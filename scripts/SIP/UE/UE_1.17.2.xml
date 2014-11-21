@@ -1,0 +1,119 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="SIP-UE 1.17.2" 
+	descrip="Support for GRUU and Registration-State Event Package " 
+	number="SIP-UE 1.17.2" inspector="disable">
+	
+	<template file="./templates/UERegAndSubTemp.xml" name="Registrar"/>
+	<template file="./templates/CallOrigAtUETemp.xml" name="UE1"/>
+	
+	<remove_from fsm="Registrar">
+		<state ID="Registered"/>
+		<state ID="NotificationComplete"/>
+	</remove_from>
+	
+	<add_to fsm="Registrar">
+		<NE ext_require="gruu"/>
+		<state ID="Registered">
+			<prelude>
+				<send protocol="sip" msgtype="200-Register"/>
+			</prelude>
+			<response>
+				<if>
+					<and>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>SUBSCRIBE</expr>
+						</eq>
+						<contains>
+							<msg_ref type="sip">SUBSCRIBE.Event</msg_ref>
+							<expr>reg</expr>
+						</contains>
+					</and>
+					<then>
+						<send protocol="sip" msgtype="200-SUBSCRIBE"/>
+						<sleep time="100"/>
+						<send protocol="sip" msgtype="NOTIFY">
+							<mod modtype="replace" body="reginfo+xml" hdr="gruu" xml_value="true">
+								<var_expr>
+									<expr>sip:DUT@pclab.com;gruu;opaque="urn:uuid:</expr>
+									<msg_ref type="platform">DUT.opaque uuid</msg_ref>
+									<expr>"</expr>
+								</var_expr>
+							</mod>
+						</send>
+					</then>
+				</if>
+			</response>
+			<transition to="Registered" event="REGISTER"/>
+			<transition to="Notification" event="SUBSCRIBE"/>
+		</state>
+		
+		<state ID="Notification" sub="postlude">
+			<generate event="Registered" fsm="UE1"/>
+		</state>
+		
+		<state ID="NotificationComplete">
+			<transition to="END" event="SucceedEvent"/>
+		</state>
+	</add_to>
+	
+	<remove_from fsm="UE1">
+		<state ID="Setup"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<state ID="Setup">
+			<prelude once="true">
+				<send protocol="utility" msgtype="DialDigits">
+					<mod modtype="add" hdr="number">
+						<msg_ref type="platform">UE1.phone number 1</msg_ref>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>INVITE</expr>
+					</eq>
+					<then>
+						<verify step="5" requirements="REQ17032, REQ17034">
+							<contains>
+								<msg_ref type="reginfo+xml" msg_instance="last" fsm="Registrar" xml_value="true">NOTIFY.gruu</msg_ref>
+								<msg_ref type="sip">Invite.Contact.addr-addr</msg_ref>
+							</contains>
+						</verify>
+						<verify step="5" requirements="REQ17032, REQ17034">
+							<dnc>
+								<msg_ref type="sip" msg_instance="last" fsm="Registrar">200-REGISTER.Contact.gruu</msg_ref>
+								<msg_ref type="sip">Invite.Contact.addr-addr</msg_ref>
+							</dnc>
+						</verify>
+						<generate event="SucceedEvent" fsm="Registrar"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Setup" event="DialDigitsComplete"/>
+			<transition to="END" event="invite"/>
+		</state>
+	</add_to>
+</pc2xml>

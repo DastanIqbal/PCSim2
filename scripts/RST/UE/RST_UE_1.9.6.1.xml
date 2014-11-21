@@ -1,0 +1,1673 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+ Change History: (Author & Date)
+	PCPCII-88 : Add a new state to the UE2 FSM to get notification from UE1 that the 911 call is
+		complete. This will allow the user more time to complete the 911 call and the call back
+		without UE2 terminating the test early with a No Response Timeout. (ghassler 12/19/2008)
+	PCPCII-139 : Update the Voicetronix modifiers to use the new values. (ghassler 07/10/2009)
+	PCPCII-174 : Update the script to the D11 version of the ATP (ghassler 01/26/2010)
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-UE 1.9.6.1" 
+	descrip="Operator Callback feature " 
+	number="RST-UE 1.9.6.1">
+	
+	<template file="./templates/CallOrigAtUETemp.xml" name="UE1"/>
+	<template file="./templates/CallTermAtUETemp.xml" name="UE2"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Setup" sub="prelude"/>
+		<state ID="OnHook"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<NE targets="service:sos"/>
+		
+		<state ID="Setup" sub="prelude" once="true">
+			<sleep time="4000"/>
+			<send protocol="utility" msgtype="DialDigits">
+				<mod modtype="add" hdr="number">
+					<expr>911</expr>
+				</mod>
+			</send>
+		</state>
+		
+		<state ID="OnHook">
+			<prelude>
+				<send protocol="utility" msgtype="OnHook"/>
+				<sleep time="8000"/>
+				<!--  Let the other FSM that we have complete the 
+					emergency call -->
+				<generate event="Branch1Event" fsm="UE2"/>
+			</prelude>
+			<transition to="EndTheCall" event="OnHookComplete"/>
+		</state>
+		
+		<state ID="EndTheCall" ES="true">
+			<transition to="Setup1" event="SessionTerminated"/>
+		</state>
+		
+		<state ID="Setup1">
+			<!-- Step 3  -->
+			<prelude>
+				<send protocol="sip" msgtype="Invite">
+					<mod modtype="add" hdr="Priority" param="value">
+						<expr>emergency</expr>
+					</mod>
+					<mod modtype="replace" hdr="P-Asserted-Identity">
+						<expr>urn:service:sos</expr>
+					</mod>
+				</send>
+			</prelude>
+			<!-- Expected responses are 100, 180, 183 or 200 -->
+			<response>
+				<if>
+					<contains>
+						<msg_ref type="sip" msg_instance="last" hdr_instance="any">18x-Invite.Require</msg_ref>
+						<expr>100rel</expr>
+					</contains>
+					<then>
+						<!--Reliability required for test sending Prack message to peer.-->
+						<send protocol="sip" msgtype="Prack"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Proceeding1" event="100-INVITE"/>
+			<transition to="Alerting1" event="180-INVITE"/>
+			<transition to="Alerting1" event="183-INVITE"/>
+			<transition to="Connected1" event="200-INVITE"/>
+		</state>
+		
+		<state ID="Proceeding1">
+			<!-- Expected responses are 180, 183 or 200 -->
+			<response>
+				<if>
+					<contains>
+						<msg_ref type="sip" msg_instance="last" hdr_instance="any">18x-Invite.Require</msg_ref>
+						<expr>100rel</expr>
+					</contains>
+					<then>
+						<!--Reliability required for test sending Prack message to peer.-->
+						<send protocol="sip" msgtype="Prack"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Alerting1" event="180-INVITE"/>
+			<transition to="Alerting1" event="183-INVITE"/>
+			<transition to="Connected1" event="200-INVITE"/>
+		</state>
+		
+		<state ID="Alerting1" timer="12000">
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="event"/>
+						<expr>TimerExpired</expr>
+					</eq>
+					<then>
+						<!--Take DUT phone off hook-->
+						<send protocol="utility" msgtype="OffHook"/>
+					</then>
+				</if>
+				<!-- Expected responses are 180, 183, PRACK, UPDATE, or 200 -->
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>UPDATE</expr>
+					</eq>
+					<then>
+						<!--QoS required for test, sending a 200-OK to Update message to peer.-->
+						<send protocol="sip" msgtype="200-Update"/>
+					</then>
+					<elseif>
+						<and>
+							<eq>
+								<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+								<expr>180</expr>
+							</eq>
+							<contains>
+								<msg_ref type="sip" hdr_instance="any">180-INVITE.Require</msg_ref>
+								<expr>100rel</expr>
+							</contains>
+						</and>
+						<then>
+							<!--Reliability required for test, sending Prack message to peer.-->
+							<send protocol="sip" msgtype="Prack"/>
+						</then>
+					</elseif>
+				</if>
+			</response>
+			<transition to="Alerting1" event="200-PRACK"/>
+			<transition to="Alerting1" event="UPDATE"/>
+			<transition to="Alerting1" event="18x-INVITE"/>
+			<transition to="Answer1" event="TimerExpired"/>
+			<transition to="Connected1" event="200-INVITE"/>
+		</state>
+		
+		<state ID="Answer1">
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>UPDATE</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="200-Update"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Answer1" event="UPDATE"/>
+			<transition to="Answer1" event="200-PRACK"/>
+			<transition to="Answer1" event="18x-INVITE"/>
+			<transition to="Answer1" event="OffHookComplete"/>
+			<transition to="Connected1" event="200-INVITE"/>
+		</state>
+		
+		<state ID="Connected1">
+			<prelude once="true">
+				<send protocol="sip" msgtype="ACK"/>
+				<generate event="Branch1Event" fsm="UE2"/>
+			</prelude>
+			<transition to="Connected1" event="OffHookComplete"/>
+			<transition to="Release1" event="Branch2Event"/>
+		</state>
+		
+		<state ID="Release1" ES="true">
+			<transition to="OffHook_2" event="SessionTerminated"/>
+		</state>
+		
+		<state ID="OffHook_2">
+			<prelude>
+				<sleep time="5000"/>
+				<send protocol="utility" msgtype="OffHook"/>
+			</prelude>
+			<transition to="Setup_2" event="OffHookComplete"/>
+		</state>
+		
+		<state ID="Setup_2">
+			<prelude once="true">
+				<send protocol="utility" msgtype="DialDigits">
+					<mod modtype="add" hdr="number">
+						<expr>911</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<!-- If the current message that we received is an Invite, answer with
+               a 100-trying -->
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>Invite</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="100-INVITE"/>
+					</then>
+				</if>
+				<!-- This set of tests determines whether to send 183 with Answer
+						 or a 180 to the INVITE -->
+				<if>
+					<and>
+						<eq>
+							<msg_ref type="extensions">precondition</msg_ref>
+							<expr>require</expr>
+						</eq>
+						<or>
+							<contains>
+								<msg_ref type="sip" hdr_instance="any">Invite.Require</msg_ref>
+								<expr>precondition</expr>
+							</contains>
+							<contains>
+								<msg_ref type="sip" hdr_instance="any">Invite.Supported</msg_ref>
+								<expr>precondition</expr>
+							</contains>
+						</or>
+					</and>
+					<then>
+						<!--Sending 183-Invite with answer-->
+						<sleep time="200"/>
+						<send protocol="sip" msgtype="183-Invite"/>
+					</then>
+					<elseif>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>Invite</expr>
+						</eq>
+						<then>
+							<!--Sending 180-Invite with SS not supporting precondition.-->
+							<sleep time="200"/>
+							<send protocol="sip" msgtype="180-Invite"/>
+						</then>
+					</elseif>
+				</if>
+			</response>
+			<transition to="Setup_2" event="DialDigitsComplete"/>
+			<transition to="Alerting_2" event="INVITE"/>
+		</state>
+		
+		<state ID="Alerting_2">
+			<response>
+				<if>
+					<and>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>PRACK</expr>
+						</eq>
+						<contains>
+							<msg_ref type="sip" msg_instance="last" hdr_instance="any">18x-Invite.Require</msg_ref>
+							<expr>100rel</expr>
+						</contains>
+					</and>
+					<then>
+						<!--Reliability required for test sending 200-Prack message to peer.-->
+						<send protocol="sip" msgtype="200-PRACK"/>
+					</then>
+				</if>
+				<!-- Now test for an UPDATE message -->
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>UPDATE</expr>
+					</eq>
+					<then>
+						<!--QoS required or supported sending 200-Update message to peer.-->
+						<send protocol="sip" msgtype="200-Update"/>
+					</then>
+				</if>
+				<!-- Test whether to send 180 -->
+				<if>
+					<and>
+						<contains>
+							<msg_ref type="sip" msg_instance="last">18x-Invite.Status-Line.status-code</msg_ref>
+							<expr>183</expr>
+						</contains>
+						<eq>
+							<msg_ref type="sdp">Request.qos-curr-remote.direction</msg_ref>
+							<msg_ref type="sdp">Request.qos-des-remote.direction</msg_ref>
+						</eq>
+					</and>
+					<then>
+						<!--Sending 180 for required preconditions.-->
+						<send protocol="sip" msgtype="180-Invite"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Alerting_2" event="DialDigitsComplete"/>
+			<transition to="Alerting_2" event="PRACK"/>
+			<transition to="Alerting_2" event="UPDATE"/>
+			<transition to="Answer_2" event="ALERTING_UAS"/>
+		</state>
+		
+		<state ID="Answer_2" timer="5000">
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="event"/>
+						<expr>TimerExpired</expr>
+					</eq>
+					<then>
+						<!--Sending 200-Invite-->
+						<send protocol="sip" msgtype="200-INVITE"/>
+					</then>
+				</if>
+				<!-- Now test for an UPDATE message -->
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>UPDATE</expr>
+					</eq>
+					<then>
+						<!--QoS required or supported sending 200-Update message to peer.-->
+						<send protocol="sip" msgtype="200-Update"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Answer_2" event="UPDATE"/>
+			<transition to="Answer_2" event="TimerExpired"/>
+			<transition to="Connected_2" event="ACK"/>
+		</state>
+		
+		<state ID="Connected_2" timer="5000">
+			<transition to="Releasing_2" event="TimerExpired"/>
+		</state>
+		
+		<state ID="Releasing_2">
+			<prelude>
+				<!--Sending BYE to peer to terminate call.-->
+				<send protocol="sip" msgtype="BYE"/>
+			</prelude>
+			<transition to="OnHook_2" event="200-Bye"/>
+		</state>
+		
+		<state ID="OnHook_2">
+			<prelude>
+				<send protocol="utility" msgtype="OnHook"/>
+				<sleep time="5500"/>
+			</prelude>
+			<transition to="EndTheCall_2" event="OnHookComplete"/>
+		</state>
+		
+		<state ID="EndTheCall_2" ES="true">
+			<transition to="Setup1_2" event="SessionTerminated"/>
+		</state>
+		
+		<state ID="Setup1_2">
+			<prelude>
+				<sleep time="5000"/>
+				<send protocol="sip" msgtype="Invite">
+					<mod modtype="add" hdr="Priority" param="value">
+						<expr>emergency</expr>
+					</mod>
+					<mod modtype="replace" hdr="P-Asserted-Identity">
+						<expr>urn:service:sos</expr>
+					</mod>
+				</send>
+			</prelude>
+			<!-- Expected responses are 100, 180, 183 or 200 -->
+			<response>
+				<if>
+					<contains>
+						<msg_ref type="sip" msg_instance="last" hdr_instance="any">18x-Invite.Require</msg_ref>
+						<expr>100rel</expr>
+					</contains>
+					<then>
+						<!--Reliability required for test sending Prack message to peer.-->
+						<send protocol="sip" msgtype="Prack"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Proceeding1_2" event="100-INVITE"/>
+			<transition to="Alerting1_2" event="180-INVITE"/>
+			<transition to="Alerting1_2" event="183-INVITE"/>
+			<transition to="Connected1_2" event="200-INVITE"/>
+		</state>
+		
+		<state ID="Proceeding1_2">
+			<!-- Expected responses are 180, 183 or 200 -->
+			<response>
+				<if>
+					<contains>
+						<msg_ref type="sip" msg_instance="last" hdr_instance="any">18x-Invite.Require</msg_ref>
+						<expr>100rel</expr>
+					</contains>
+					<then>
+						<!--Reliability required for test sending Prack message to peer.-->
+						<send protocol="sip" msgtype="Prack"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Alerting1_2" event="180-INVITE"/>
+			<transition to="Alerting1_2" event="183-INVITE"/>
+			<transition to="Connected1_2" event="200-INVITE"/>
+		</state>
+		
+		<state ID="Alerting1_2" timer="12000">
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="event"/>
+						<expr>TimerExpired</expr>
+					</eq>
+					<then>
+						<!--Take DUT phone off hook-->
+						<send protocol="utility" msgtype="OffHook"/>
+					</then>
+				</if>
+				<!-- Expected responses are 180, 183, PRACK, UPDATE, or 200 -->
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>UPDATE</expr>
+					</eq>
+					<then>
+						<!--QoS required for test, sending a 200-OK to Update message to peer.-->
+						<send protocol="sip" msgtype="200-Update"/>
+					</then>
+					<elseif>
+						<and>
+							<eq>
+								<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+								<expr>180</expr>
+							</eq>
+							<contains>
+								<msg_ref type="sip" hdr_instance="any">180-INVITE.Require</msg_ref>
+								<expr>100rel</expr>
+							</contains>
+						</and>
+						<then>
+							<!--Reliability required for test, sending Prack message to peer.-->
+							<send protocol="sip" msgtype="Prack"/>
+						</then>
+					</elseif>
+				</if>
+			</response>
+			<transition to="Alerting1_2" event="200-PRACK"/>
+			<transition to="Alerting1_2" event="UPDATE"/>
+			<transition to="Alerting1_2" event="18x-INVITE"/>
+			<transition to="Answer1_2" event="TimerExpired"/>
+			<transition to="Connected1_2" event="200-INVITE"/>
+		</state>
+		
+		<state ID="Answer1_2">
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>UPDATE</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="200-Update"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Answer1_2" event="UPDATE"/>
+			<transition to="Answer1_2" event="200-PRACK"/>
+			<transition to="Answer1_2" event="18x-INVITE"/>
+			<transition to="Answer1_2" event="OffHookComplete"/>
+			<transition to="Connected1_2" event="200-INVITE"/>
+		</state>
+		
+		<state ID="Connected1_2" timer="5000">
+			<prelude once="true">
+				<send protocol="sip" msgtype="ACK"/>
+			</prelude>
+			<transition to="Connected1_2" event="OffHookComplete"/>
+			<transition to="Releasing1_2" event="TimerExpired"/>
+		</state>
+		
+		<state ID="Releasing1_2">
+			<prelude>
+				<send protocol="sip" msgtype="Bye"/>
+			</prelude>
+			<response>
+				<verify step="7" requirements="REQ14093, REQ14094">
+					<eq>
+						<msg_ref type="sip">Response</msg_ref>
+						<expr>200-BYE</expr>
+					</eq>
+				</verify>
+			</response>
+			<transition to="OnHook1_2" event="200-BYE"/>
+		</state>
+		
+		<state ID="OnHook1_2">
+			<prelude>
+				<send protocol="utility" msgtype="OnHook"/>
+			</prelude>
+			<transition to="EndTheCall1_2" event="OnHookComplete"/>
+		</state>
+		
+		<state ID="EndTheCall1_2" ES="true">
+			<transition to="OffHook_3" event="SessionTerminated"/>
+		</state>
+		
+		<state ID="OffHook_3">
+			<prelude>
+				<sleep time="5000"/>
+				<send protocol="utility" msgtype="OffHook"/>
+			</prelude>
+			<transition to="Setup_3" event="OffHookComplete"/>
+		</state>
+		
+		<state ID="Setup_3">
+			<prelude once="true">
+				<send protocol="utility" msgtype="DialDigits">
+					<mod modtype="add" hdr="number">
+						<expr>911</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<!-- If the current message that we received is an Invite, answer with
+               a 100-trying -->
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>Invite</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="100-INVITE"/>
+					</then>
+				</if>
+				<!-- This set of tests determines whether to send 183 with Answer
+						 or a 180 to the INVITE -->
+				<if>
+					<and>
+						<eq>
+							<msg_ref type="extensions">precondition</msg_ref>
+							<expr>require</expr>
+						</eq>
+						<or>
+							<contains>
+								<msg_ref type="sip" hdr_instance="any">Invite.Require</msg_ref>
+								<expr>precondition</expr>
+							</contains>
+							<contains>
+								<msg_ref type="sip" hdr_instance="any">Invite.Supported</msg_ref>
+								<expr>precondition</expr>
+							</contains>
+						</or>
+					</and>
+					<then>
+						<!--Sending 183-Invite with answer-->
+						<sleep time="200"/>
+						<send protocol="sip" msgtype="183-Invite"/>
+					</then>
+					<elseif>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>Invite</expr>
+						</eq>
+						<then>
+							<!--Sending 180-Invite with SS not supporting precondition.-->
+							<sleep time="200"/>
+							<send protocol="sip" msgtype="180-Invite"/>
+						</then>
+					</elseif>
+				</if>
+			</response>
+			<transition to="Setup_3" event="DialDigitsComplete"/>
+			<transition to="Alerting_3" event="INVITE"/>
+		</state>
+		
+		<state ID="Alerting_3">
+			<response>
+				<if>
+					<and>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>PRACK</expr>
+						</eq>
+						<contains>
+							<msg_ref type="sip" msg_instance="last" hdr_instance="any">18x-Invite.Require</msg_ref>
+							<expr>100rel</expr>
+						</contains>
+					</and>
+					<then>
+						<!--Reliability required for test sending 200-Prack message to peer.-->
+						<send protocol="sip" msgtype="200-PRACK"/>
+					</then>
+				</if>
+				<!-- Now test for an UPDATE message -->
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>UPDATE</expr>
+					</eq>
+					<then>
+						<!--QoS required or supported sending 200-Update message to peer.-->
+						<send protocol="sip" msgtype="200-Update"/>
+					</then>
+				</if>
+				<!-- Test whether to send 180 -->
+				<if>
+					<and>
+						<contains>
+							<msg_ref type="sip" msg_instance="last">18x-Invite.Status-Line.status-code</msg_ref>
+							<expr>183</expr>
+						</contains>
+						<eq>
+							<msg_ref type="sdp">Request.qos-curr-remote.direction</msg_ref>
+							<msg_ref type="sdp">Request.qos-des-remote.direction</msg_ref>
+						</eq>
+					</and>
+					<then>
+						<!--Sending 180 for required preconditions.-->
+						<send protocol="sip" msgtype="180-Invite"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Alerting_3" event="DialDigitsComplete"/>
+			<transition to="Alerting_3" event="PRACK"/>
+			<transition to="Alerting_3" event="UPDATE"/>
+			<transition to="Answer_3" event="ALERTING_UAS"/>
+		</state>
+		
+		<state ID="Answer_3" timer="5000">
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="event"/>
+						<expr>TimerExpired</expr>
+					</eq>
+					<then>
+						<!--Sending 200-Invite-->
+						<send protocol="sip" msgtype="200-INVITE"/>
+					</then>
+				</if>
+				<!-- Now test for an UPDATE message -->
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>UPDATE</expr>
+					</eq>
+					<then>
+						<!--QoS required or supported sending 200-Update message to peer.-->
+						<send protocol="sip" msgtype="200-Update"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Answer_3" event="UPDATE"/>
+			<transition to="Answer_3" event="TimerExpired"/>
+			<transition to="Connected_3" event="ACK"/>
+		</state>
+		
+		<state ID="Connected_3" timer="5000">
+			<transition to="Releasing_3" event="TimerExpired"/>
+		</state>
+		
+		<state ID="Releasing_3">
+			<prelude>
+				<!--Sending BYE to peer to terminate call.-->
+				<send protocol="sip" msgtype="BYE"/>
+			</prelude>
+			<transition to="OnHook_3" event="200-Bye"/>
+		</state>
+		
+		<state ID="OnHook_3">
+			<prelude>
+				<send protocol="utility" msgtype="OnHook"/>
+				<sleep time="5500"/>
+			</prelude>
+			<transition to="EndTheCall_3" event="OnHookComplete"/>
+		</state>
+		
+		<state ID="EndTheCall_3" ES="true">
+			<transition to="Setup1_3" event="SessionTerminated"/>
+		</state>
+		
+		<state ID="Setup1_3">
+			<prelude>
+				<sleep time="5500"/>
+				<send protocol="sip" msgtype="Invite">
+					<mod modtype="add" hdr="Priority" param="value">
+						<expr>emergency</expr>
+					</mod>
+					<mod modtype="replace" hdr="P-Asserted-Identity">
+						<expr>urn:service:sos</expr>
+					</mod>
+				</send>
+			</prelude>
+			<!-- Expected responses are 100, 180, 183 or 200 -->
+			<response>
+				<if>
+					<contains>
+						<msg_ref type="sip" msg_instance="last" hdr_instance="any">18x-Invite.Require</msg_ref>
+						<expr>100rel</expr>
+					</contains>
+					<then>
+						<!--Reliability required for test sending Prack message to peer.-->
+						<send protocol="sip" msgtype="Prack"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Proceeding1_3" event="100-INVITE"/>
+			<transition to="Alerting1_3" event="180-INVITE"/>
+			<transition to="Alerting1_3" event="183-INVITE"/>
+			<transition to="Connected1_3" event="200-INVITE"/>
+		</state>
+		
+		<state ID="Proceeding1_3">
+			<!-- Expected responses are 180, 183 or 200 -->
+			<response>
+				<if>
+					<contains>
+						<msg_ref type="sip" msg_instance="last" hdr_instance="any">18x-Invite.Require</msg_ref>
+						<expr>100rel</expr>
+					</contains>
+					<then>
+						<!--Reliability required for test sending Prack message to peer.-->
+						<send protocol="sip" msgtype="Prack"/>
+					</then>
+				</if>
+			</response>
+			<!-- Transitions for Proceeding state -->
+			<transition to="Alerting1_3" event="180-INVITE"/>
+			<transition to="Alerting1_3" event="183-INVITE"/>
+			<transition to="Connected1_3" event="200-INVITE"/>
+		</state>
+		
+		<state ID="Alerting1_3" timer="5000">
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="event"/>
+						<expr>TimerExpired</expr>
+					</eq>
+					<then>
+						<!--Take DUT phone off hook-->
+						<send protocol="utility" msgtype="OffHook"/>
+					</then>
+				</if>
+				<!-- Expected responses are 180, 183, PRACK, UPDATE, or 200 -->
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>UPDATE</expr>
+					</eq>
+					<then>
+						<!--QoS required for test, sending a 200-OK to Update message to peer.-->
+						<send protocol="sip" msgtype="200-Update"/>
+					</then>
+					<elseif>
+						<and>
+							<eq>
+								<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+								<expr>180</expr>
+							</eq>
+							<contains>
+								<msg_ref type="sip" hdr_instance="any">180-INVITE.Require</msg_ref>
+								<expr>100rel</expr>
+							</contains>
+						</and>
+						<then>
+							<!--Reliability required for test, sending Prack message to peer.-->
+							<send protocol="sip" msgtype="Prack"/>
+						</then>
+					</elseif>
+				</if>
+			</response>
+			<transition to="Alerting1_3" event="200-PRACK"/>
+			<transition to="Alerting1_3" event="UPDATE"/>
+			<transition to="Alerting1_3" event="18x-INVITE"/>
+			<transition to="Answer1_3" event="TimerExpired"/>
+			<transition to="Connected1_3" event="200-INVITE"/>
+		</state>
+		
+		<state ID="Answer1_3">
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>UPDATE</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="200-Update"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Answer1_3" event="UPDATE"/>
+			<transition to="Answer1_3" event="200-PRACK"/>
+			<transition to="Answer1_3" event="18x-INVITE"/>
+			<transition to="Answer1_3" event="OffHookComplete"/>
+			<transition to="Connected1_3" event="200-INVITE"/>
+		</state>
+		
+		<state ID="Connected1_3" timer="5000">
+			<prelude once="true">
+				<send protocol="sip" msgtype="ACK"/>
+			</prelude>
+			<transition to="Connected1_3" event="OffHookComplete"/>
+			<transition to="OnHook1_3" event="TimerExpired"/>
+		</state>
+		
+		<state ID="OnHook1_3">
+			<prelude>
+				<send protocol="utility" msgtype="OnHook"/>
+			</prelude>
+			<transition to="ReceiveINVITE1_3" event="OnHookComplete"/>
+		</state>
+		
+		<state ID="ReceiveINVITE1_3">
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>REINVITE</expr>
+					</eq>
+					<then>
+						<verify step="10" requirements="REQ14093, REQ14094">
+							<contains>
+								<msg_ref type="sdp">REINVITE.mode.value</msg_ref>
+								<expr>inactive</expr>
+							</contains>
+						</verify>
+						<verify step="10" requirements="REQ14093, REQ14094">
+							<contains>
+								<msg_ref type="sip">REINVITE.SDP</msg_ref>
+								<expr>a=rtpmap</expr>
+							</contains>
+						</verify>
+						<verify step="10" requirements="REQ14093, REQ14094">
+							<contains>
+								<msg_ref type="sip">REINVITE.Priority</msg_ref>
+								<expr>emergency</expr>
+							</contains>
+						</verify>
+						<send protocol="sip" msgtype="100-INVITE"/>
+						<sleep time="1000"/>
+						<send protocol="sip" msgtype="200-INVITE"/>
+					</then>
+				</if>
+			</response>
+			<transition to="ACK1_3" event="REINVITE"/>
+		</state>
+		
+		<state ID="ACK1_3">
+			<transition to="OffHook2_3" event="ACK"/>
+		</state>
+		
+		<state ID="OffHook2_3">
+			<prelude once="true">
+				<sleep time="5000"/>
+				<send protocol="utility" msgtype="OffHook"/>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>REINVITE</expr>
+					</eq>
+					<then>
+						<verify step="12" requirements="REQ14093, REQ14094">
+							<contains>
+								<msg_ref type="sip">REINVITE.SDP</msg_ref>
+								<expr>a=rtpmap</expr>
+							</contains>
+						</verify>
+						<verify step="12" requirements="REQ14093, REQ14094">
+							<contains>
+								<msg_ref type="sdp">REINVITE.mode.value</msg_ref>
+								<expr>sendrecv</expr>
+							</contains>
+						</verify>
+						<verify step="12" requirements="REQ14093, REQ14094">
+							<contains>
+								<msg_ref type="sip">REINVITE.Priority</msg_ref>
+								<expr>emergency</expr>
+							</contains>
+						</verify>
+						<send protocol="sip" msgtype="100-INVITE"/>
+						<sleep time="1000"/>
+						<send protocol="sip" msgtype="200-INVITE"/>
+					</then>
+				</if>
+			</response>
+			<transition to="OffHook2_3" event="OffHookComplete"/>
+			<transition to="ACK2_3" event="REINVITE"/>
+		</state>
+		
+		<state ID="ACK2_3">
+			<transition to="NetworkHoldTimer1_3" event="ACK"/>
+			<transition to="ACK2_3" event="OffHookComplete"/>
+		</state>
+		
+		<state ID="NetworkHoldTimer1_3" timer="59000">
+			<response>
+				<verify step="14" requirements="REQ14093, REQ14094">
+					<neq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>BYE</expr>
+					</neq>
+				</verify>
+			</response>
+			<transition to="Releasing2_3" event="TimerExpired"/>
+		</state>
+		
+		<state ID="Releasing2_3">
+			<prelude>
+				<!--Sending BYE to peer to terminate call.-->
+				<send protocol="sip" msgtype="BYE"/>
+			</prelude>
+			<transition to="OnHook2_3" event="200-Bye"/>
+		</state>
+		
+		<state ID="OnHook2_3">
+			<prelude>
+				<send protocol="utility" msgtype="OnHook"/>
+			</prelude>
+			<transition to="EndTheCall2_3" event="OnHookComplete"/>
+		</state>
+		
+		<state ID="EndTheCall2_3" ES="true">
+			<transition to="OffHook_4" event="SessionTerminated"/>
+		</state>
+		
+		<state ID="OffHook_4">
+			<prelude>
+				<sleep time="5000"/>
+				<send protocol="utility" msgtype="OffHook"/>
+			</prelude>
+			<transition to="Setup_4" event="OffHookComplete"/>
+		</state>
+		
+		<state ID="Setup_4">
+			<prelude once="true">
+				<send protocol="utility" msgtype="DialDigits">
+					<mod modtype="add" hdr="number">
+						<expr>911</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<!-- If the current message that we received is an Invite, answer with
+               a 100-trying -->
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>Invite</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="100-INVITE"/>
+					</then>
+				</if>
+				<!-- This set of tests determines whether to send 183 with Answer
+						 or a 180 to the INVITE -->
+				<if>
+					<and>
+						<eq>
+							<msg_ref type="extensions">precondition</msg_ref>
+							<expr>require</expr>
+						</eq>
+						<or>
+							<contains>
+								<msg_ref type="sip" hdr_instance="any">Invite.Require</msg_ref>
+								<expr>precondition</expr>
+							</contains>
+							<contains>
+								<msg_ref type="sip" hdr_instance="any">Invite.Supported</msg_ref>
+								<expr>precondition</expr>
+							</contains>
+						</or>
+					</and>
+					<then>
+						<!--Sending 183-Invite with answer-->
+						<sleep time="200"/>
+						<send protocol="sip" msgtype="183-Invite"/>
+					</then>
+					<elseif>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>Invite</expr>
+						</eq>
+						<then>
+							<!--Sending 180-Invite with SS not supporting precondition.-->
+							<sleep time="200"/>
+							<send protocol="sip" msgtype="180-Invite"/>
+						</then>
+					</elseif>
+				</if>
+			</response>
+			<transition to="Setup_4" event="DialDigitsComplete"/>
+			<transition to="Alerting_4" event="INVITE"/>
+		</state>
+		
+		<state ID="Alerting_4">
+			<response>
+				<if>
+					<and>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>PRACK</expr>
+						</eq>
+						<contains>
+							<msg_ref type="sip" msg_instance="last" hdr_instance="any">18x-Invite.Require</msg_ref>
+							<expr>100rel</expr>
+						</contains>
+					</and>
+					<then>
+						<!--Reliability required for test sending 200-Prack message to peer.-->
+						<send protocol="sip" msgtype="200-PRACK"/>
+					</then>
+				</if>
+				<!-- Now test for an UPDATE message -->
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>UPDATE</expr>
+					</eq>
+					<then>
+						<!--QoS required or supported sending 200-Update message to peer.-->
+						<send protocol="sip" msgtype="200-Update"/>
+					</then>
+				</if>
+				<!-- Test whether to send 180 -->
+				<if>
+					<and>
+						<contains>
+							<msg_ref type="sip" msg_instance="last">18x-Invite.Status-Line.status-code</msg_ref>
+							<expr>183</expr>
+						</contains>
+						<eq>
+							<msg_ref type="sdp">Request.qos-curr-remote.direction</msg_ref>
+							<msg_ref type="sdp">Request.qos-des-remote.direction</msg_ref>
+						</eq>
+					</and>
+					<then>
+						<!--Sending 180 for required preconditions.-->
+						<send protocol="sip" msgtype="180-Invite"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Alerting_4" event="DialDigitsComplete"/>
+			<transition to="Alerting_4" event="PRACK"/>
+			<transition to="Alerting_4" event="UPDATE"/>
+			<transition to="Answer_4" event="ALERTING_UAS"/>
+		</state>
+		
+		<state ID="Answer_4" timer="5000">
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="event"/>
+						<expr>TimerExpired</expr>
+					</eq>
+					<then>
+						<!--Sending 200-Invite-->
+						<send protocol="sip" msgtype="200-INVITE"/>
+					</then>
+				</if>
+				<!-- Now test for an UPDATE message -->
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>UPDATE</expr>
+					</eq>
+					<then>
+						<!--QoS required or supported sending 200-Update message to peer.-->
+						<send protocol="sip" msgtype="200-Update"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Answer_4" event="UPDATE"/>
+			<transition to="Answer_4" event="TimerExpired"/>
+			<transition to="Connected_4" event="ACK"/>
+		</state>
+		
+		<state ID="Connected_4" timer="10000">
+			<transition to="Releasing_4" event="TimerExpired"/>
+		</state>
+		
+		<state ID="Releasing_4">
+			<prelude>
+				<!--Sending BYE to peer to terminate call.-->
+				<send protocol="sip" msgtype="BYE"/>
+			</prelude>
+			<transition to="OnHook_4" event="200-Bye"/>
+		</state>
+		
+		<state ID="OnHook_4">
+			<prelude>
+				<send protocol="utility" msgtype="OnHook"/>
+				<sleep time="5500"/>
+			</prelude>
+			<transition to="EndTheCall_4" event="OnHookComplete"/>
+		</state>
+		
+		<state ID="EndTheCall_4" ES="true">
+			<transition to="Setup1_4" event="SessionTerminated"/>
+		</state>
+		
+		<state ID="Setup1_4">
+			<prelude>
+				<sleep time="5500"/>
+				<send protocol="sip" msgtype="Invite">
+					<mod modtype="add" hdr="Priority" param="value">
+						<expr>emergency</expr>
+					</mod>
+					<mod modtype="replace" hdr="P-Asserted-Identity">
+						<expr>urn:service:sos</expr>
+					</mod>
+				</send>
+			</prelude>
+			<!-- Expected responses are 100, 180, 183 or 200 -->
+			<response>
+				<if>
+					<contains>
+						<msg_ref type="sip" msg_instance="last" hdr_instance="any">18x-Invite.Require</msg_ref>
+						<expr>100rel</expr>
+					</contains>
+					<then>
+						<!--Reliability required for test sending Prack message to peer.-->
+						<send protocol="sip" msgtype="Prack"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Proceeding1_4" event="100-INVITE"/>
+			<transition to="Alerting1_4" event="180-INVITE"/>
+			<transition to="Alerting1_4" event="183-INVITE"/>
+			<transition to="Connected1_4" event="200-INVITE"/>
+		</state>
+		
+		<state ID="Proceeding1_4">
+			<!-- Expected responses are 180, 183 or 200 -->
+			<response>
+				<if>
+					<contains>
+						<msg_ref type="sip" msg_instance="last" hdr_instance="any">18x-Invite.Require</msg_ref>
+						<expr>100rel</expr>
+					</contains>
+					<then>
+						<!--Reliability required for test sending Prack message to peer.-->
+						<send protocol="sip" msgtype="Prack"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Alerting1_4" event="180-INVITE"/>
+			<transition to="Alerting1_4" event="183-INVITE"/>
+			<transition to="Connected1_4" event="200-INVITE"/>
+		</state>
+		
+		<state ID="Alerting1_4" timer="12000">
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="event"/>
+						<expr>TimerExpired</expr>
+					</eq>
+					<then>
+						<!--Take DUT phone off hook-->
+						<send protocol="utility" msgtype="OffHook"/>
+					</then>
+				</if>
+				<!-- Expected responses are 180, 183, PRACK, UPDATE, or 200 -->
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>UPDATE</expr>
+					</eq>
+					<then>
+						<!--QoS required for test, sending a 200-OK to Update message to peer.-->
+						<send protocol="sip" msgtype="200-Update"/>
+					</then>
+					<elseif>
+						<and>
+							<eq>
+								<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+								<expr>180</expr>
+							</eq>
+							<contains>
+								<msg_ref type="sip" hdr_instance="any">180-INVITE.Require</msg_ref>
+								<expr>100rel</expr>
+							</contains>
+						</and>
+						<then>
+							<!--Reliability required for test, sending Prack message to peer.-->
+							<send protocol="sip" msgtype="Prack"/>
+						</then>
+					</elseif>
+				</if>
+			</response>
+			<transition to="Alerting1_4" event="200-PRACK"/>
+			<transition to="Alerting1_4" event="UPDATE"/>
+			<transition to="Alerting1_4" event="18x-INVITE"/>
+			<transition to="Answer1_4" event="TimerExpired"/>
+			<transition to="Connected1_4" event="200-INVITE"/>
+		</state>
+		
+		<state ID="Answer1_4">
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>UPDATE</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="200-Update"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Answer1_4" event="UPDATE"/>
+			<transition to="Answer1_4" event="200-PRACK"/>
+			<transition to="Answer1_4" event="18x-INVITE"/>
+			<transition to="Answer1_4" event="OffHookComplete"/>
+			<transition to="Connected1_4" event="200-INVITE"/>
+		</state>
+		
+		<state ID="Connected1_4" timer="5000">
+			<prelude once="true">
+				<send protocol="sip" msgtype="ACK"/>
+			</prelude>
+			<transition to="Connected1_4" event="OffHookComplete"/>
+			<transition to="OnHook1_4" event="TimerExpired"/>
+		</state>
+		
+		<state ID="OnHook1_4">
+			<prelude once="true">
+				<send protocol="utility" msgtype="OnHook"/>
+			</prelude>
+			<response>
+				<if>
+					<and>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>REINVITE</expr>
+						</eq>
+						<contains>
+							<msg_ref type="sdp">REINVITE.mode.value</msg_ref>
+							<expr>inactive</expr>
+						</contains>
+					</and>
+					<then>
+						<send protocol="sip" msgtype="100-INVITE"/>
+						<sleep time="1000"/>
+						<send protocol="sip" msgtype="200-INVITE"/>
+					</then>
+				</if>
+			</response>
+			<transition to="OnHook1_4" event="OnHookComplete"/>
+			<transition to="ACK1_4" event="REINVITE"/>
+		</state>
+		
+		<state ID="ACK1_4">
+			<transition to="NetworkHoldTimer2_4" event="ACK"/>
+		</state>
+		
+		<state ID="NetworkHoldTimer2_4" timer="65000">
+			<response>
+				<verify step="19" requirements="REQ14093, REQ14094">
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>BYE</expr>
+					</eq>
+				</verify>
+			</response>
+			<postlude>
+				<send protocol="sip" msgtype="200-BYE"/>
+			</postlude>
+			<transition to="EndTheCall3_4" event="BYE"/>
+		</state>
+		
+		<state ID="EndTheCall3_4" ES="true">
+			<transition to="OffHook_5" event="SessionTerminated"/>
+		</state>
+		
+		<state ID="OffHook_5">
+			<prelude>
+				<sleep time="5000"/>
+				<send protocol="utility" msgtype="OffHook"/>
+			</prelude>
+			<transition to="Setup_5" event="OffHookComplete"/>
+		</state>
+		
+		<state ID="Setup_5">
+			<prelude once="true">
+				<send protocol="utility" msgtype="DialDigits">
+					<mod modtype="add" hdr="number">
+						<expr>911</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<!-- If the current message that we received is an Invite, answer with
+               a 100-trying -->
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>Invite</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="100-INVITE"/>
+					</then>
+				</if>
+				<!-- This set of tests determines whether to send 183 with Answer
+						 or a 180 to the INVITE -->
+				<if>
+					<and>
+						<eq>
+							<msg_ref type="extensions">precondition</msg_ref>
+							<expr>require</expr>
+						</eq>
+						<or>
+							<contains>
+								<msg_ref type="sip" hdr_instance="any">Invite.Require</msg_ref>
+								<expr>precondition</expr>
+							</contains>
+							<contains>
+								<msg_ref type="sip" hdr_instance="any">Invite.Supported</msg_ref>
+								<expr>precondition</expr>
+							</contains>
+						</or>
+					</and>
+					<then>
+						<!--Sending 183-Invite with answer-->
+						<sleep time="200"/>
+						<send protocol="sip" msgtype="183-Invite"/>
+					</then>
+					<elseif>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>Invite</expr>
+						</eq>
+						<then>
+							<!--Sending 180-Invite with SS not supporting precondition.-->
+							<sleep time="200"/>
+							<send protocol="sip" msgtype="180-Invite"/>
+						</then>
+					</elseif>
+				</if>
+			</response>
+			<transition to="Setup_5" event="DialDigitsComplete"/>
+			<transition to="Alerting_5" event="INVITE"/>
+		</state>
+		
+		<state ID="Alerting_5">
+			<response>
+				<if>
+					<and>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>PRACK</expr>
+						</eq>
+						<contains>
+							<msg_ref type="sip" msg_instance="last" hdr_instance="any">18x-Invite.Require</msg_ref>
+							<expr>100rel</expr>
+						</contains>
+					</and>
+					<then>
+						<!--Reliability required for test sending 200-Prack message to peer.-->
+						<send protocol="sip" msgtype="200-PRACK"/>
+					</then>
+				</if>
+				<!-- Now test for an UPDATE message -->
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>UPDATE</expr>
+					</eq>
+					<then>
+						<!--QoS required or supported sending 200-Update message to peer.-->
+						<send protocol="sip" msgtype="200-Update"/>
+					</then>
+				</if>
+				<!-- Test whether to send 180 -->
+				<if>
+					<and>
+						<contains>
+							<msg_ref type="sip" msg_instance="last">18x-Invite.Status-Line.status-code</msg_ref>
+							<expr>183</expr>
+						</contains>
+						<eq>
+							<msg_ref type="sdp">Request.qos-curr-remote.direction</msg_ref>
+							<msg_ref type="sdp">Request.qos-des-remote.direction</msg_ref>
+						</eq>
+					</and>
+					<then>
+						<!--Sending 180 for required preconditions.-->
+						<send protocol="sip" msgtype="180-Invite"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Alerting_5" event="DialDigitsComplete"/>
+			<transition to="Alerting_5" event="PRACK"/>
+			<transition to="Alerting_5" event="UPDATE"/>
+			<transition to="Answer_5" event="ALERTING_UAS"/>
+		</state>
+		
+		<state ID="Answer_5" timer="5000">
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="event"/>
+						<expr>TimerExpired</expr>
+					</eq>
+					<then>
+						<!--Sending 200-Invite-->
+						<send protocol="sip" msgtype="200-INVITE"/>
+					</then>
+				</if>
+				<!-- Now test for an UPDATE message -->
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>UPDATE</expr>
+					</eq>
+					<then>
+						<!--QoS required or supported sending 200-Update message to peer.-->
+						<send protocol="sip" msgtype="200-Update"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Answer_5" event="UPDATE"/>
+			<transition to="Answer_5" event="TimerExpired"/>
+			<transition to="Connected_5" event="ACK"/>
+		</state>
+		
+		<state ID="Connected_5" timer="5000">
+			<transition to="Releasing_5" event="TimerExpired"/>
+		</state>
+		
+		<state ID="Releasing_5">
+			<prelude>
+				<!--Sending BYE to peer to terminate call.-->
+				<send protocol="sip" msgtype="BYE"/>
+			</prelude>
+			<transition to="OnHook_5" event="200-Bye"/>
+		</state>
+		
+		<state ID="OnHook_5">
+			<prelude>
+				<send protocol="utility" msgtype="OnHook"/>
+				<sleep time="5500"/>
+			</prelude>
+			<transition to="EndTheCall_5" event="OnHookComplete"/>
+		</state>
+		
+		<state ID="EndTheCall_5" ES="true">
+			<transition to="Setup1_5" event="SessionTerminated"/>
+		</state>
+		
+		<state ID="Setup1_5">
+			<prelude>
+				<sleep time="5500"/>
+				<send protocol="sip" msgtype="Invite">
+					<mod modtype="add" hdr="Priority" param="value">
+						<expr>emergency</expr>
+					</mod>
+					<mod modtype="replace" hdr="P-Asserted-Identity">
+						<expr>urn:service:sos</expr>
+					</mod>
+				</send>
+			</prelude>
+			<!-- Expected responses are 100, 180, 183 or 200 -->
+			<response>
+				<if>
+					<contains>
+						<msg_ref type="sip" msg_instance="last" hdr_instance="any">18x-Invite.Require</msg_ref>
+						<expr>100rel</expr>
+					</contains>
+					<then>
+						<!--Reliability required for test sending Prack message to peer.-->
+						<send protocol="sip" msgtype="Prack"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Proceeding1_5" event="100-INVITE"/>
+			<transition to="Alerting1_5" event="180-INVITE"/>
+			<transition to="Alerting1_5" event="183-INVITE"/>
+			<transition to="Connected1_5" event="200-INVITE"/>
+		</state>
+		
+		<state ID="Proceeding1_5">
+			<!-- Expected responses are 180, 183 or 200 -->
+			<response>
+				<if>
+					<contains>
+						<msg_ref type="sip" msg_instance="last" hdr_instance="any">18x-Invite.Require</msg_ref>
+						<expr>100rel</expr>
+					</contains>
+					<then>
+						<!--Reliability required for test sending Prack message to peer.-->
+						<send protocol="sip" msgtype="Prack"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Alerting1_5" event="180-INVITE"/>
+			<transition to="Alerting1_5" event="183-INVITE"/>
+			<transition to="Connected1_5" event="200-INVITE"/>
+		</state>
+		
+		<state ID="Alerting1_5" timer="5000">
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="event"/>
+						<expr>TimerExpired</expr>
+					</eq>
+					<then>
+						<!--Take DUT phone off hook-->
+						<send protocol="utility" msgtype="OffHook"/>
+					</then>
+				</if>
+				<!-- Expected responses are 180, 183, PRACK, UPDATE, or 200 -->
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>UPDATE</expr>
+					</eq>
+					<then>
+						<!--QoS required for test, sending a 200-OK to Update message to peer.-->
+						<send protocol="sip" msgtype="200-Update"/>
+					</then>
+					<elseif>
+						<and>
+							<eq>
+								<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+								<expr>180</expr>
+							</eq>
+							<contains>
+								<msg_ref type="sip" hdr_instance="any">180-INVITE.Require</msg_ref>
+								<expr>100rel</expr>
+							</contains>
+						</and>
+						<then>
+							<!--Reliability required for test, sending Prack message to peer.-->
+							<send protocol="sip" msgtype="Prack"/>
+						</then>
+					</elseif>
+				</if>
+			</response>
+			<transition to="Alerting1_5" event="200-PRACK"/>
+			<transition to="Alerting1_5" event="UPDATE"/>
+			<transition to="Alerting1_5" event="18x-INVITE"/>
+			<transition to="Answer1_5" event="TimerExpired"/>
+			<transition to="Connected1_5" event="200-INVITE"/>
+		</state>
+		
+		<state ID="Answer1_5">
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>UPDATE</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="200-Update"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Answer1_5" event="UPDATE"/>
+			<transition to="Answer1_5" event="200-PRACK"/>
+			<transition to="Answer1_5" event="18x-INVITE"/>
+			<transition to="Answer1_5" event="OffHookComplete"/>
+			<transition to="Connected1_5" event="200-INVITE"/>
+		</state>
+		
+		<state ID="Connected1_5" timer="5000">
+			<prelude once="true">
+				<send protocol="sip" msgtype="ACK"/>
+			</prelude>
+			<transition to="Connected1_5" event="OffHookComplete"/>
+			<transition to="HookFlash1_5" event="TimerExpired"/>
+		</state>
+		
+		<state ID="HookFlash1_5">
+			<prelude>
+				<send protocol="utility" msgtype="HookFlash"/>
+			</prelude>
+			<transition to="Wait1_5" event="HookFlashComplete"/>
+		</state>
+		
+		<!-- Wait State Step 22-->
+		<state ID="Wait1_5" timer="10000">
+			<response>
+				<verify step="22" requirements="REQ14093, REQ14094">
+					<and>
+						<neq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>REINVITE</expr>
+						</neq>
+						<neq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>INVITE</expr>
+						</neq>
+					</and>
+				</verify>
+			</response>
+			<transition to="Releasing1_5" event="TimerExpired"/>
+		</state>
+		
+		<state ID="Releasing1_5">
+			<prelude>
+				<!--Sending BYE to peer to terminate call.-->
+				<send protocol="sip" msgtype="BYE"/>
+			</prelude>
+			<transition to="OnHook1_5" event="200-Bye"/>
+		</state>
+		
+		<state ID="OnHook1_5">
+			<prelude>
+				<send protocol="utility" msgtype="OnHook"/>
+			</prelude>
+			<transition to="END" event="OnHookComplete"/>
+		</state>
+	</add_to>
+	
+	<remove_from fsm="UE2">
+		<state ID="Setup"/>
+	</remove_from>
+	
+	<add_to fsm="UE2">
+		<transition from="RealOrSimulatedUE" to="EmergencyCallComplete" event="Branch2Event"/>
+		
+		<state ID="EmergencyCallComplete">
+			<transition to="WaitCall" event="Branch1Event"/>
+		</state>
+		
+		<state ID="WaitCall">
+			<transition to="Setup" event="Branch1Event"/>
+		</state>
+		
+		<state ID="Setup">
+			<prelude once="true">
+				<send protocol="sip" msgtype="Invite"/>
+			</prelude>
+			<!-- Expected responses are 100, 180, 183 or 200 -->
+			<response>
+				<if>
+					<gt>
+						<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+						<expr>100</expr>
+					</gt>
+					<then>
+						<verify step="4" requirements="REQ14093, REQ14094">
+							<eq>
+								<msg_ref type="sip">Response</msg_ref>
+								<expr>486-INVITE</expr>
+							</eq>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<transition to="Setup" event="100-INVITE"/>
+			<transition to="EndCall" event="xxx-INVITE"/>
+		</state>
+		
+		<state ID="EndCall" ES="true" offHookOK="true">
+			<prelude>
+				<generate event="Branch2Event" fsm="UE1"/>
+			</prelude>
+		</state>
+	</add_to>
+</pc2xml>

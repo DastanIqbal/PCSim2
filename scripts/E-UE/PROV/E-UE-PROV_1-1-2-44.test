@@ -1,0 +1,198 @@
+#//*****************************************************************************
+#// Filename: E-UE-PROV_1-1-2-44.test
+#// Author:   Matthew Forbes
+#// Creation Date: March 16, 2009
+#// Modified by:
+#//*****************************************************************************
+#// Description:
+#//     TC3252 TEST CASE E-UE-PROV 1.1.2.44 - Ability of eUE to Properly Update the
+#//	ToD When the eCM Changes ToD Due to Changes in Values From the ToD Server or Time
+#//	Offset in DHCP Options.
+#//
+#// Objective:
+#//     To verify the ability of the eUE to update the ToD and send the corresponding 
+#//	event in the scenario when eCM changes ToD due to the change in DHCP Options
+#//	(ToD Server and Time Offset) during the DHCP Renew.
+#//	
+#//
+#//
+#// PacketCable DUT:
+#//     E-UE
+#//
+#// Test Steps:
+#//     - Initial Configuration
+#//     - Start sniffer
+#//     - Reset DUT
+#//     - Check provisioning state of eUE
+#//     - Check timestamp of Syslog message, should match ToD
+#//     - Set policy for eCM to different Time Server and offset
+#//     - Wait lease renewal (90 secs) and time request
+#//     - Monitor trace and verify syslog message and ToD to different Time server
+#//     - Wait for Provisioning of eUE
+#//     - Check Syslog message, should have new ToD from new server and new time offset
+#//     - Check for AS request to KDC for new ticket
+#//     - Perform SNMP query to check for SNMPv3 management of eUE
+#//     - Send WAKEUP message to eUE and generate AP Request
+#//     - Perform SNMP query to check for SNMPv3 management of eUE
+#//     - Stop sniffer
+#//     - Restore policy
+#//
+#// Notes:
+#//     - Requires provPrimitives.tcl & tftp_primitives.tcl.
+#//     - Requires the specific config file in $BASE_CFG_FILE_PATH in Provisioning Server.
+#//     - Requires parT.tcl parsing tool to parse data from capture file.
+#//*****************************************************************************
+
+global SCRIPT_VERSION
+set SCRIPT_VERSION { # $Id: E-UE-PROV_1-1-2-44.test 7406 2010-07-20 17:17:37Z dthakore $ }
+
+DoStep "E-UE-PROV_1-1-2-44-PreStep-1" "Initialize Test Platform" {
+    Init_PROV
+    Init_CONTROLLER_LAN
+    # Initial PARSER TOOL
+    Init_PART
+} { PASS_STEP }
+
+
+
+set msgStr "Configure DHCP SERVER"
+DoStep "E-UE-PROV_1-1-2-44_PreStep-3" $msgStr {
+} {
+    PROV_MODIFY_DEVICE $CM_MAC CMFORCW_122_3MIN
+    PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122 Device_Level_Secure.cfg
+    PROV_DEPLOY_DHCP
+}
+
+set msgStr "Start Sniffer"
+DoStep "E-UE-PROV_1-1-2-44_1-1" $msgStr {
+    LogMsg "--- $msgStr ---"
+    SetupCaptureControllerLan "host $MTA_IP || udp port 67 || host $CM_IP"
+    StartCaptureControllerLan
+} {PASS_STEP}
+
+DoStep "E-UE-PROV_1-1-2-44_1-2" "Reset DUT" {
+    set val [SNMPvN_RESET $CM_IP]
+    LogMsg "Hard reboot of CM and MTA has passed"
+} {
+    IsEqual $val 0
+}
+
+DoStep "E-UE-PROV_1-1-2-44_2-1" "pktcMTADevProvisioningState Content Verification" {
+    actionWait "Wait for CM/MTA to reboot" 80
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMP_GET $oid_pktcMtaDevProvisioningState $MTA_IP]
+    LogMsg "MTA Provisioning State" 49
+    LogMsg "             - Expected : 1" 49
+    LogMsg "             - Received : $val" 49
+} {
+    IsEqual $val 1
+}
+
+set msgStr "Monitor Trace: Verify Syslog message from eUE has a timestamp that matches the TOD."
+DoStep "E-UE-PROV_1-1-2-44_3-1" $msgStr {
+    LogMsg "--- $msgStr ---"
+} {
+    verify_signal $msgStr
+}
+
+set msgStr "Configure DHCP SERVER"
+DoStep "E-UE-PROV_1-1-2-44_4-1" $msgStr {
+} {
+    PROV_MODIFY_DEVICE $CM_MAC CM_TC3252
+    PROV_DEPLOY_DHCP
+}
+
+set msgStr "Monitor Trace: Verify CM ($CM_IP) sends DHCP REQUEST to renew its IP and receives a
+DHCP ACK with option 4, Time server = 10.32.0.19 and option 2, Time offset = 5 sec ."
+DoStep "E-UE-PROV_1-1-2-44_4-2" $msgStr {
+    LogMsg "--- $msgStr ---"
+} {
+    verify_signal $msgStr
+}
+
+set msgStr "Monitor Trace: Verify CM ($CM_IP) sends ToD REQUEST receives a RESPONSE."
+DoStep "E-UE-PROV_1-1-2-44_5-1" $msgStr {
+    LogMsg "--- $msgStr ---"
+} {
+    verify_signal $msgStr
+}
+
+set msgStr "Monitor Trace: Verify Syslog message from eUE has event message 4000960006 time has been
+    retrieved from TOD server and the timestamp matches the new TOD."
+DoStep "E-UE-PROV_1-1-2-44_6-1" $msgStr {
+    LogMsg "--- $msgStr ---"
+} {
+    verify_signal $msgStr
+}
+
+set msgStr "Monitor Trace: Verify an AS REQUEST message from eUE to the KDC ($KDC_IP)."
+DoStep "E-UE-PROV_1-1-2-44_6-1" $msgStr {
+    LogMsg "--- $msgStr ---"
+} {
+    verify_signal $msgStr
+}
+
+DoStep "E-UE-PROV_1-1-2-44_7-1" "pktcMTADevProvisioningState Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMP_GET $oid_pktcMtaDevProvisioningState $MTA_IP]
+    LogMsg "MTA Provisioning State" 49
+    LogMsg "             - Expected : 1" 49
+    LogMsg "             - Received : $val" 49
+} {
+    IsEqual $val 1
+}
+
+# set msgStr "Monitor Trace: Verify an AP REQUEST message from eUE."
+# DoStep "E-UE-PROV_1-1-2-44_8-1" $msgStr {
+    # LogMsg "--- $msgStr ---"
+# } {
+    # verify_signal $msgStr
+# }
+
+DoStep "E-UE-PROV_1-1-2-44_9-1" "pktcMTADevProvisioningState Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMP_GET $oid_pktcMtaDevProvisioningState $MTA_IP]
+    LogMsg "MTA Provisioning State" 49
+    LogMsg "             - Expected : 1" 49
+    LogMsg "             - Received : $val" 49
+} {
+    IsEqual $val 1
+}
+
+set msgStr "Stop Sniffer"
+DoStep "E-UE-PROV_1-1-2-44_10-1" $msgStr {
+    LogMsg "--- $msgStr ---"
+    StopCaptureControllerLan
+    SaveToFileControllerLan
+} {PASS_STEP}
+
+
+set msgStr "Configure DHCP SERVER"
+DoStep "E-UE-PROV_1-1-2-44_PostStep-1" $msgStr {
+} {
+    PROV_MODIFY_DEVICE $CM_MAC CMFORCW_122
+    PROV_DEPLOY_DHCP
+}
+
+DoStep "E-UE-PROV_1-1-2-44_PostStep-2" "Reset DUT" {
+    set val [SNMPvN_RESET $CM_IP]
+    LogMsg "Hard reboot of CM and MTA has passed"
+} {
+    IsEqual $val 0
+}
+
+DoStep "E-UE-PROV_1-1-2-44_PostStep-3" "pktcMTADevProvisioningState Content Verification" {
+    # Wait for a minute to let CM/MTA starting to reboot
+    actionWait "Wait for CM/MTA to reboot" 60
+    # Get the OID from the MTA and check it using our previously defined
+    set val [GetProvState 1 600]
+    LogMsg "MTA Provisioning State"
+    LogMsg "             - Expected : 1"
+    LogMsg "             - Received : $val"
+} {
+    IsEqual $val 1
+}
+
+Cleanup
+
+

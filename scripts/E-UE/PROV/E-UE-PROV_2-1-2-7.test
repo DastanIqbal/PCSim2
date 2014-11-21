@@ -1,0 +1,144 @@
+###############################################################################
+#// Filename: E-UE-PROV_2-1-2-7.test
+#// Author:  Matthew Forbes
+#//
+#//
+#//
+#// Creation Date: Novemeber 02, 2008
+#// Modified by:
+################################################################################
+#// Description:
+#//     TC2835 TEST CASE E-UE-PROV_2-1-2-7 Ability of eUE to reject a configuration
+#//     file when the wrong value of the encryption key is supplied to the device.
+#//
+#// Objective:
+#//     To test the Capability of the eUE DUT to to reject the Configuration File 
+#//     if the Encryption is wrong (wrong encryption key is supplied to the DUT).
+#//
+#// PacketCable DUT:
+#//     MTA
+#//
+#// Test Steps:
+#//     - Initial configuration
+#//     - Modify TLV properties with a faulty encyption key
+#//     - Start sniffer
+#//     - Reset DUT
+#//     - Check Provisioning state
+#//     - Stop sniffer
+#//     - Invoke parsing tool and validate using Pass/Fail scripts
+#//     - Restore TLV properties
+#//     
+#//
+#// Notes:
+#//     - Requires provPrimitives .tcl & tftp_primitives.tcl.
+#//     - Requires the specific config file in $BASE_CFG_FILE_PATH in Provisioning Server.
+#//     - Requires parT.tcl parsing tool to parse data from capture file.
+##########################################################################################
+
+global SCRIPT_VERSION
+set SCRIPT_VERSION { # $Id: E-UE-PROV_2-1-2-7.test 7406 2010-07-20 17:17:37Z dthakore $ }
+
+###################### INITIAL CONFIGURATION OF DUT ########################
+
+DoStep "E-UE-PROV_2-1-2-7_1-1" "Initial configuration" {
+    LogMsg "--- Initial PROV module ---"
+    Init_PROV
+    # ProvCreateConfig 291 $MTA_MAC
+} { PASS_STEP }
+
+DoStep "E-UE-PROV_2-1-2-7_2-1" "Set Privacy to DES" {
+    LogMsg "--- Set Privacy to DES---"
+    # verify_signal "Set Privacy to DES(go to SNMPv3, set privacy protocol to DES.)"
+    PROV_SNMP_PRIV_PROTO DES
+} { PASS_STEP }
+
+################# CREATE FAULTY ENCRYPTION KEY FOR CONFIG FILE ################
+
+DoStep "E-UE-PROV_2-1-2-7_3-1" "Create a faulty encryption key for the configuration file in TLV properties" {
+    LogMsg "--- Create faulty encryption key in TLV properties ---"
+    # verify_signal "Set ECRYPTION = true and FAULTYENCRYPTION.mtamac = true in TLV properties and reload"
+    # verify_signal "Modify cfg-616.bin to point to $CMS_NAME (List files, select cfg-616, edit CMS FQDNs in TLVs)
+    # and click Save to Prov & TFTP Put"
+    PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122 cfg-2835.bin
+    PROV_DEPLOY_DHCP
+    LogMsg "--- Faulty encryption key in TLV properties has been created ---"
+} {PASS_STEP}
+
+################################# START SNIFFER ###############################
+
+DoStep "E-UE-PROV_2-1-2-7_4-1" "Start sniffer" {
+    LogMsg "--- Start sniffer ---"
+    Init_CONTROLLER_LAN
+    SetupCaptureControllerLan "host $MTA_IP || udp port 67 || host $CM_IP"
+    StartCaptureControllerLan
+} {PASS_STEP}
+
+################ RESET CM and MTA and VERIFY PROVISIONING STATE ################
+
+DoStep "E-UE-PROV_2-1-2-7_4-2" "Reset MTA" {
+    set val [SNMPvN_RESET $CM_IP]
+    LogMsg "Reset of CM and MTA has passed"
+} {
+    IsEqual $val 0
+}
+
+DoStep "E-UE-PROV_2-1-2-7_5-1" "pktcMTADevProvisioningState Content Verification" {
+    # Wait for a minute to let CM/MTA starting to reboot
+    actionWait "Waiting for CM and MTA to reboot" 60
+    # Get the OID from the MTA and check it using our previously defined
+    set val [GetProvState 3 600]
+    LogMsg "MTA Provisioning State"
+    LogMsg "             - Expected : 3"
+    LogMsg "             - Received : $val"
+} {
+    IsEqual $val 3
+}
+
+##################### STOP SNIFFER AND SAVE CAPTURE FILES #####################
+
+DoStep "E-UE-PROV_2-1-2-7_6-1" "Stop sniffer" {
+    LogMsg "--- Stop sniffer ---"
+    StopCaptureControllerLan
+    SaveToFileControllerLan
+} { PASS_STEP }
+
+############# RESTORE TLV PROPERTIES TO ORIGINAL CONFIGURATION #############
+
+DoStep "E-UE-PROV_2-1-2-7_7-1" "Set Privacy to null" {
+    LogMsg "--- Set Privacy to null ---"
+    # verify_signal "Restore TLV properties to original configuration and reload"
+    # verify_signal "Set Privacy to null(go to SNMPv3, set privacy protocol to NULL)."
+    PROV_SNMP_PRIV_PROTO NULL
+    PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122 Device_Level_Secure.cfg
+    # ProvCreateConfig 291 $MTA_MAC
+    PROV_DEPLOY_DHCP
+    LogMsg "--- TLV properties have been restored ---"
+} {PASS_STEP}
+
+################ RESET CM and MTA and VERIFY PROVISIONING STATE ################
+
+DoStep "E-UE-PROV_2-1-2-7_7-2" "Reset MTA" {
+    set val [SNMPvN_RESET $CM_IP]
+    LogMsg "Reset of CM and MTA has passed"
+} {
+    IsEqual $val 0
+}
+
+DoStep "E-UE-PROV_2-1-2-7_7-3" "pktcMTADevProvisioningState Content Verification" {
+    # Wait for a minute to let CM/MTA starting to reboot
+    actionWait "Waiting for CM and MTA to reboot" 60
+    # Get the OID from the MTA and check it using our previously defined
+    set val [GetProvState 1 600]
+    LogMsg "MTA Provisioning State"
+    LogMsg "             - Expected : 1"
+    LogMsg "             - Received : $val"
+} {
+    IsEqual $val 1
+}
+
+#################################################################################
+# Cleanup
+#################################################################################
+
+Cleanup
+return 0

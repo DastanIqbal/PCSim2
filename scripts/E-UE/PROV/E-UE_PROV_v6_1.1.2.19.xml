@@ -1,0 +1,118 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+ Change History: (Author & Date)
+
+-->
+
+
+<!-- Document type and attributes. -->
+<pc2xml version="$Revision: 6076 $"
+        name="E-UE_PROV_1.1.2.19"
+        descrip="eUE returns to first step in provisioning flow
+                 when both primary and secondary DHCP servers unavailable."
+        number="E-UE_PROV_1.1.2.19">
+
+    <!-- Device reboot; start capture. -->
+    <template file="./templates/EUE_Prov_B_1_1_1.xml" name="DHCPServersUnavailable"/>
+
+    <add_to fsm="DHCPServersUnavailable">
+        <transition from="StartCapture_RebootWait" to="DHCPCheck" event="TimerExpired"/>
+
+
+       <!-- Step 7.
+                * eUE sent at least three SOLICIT messages separated by the exponential timeout.
+                * Neither DHCP server sent DHCP ADVERTISE messages.
+                * eUE did not send DHCP REQUEST messages.
+                * eUE repeats cycle of at least three DHCP DISCOVER messages separated by exponential timeout. -->
+        <state ID="DHCPCheck">
+            <prelude once="true">
+				<sleep time="240000"/>
+                <stop_capture/>
+
+				<parse_capture name="eUE_DHCPv6">
+                    <parser_filter protocol="dhcpv6" clientMAC="DUT.MAC Address"/>
+                </parse_capture>
+                <!--parse_capture name="eUE_DHCPv6">
+                    <parser_filter protocol="dhcpv6" ip="DUT.DHCP Server IP"/>
+                </parse_capture>
+                <parse_capture name="eUE_Prov1">
+                    <parser_filter protocol="dhcpv6" ip="DUT.DHCP Server IP 2"/>
+                </parse_capture>
+                <parse_capture name="eUE_Prov2">
+                    <parser_filter protocol="dhcpv6" ip="DUT.IP"/>
+                </parse_capture-->
+
+                <verify step="7">
+                    <and>
+                        <lt>
+                            <capture_ref type="dhcpv6" name="eUE_DHCPv6" msg_instance="1" add="15">Solicit.timestamp</capture_ref>
+                            <capture_ref type="dhcpv6" name="eUE_DHCPv6" msg_instance="5">Solicit.timestamp</capture_ref>
+                        </lt>
+                    <and>
+                        <gt>
+                            <capture_ref type="dhcpv6" name="eUE_DHCPv6" msg_instance="1" add="45">Solicit.timestamp</capture_ref>
+                            <capture_ref type="dhcpv6" name="eUE_DHCPv6" msg_instance="5">Solicit.timestamp</capture_ref>
+                        </gt>
+                    <and>
+                        <lt>
+                            <capture_ref type="dhcpv6" name="eUE_DHCPv6" msg_instance="5" add="15">Solicit.timestamp</capture_ref>
+                            <capture_ref type="dhcpv6" name="eUE_DHCPv6" msg_instance="9">Solicit.timestamp</capture_ref>
+                        </lt>
+                    <and>
+                        <gt>
+                            <capture_ref type="dhcpv6" name="eUE_DHCPv6" msg_instance="5" add="45">Solicit.timestamp</capture_ref>
+                            <capture_ref type="dhcpv6" name="eUE_DHCPv6" msg_instance="9">Solicit.timestamp</capture_ref>
+                        </gt>
+                    <and>
+                        <lt>
+                            <capture_ref type="dhcpv6" name="eUE_DHCPv6" msg_instance="9" add="15">Solicit.timestamp</capture_ref>
+                            <capture_ref type="dhcpv6" name="eUE_DHCPv6" msg_instance="13">Solicit.timestamp</capture_ref>
+                        </lt>
+                    <and>
+                        <gt>
+                            <capture_ref type="dhcpv6" name="eUE_DHCPv6" msg_instance="9" add="45">Solicit.timestamp</capture_ref>
+                            <capture_ref type="dhcpv6" name="eUE_DHCPv6" msg_instance="13">Solicit.timestamp</capture_ref>
+                        </gt>
+                    <!--and>
+                        <lt>
+                            <capture_ref type="dhcpv6" name="eUE_DHCPv6" msg_instance="13" add="3750">Solicit.timestamp</capture_ref>
+                            <capture_ref type="dhcpv6" name="eUE_DHCPv6" msg_instance="17">Solicit.timestamp</capture_ref>
+                        </lt>
+                    <and>
+                        <gt>
+                            <capture_ref type="dhcpv6" name="eUE_DHCPv6" msg_instance="13" add="4250">Solicit.timestamp</capture_ref>
+                            <capture_ref type="dhcpv6" name="eUE_DHCPv6" msg_instance="17">Solicit.timestamp</capture_ref>
+                        </gt>
+                    <and-->
+                        <!--null>
+                            <capture_ref type="dhcpv6" name="eUE_DHCPv6">Advertise</capture_ref>
+                        </null>
+                    <and>
+                        <null>
+                            <capture_ref type="dhcpv6" name="eUE_DHCPv6">Advertise</capture_ref>
+                        </null-->
+                        <null>
+                            <capture_ref type="dhcpv6" name="eUE_DHCPv6">Request</capture_ref>
+                        </null>
+                    </and>
+                    </and>
+                    </and>
+                    </and>
+                    </and>
+                    </and>
+                </verify>
+				<generate event="SucceedEvent"/>
+            </prelude>
+			<transition to="END" event="SucceedEvent"/>
+        </state>
+    </add_to>
+</pc2xml>

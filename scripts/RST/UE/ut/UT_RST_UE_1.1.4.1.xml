@@ -1,0 +1,308 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+-->
+
+<pc2xml version="$Revision: 7975 $" 
+		name="UT_RST_UE_1.1.4.1" 
+		descrip="This is a unit test for the RST_UE 1.1.4.1 test script" 
+		number="1">
+		
+	<fsm name="UE1">
+		<models>
+			<session/>
+		</models>
+		<NE sim_type="term" elements="DUT PCSCF1" targets="UE1"/>
+		<states initialstate="Register">
+			<!-- REGISTER State -->
+			<state ID="Register">
+				<prelude>
+					<send protocol="sip" msgtype="Register" target="PCSCF1" originator="DUT"/>
+				</prelude>
+				<transition to="Digest" event="401-Register"/>
+				<transition to="Call1" event="200-Register"/>
+			</state>
+			<state ID="Digest">
+				<prelude>
+					<send protocol="sip" msgtype="Register" target="PCSCF1" originator="DUT"/>
+				</prelude>
+				<transition to="Call1" event="200-Register"/>
+			</state>
+			<!-- Call1 doesn't require any messaging from the unit test script.
+				Simply wait until it completes and then send an INVITE with the 
+				correct Request-Line -->
+			<state ID="Call1">
+				<prelude once="true">
+					<log expr="Start the test script if you haven't already."/>
+					<sleep time="15000"/>
+					<send protocol="sip" msgtype="Invite" target="UE1" originator="DUT"/>
+				</prelude>
+				<response>
+					<if>
+						<gte>
+							<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+							<expr>404</expr>
+						</gte>
+						<then>
+							<send protocol="sip" msgtype="Ack" target="UE1" originator="DUT"/>
+						</then>
+					</if>
+				</response >
+				<!-- Transitions for Call state -->
+				<transition to="Call2" event="404-INVITE"/>
+			</state>
+			<state ID="Call2">
+				<prelude once="true">
+					<log expr="Start the test script if you haven't already."/>
+					<sleep time="15000"/>
+					<send protocol="sip" msgtype="Invite" target="UE1" originator="DUT"/>
+				</prelude>
+				<response>
+					<if>
+						<gte>
+							<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+							<expr>406</expr>
+						</gte>
+						<then>
+							<send protocol="sip" msgtype="Ack" target="UE1" originator="DUT"/>
+						</then>
+					</if>
+				</response >
+				<!-- Transitions for Call state -->
+				<transition to="Call3" event="406-INVITE"/>
+			</state>
+			<state ID="Call3">
+				<prelude once="true">
+					<log expr="Start the test script if you haven't already."/>
+					<sleep time="15000"/>
+					<send protocol="sip" msgtype="Invite" target="UE1" originator="DUT"/>
+				</prelude>
+				<response>
+					<if>
+						<gte>
+							<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+							<expr>408</expr>
+						</gte>
+						<then>
+							<send protocol="sip" msgtype="Ack" target="UE1" originator="DUT"/>
+						</then>
+					</if>
+				</response >
+				<!-- Transitions for Call state -->
+				<transition to="Call4" event="408-INVITE"/>
+			</state>
+			<state ID="Call4">
+				<prelude once="true">
+					<log expr="Start the test script if you haven't already."/>
+					<sleep time="15000"/>
+					<send protocol="sip" msgtype="Invite" target="UE1" originator="DUT"/>
+				</prelude>
+				<response>
+					<if>
+						<gte>
+							<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+							<expr>480</expr>
+						</gte>
+						<then>
+							<send protocol="sip" msgtype="Ack" target="UE1" originator="DUT"/>
+						</then>
+					</if>
+				</response >
+				<!-- Transitions for Call state -->
+				<transition to="Call5" event="480-INVITE"/>
+			</state>
+			<state ID="Call5">
+				<prelude once="true">
+					<log expr="Start the test script if you haven't already."/>
+					<sleep time="15000"/>
+					<send protocol="sip" msgtype="Invite" target="UE1" originator="DUT"/>
+				</prelude>
+				<response>
+					<if>
+						<gte>
+							<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+							<expr>484</expr>
+						</gte>
+						<then>
+							<send protocol="sip" msgtype="Ack" target="UE1" originator="DUT"/>
+						</then>
+					</if>
+				</response >
+				<!-- Transitions for Call state -->
+				<transition to="Call6" event="484-INVITE"/>
+			</state>
+			<state ID="Call6">
+				<prelude once="true">
+					<log expr="Start the test script if you haven't already."/>
+					<sleep time="15000"/>
+					<send protocol="sip" msgtype="Invite" target="UE1" originator="DUT"/>
+										
+				</prelude>
+				<response>
+					<if>
+						<gte>
+							<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+							<expr>487</expr>
+						</gte>
+						<then>
+							<send protocol="sip" msgtype="Ack" target="UE1" originator="DUT"/>
+						</then>
+					</if>
+				</response >
+				<!-- Transitions for Call state -->
+				<transition to="Call7" event="487-INVITE"/>
+			</state>
+			<state ID="Call7">
+				<prelude once="true">
+					<log expr="Start the test script if you haven't already."/>
+					<sleep time="15000"/>
+					<send protocol="sip" msgtype="Invite" target="UE1" originator="DUT"/>
+				</prelude>
+				<response>
+					<if>
+						<gte>
+							<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+							<expr>487</expr>
+						</gte>
+						<then>
+							<send protocol="sip" msgtype="Ack" target="UE1" originator="DUT"/>
+						</then>
+					</if>
+				</response >
+				<!-- Transitions for Call state -->
+				<transition to="Call8" event="487-INVITE"/>
+			</state>
+			<state ID="Call8">
+				<prelude once="true">
+					<log expr="Start the test script if you haven't already."/>
+					<sleep time="15000"/>
+					<send protocol="sip" msgtype="Invite" target="UE1" originator="DUT"/>
+				</prelude>
+				<response>
+					<if>
+						<gte>
+							<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+							<expr>487</expr>
+						</gte>
+						<then>
+							<send protocol="sip" msgtype="Ack" target="UE1" originator="DUT"/>
+						</then>
+					</if>
+				</response >
+				<!-- Transitions for Call state -->
+				<transition to="Call9" event="487-INVITE"/>
+			</state>
+			<state ID="Call9">
+				<prelude once="true">
+					<log expr="Start the test script if you haven't already."/>
+					<sleep time="15000"/>
+					<send protocol="sip" msgtype="Invite" target="UE1" originator="DUT"/>
+				</prelude>
+				<response>
+					<if>
+						<gte>
+							<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+							<expr>500</expr>
+						</gte>
+						<then>
+							<send protocol="sip" msgtype="Ack" target="UE1" originator="DUT"/>
+						</then>
+					</if>
+				</response >
+				<!-- Transitions for Call state -->
+				<transition to="Call10" event="500-INVITE"/>
+			</state>
+			<state ID="Call10">
+				<prelude once="true">
+					<log expr="Start the test script if you haven't already."/>
+					<sleep time="15000"/>
+					<send protocol="sip" msgtype="Invite" target="UE1" originator="DUT"/>
+				</prelude>
+				<response>
+					<if>
+						<gte>
+							<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+							<expr>503</expr>
+						</gte>
+						<then>
+							<send protocol="sip" msgtype="Ack" target="UE1" originator="DUT"/>
+						</then>
+					</if>
+				</response >
+				<!-- Transitions for Call state -->
+				<transition to="Call11" event="503-INVITE"/>
+			</state>
+			<state ID="Call11">
+				<prelude once="true">
+					<log expr="Start the test script if you haven't already."/>
+					<sleep time="15000"/>
+					<send protocol="sip" msgtype="Invite" target="UE1" originator="DUT"/>
+				</prelude>
+				<response>
+					<if>
+						<gte>
+							<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+							<expr>504</expr>
+						</gte>
+						<then>
+							<send protocol="sip" msgtype="Ack" target="UE1" originator="DUT"/>
+						</then>
+					</if>
+				</response >
+				<!-- Transitions for Call state -->
+				<transition to="Call12" event="504-INVITE"/>
+			</state>
+			<state ID="Call12">
+				<prelude once="true">
+					<log expr="Start the test script if you haven't already."/>
+					<sleep time="15000"/>
+					<send protocol="sip" msgtype="Invite" target="UE1" originator="DUT"/>
+				</prelude>
+				<response>
+					<if>
+						<gte>
+							<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+							<expr>600</expr>
+						</gte>
+						<then>
+							<send protocol="sip" msgtype="Ack" target="UE1" originator="DUT"/>
+						</then>
+					</if>
+				</response >
+				<!-- Transitions for Call state -->
+				<transition to="Call13" event="600-INVITE"/>
+			</state>
+			<state ID="Call13">
+				<prelude once="true">
+					<log expr="Start the test script if you haven't already."/>
+					<sleep time="15000"/>
+					<send protocol="sip" msgtype="Invite" target="UE1" originator="DUT"/>
+				</prelude>
+				<response>
+					<if>
+						<gte>
+							<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+							<expr>600</expr>
+						</gte>
+						<then>
+							<send protocol="sip" msgtype="Ack" target="UE1" originator="DUT"/>
+						</then>
+					</if>
+				</response >
+				<!-- Transitions for Call state -->
+				<transition to="END" event="603-INVITE"/>
+			</state>
+		</states>
+	</fsm>
+</pc2xml>

@@ -1,0 +1,88 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	PCPCIIAPPSATP-128 : Remove steps 7 & 8 from the script to match the updated test case. (ghassler 04/30/2010)
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-UE 1.2.2.2" 
+	descrip="Display Name and SIP URI in P-Asserted-Identity header" 
+	number="RST-UE 1.2.2.2">
+	
+	<fsm name="UE1">
+		<models>
+			<session/>
+		</models>
+		
+		<NE sim_type="orig" elements="UE1 PCSCF2 SCSCF1 PCSCF1" targets="UE1"/>
+		
+		<states initialstate="Register1">
+			<state ID="Register1">
+				<postlude>
+					<sleep time="3000"/>
+				</postlude>
+				<transition to="Setup1" event="Registered"/>
+			</state>
+			
+			<state ID="Setup1">
+				<prelude>
+					<send protocol="sip" msgtype="Invite">
+						<!-- Step 1 test case SIP 1.2.2.2 -->
+						<mod modtype="replace" hdr="P-Asserted-Identity">
+							<expr>&quot;Cullen Jennings&quot; &lt;sip:bob@Biloxi.com&gt;</expr>
+						</mod>
+					</send>
+				</prelude>
+				<transition to="DisplayVerify1" event="xxx-INVITE"/>
+			</state>
+			
+			<state ID="DisplayVerify1">
+				<prelude>
+					<log promptUser="True" yesExpected="True" verify="True" 
+						step="2" requirements="REQ14456" 
+						expr="View Caller ID display device. Verify display has 'Cullen Jennings' in the name field and nothing in the number field?"/>
+				</prelude>
+				<transition to="EndSession1" event="xxx-INVITE"/>
+			</state>
+			
+			<state ID="EndSession1" ES="true">
+				<transition to="Setup2" event="SessionTerminated"/>
+			</state>
+			
+			<state ID="Setup2">
+				<prelude>
+					<sleep time="10000"/>
+					<send protocol="sip" msgtype="Invite">
+						<!-- Step 4 test case SIP 1.2.2.2 -->
+						<mod modtype="replace" hdr="P-Asserted-Identity">
+							<expr>&quot;Cullen Jennings Esq&quot; &lt;sip:bob@Biloxi.com&gt;</expr>
+						</mod>
+					</send>
+				</prelude>
+				<transition to="DisplayVerify2" event="xxx-INVITE"/>
+			</state>
+			
+			<state ID="DisplayVerify2">
+				<prelude>
+					<log promptUser="True" yesExpected="True" verify="True" 
+						step="5" requirements="REQ14456" 
+						expr="View Caller ID display device. Verify display has	'Cullen Jennings'\nin the name field and nothing in the number field?"/>
+				</prelude>
+				<transition to="END" event="xxx-INVITE"/>
+			</state>
+		</states>
+	</fsm>
+</pc2xml>

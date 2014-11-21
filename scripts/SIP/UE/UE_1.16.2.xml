@@ -1,0 +1,75 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	PCPCII-135 : UPdate the script to accommodate a de-register message during the reboot. (ghassler 06/24/2009)
+	
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="SIP-UE 1.16.2" 
+	descrip="Support for P-Associated-URI Header/Value When UE Subscribes to the Registration-State Event Package" 
+	number="SIP-UE 1.16.2">
+	
+	<template file="./templates/UERegAndSubTemp.xml" name="Registrar"/>
+	
+	<remove_from fsm="Registrar">
+		<state ID="Registered"/>
+	</remove_from>
+	
+	<add_to fsm="Registrar">
+		<NE targets="dut@pclab.com"/>
+		
+		<state ID="Registered">
+			<prelude>
+				<send protocol="sip" msgtype="200-Register">
+					<!-- Step 2 of test case 1.16.2- SS transmits a 200-REGISTER 
+						per step 4 [UE Registration Case Flow] with the following 
+						modification. -->
+					<mod modtype="add" hdr="P-Associated-URI">
+						<expr>&lt;sip:dut@pclab.com&gt;</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="4" requirements="REQ16890, REQ16891">
+					<eq>
+						<msg_ref type="sip">SUBSCRIBE.From.name-addr</msg_ref>
+						<msg_ref type="sip" msg_instance="last">200-Register.P-Associated-URI.name-addr</msg_ref>
+					</eq>
+				</verify>
+				<if>
+					<and>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>SUBSCRIBE</expr>
+						</eq>
+						<contains>
+							<msg_ref type="sip">SUBSCRIBE.Event</msg_ref>
+							<expr>reg</expr>
+						</contains>
+					</and>
+					<then>
+						<send protocol="sip" msgtype="200-SUBSCRIBE"/>
+						<sleep time="100"/>
+						<send protocol="sip" msgtype="NOTIFY"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Notification" event="SUBSCRIBE"/>
+		</state>
+		<transition from="Notification" to="END" event="200-NOTIFY"/>
+	</add_to>
+</pc2xml>

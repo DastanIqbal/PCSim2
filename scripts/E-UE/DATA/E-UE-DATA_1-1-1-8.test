@@ -1,0 +1,167 @@
+#//****************************************************************************
+#// Filename: E-UE-DATA_1-1-1-8.test
+#// Author:   Matthew Forbes
+#// Creation Date: 11/09/2008
+#// Modified by:
+#//
+#//
+#//
+#//****************************************************************************
+#// Description:
+#//     TC2740 TEST CASE E-UE-DATA 1.1.1.8 Ability of eUE to remain operational when swithed 
+#//        between AC and DC power
+#//
+#// Objective:
+#//     If the eUE supports battery backup, this test verifies the ability of the device to
+#//     seamlessly switch between AC and DC power during normal operation.  This will also verify
+#//     that the provisioned IP services are not affected by the switch.
+#//
+#// PacketCable DUT:
+#//     EDVA
+#//
+#// Test Steps:
+#//     - Initial configuration
+#//     - Start sniffer
+#//     - Reset EDVA
+#//     - Check Provisioning state
+#//     - Check IP services
+#//     - Remove AC power
+#//     - Check IP services
+#//     - Restore AC
+#//     - Check IP services
+#//     - Remove AC power
+#//     - Reset EDVA
+#//     - Check Provisioning state
+#//     - Check IP services
+#//     - Restore AC
+#//     - Check IP services
+#//     - Stop Sniffer
+#//
+#// Notes:
+#//     
+#//     
+#//****************************************************************************
+
+set SCRIPT_VERSION { # $Id: E-UE-DATA_1-1-1-8.test 7406 2010-07-20 17:17:37Z dthakore $ }
+global SCRIPT_VERSION
+
+DoStep "E-UE-DATA_1-1-1-8_1-1" "Configure DUT" {
+    LogMsg "--- Configure DUT ---"
+    Init_PROV
+    PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122 Secure_Flow_BasicCall_DigitMap.cfg
+    PROV_DEPLOY_DHCP
+} {PASS_STEP}
+
+DoStep "E-UE-DATA_1-1-1-8_1-2" "Verify Battery" {
+    tk_messageBox -message "Please ensure a battery is installed in the EDVA and AC power is connected, then press OK"
+} {
+    PASS_STEP
+}
+
+################################# START SNIFFER ###############################
+
+DoStep "E-UE-DATA_1-1-1-8_1-3" "Start sniffer" {
+    LogMsg "--- Start sniffer ---"
+    Init_CONTROLLER_LAN
+    SetupCaptureControllerLan "host $MTA_IP || udp port 67 || host $CM_IP"
+    StartCaptureControllerLan
+} {PASS_STEP}
+
+################ RESET CM and MTA and VERIFY PROVISIONING STATE ################
+
+DoStep "E-UE-DATA_1-1-1-8_1-4" "Reset EDVA" {
+    set val [SNMPvN_RESET $CM_IP]
+    LogMsg "Reset of CM and DVA has passed"
+} {
+    IsEqual $val 0
+}
+DoStep "E-UE-DATA_1-1-1-8_1-5" "pktcMtaDevProvisioningState Content Verification" {
+    actionWait "Wait for MTA to reboot" 60
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMP_GET $oid_pktcMtaDevProvisioningState $MTA_IP 20]
+    LogMsg "The Value of EDVA Provisioning State is: $val"
+} {
+    IsEqual $val 1
+}
+
+#
+# Verify EDVA is alive
+#
+DoStep "E-UE-DATA_1-1-1-8_2" "Verify EDVA is alive" {
+        LogMsg "Verify EDVA is alive"
+} {
+    verify_signal "Verify EDVA IP services exist (ping $MTA_IP)" ;# verify mta is alive
+}
+
+
+#
+# Remove power and Verify EDVA is alive
+#
+DoStep "E-UE-DATA_1-1-1-8_3" "Remove power and Verify EDVA is alive" {
+    LogMsg "Remove power and Verify EDVA is alive"
+    tk_messageBox -message "Please disconnect AC power and press OK"
+} {
+    verify_signal "Verify EDVA IP services exist (ping $MTA_IP)" ;# verify mta is alive
+}
+
+#
+# Remove power and Verify EDVA is alive
+#
+DoStep "E-UE-DATA_1-1-1-8_4" "Restore power and Verify EDVA is alive" {
+    LogMsg "Restore power and Verify EDVA is alive"
+    tk_messageBox -message "Please connect AC power and press OK"
+} {
+    verify_signal "Verify EDVA IP services exist (ping $MTA_IP)" ;# verify mta is alive
+}
+
+#
+# Restore power and Verify EDVA is alive
+#
+DoStep "E-UE-DATA_1-1-1-8_5" "Remove power and Verify EDVA is alive" {
+    LogMsg "Remove power and Verify EDVA is alive"
+    tk_messageBox -message "Please disconnect AC power and press OK"
+    SNMP_SET $oid_pktcMtaDevResetNow INTEGER 1 $MTA_IP
+    actionWait "Wait for MTA to reboot" 30
+    set val [SNMP_GET $oid_pktcMtaDevProvisioningState $MTA_IP 20]
+    LogMsg "The Value of MTA Provisioning State is: $val"
+} {
+    IsEqual $val 1
+}
+
+DoStep "E-UE-DATA_1-1-1-8_6" "Verify EDVA is alive" {
+    LogMsg "Verify EDVA is alive"
+} {
+    verify_signal "Verify EDVA IP services exist (ping $MTA_IP)" ;# verify mta is alive
+}
+
+#
+# Restore power and Verify EDVA is alive
+#
+DoStep "E-UE-DATA_1-1-1-8_7" "Restore power and Verify EDVA is alive" {
+    LogMsg "Restore power and Verify EDVA is alive"
+    tk_messageBox -message "Please connect AC power and press OK"
+} {
+    verify_signal "Verify EDVA IP services exist (ping $MTA_IP)" ;# verify mta is alive
+}
+
+DoStep "E-UE-DATA_1-1-1-8_8" "Configure DUT" {
+    LogMsg "--- Configure DUT ---"
+    Init_PROV
+    PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122 Device_Level_Secure.cfg
+    PROV_DEPLOY_DHCP
+        SNMP_SET $oid_pktcMtaDevResetNow INTEGER 1 $MTA_IP
+        actionWait "Wait for MTA to reboot" 30
+} {PASS_STEP}
+
+
+##################### STOP SNIFFER AND SAVE CAPTURE FILES #####################
+
+DoStep "E-UE-DATA_1-1-1-8_9" "Stop sniffer" {
+    LogMsg "--- Stop sniffer ---"
+    StopCaptureControllerLan
+    SaveToFileControllerLan
+} { PASS_STEP }
+
+Cleanup
+
+

@@ -1,0 +1,1027 @@
+#//**************************************************************************
+#// Filename: SEC_9-1.test
+#// Author: Ming Jiang
+#// Creation Date: September 05, 2002
+#// Modified by : 
+#//     Titintorn Yaemnoi on September 29, 2003
+#//     - Add Reset tickets
+#//     Titintorn on October 27, 2003
+#//     - Add Init_NCS
+#//     - Add ethereal start/stop automatically.
+#//     - Add PacketCable DUT
+#//     - Add Description
+#//     Rachapong Pornwiriyangkura on February 2, 2004
+#//     - Change verifyValue to verifyLength for SEC_9-1_7-1
+#//     Titintorn Y. on May 5, 2004
+#//     - Remove Pop-up window to check 20 years
+#//     - Add automatically check 20 years in step 4-1
+#//     Titintorn Y. on May 28, 2004
+#//     - Update step 4-1 from "!= 20" to "< 20"
+#//**************************************************************************
+#// Description:
+#//     TC440 TEST CASE SEC 9.1 MTA manufacturer certificate format 
+#//
+#// Objective:
+#//     Verify that the certificate complies with the PacketCable 
+#//     security specification, especially for where the non-compliancies 
+#//     with the RFC 2459 are explicitly stated. 
+#//
+#// PacketCable DUT:
+#//     MTA
+#//**************************************************************************
+global SCRIPT_VERSION
+set SCRIPT_VERSION { # $Id: RST_E-DVA_4-1-1.test 7406 2010-07-20 17:17:37Z dthakore $ }
+
+set testName        "MTA Device Ceritificate format"
+set stepName        "SEC_9-1_"
+set preStepName     "PRESTEP_SEC_9-1_"
+set majorStepCount  1   ;# Major step
+set minorStepCount  1   ;# Minor step
+set PA_PK_AS_REQ_ELEM   -1  ;# PA-PK-AS-REQ element
+set MTA_DEV_CERT_ELEM   -1  ;# MTA Device Certificate element
+set MTA_MAN_CERT_ELEM   -1  ;# MTA Manufacturer Certificate element
+set AUTH_KEY_ID_ELEM    -1  ;# Authority Key identifier element
+set SUBJECT_KEY_ID_ELEM -1  ;# Subject Key Identifier element
+set ISSUER_ELEM         -1  ;# Issuer element number
+set SUBJECT_ELEM        -1  ;# Subject element number
+set ISSUER_RDN_SEQUENCE  {} ;# RdnSequence instance of Issuer
+set SUBJECT_RDN_SEQUENCE {} ;# RdnSequence instance of Subject
+set CONTINUE_PAST_STEP_ERROR 1 ;# Continue test next step even found one fail
+   
+    Init_NCS
+Init_PROV
+##############################################################################
+# PRESTEP_SEC_9-1_1-1: Verify if SNMP is enable or not
+##############################################################################
+DoStep ${preStepName}${majorStepCount}-${minorStepCount} "verify snmp" {
+    puts "--- Verify if SNMP API is started ---" action
+
+} {
+    if {$SNMP_V3_API} {
+        puts "SNMPv3 API is already started"
+        PASS_STEP
+    } else {
+        puts "\
+            WARNING:
+            It seems as though you do not have a Provisioning server API application.
+            This test can not be executed without a API or sort of SNMPv3 Utility.
+            Please Enable SNMPv3 utility and restart TclSim. " action
+        FAIL_STEP "SNMPv3 API is not started"
+    }
+}
+incr majorStepCount
+
+###############################################################################
+# PRESTEP_SEC_9-1_2-1: Reset Tickets
+###############################################################################
+DoStep ${preStepName}${majorStepCount}-${minorStepCount} "Reset Tickets" {
+    
+    # Start sniffer
+    LogMsg "--- Start sniffer ---"
+    Init_CONTROLLER_LAN
+    SetupCaptureControllerLan "host $MTA_IP"
+    StartCaptureControllerLan 
+
+    LogMsg "--- Reset Tickets ---"
+} {
+    # set oid_pktcMtaDevResetKrbTickets   .1.3.6.1.4.1.4491.2.2.1.1.3.19.0
+    set retCode [SNMP_SET $oid_pktcMtaDevResetKrbTickets \
+                          OCTET-STRING \
+                          0xC0 \
+                          $MTA_IP]
+
+    # Check if SNMP SET is successful
+    if {$retCode == 0} {
+        PASS_STEP
+    } else {
+        FAIL_STEP "Cannot reset tickets from NVRAM"
+    }
+}
+incr majorStepCount
+
+##############################################################################
+# PRESTEP_SEC_9-1_3-1: Reset MTA, wait of AP Request
+##############################################################################
+DoStep ${preStepName}${majorStepCount}-${minorStepCount} "Reset MTA and Wait for AP Request" {
+    
+    LogMsg "--- Reset MTA ---"
+    # SNMP_RESET $MTA_IP
+    SNMP_SET $oid_pktcMtaDevResetNow INTEGER 1 $MTA_IP
+    LogMsg "Wait for AP Request message"
+    # set retCode [Wait_Msg $msgIDAPReq 120]
+    actionWait "Wait for MTA to reboot" 60
+    set retCode [SNMP_GET $oid_pktcMtaDevProvisioningState $MTA_IP 20]
+    # Perhaps MTA cannot reset with SNMP reset
+    if { $retCode != 1 } {
+        verify_signal "
+            1. MTA fail to reset with SNMP Reset command
+            2. Hard Reset MTA
+            3. Click 'OK' when ready"
+        set retCode [Wait_Msg $msgIDAPReq 120]
+    }
+
+} {
+    if { $retCode == 1 } {
+        PASS_STEP
+    } else {
+        FAIL_STEP "MTA does not send AP Request after reset"
+    }
+}
+incr majorStepCount
+
+##############################################################################
+# PRESTEP_SEC_9-1_4-1: Capture AS Request and print to a text file
+##############################################################################
+DoStep ${preStepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    LogMsg "--- Stop sniffer ---" action
+    StopCaptureControllerLanAfter ApReplyCMS
+    SaveToFileControllerLan 
+}
+incr majorStepCount
+
+##############################################################################
+# PRESTEP_SEC_9-1_5-1: Decode AS Request message
+##############################################################################
+DoStep ${preStepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    set hexFileName     "SEC_9-1_Prov_AsReq.hex"
+    set binFileName     "SEC_9-1_Prov_AsReq.bin"
+
+    # Initial Parser LAN and check if it pass
+    if { [Init_PARSER_LAN "CHECKS" "$testName"] != 0 } {
+        LogMsg "!! Initial Parser LAN ERROR: - exiting"; 
+        Cleanup; 
+        return -1
+    }
+
+    # Collect raw data into array variable FR_INFO(frame#,RAWDATA,RAWDATA)
+    ParseKerberos
+    
+    # Find Provisioning AS Request. Start finding at the first frame
+    set provAsRequestFrame [FindAsRequest]
+    puts "AS Request frame for Provisioning server = $provAsRequestFrame" action
+    
+    # Combine fragmented frame into a file.hex
+    CombineFragmentedMessage $provAsRequestFrame $hexFileName
+    
+    # Convert ascii printed hex into binary file
+    ConvertHexFileToBinFile $hexFileName $binFileName
+    
+    # Call decoder
+    exec ${KRB_DECODER_FOLDER}/asdec.exe \
+         ${KERBEROS_FOLDER}/$binFileName
+
+    # Pass binary data to PARSERSEC
+    set INPUT_FILE "${KERBEROS_FOLDER}/${binFileName}_Decoded.txt"
+    Init_PARSER_SEC
+
+    PASS_STEP
+}
+incr majorStepCount
+
+##############################################################################
+# PRESTEP_SEC_9-1_6-1: Find PA-PK-AS-REQ element
+##############################################################################
+DoStep ${preStepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    set FOUND_PA_PK 0 ;# Flag to show if found PA_PK_AS_REQ
+
+    # Get the number of entries
+    set numberOfEntries [getValue {Pre-authentication data (padata):
+                                   Number of elements}]
+
+    # Go through each element of padata and figure out which one is 
+    # PA-PK-AS-REQ
+    for {set i 0} {$i < $numberOfEntries} {incr i} {
+        if { [verifyValue "Pre-authentication data (padata):
+                           element\[$i\]:
+                           Preauthentication data type (padata-type)" \
+                          {14 (PA-PK-AS-REQ)}] == $PASS } {
+            set FOUND_PA_PK 1
+            set PA_PK_AS_REQ_ELEM $i
+        }
+    }
+
+    if { $FOUND_PA_PK } {
+        LogMsg "PA-PK-AS-REQ is element '$PA_PK_AS_REQ_ELEM' of padata" 0
+        PASS_STEP
+    } else {
+        FAIL_STEP "Cannot find PA-PK-AS-REQ in padata"
+    }
+}
+incr majorStepCount
+
+##############################################################################
+# PRESTEP_SEC_9-1_7-1: Find MTA Manufacturer Certificate element and set RdnSequence
+##############################################################################
+DoStep ${preStepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    set FOUND_MTA_MAN_CERT 0 ;# Flag to show if found MTA Manufacturer Cert.
+
+    # Get the number of entries of certificate
+    set numberOfEntries [getValue "Pre-authentication data (padata):
+                                   element\[$PA_PK_AS_REQ_ELEM\]:
+                                   Preauthentication data value (padata-value):
+                                   signedAuthPack:
+                                   content:
+                                   certificates:
+                                   Number of elements"]
+
+    # Go through each entry of certificate and figure out which one is 
+    # Manufacturer certificate by looking at commonName MUST be "PacketCable Root Device Certificate Authority"
+    for {set i 0} {$i < $numberOfEntries} {incr i} {
+
+        # Set SUBJECT_RDN_SEQUENCE for issuer
+        set ISSUER_RDN_SEQUENCE "Pre-authentication data (padata):
+                                  element\[$PA_PK_AS_REQ_ELEM\]:
+                                  Preauthentication data value (padata-value):
+                                  signedAuthPack:
+                                  content:
+                                  certificates:
+                                  element\[$i\]:
+                                  certificate:
+                                  tbsCertificate:
+                                  issuer:
+                                  RdnSequence:"
+
+        # Get number of RdnSequence
+        set numberOfRdnEntries [getValue "$ISSUER_RDN_SEQUENCE
+                                          Number of elements"]
+
+        # Check if any of this entries is MTA MAC address or Company name
+        for {set j 0} {$j < $numberOfRdnEntries} {incr j} {
+            # MTA Manufacturer certificate
+            if { [verifyValue "$ISSUER_RDN_SEQUENCE
+                                element\[$j\]:
+                                element\[0\]:
+                                value" \
+                               "\"PacketCable Root Device Certificate Authority\""] == $PASS } {
+                set MTA_MAN_CERT_ELEM $i
+                set FOUND_MTA_MAN_CERT 1
+            }
+        }
+    }
+
+    # Set tbsCertificate
+    set TBS_CERTIFICATE "Pre-authentication data (padata):
+                         element\[$PA_PK_AS_REQ_ELEM\]:
+                         Preauthentication data value (padata-value):
+                         signedAuthPack:
+                         content:
+                         certificates:
+                         element\[$MTA_MAN_CERT_ELEM\]:
+                         certificate:
+                         tbsCertificate:"
+
+    # Set ISSUER_RDN_SEQUENCE for issuer
+    set ISSUER_RDN_SEQUENCE "$TBS_CERTIFICATE
+                             issuer:
+                             RdnSequence:"
+
+    # Set SUBJECT_RDN_SEQUENCE for subject
+    set SUBJECT_RDN_SEQUENCE "$TBS_CERTIFICATE
+                              subject:
+                              RdnSequence:"
+
+    if { $FOUND_MTA_MAN_CERT } {
+        LogMsg "MTA Manufacturer Ceritificate is element '$MTA_MAN_CERT_ELEM' of padata" 0
+        PASS_STEP
+    } else {
+        FAIL_STEP "Cannot find MTA Manufacturer Certificate"
+    }
+}
+set majorStepCount 1
+
+##############################################################################
+# SEC_9-1_1-1: Verify Certificate version MUST be version 3 (value = 2)
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    verifyValue "Pre-authentication data (padata):
+                 element\[$PA_PK_AS_REQ_ELEM\]:
+                 Preauthentication data value (padata-value):
+                 signedAuthPack:
+                 content:
+                 certificates:
+                 element\[$MTA_MAN_CERT_ELEM\]:
+                 certificate:
+                 tbsCertificate:
+                 version" \
+                {2}
+}
+incr majorStepCount
+
+##############################################################################
+# SEC_9-1_2-1: Verify Signature algorithm MUST be SHA-1 with RSA Encryption
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    verifyValue "Pre-authentication data (padata):
+                 element\[$PA_PK_AS_REQ_ELEM\]:
+                 Preauthentication data value (padata-value):
+                 signedAuthPack:
+                 content:
+                 certificates:
+                 element\[$MTA_MAN_CERT_ELEM\]:
+                 certificate:
+                 tbsCertificate:
+                 signature:
+                 algorithm" \
+                {1.2.840.113549.1.1.5 (sha1WithRSAEncryption)}
+}
+incr majorStepCount
+
+##############################################################################
+# SEC_9-1_3-1: Verify issuer:countryName
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    set allPass 1 ;# if found step pass
+    set ISSUER_ELEM 0 ;# Start Issuer element with 0
+
+    # Check RdnSequence first element if it is country name
+    if { [verifyValue "$ISSUER_RDN_SEQUENCE
+                       element\[$ISSUER_ELEM\]:
+                       element\[0\]:
+                       type" \
+                      {2.5.4.6 (countryName)}] == $FAIL } {
+        set allPass 0
+    } elseif { [verifyValue "$ISSUER_RDN_SEQUENCE
+                               element\[$ISSUER_ELEM\]:
+                               element\[0\]:
+                               value" \
+                               {"US"}] == $FAIL } {
+        set allPass 0
+    }
+
+    # Increase issuer element since this is a mandatory element
+    incr ISSUER_ELEM 1
+
+    # Check if it pass of fail
+    if { $allPass } {
+        PASS_STEP
+    } else {
+        FAIL_STEP "No matched country name"
+    }
+}
+incr minorStepCount
+
+##############################################################################
+# SEC_9-1_3-2: Verify issuer:organizationName
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    set allPass 1 ;# if found step pass
+
+    # Check RdnSequence 2nd element if it is organization name
+    if { [verifyValue "$ISSUER_RDN_SEQUENCE
+                       element\[$ISSUER_ELEM\]:
+                       element\[0\]:
+                       type" \
+                      {2.5.4.10 (organizationName)}] == $FAIL } {
+        set allPass 0
+    } elseif { [verifyValue "$ISSUER_RDN_SEQUENCE
+                               element\[$ISSUER_ELEM\]:
+                               element\[0\]:
+                               value" \
+                               {"CableLabs"}] == $FAIL } {
+        set allPass 0
+    }
+
+    # Increase issuer element since this is a mandatory element
+    incr ISSUER_ELEM 1
+
+    # Check if it pass of fail
+    if { $allPass } {
+        PASS_STEP
+    } else {
+        FAIL_STEP "No matched organization name"
+    }
+}
+incr minorStepCount
+
+##############################################################################
+# SEC_9-1_3-3: Verify issuer:organizationalUnitName
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    set allPass 1 ;# if found step pass
+
+    # Check RdnSequence next element if it is organizationalUnitName
+    if { [verifyValue "$ISSUER_RDN_SEQUENCE
+                       element\[$ISSUER_ELEM\]:
+                       element\[0\]:
+                       type" \
+                      {2.5.4.11 (organizationalUnitName)}] == $FAIL } {
+        set allPass 0
+    } elseif { [verifyValue "$ISSUER_RDN_SEQUENCE
+                             element\[$ISSUER_ELEM\]:
+                             element\[0\]:
+                             value" \
+                            {"PacketCable"}] == $FAIL } {
+        set allPass 0
+    }
+
+    # Increase issuer element since this is a mandatory element
+    incr ISSUER_ELEM 1
+
+    # Check if it pass of fail
+    if { $allPass } {
+        PASS_STEP
+    } else {
+        FAIL_STEP "No matched organization unit name"
+    }
+}
+incr minorStepCount
+
+##############################################################################
+# SEC_9-1_3-4: Verify issuer:commonName
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    set allPass 1 ;# if found step pass
+
+    # Check RdnSequence element 6 if it is common name
+    if { [verifyValue "$ISSUER_RDN_SEQUENCE
+                       element\[$ISSUER_ELEM\]:
+                       element\[0\]:
+                       type" \
+                      {2.5.4.3 (commonName)}] == $FAIL } {
+        set allPass 0
+    } elseif { [verifyValue "$ISSUER_RDN_SEQUENCE
+                               element\[$ISSUER_ELEM\]:
+                               element\[0\]:
+                               value" \
+                               {"PacketCable Root Device Certificate Authority"}] == $FAIL } {
+        set allPass 0
+    }
+
+    # Increase issuer element since this is a mandatory element
+    incr ISSUER_ELEM 1
+
+    # Check if it pass of fail
+    if { $allPass } {
+        PASS_STEP
+    } else {
+        FAIL_STEP "No matched common name"
+    }
+}
+incr majorStepCount 
+set  minorStepCount 1
+
+##############################################################################
+# SEC_9-1_4-1: Verify period
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # Set Validity for MTA Manufacturer Ceritificate
+    set MTA_MAN_VALIDITY "$TBS_CERTIFICATE
+                          validity:"
+
+    # Get Not Before value
+    set notBefore [getValue "$MTA_MAN_VALIDITY
+                             notBefore:
+                             utcTime"]
+    # Get Not After value
+    set notAfter [getValue "$MTA_MAN_VALIDITY
+                            notAfter:
+                            utcTime"]
+
+    puts "$notBefore" action
+    puts "$notAfter" action
+    set a [string range $notBefore 1 2]
+    set b [string range $notAfter 1 2]
+    set result [expr $b - $a]
+    if {$result < 20} {
+        LogMsg "!! The years different is =($result) which is not greater than or equal to 20 years"
+    } else {
+        LogMsg "--- The years different is =($result) which is greater than or equal to 20 years ---"
+    }
+} {
+    # This is an information step
+    PASS_STEP
+}
+incr majorStepCount
+
+##############################################################################
+# SEC_9-1_5-1: Verify subject:countryName
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    set allPass 1 ;# if found step pass
+    set SUBJECT_ELEM 0 ;# Start Subject element with 0
+
+    # Check RdnSequence first element if it is country name
+    if { [verifyValue "$SUBJECT_RDN_SEQUENCE
+                       element\[$SUBJECT_ELEM\]:
+                       element\[0\]:
+                       type" \
+                      {2.5.4.6 (countryName)}] == $FAIL } {
+        set allPass 0
+    } elseif { [verifyPresent "$SUBJECT_RDN_SEQUENCE
+                               element\[$SUBJECT_ELEM\]:
+                               element\[0\]:
+                               value"] == $FAIL } {
+        set allPass 0
+    }
+
+    # Increase subject element since this is a mandatory element
+    incr SUBJECT_ELEM 1
+
+    # Check if it pass of fail
+    if { $allPass } {
+        PASS_STEP
+    } else {
+        FAIL_STEP "No matched country name"
+    }
+}
+incr minorStepCount
+
+##############################################################################
+# SEC_9-1_5-2: Verify subject:organizationName
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    set allPass 1 ;# if found step pass
+
+    # Check RdnSequence 2nd element if it is organization name
+    if { [verifyValue "$SUBJECT_RDN_SEQUENCE
+                       element\[$SUBJECT_ELEM\]:
+                       element\[0\]:
+                       type" \
+                      {2.5.4.10 (organizationName)}] == $FAIL } {
+        set allPass 0
+    } elseif { [verifyPresent "$SUBJECT_RDN_SEQUENCE
+                               element\[$SUBJECT_ELEM\]:
+                               element\[0\]:
+                               value"] == $FAIL } {
+        set allPass 0
+    }
+
+    # Increase subject element since this is a mandatory element
+    incr SUBJECT_ELEM 1
+
+    # Check if it pass of fail
+    if { $allPass } {
+        PASS_STEP
+    } else {
+        FAIL_STEP "No matched organization name"
+    }
+}
+incr minorStepCount
+
+##############################################################################
+# SEC_9-1_5-3: Verify subject:stateOrProvinceName (optional)
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    set allPass 1 ;# if found step pass
+
+    # Check RdnSequence next element if it is state or province name
+    if { [verifyValue "$SUBJECT_RDN_SEQUENCE
+                       element\[$SUBJECT_ELEM\]:
+                       element\[0\]:
+                       type" \
+                      {2.5.4.8 (stateOrProvinceName)}] == $FAIL } {
+        set allPass 1 ;# Still pass since this is an optional step
+    } else {
+        if { [verifyPresent "$SUBJECT_RDN_SEQUENCE
+                                   element\[$SUBJECT_ELEM\]:
+                                   element\[0\]:
+                                   value"] == $FAIL } {
+            set allPass 0
+        }
+        # Increase subject element only if this attribute exists
+        incr SUBJECT_ELEM 1
+    }
+
+    # Check if it pass of fail
+    if { $allPass } {
+        PASS_STEP
+    } else {
+        FAIL_STEP "No match state or province name"
+    }
+}
+incr minorStepCount
+
+##############################################################################
+# SEC_9-1_5-4: Verify subject:localityName (optional)
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    set allPass 1 ;# if found step pass
+
+    # Check RdnSequence element 3 if it is locality name
+    if { [verifyValue "$SUBJECT_RDN_SEQUENCE
+                       element\[$SUBJECT_ELEM\]:
+                       element\[0\]:
+                       type" \
+                      {2.5.4.7 (localityName)}] == $FAIL } {
+        set allPass 1 ;# Still pass since this is an optional step
+    } else {
+        if { [verifyPresent "$SUBJECT_RDN_SEQUENCE
+                                   element\[$SUBJECT_ELEM\]:
+                                   element\[0\]:
+                                   value"] == $FAIL } {
+            set allPass 0
+        }
+        # Increase subject element only if this attribute exists
+        incr SUBJECT_ELEM 1
+    }
+
+    # Check if it pass or fail
+    if { $allPass } {
+        PASS_STEP
+    } else {
+        FAIL_STEP "No match locality name"
+    }
+}
+incr minorStepCount
+
+##############################################################################
+# SEC_9-1_5-5: Verify subject:organizationalUnitName
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    set allPass 1 ;# if found step pass
+
+    # Check RdnSequence next element if it is organizationalUnitName
+    # (PacketCAble)
+    if { [verifyValue "$SUBJECT_RDN_SEQUENCE
+                       element\[$SUBJECT_ELEM\]:
+                       element\[0\]:
+                       type" \
+                      {2.5.4.11 (organizationalUnitName)}] == $FAIL } {
+        set allPass 0
+    } elseif { [verifyValue "$SUBJECT_RDN_SEQUENCE
+                             element\[$SUBJECT_ELEM\]:
+                             element\[0\]:
+                             value" \
+                            {"PacketCable"}] == $FAIL } {
+        set allPass 0
+    }
+
+    # Increase subject element since this is a mandatory element
+    incr SUBJECT_ELEM 1
+
+    # Check if it pass or fail
+    if { $allPass } {
+        PASS_STEP
+    } else {
+        FAIL_STEP "No matched organization unit name"
+    }
+}
+incr minorStepCount
+
+##############################################################################
+# SEC_9-1_5-6: Verify subject:organizationalUnitName (optional)
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    set allPass 1 ;# if found step pass
+
+    # Check RdnSequence next element if it is organizationalUnitName 
+    # (Product Name)
+    if { [verifyValue "$SUBJECT_RDN_SEQUENCE
+                       element\[$SUBJECT_ELEM\]:
+                       element\[0\]:
+                       type" \
+                      {2.5.4.11 (organizationalUnitName)}] == $FAIL } {
+        set allPass 1 ;# Still pass since this is an optional step
+    } else {
+        if { [verifyPresent "$SUBJECT_RDN_SEQUENCE
+                                   element\[$SUBJECT_ELEM\]:
+                                   element\[0\]:
+                                   value"] == $FAIL } {
+            set allPass 0
+        }
+        # Increase subject element only if this attribute exists
+        incr SUBJECT_ELEM 1
+    }
+
+    # Check if it pass or fail
+    if { $allPass } {
+        PASS_STEP
+    } else {
+        FAIL_STEP "No matched organization unit name"
+    }
+}
+incr minorStepCount
+
+##############################################################################
+# SEC_9-1_5-7: Verify subject:commonName
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    set allPass 1 ;# if found step pass
+
+    # Check RdnSequence element 6 if it is common name
+    if { [verifyValue "$SUBJECT_RDN_SEQUENCE
+                       element\[$SUBJECT_ELEM\]:
+                       element\[0\]:
+                       type" \
+                      {2.5.4.3 (commonName)}] == $FAIL } {
+        set allPass 0
+    } elseif { [verifyRegexp "$SUBJECT_RDN_SEQUENCE
+                               element\[$SUBJECT_ELEM\]:
+                               element\[0\]:
+                               value" \
+                            "\".* PacketCable CA\""] == $FAIL } {
+        set allPass 0
+    }
+
+    # Increase subject element since this is a mandatory element
+    incr SUBJECT_ELEM 1
+
+    # Check if it pass or fail
+    if { $allPass } {
+        PASS_STEP
+    } else {
+        FAIL_STEP "No matched common name"
+    }
+}
+incr majorStepCount
+set  minorStepCount 1
+
+##############################################################################
+# SEC_9-1_6-1: Verify public key algorithm
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    verifyValue "$TBS_CERTIFICATE
+                 subjectPublicKeyInfo:
+                 algorithm:
+                 algorithm" \
+                "1.2.840.113549.1.1.1 (rsaEncryption)"
+}
+incr majorStepCount
+
+##############################################################################
+# SEC_9-1_7-1: Verify length of modulus MUST be 2048 bits
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    set allPass 0 ;# if found step pass
+    set expectLength 0 ;# Expected length either 256 or 257 bytes
+
+    # Get modulus value
+    set modulus [getValue "$TBS_CERTIFICATE
+                           subjectPublicKeyInfo:
+                           subjectPublicKey:
+                           modulus (n)"]
+
+    # Get the first byte
+    regexp -- {'([0-9A-Fa-f]* )} $modulus dummy firstByte
+
+    # Set expected length
+    if { $firstByte == 00 } {
+        # Expected length is 257 bytes (plus one zero byte at the beginning)
+        set expectLength 257
+    } else {
+        # Expected length is 256
+        set expectLength 256
+    }
+
+    # Verify length
+    if { [verifyLength "$TBS_CERTIFICATE
+                        subjectPublicKeyInfo:
+                        subjectPublicKey:
+                        modulus (n)" \
+                       "$expectLength"] == $PASS } {
+        set allPass 1
+    }
+
+    # Check if it pass or fail
+    if { $allPass } {
+        PASS_STEP
+    } else {
+        FAIL_STEP "modulus length is not correct, $modulus"
+    }
+}
+incr majorStepCount
+
+##############################################################################
+# SEC_9-1_8-1: Verify exponent of RSA
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    verifyValue "$TBS_CERTIFICATE
+                 subjectPublicKeyInfo:
+                 subjectPublicKey:
+                 publicExponent (e)" \
+                {65537}
+}
+incr majorStepCount
+
+##############################################################################
+# SEC_9-1_9-1: Verify keyUsage extension
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    set allPass 0 ;# if found step pass
+
+    # Find authorityKeyIdentifier
+    set numberOfExtEntries [getValue "$TBS_CERTIFICATE
+                                      extensions:
+                                      Number of elements"]
+
+    # Go through each entry of extension
+    for {set i 0} {$i < $numberOfExtEntries} {incr i} {
+        if { [verifyValue "$TBS_CERTIFICATE
+                           extensions:
+                           element\[$i\]:
+                           extnID" \
+                          "2.5.29.15 (keyUsage)"] == $PASS } {
+            if { ( [verifyValue "$TBS_CERTIFICATE
+                              extensions:
+                              element\[$i\]:
+                              critical" \
+                              "TRUE"] == $PASS 
+                   && [verifyValue "$TBS_CERTIFICATE
+                              extensions:
+                              element\[$i\]:
+                              extnValue:
+                              KeyUsage:
+                              KEYCERTSIGN bit" \
+                              {1}] == $PASS 
+                   && [verifyValue "$TBS_CERTIFICATE
+                              extensions:
+                              element\[$i\]:
+                              extnValue:
+                              KeyUsage:
+                              CRLSIGN bit" \
+                              {1}] == $PASS ) } {
+                set allPass 1
+            }        
+        }
+    }
+
+    # Check if it pass or fail
+    if { $allPass } {
+        PASS_STEP
+    } else {
+        FAIL_STEP "keyUsage incorrect"
+    }
+}
+incr majorStepCount
+
+##############################################################################
+# SEC_9-1_10-1: Verify basicConstraints extension
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    set allPass 0 ;# if found step pass
+
+    # Find authorityKeyIdentifier
+    set numberOfExtEntries [getValue "$TBS_CERTIFICATE
+                                      extensions:
+                                      Number of elements"]
+
+    # Go through each entry of extension
+    for {set i 0} {$i < $numberOfExtEntries} {incr i} {
+        if { [verifyValue "$TBS_CERTIFICATE
+                           extensions:
+                           element\[$i\]:
+                           extnID" \
+                          "2.5.29.19 (basicConstraints)"] == $PASS } {
+            if { ( [verifyValue "$TBS_CERTIFICATE
+                              extensions:
+                              element\[$i\]:
+                              critical" \
+                              "TRUE"] == $PASS 
+                  && [verifyValue "$TBS_CERTIFICATE
+                              extensions:
+                              element\[$i\]:
+                              extnValue:
+                              BasicConstraints:
+                              cA" \
+                              "TRUE"] == $PASS 
+                  && [verifyValue "$TBS_CERTIFICATE
+                              extensions:
+                              element\[$i\]:
+                              extnValue:
+                              BasicConstraints:
+                              pathLenConstraint" \
+                              {0}] == $PASS ) } {
+                set allPass 1
+            }        
+        }
+    }
+
+    # Check if it pass or fail
+    if { $allPass } {
+        PASS_STEP
+    } else {
+        FAIL_STEP "basicConstraints incorrect"
+    }
+}
+incr majorStepCount
+
+##############################################################################
+# SEC_9-1_11-1: Verify subjectKeyIdentifier Extension
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    set allPass 0 ;# if found step pass
+
+    # Find authorityKeyIdentifier
+    set numberOfExtEntries [getValue "$TBS_CERTIFICATE
+                                      extensions:
+                                      Number of elements"]
+
+    # Go through each entry of extension
+    for {set i 0} {$i < $numberOfExtEntries} {incr i} {
+        if { [verifyValue "$TBS_CERTIFICATE
+                           extensions:
+                           element\[$i\]:
+                           extnID" \
+                          "2.5.29.14 (subjectKeyIdentifier)"] == $PASS } {
+            if { [verifyPresent "$TBS_CERTIFICATE
+                              extensions:
+                              element\[$i\]:
+                              extnValue:
+                              SubjectKeyIdentifier"] == $PASS } {
+                set allPass 1
+            }        
+        }
+    }
+
+    # Check if it pass or fail
+    if { $allPass } {
+        PASS_STEP
+    } else {
+        FAIL_STEP "subjectKeyIdentifier not found"
+    }
+}
+incr majorStepCount
+
+##############################################################################
+# SEC_9-1_12-1: Verify authorityKeyIdentifier
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    set allPass 0 ;# if found step pass
+
+    # Find authorityKeyIdentifier
+    set numberOfExtEntries [getValue "$TBS_CERTIFICATE
+                                      extensions:
+                                      Number of elements"]
+
+    # Go through each entry of extension
+    for {set i 0} {$i < $numberOfExtEntries} {incr i} {
+        if { [verifyValue "$TBS_CERTIFICATE
+                           extensions:
+                           element\[$i\]:
+                           extnID" \
+                          "2.5.29.35 (authorityKeyIdentifier)"] == $PASS } {
+            if { [verifyValue "$TBS_CERTIFICATE
+                              extensions:
+                              element\[$i\]:
+                              extnValue:
+                              AuthorityKeyIdentifier:
+                              keyIdentifier" \
+                              "'91 94 20 7E D5 71 B9 B0    00 61 49 51 BD 38 5C 6E\nA6 ED 60 7C'H"] == $PASS } {
+                # Value obtained from Public certificate.
+                set allPass 1
+            }        
+        }
+    }
+
+    # Check if it pass or fail
+    if { $allPass } {
+        PASS_STEP
+    } else {
+        FAIL_STEP "authorityKeyIdentifier not found"
+    }
+}
+
+##############################################################################
+# Cleanup
+##############################################################################
+Cleanup
+
+return 0

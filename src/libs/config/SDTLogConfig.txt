@@ -1,0 +1,9 @@
+# The format for this file is the following:
+# The Logger to configure, currently ALL, CONSOLE, APP, TEST
+# The category to log
+# The subcategory to log
+# The level of logging to perform OFF, ALL, FATAL, ERROR, WARN, INFO, DEBUG, and TRACE
+
+ALL SDT * INFO
+ALL SDT SDTCanvas TRACE
+ALL SDT LogParser TRACE

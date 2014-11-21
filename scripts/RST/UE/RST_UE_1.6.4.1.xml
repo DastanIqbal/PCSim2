@@ -1,0 +1,112 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-UE 1.6.4.1" 
+	descrip="VMWI Subscription" 
+	number="RST-UE 1.6.4.1" inspector="disable">
+	
+	<template file="./templates/UERegAndSubTemp.xml" name="Registrar"/>
+	
+	<remove_from fsm="Registrar">
+		<state ID="Registered"/>
+	</remove_from>
+	
+	<add_to fsm="Registrar">
+		<state ID="Registered">
+			<prelude once="true">
+				<send protocol="sip" msgtype="200-Register"/>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">SUBSCRIBE.Event.event-type</msg_ref>
+						<expr>reg</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="200-SUBSCRIBE"/>
+						<sleep time="100"/>
+						<send protocol="sip" msgtype="NOTIFY"/>
+					</then>
+				</if>
+				<if>
+					<eq>
+						<msg_ref type="sip">SUBSCRIBE.Event.event-type</msg_ref>
+						<expr>message-summary</expr>
+					</eq>
+					<then>
+						<verify step="3" requirements="REQ13920">
+							<neq>
+								<msg_ref type="sip">SUBSCRIBE.Request-Line.Request-URI</msg_ref>
+								<expr/>
+							</neq>
+						</verify>
+						<verify step="4" requirements="REQ13920">
+							<contains>
+								<msg_ref type="sip">SUBSCRIBE.From.name-addr</msg_ref>
+								<msg_ref type="platform">DUT.pui</msg_ref>
+							</contains>
+						</verify>
+						<verify step="5" requirements="REQ13920">
+							<neq>
+								<msg_ref type="sip">SUBSCRIBE.To.name-addr</msg_ref>
+								<expr/>
+							</neq>
+						</verify>
+						<verify step="6" requirements="REQ13920, RFC1543, RFC1589">
+							<contains>
+								<msg_ref type="sip">SUBSCRIBE.Event</msg_ref>
+								<expr>message-summary</expr>
+							</contains>
+						</verify>
+						<verify step="7" requirements="REQ13920">
+							<eq>
+								<msg_ref type="sip">SUBSCRIBE.Expires.value</msg_ref>
+								<expr>600000</expr>
+							</eq>
+						</verify>
+						<verify step="8" requirements="REQ13920">
+							<or>
+								<contains>
+									<msg_ref type="sip">SUBSCRIBE.Contact.name-addr</msg_ref>
+									<msg_ref type="platform">DUT.FQDN</msg_ref>
+								</contains>
+								<contains>
+									<msg_ref type="sip">SUBSCRIBE.Contact.name-addr</msg_ref>
+									<msg_ref type="platform">DUT.IP</msg_ref>
+								</contains>
+							</or>
+						</verify>
+						<send protocol="sip" msgtype="200-SUBSCRIBE"/>
+						<sleep time="100"/>
+						<send protocol="sip" msgtype="NOTIFY"/>
+						<generate event="Branch1Event"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Registered" event="SUBSCRIBE"/>
+			<transition to="Registered" event="200-NOTIFY"/>
+			<transition to="WaitSubscribeComplete" event="Branch1Event"/>
+		</state>
+		
+		<state ID="WaitSubscribeComplete">
+			<transition to="END" event="200-NOTIFY"/>
+		</state>
+	</add_to>
+</pc2xml>

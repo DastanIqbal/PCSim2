@@ -1,0 +1,86 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+
+<pc2xml version="$Revision: 8188 $" name="UT_RST_UE_1.1.1.3" descrip="This is a unit test for the RST_UE 1.1.1.3 test script" number="1">
+	<fsm name="UE1">
+		<models>
+			<session/>
+		</models>
+		<NE sim_type="term" elements="DUT" targets="UE0 DUT"/>
+		<states initialstate="Register">
+			<!-- REGISTER State -->
+			<state ID="Register">
+				<prelude>
+					<send protocol="sip" msgtype="Register" target="PCSCF1" originator="DUT"/>
+				</prelude>
+				<transition to="Digest" event="401-Register"/>
+				<transition to="Call1" event="200-Register"/>
+			</state>
+			<state ID="Digest">
+				<prelude>
+					<send protocol="sip" msgtype="Register" target="PCSCF1" originator="DUT"/>
+				</prelude>
+				<transition to="Call1" event="200-Register"/>
+			</state>
+			<!-- Call1 doesn't require any messaging from the unit test script.
+				Simply wait until it completes and then send an INVITE with the 
+				correct Request-Line -->
+			<state ID="Call1">
+				<prelude>
+					<log expr="Start the test script if you haven't already."/>
+					<sleep time="15000"/>
+					<send protocol="sip" msgtype="Invite" target="UE1" originator="DUT">
+						<mod modtype="replace" hdr="Request-Line" param="Request-URI">
+							<var_expr>
+								<expr>sip:3036619100@</expr>
+								<msg_ref type="platform">DUT.domain</msg_ref>
+								<expr>;user=dialstring</expr>
+							</var_expr>
+						</mod>
+					</send>
+				</prelude>
+				<postlude>
+					<send protocol="sip" msgtype="Ack" target="UE1" originator="DUT"/>
+				</postlude>
+				<!-- Transitions for Call1 state -->
+				<transition to="Call2" event="500-INVITE"/>
+			</state>
+			<state ID="Call2">
+				<prelude>
+					<sleep time="5000"/>
+					<send protocol="sip" msgtype="Invite" target="UE1" originator="DUT">
+						<mod modtype="replace" hdr="Request-Line" param="Request-URI">
+							<var_expr>
+								<expr>sip:*63@</expr>
+								<msg_ref type="platform">DUT.domain</msg_ref>
+								<expr>;user=dialstring</expr>
+							</var_expr>
+						</mod>
+					</send>
+				</prelude>
+				<postlude>
+					<send protocol="sip" msgtype="Ack" target="UE1" originator="DUT"/>
+				</postlude>
+				<!-- Transitions for Call2 state -->
+				<transition to="END" event="500-INVITE"/>
+			</state>
+		</states>
+	</fsm>
+</pc2xml>

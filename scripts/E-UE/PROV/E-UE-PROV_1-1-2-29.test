@@ -1,0 +1,484 @@
+#//*****************************************************************************
+#// Filename: E-UE-PROV_1-1-2-29.test
+#// Author:   Satish Kumar, Texas Instruments Visiting Engineer
+#// Creation Date: Jun 21, 2005
+#// Modified by: Matthew Forbes 1/9/2006
+#//
+#// 	Matt Forbes 11/27/07
+#//		- changed policy from HYBRID2 to MTATC1605H to set prov timer to 30 min.
+#//		- changed filter on capture to prov server instead of dhcp udp port in Steps 5-2 & 6-2a
+#//		- increased wait time for slower provisioning DUTs in Steps 7-2 & 7-2a
+#//  Matt Forbes 5/30/08
+#//     - Moved port block before reset for faster provisioning MTAs in 6-3a
+#//*****************************************************************************
+#// Description:
+#//     TC1605 TEST CASE PROV 5.79 MTA ability to return MTA-1upon failure to  
+#//   receive response to SNMP Enrollment Inform (SECURE and HYBRID flow only)
+#//     
+#//
+#// Objective:
+#//     Test the MTA ability to return to MTA-1 when a failure to receive a response 
+#//  to an SNMP EnrollmentInform is notedand teh action is not a result of provisioning 
+#//  timer expiration
+#//
+#//
+#// PacketCable DUT:
+#//     MTA
+#//
+#// Test Steps:
+#//     - Initial Configuration: cfg-291 for secure flow or cfg-1457 for Hybrid flow.
+#//     - TFTP config file
+#//     - Start sniffer
+#//     - Reset DUT
+#//     - Check Provisioning state of MTA
+#//     - Clear the tickets, reset MTA
+#//     - Configure prov server not to reply to SNMP-INFORM, 122.8=30
+#//	    - Wait for 30 seconds to make sure that MTA loop back to DHCP after enrollment inform retry
+#//     - Stop sniffer
+#//     - Invoke parsing tool and validate for presence of enrollment inform and sequence 
+#//     - Delete MTA config file
+#//     - Run for both flow types if supported
+#//
+#// Notes:
+#//     - Requires provPrimitives.tcl & tftp_primitives.tcl.
+#//     - Requires the specific config file in $BASE_CFG_FILE_PATH in Provisioning Server.
+#//     - Requires parT.tcl parsing tool to parse data from capture file.
+#//*****************************************************************************
+global SCRIPT_VERSION
+set SCRIPT_VERSION { # $Id: E-UE-PROV_1-1-2-29.test 7406 2010-07-20 17:17:37Z dthakore $ }
+
+DoStep "E-UE-PROV_1-1-2-29_PreStep-1" "Initialize Test Platform" {
+    Init_PROV
+    Init_CONTROLLER_LAN
+    # Initial PARSER TOOL
+    Init_PART
+
+} { PASS_STEP }
+
+################################################################################
+# DoStep "E-UE-PROV_1-1-2-29_PreStep-2" "Setup session with Provisioning Server to block the SNMP port" {
+# LogMsg "Setup session with Provisioning Server to block the SNMP port"
+# } {
+# # verify_signal "Configure provisioning application SNMP Entity to not respond(block port 162 on prov server)"
+# # verify_signal "Set up session with the provisioning server $PROV_DHCP1_IP to block the SNMP port
+# # (setup SSH session with server,PuTTY or other, at $PROV_DHCP1_IP and type the
+# # command: iptables -A pact_chain -p udp -s ! $PROV_DHCP1_IP --dport 162 -j DROP
+# # then wait to hit enter)"
+# }
+# 
+################################################################################
+
+DoStep "E-UE-PROV_1-1-2-29_1-1" "Does device support Hybrid Flow type?" {
+    LogMsg "Does device support Hybrid Flow type?"
+    set choice [tk_messageBox -type yesno -default yes -message "Does device support Hybrid Flow type?" -icon question]
+} {
+    PASS_STEP
+}
+   if {$choice == yes} {
+    
+################################################################################
+# if {000} {
+################################################################################
+
+DoStep "E-UE-PROV_1-1-2-29_2-1" "Initial configuration" {
+    LogMsg "--- Initial configuration ---"
+    # ProvCreateConfig 1457 $MTA_MAC
+} { PASS_STEP }
+
+
+DoStep "E-UE-PROV_1-1-2-29_3-1" "Setup policy in provisioning server" {
+    LogMsg "Setup policy in provisioning server"
+} {
+    # verify_signal "Setup policy in server for the MTA with sub-option 6 to Hybrid2 and sub-option 8 to 30 minutes (MTATC1605H)"
+    # verify_signal "Restart provisioning server!"
+    # changed policy from HYBRID2 to MTATC1605H to set prov timer to 30 min. - MF 11/27/07
+    PROV_MODIFY_DEVICE $MTA_MAC MTATC1605H Device_Level_Hybrid.cfg
+    PROV_DEPLOY_DHCP
+}
+
+################ Reset CM and MTA and Verify Provisioning ################
+
+DoStep "E-UE-PROV_1-1-2-29_4-1" "Reboot CM & MTA" {
+    set val [SNMPvN_RESET $CM_IP]
+    LogMsg "Reboot of CM and MTA has passed"
+} {
+    IsEqual $val 0
+}
+
+DoStep "E-UE-PROV_1-1-2-29_5-1" "pktcMtaDevProvisioningState Content Verification" {
+    # Wait for a minute to let CM/MTA starting to reboot
+    actionWait "Wait for 90 seconds for reboot" 90
+    
+    # Initial variables
+    set start_time   [clock clicks -milliseconds]
+    set current_time [clock clicks -milliseconds]
+    set diff_time    [expr $current_time - $start_time]
+    set timeout      60000
+    
+    while {($val != 1) && ($diff_time < $timeout)} {
+        set val [SNMPvN_GET $oid_pktcMtaDevProvisioningState $MTA_IP]
+        
+        update ;# Update other events
+        set current_time [clock clicks -milliseconds]
+        set diff_time    [expr $current_time - $start_time]
+        after 2000 ;# Wait for a few seconds
+    }
+} {
+    IsEqual $val 1
+}
+
+DoStep "PRESTEP_E-UE-PROV_1-1-2-29_5-2" "Start sniffer" {
+    LogMsg "--- Start sniffer ---"
+    # Init_CONTROLLER_LAN
+    #changed filter for trace from DHCP udp port to prov server IP address - MF 11/27/07
+    SetupCaptureControllerLan "host $MTA_IP || host $PROV_DHCP1_IP"
+    StartCaptureControllerLan
+} {PASS_STEP}
+
+##############################################################################
+#         MTA RESET
+###############################################################################
+DoStep "E-UE-PROV_1-1-2-29_6-1" "Reset MTA" {
+    set val [SNMPvN_SET $oid_pktcMtaDevResetNow INTEGER 1 $MTA_IP]
+    LogMsg "Reset of MTA has passed"
+} {
+    IsEqual $val 0
+}
+
+DoStep "E-UE-PROV_1-1-2-29_7-1" "Disable SNMP Entity in provisioning server" {
+    LogMsg "Disable SNMP Entity in provisioning server"
+    PROV_BLOCK_SNMP_TRAP_PORT $PROV_DHCP1_IP
+} {
+    # verify_signal "Configure provisioning application SNMP Entity to not respond(block port 162 on prov server)"
+    # verify_signal "Configure provisioning application SNMP Entity to not respond (go to SSH session window and hit enter)"
+    PASS_STEP
+}
+
+
+#Wait 180 seconds
+DoStep "E-UE-PROV_1-1-2-29_7-2" "Wait for provisioning" {
+    # increased wait time for slower provisioning DUTs - MF - 11/27/07	
+    actionWait "Wait for 230 seconds for provisioning" 230
+} {PASS_STEP}
+
+########################## Stop IP sniffer ##################################
+
+
+DoStep "E-UE-PROV_1-1-2-29_7-3" "Stop Sniffer" {
+    LogMsg "--- Stop Sniffer ---"
+    StopCaptureControllerLan
+    SaveToFileControllerLan "_Hybrid_Flow"
+} {PASS_STEP}
+
+########################## INVOKE PARSING TOOL ##################################
+
+################################################################################
+# }
+################################################################################
+
+DoStep "E-UE-PROV_1-1-2-29_8-1" "Analyze flow data" {
+    # Initial PARSER TOOL
+    # Init_PART
+    # Set up parser file
+    set PARSERFILE    $ETH_DEFAULT_TXT_FILE
+} { PASS_STEP }
+
+
+
+DoStep "E-UE-PROV_1-1-2-29_8-2" "Parse the database" {
+    
+    # Parse data
+    set PARAMS_DHCP         "{DHCP {} {} {} {} {} {} {} {}}"
+    set PARAMS_MTA_SRC      "{{} {} {} {} $MTA_IP {} {} {} {}}"
+    set PARAMS_MTA_DST      "{{} {} {} {} {} {} {} $MTA_IP {}}"
+    set msgID_MTA           [ParseFile $PARSERFILE "$PARAMS_DHCP $PARAMS_MTA_SRC $PARAMS_MTA_DST"]
+} {
+    if { $::PART_RETURN == 0 } {
+        PASS_STEP
+    } else {
+        FAIL_STEP "Cannot find data"
+    }
+}
+
+######################### NOTIFICATION SNMP ENROLLMENT INFORM MESSAGE##########################
+DoStep "E-UE-PROV_1-1-2-29_8-3" "SNMP ENROLLMENT INFORM EXISTS" {
+    LogMsg "Verify SNMP ENROLLMENT is sent to PROVISIONING SERVER"
+} {
+    # Verify presence of additional inform
+    VerifyValue $msgID_MTA "INANY SNMP SNMP_INFORM HEADERDSTIP" "IS" "$PROV_DHCP1_IP"
+}
+
+DoStep "E-UE-PROV_1-1-2-29_9-1" "Verify no SNMP RESPONSE" {
+    LogMsg "Verify  NO SNMP RESPONSE"
+} {
+    # Verify MTA MAC
+    VerifyNotValue $msgID_MTA  "INANY SNMP SNMP_RESPONSE HEADERSRCIP" "IS" "$PROV_DHCP1_IP"
+}
+
+DoStep "E-UE-PROV_1-1-2-29_10-1" "MTA Sequence" {
+    LogMsg "Verify MTA Sequence"
+    
+    # Set MTA SEQUENCE to check
+    set MTA_SEQUENCE "DHCP:DISCOVER,DHCP:OFFER,DHCP:DISCOVER,DHCP:OFFER,DHCP:DISCOVER,DHCP:OFFER,\
+            DHCP:DISCOVER,DHCP:OFFER,DHCP:REQUEST,DHCP:ACK,\
+            DNS:DNS_QUERY_HOST,DNS:DNS_RESPONSE_HOST,\
+            SNMP:SNMP_INFORM,DHCP:DISCOVER,DHCP:OFFER,DHCP:DISCOVER,DHCP:OFFER,DHCP:DISCOVER,DHCP:OFFER,\
+            DHCP:DISCOVER,DHCP:OFFER,DHCP:REQUEST,DHCP:ACK"
+    # Remove whitespace
+    regsub -all { } $MTA_SEQUENCE {} MTA_SEQUENCE
+} {
+    # Verify TOD Response
+    VerifyValue $msgID_MTA "SEQUENCE $MTA_SEQUENCE" "" ""
+}
+
+DoStep "E-UE-PROV_1-1-2-29_11-1" "Restore policy in provisioning server" {
+    LogMsg "Restore policy in provisioning server and SNMP entity"
+    PROV_UNBLOCK_SNMP_TRAP_PORT $PROV_DHCP1_IP
+} {
+    # verify_signal "Restore policy in server (MTAFORCW122) and SNMP Entity (unblock port 162)"
+    # verify_signal "Configure provisioning application SNMP Entity to respond (go to SSH session window and change iptables -A to -D and hit enter)"
+    PASS_STEP
+}
+
+DoStep "E-UE-PROV_1-1-2-29_11-2" "Restore Configuration" {
+    LogMsg "--- Set up MTA config file ---"
+    # ProvCreateConfig 291 $MTA_MAC
+    PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122 Device_Level_Secure.cfg
+    PROV_DEPLOY_DHCP
+} { PASS_STEP }
+
+
+################ Reset CM and MTA and Verify Provisioning ################
+
+DoStep "E-UE-PROV_1-1-2-29_11-3" "Hard reboot MTA" {
+    set val [SNMPvN_RESET $CM_IP]
+    LogMsg "Hard reboot of CM and MTA has passed"
+} {
+    IsEqual $val 0
+}
+
+DoStep "E-UE-PROV_1-1-2-29_11-4" "pktcMTADevProvisioningState Content Verification" {
+    # Wait for a minute to let CM/MTA starting to reboot
+    actionWait "Wait for CM/MTA to reboot" 60
+    # Get the OID from the MTA and check it using our previously defined
+    set val [GetProvState 1 600]
+    LogMsg "MTA Provisioning State"
+    LogMsg "             - Expected : 1"
+    LogMsg "             - Received : $val"
+} {
+    IsEqual $val 1
+}
+
+    }
+
+################################################################################
+# Skip to here for secure flow type only
+################################################################################
+
+DoStep "E-UE-PROV_1-1-2-29_1-1a" "Does device support Secure Flow type?" {
+    LogMsg "Does device support Secure Flow type?"
+    set choice [tk_messageBox -type yesno -default yes -message "Does device support Secure Flow type?" -icon question]
+} {
+    PASS_STEP
+}
+
+if {$choice == yes} {
+
+DoStep "E-UE-PROV_1-1-2-29_2-1a" "Initial configuration" {
+    LogMsg "--- Initial PROV module ---"
+    # ProvCreateConfig 291 $MTA_MAC
+    PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122 Device_Level_Secure.cfg
+    PROV_DEPLOY_DHCP
+} { PASS_STEP }
+
+################################################################################
+# DoStep "E-UE-PROV_1-1-2-29_3-1a" "Disable SNMP Entity in provisioning server" {
+#     LogMsg "Disable SNMP Entity in provisioning server"
+# 
+# } {
+#     # verify_signal "Configure provisioning application SNMP Entity to not respond(block port 162 on prov server)"
+#     # verify_signal "Setup SSH session to block port (iptables -A pact_chain -p udp -s ! $PROV_DHCP1_IP --dport 162 -j DROP
+#     # then wait to hit enter)"
+# }
+################################################################################
+
+
+################ Reset CM and MTA and Verify Provisioning ################
+
+DoStep "E-UE-PROV_1-1-2-29_3-1a" "Reset MTA" {
+    set val [SNMP_SET $oid_pktcMtaDevResetNow INTEGER 1 $MTA_IP]
+    LogMsg "Reset of MTA has passed"
+} {
+    IsEqual $val 0
+}
+
+DoStep "E-UE-PROV_1-1-2-29_3-2a" "pktcMTADevProvisioningState Content Verification" {
+    actionWait "Wait 30 seconds for MTA to provision" 30
+    # Get the OID from the MTA and check it using our previously defined
+    set val [GetProvState 1 600]
+    LogMsg "MTA Provisioning State" 49
+    LogMsg "             - Expected : 1" 49
+    LogMsg "             - Received : $val" 49
+} {
+    IsEqual $val 1
+}
+
+
+#############Configure SNMP entity and MTA DHCP 122.8=30 min
+
+DoStep "E-UE-PROV_1-1-2-29_6-1a" "Setup policy in provisioning server " {
+    LogMsg "Setup policy in provisioning server "
+} {
+    # verify_signal "Configure provisioning application SNMP entity not to respond to an SNMP\n
+    # enrollment (Block port 162 on SNMP entity). MTA-DHCP 122.8=30 minutes (MTATC1605)"
+    PROV_MODIFY_DEVICE $MTA_MAC MTATC1605 Device_Level_Secure.cfg
+    PROV_DEPLOY_DHCP
+}
+
+DoStep "PRESTEP_E-UE-PROV_1-1-2-29_6-2a" "Start sniffer" {
+    LogMsg "--- Start sniffer ---"
+    # Init_CONTROLLER_LAN
+    #changed filter for trace from DHCP udp port to prov server IP address - MF 11/27/07
+    SetupCaptureControllerLan "host $MTA_IP || host $PROV_DHCP1_IP"
+    StartCaptureControllerLan
+} {PASS_STEP}
+
+###############################################################################
+DoStep "E-UE-PROV_1-1-2-29_6-3a" "Reset MTA" {
+LogMsg "SNMP set: pktcMtaDevResetNow - 1"
+# Moved port block before reset for faster provisioning MTAs - M.Forbes - 5/30/08
+PROV_BLOCK_SNMP_TRAP_PORT $PROV_DHCP1_IP
+set val [SNMP_SET $oid_pktcMtaDevResetNow INTEGER 1 $MTA_IP]
+} {
+    IsEqual $val 0
+}
+###############################################################################
+
+# DoStep "E-UE-PROV_1-1-2-29_7-1a" "Disable SNMP Entity in provisioning server" {
+    # LogMsg "Disable SNMP Entity in provisioning server"
+    # PROV_BLOCK_SNMP_TRAP_PORT $PROV_DHCP1_IP
+# } {
+    # # verify_signal "Configure provisioning application SNMP Entity to not respond(block port 162 on prov server)"
+    # # verify_signal "Configure provisioning application SNMP Entity to not respond (go to SSH session window and hit enter)"
+    # PASS_STEP
+# }
+
+#Wait 180 seconds
+DoStep "E-UE-PROV_1-1-2-29_7-2a" "Wait for provisioning" {
+    # increased wait time for slower provisioning DUTs - MF - 11/27/07
+    actionWait "Wait for 200 seconds for provisioning" 200
+} {PASS_STEP}
+
+
+########################## Stop IP sniffer ##################################
+
+
+DoStep "E-UE-PROV_1-1-2-29_7-3a" "Stop Sniffer" {
+    LogMsg "--- Stop Sniffer ---"
+    StopCaptureControllerLan
+    SaveToFileControllerLan "_Secure_Flow"
+} {PASS_STEP}
+
+########################## INVOKE PARSING TOOL ##################################
+
+DoStep "E-UE-PROV_1-1-2-29_8-1a" "Analyze flow data" {
+    # Initial PARSER TOOL
+    # Init_PART
+
+    # Set up parser file
+    set PARSERFILE    $ETH_DEFAULT_TXT_FILE
+} { PASS_STEP }
+
+
+
+DoStep "E-UE-PROV_1-1-2-29_8-2a" "Parse the database" {
+    
+    # Parse data
+    set PARAMS_DHCP         "{DHCP {} {} {} {} {} {} {} {}}"
+    set PARAMS_MTA_SRC      "{{} {} {} {} $MTA_IP {} {} {} {}}"
+    set PARAMS_MTA_DST      "{{} {} {} {} {} {} {} $MTA_IP {}}"
+    set msgID_MTA           [ParseFile $PARSERFILE "$PARAMS_DHCP $PARAMS_MTA_SRC $PARAMS_MTA_DST"]
+} { 
+    if { $::PART_RETURN == 0 } {
+        PASS_STEP
+    } else {
+        FAIL_STEP "Cannot find data"
+    }
+}
+
+######################### NOTIFICATION SNMP ENROLLMENT INFORM MESSAGE##########################
+DoStep "E-UE-PROV_1-1-2-29_9-1a" "SNMP ENROLLMENT INFORM EXISTS" {
+    LogMsg "Verify SNMP ENROLLMENT is sent to PROVISIONING SERVER"
+} {
+    # Verify presence of additional inform
+    VerifyValue $msgID_MTA "INANY SNMP SNMP_INFORM HEADERDSTIP" "IS" "$PROV_DHCP1_IP"
+}
+
+DoStep "E-UE-PROV_1-1-2-29_9-2a" "Verify no SNMP RESPONSE" {
+    LogMsg "Verify  NO SNMP RESPONSE"
+} {
+    # Verify MTA MAC
+    VerifyNotValue $msgID_MTA  "INANY SNMP SNMP_RESPONSE HEADERSRCIP" "IS" "$PROV_DHCP1_IP"
+}
+
+DoStep "E-UE-PROV_1-1-2-29_10-1a" "MTA Sequence" {
+    LogMsg "Verify MTA Sequence"
+
+    # Set MTA SEQUENCE to check
+    set MTA_SEQUENCE "DHCP:DISCOVER,DHCP:OFFER,DHCP:REQUEST,DHCP:ACK,\
+                      DNS:DNS_QUERY_HOST,DNS:DNS_RESPONSE_HOST,\
+                      PKKM:PKKM_AP_REQ,PKKM:PKKM_AP_REP,\
+                      SNMP:SNMP_INFORM,\
+                      DHCP:DISCOVER,DHCP:OFFER,DHCP:REQUEST,DHCP:ACK"
+    # Remove whitespace
+    regsub -all { } $MTA_SEQUENCE {} MTA_SEQUENCE
+} {
+    # Verify TOD Response
+    VerifyValue $msgID_MTA "SEQUENCE $MTA_SEQUENCE" "" ""
+}
+
+DoStep "E-UE-PROV_1-1-2-29_11-1a" "Restore policy in provisioning server" {
+    LogMsg "Restore policy in provisioning server"
+
+    # verify_signal "Restore policy in server (MTAFORCW122) and SNMP Entity (unblock port 162)"
+    # verify_signal "Configure provisioning application SNMP Entity to respond (go to SSH session window and change iptables -A to -D and hit enter)"
+    PROV_UNBLOCK_SNMP_TRAP_PORT $PROV_DHCP1_IP
+    PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122
+    PROV_DEPLOY_DHCP
+    actionWait "Please wait 30 seconds for SNMP" 30
+} {
+    PASS_STEP
+}
+
+##############################################################################
+#         MTA RESET
+###############################################################################
+DoStep "E-UE-PROV_1-1-2-29_12-1a" "Reset MTA" {
+    set val [SNMP_SET $oid_pktcMtaDevResetNow INTEGER 1 $MTA_IP]
+    LogMsg "Reset of MTA has passed"
+} {
+    IsEqual $val 0
+}
+
+DoStep "E-UE-PROV_1-1-2-29_12-2a" "pktcMTADevProvisioningState Content Verification" {
+    actionWait "Wait 30 seconds for MTA to provision" 30
+    # Get the OID from the MTA and check it using our previously defined
+    set val [GetProvState 1 600]
+    LogMsg "MTA Provisioning State" 49
+    LogMsg "             - Expected : 1" 49
+    LogMsg "             - Received : $val" 49
+} {
+    IsEqual $val 1
+}
+################################################################################
+# Skip to here if device does not support secure flow type
+################################################################################
+}
+
+
+################################################################################
+# Cleanup
+################################################################################
+set CONTINUE_PAST_STEP_ERROR 0
+
+Cleanup

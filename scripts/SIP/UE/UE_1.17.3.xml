@@ -1,0 +1,201 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="SIP-UE 1.17.3" 
+	descrip="Registration – sip.instance tag" 
+	number="SIP-UE 1.17.3">
+	
+	<template file="./templates/UERegAndSubTemp.xml" name="Registrar"/>
+	
+	<remove_from fsm="Registrar">
+		<state ID="PendingRegistration"/>
+		<state ID="Registered"/>
+		<state ID="Notification"/>
+	</remove_from>
+	
+	<add_to fsm="Registrar">
+		<state ID="PendingRegistration">
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>REGISTER</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="401-REGISTER"/>
+					</then>
+				</if>
+				<verify step="2" requirements="RFC3516, RFC3517">
+					<contains>
+						<msg_ref type="sip" hdr_instance="any">REGISTER.Supported</msg_ref>
+						<expr>gruu</expr>
+					</contains>
+				</verify>
+				<verify step="3" requirements="RFC3518, RFC3519">
+					<contains>
+						<msg_ref type="sip">REGISTER.Contact</msg_ref>
+						<expr>sip.instance</expr>
+					</contains>
+				</verify>
+				<verify step="4" requirements="RFC4023, RFC4024">
+					<neq>
+						<msg_ref type="sip">REGISTER.Contact.name-addr</msg_ref>
+						<msg_ref type="sip">REGISTER.To.name-addr</msg_ref>
+					</neq>
+				</verify>
+			</response>
+			<transition to="Authorization" event="REGISTER"/>
+		</state>
+		
+		<state ID="Registered">
+			<prelude>
+				<send protocol="sip" msgtype="200-Register"/>
+			</prelude>
+			<response>
+				<if>
+					<and>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>SUBSCRIBE</expr>
+						</eq>
+						<contains>
+							<msg_ref type="sip">SUBSCRIBE.Event</msg_ref>
+							<expr>reg</expr>
+						</contains>
+					</and>
+					<then>
+						<send protocol="sip" msgtype="200-SUBSCRIBE"/>
+						<sleep time="100"/>
+						<send protocol="sip" msgtype="NOTIFY"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Registered" event="REGISTER"/>
+			<transition to="Notification" event="SUBSCRIBE"/>
+		</state>
+		
+		<!-- State changes from Registered to Notification on receiving SUBSCRIBE message-->
+		<state ID="Notification">
+			<transition to="PendingRegistration1" event="200-NOTIFY"/>
+		</state>
+		
+		<state ID="PendingRegistration1">
+			<!-- First we need to power cycle the UE to conduct the test -->
+			<prelude>
+				<log expr="Reboot the  DUT to begin Registration process once again"/>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>REGISTER</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="401-REGISTER"/>
+					</then>
+				</if>
+				<verify step="7" requirements="RFC3519">
+					<eq>
+						<msg_ref type="sip">REGISTER.Contact.sip-instance</msg_ref>
+						<msg_ref type="sip" msg_instance="previous">REGISTER.Contact.sip-instance</msg_ref>
+					</eq>
+				</verify>
+			</response>
+			<transition to="Authorization1" event="REGISTER"/>
+		</state>
+		
+		<state ID="Authorization1">
+			<response>
+				<if>
+					<or>
+						<eq>
+							<msg_ref type="event"/>
+							<expr>AuthenticateSucceed</expr>
+						</eq>
+						<eq>
+							<msg_ref type="event"/>
+							<expr>AuthenticateFailed</expr>
+						</eq>
+					</or>
+					<then>
+						<!-- this is to prevent the AuthenticateFailed from being forwarded
+									to the next state on the AuthenticateSucceed -->
+					</then>
+					<elseif>
+						<and>
+							<eq>
+								<msg_ref type="sip">Request</msg_ref>
+								<expr>REGISTER</expr>
+							</eq>
+							<and>
+								<contains>
+									<msg_ref type="sip">REGISTER</msg_ref>
+									<expr>Authorization</expr>
+								</contains>
+								<digest/>
+							</and>
+						</and>
+						<then>
+							<generate event="AuthenticateSucceed"/>
+						</then>
+						<else>
+							<generate event="AuthenticateFailed"/>
+							<send protocol="sip" msgtype="503-Register"/>
+						</else>
+					</elseif>
+				</if>
+			</response>
+			<transition to="Registered1" event="AuthenticateSucceed"/>
+			<transition to="END" event="AuthenticateFailed"/>
+			<transition to="Authorization1" event="REGISTER"/>
+		</state>
+		
+		<state ID="Registered1">
+			<prelude>
+				<send protocol="sip" msgtype="200-Register"/>
+			</prelude>
+			<response>
+				<if>
+					<and>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>SUBSCRIBE</expr>
+						</eq>
+						<contains>
+							<msg_ref type="sip">SUBSCRIBE.Event</msg_ref>
+							<expr>reg</expr>
+						</contains>
+					</and>
+					<then>
+						<send protocol="sip" msgtype="200-SUBSCRIBE"/>
+						<sleep time="100"/>
+						<send protocol="sip" msgtype="NOTIFY"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Notification1" event="SUBSCRIBE"/>
+		</state>
+		<!-- State changes from Registered1 to Notification1 on receiving SUBSCRIBE message-->
+		
+		<state ID="Notification1">
+			<transition to="END" event="200-NOTIFY"/>
+		</state>
+	</add_to>
+</pc2xml>

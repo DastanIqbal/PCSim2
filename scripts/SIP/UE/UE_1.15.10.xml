@@ -1,0 +1,148 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	PCPCII-135 : UPdate the script to accommodate a de-register message during the reboot. (ghassler 06/24/2009)
+	
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="SIP-UE 1.15.10" 
+	descrip="UE Deregisters Upon Receipt of a NOTIFY When The Reg-Event Message Body Registration Element State Attribute is Equal to Terminated" 
+	number="SIP-UE 1.15.10" inspector="disable">
+	
+	<template file="./templates/UERegAndSubTemp.xml" name="Registrar"/>
+	<template file="./templates/CallOrigAtUETemp.xml" name="UE1"/>
+	
+	<remove_from fsm="Registrar">
+		<state ID="Registered"/>
+		<state ID="NotificationComplete"/>
+	</remove_from>
+	
+	<add_to fsm="Registrar">
+		<state ID="Registered">
+			<prelude>
+				<send protocol="sip" msgtype="200-Register"/>
+			</prelude>
+			<response>
+				<if>
+					<contains>
+						<msg_ref type="sip">SUBSCRIBE.Event</msg_ref>
+						<expr>reg</expr>
+					</contains>
+					<then>
+						<send protocol="sip" msgtype="200-SUBSCRIBE"/>
+						<sleep time="100"/>
+						<send protocol="sip" msgtype="NOTIFY"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Registered" event="REGISTER"/>
+			<transition to="Notification" event="SUBSCRIBE"/>
+		</state>
+		
+		<!-- Step 3 from test case SIP-UE 1.5.10 -
+			Send Notify with registration state = terminated. -->
+		<state ID="NotificationComplete">
+			<prelude>
+				<sleep time="1000"/>
+				<send protocol="sip" msgtype="NOTIFY">
+					<mod modtype="replace" hdr="registration" param="state" body="reginfo+xml">
+						<expr>terminated</expr>
+					</mod>
+					<mod modtype="replace" hdr="contact" param="state" body="reginfo+xml">
+						<expr>terminated</expr>
+					</mod>
+					<mod modtype="replace" hdr="contact" param="event" body="reginfo+xml">
+						<expr>deactivated</expr>
+					</mod>
+				</send>
+			</prelude>
+			<postlude>
+				<!-- Step 4 from test case SIP-UE 1.5.10 - 
+					Initiate INVITE to DUT. -->
+				<generate event="Registered" fsm="UE1"/>
+			</postlude>
+			<transition to="WaitSucceedORregister" event="200-Notify"/>
+		</state>
+		
+		<state ID="WaitSucceedORregister">
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>REGISTER</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="500-REGISTER"/>
+					</then>
+				</if>
+			</response>
+			<transition to="WaitSucceedORregister" event="REGISTER"/>
+			<transition to="END" event="SucceedEvent"/>
+		</state>
+	</add_to>
+	
+	<remove_from fsm="UE1">
+		<state ID="Setup"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<state ID="Setup" timer="20000">
+			<prelude once="true">
+				<send protocol="utility" msgtype="DialDigits">
+					<mod modtype="add" hdr="number">
+						<msg_ref type="platform">UE1.phone number 1</msg_ref>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<or>
+						<eq>
+							<msg_ref type="event"/>
+							<expr>TimerExpired</expr>
+						</eq>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>INVITE</expr>
+						</eq>
+					</or>
+					<then>
+						<verify step="4" requirements="REQ17035">
+							<or>
+								<eq>
+									<msg_ref type="event"/>
+									<expr>TimerExpired</expr>
+								</eq>
+								<neq>
+									<msg_ref type="sip">Request</msg_ref>
+									<expr>INVITE</expr>
+								</neq>
+							</or>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<transition to="Setup" event="DialDigitsComplete"/>
+			<transition to="EndState" event="TimerExpired"/>
+		</state>
+		<state ID="EndState" ES="true">
+			<prelude once="true">
+				<generate event="SucceedEvent" fsm="Registrar"/>
+			</prelude>
+		</state>
+	</add_to>
+</pc2xml>

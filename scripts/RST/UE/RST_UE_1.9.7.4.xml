@@ -1,0 +1,127 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	PCPCII-139 : Update the Voicetronix modifiers to use the new values. (ghassler 07/10/2009)
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-UE 1.9.7.4" 
+	descrip="Reject non emergency calls when on emergency call. " 
+	number="RST-UE 1.9.7.4" inspector="disable">
+	
+	<template file="./templates/CallOrigAtUETemp.xml" name="UE1"/>
+	<template file="./templates/CallTermAtUETemp.xml" name="UE2"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Setup" sub="prelude"/>
+		<state ID="Connected"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<NE targets="service:sos *70"/>
+		
+		<transition from="OffHook" to="Dial" event="OffHookComplete"/>
+		
+		<state ID="Dial">
+			<prelude>
+				<send protocol="utility" msgtype="DialDigits">
+					<mod modtype="add" hdr="number">
+						<expr>*70</expr>
+					</mod>
+				</send>
+			</prelude>
+			<transition to="OnHook1" event="DialDigitsComplete"/>
+		</state>
+		
+		<state ID="OnHook1">
+			<prelude>
+				<send protocol="utility" msgtype="OnHook"/>
+			</prelude>
+			<transition to="OffHook1" event="OnHookComplete"/>
+		</state>
+		
+		<state ID="OffHook1">
+			<prelude>
+				<sleep time="10000"/>
+				<send protocol="utility" msgtype="OffHook"/>
+			</prelude>
+			<transition to="Setup" event="OffHookComplete"/>
+		</state>
+		
+		<state ID="Setup" sub="prelude" once="true">
+			<!-- Step 1 test case SIP 1.9.7.4 - Initiate an emergency call session from the -->
+			<send protocol="utility" msgtype="DialDigits">
+				<mod modtype="add" hdr="number">
+					<expr>911</expr>
+				</mod>
+			</send>
+		</state>
+		
+		<state ID="Connected" timer="3000">
+			<transition to="WaitCall2" event="TimerExpired"/>
+		</state>
+		
+		<state ID="WaitCall2">
+			<prelude>
+				<generate event="Branch1Event" fsm="UE2"/>
+			</prelude>
+			<transition to="END" event="SucceedEvent"/>
+		</state>
+	</add_to>
+	
+	<add_to fsm="UE2">
+		<transition from="RealOrSimulatedUE" to="WaitCall1" event="Branch2Event"/>
+		<state ID="WaitCall1">
+			<transition to="Setup2" event="Branch1Event"/>
+		</state>
+		
+		<state ID="Setup2">
+			<prelude once="true">
+				<send protocol="sip" msgtype="Invite"/>
+			</prelude>
+			<response>
+				<if>
+					<and>
+						<neq>
+							<msg_ref type="event"/>
+							<expr>PROV_RSP_RX_UAC</expr>
+						</neq>
+						<neq>
+							<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+							<expr>100</expr>
+						</neq>
+					</and>
+					<then>
+						<verify step="4" requirements="REQ14112">
+							<eq>
+								<msg_ref type="sip">Response</msg_ref>
+								<expr>486-INVITE</expr>
+							</eq>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<transition to="Setup2" event="100-INVITE"/>
+			<transition to="EndCall2" event="486-INVITE"/>
+		</state>
+		
+		<state ID="EndCall2" ES="true">
+			<prelude>
+				<generate event="SucceedEvent" fsm="UE1"/>
+			</prelude>
+		</state>
+	</add_to>	
+</pc2xml>

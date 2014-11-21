@@ -1,0 +1,84 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="SIP-UE 1.9.3" 
+	descrip="Invalid Content-Language Processed with 415 Unsupported Media Type Response" 
+	number="SIP-UE 1.9.3">
+	
+	<template file="./templates/CallTermAtUETemp.xml" name="UE1"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Setup"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<state ID="Setup">
+			<prelude>
+				<send protocol="sip" msgtype="Invite">
+					<!-- Step 1 from the test case SIP 1.9.3 - 
+					Execute step 1 with the following modification to the INVITE-->
+					<mod modtype="replace" hdr="Content-Language">
+						<expr>slang</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<!-- Step 1 from the test case SIP 1.9.3- 
+				UE Responds with 415 (Unsupported Media Type) with an Accept-Language header -->
+				<if>
+					<eq>
+						<msg_ref type="sip">Response</msg_ref>
+						<expr>415-INVITE</expr>
+					</eq>
+					<then>
+						<verify step="1" requirements="RFC409, RFC406" group="415">
+							<contains>
+								<msg_ref type="sip">415-INVITE</msg_ref>
+								<expr>Accept-Language: </expr>
+							</contains>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<transition to="Verify" event="100-INVITE"/>
+			<transition to="END" event="415-INVITE"/>
+		</state>
+		
+		<state ID="Verify">
+			<response>
+				<!-- Step 1 from the test case SIP 1.9.3 -
+					Verify that the UE Responds with 415 (Unsupported Media Type) that has a header Accept-Language-->
+				<verify step="1" requirements="RFC409, RFC406" group="415">
+					<and>
+						<eq>
+							<msg_ref type="sip">Response</msg_ref>
+							<expr>415-INVITE</expr>
+						</eq>
+						<contains>
+							<msg_ref type="sip">415-INVITE</msg_ref>
+							<expr>Accept-Language: </expr>
+						</contains>
+					</and>
+				</verify>
+			</response>
+			<transition to="END" event="415-INVITE"/>
+		</state>
+	</add_to>
+</pc2xml>

@@ -1,0 +1,93 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="SIP-UE 1.17.7" 
+	descrip="UE-terminating case- Temporary GRUU" 
+	number="SIP-UE 1.17.7" inspector="disable">
+	
+	<template file="./templates/UERegAndSubTemp.xml" name="Registrar"/>
+	<template file="./templates/CallTermAtUETemp.xml" name="UE1"/>
+	
+	<remove_from fsm="Registrar">
+		<state ID="NotificationComplete"/>
+	</remove_from>
+	
+	<add_to fsm="Registrar">
+		<NE ext_require="gruu"/>
+		
+		<state ID="Notification" sub="postlude">
+			<generate event="Registered" fsm="UE1"/>
+		</state>
+		
+		<state ID="NotificationComplete">
+			<transition to="END" event="SucceedEvent"/>
+		</state>
+	</add_to>
+	
+	<remove_from fsm="UE1">
+		<state ID="Answer"/>
+		<state ID="OnHook"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<state ID="Answer">
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>UPDATE</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="200-Update"/>
+					</then>
+				</if>
+				<if>
+					<eq>
+						<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+						<expr>200</expr>
+					</eq>
+					<then>
+						<verify step="2" requirements="REQ17081, RFC4027, RFC4032, RFC4033">
+							<contains>
+								<msg_ref type="sip" msg_instance="last" fsm="Registrar">200-REGISTER.Contact.temp-gruu</msg_ref>
+								<msg_ref type="sip">Invite.Contact.temp-gruu</msg_ref>
+							</contains>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<transition to="Answer" event="UPDATE"/>
+			<transition to="Answer" event="200-PRACK"/>
+			<transition to="Answer" event="18x-INVITE"/>
+			<transition to="Answer" event="OffHookComplete"/>
+			<transition to="Connected" event="200-INVITE"/>
+		</state>
+		
+		<state ID="OnHook">
+			<prelude>
+				<send protocol="utility" msgtype="OnHook"/>
+			</prelude>
+			<postlude>
+				<generate event="SucceedEvent" fsm="Registrar"/>
+			</postlude>
+			<transition to="END" event="OnHookComplete"/>
+		</state>
+	</add_to>
+</pc2xml>

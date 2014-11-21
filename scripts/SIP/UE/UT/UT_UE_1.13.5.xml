@@ -1,0 +1,61 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+
+<pc2xml version="$Revision: 8188 $" name="UT_UE_1.13.5" descrip="This is a unit test script for testing the UE_1.13.5 test script." number="1">
+	<template name="UE0" file="$UT_PATH/Templates/ut/Term_DUT.xml"/>
+	<remove_from fsm="UE0">
+		<state ID="Setup" sub="response"/>
+	</remove_from>
+	<add_to fsm="UE0">
+		<NE ext_disable="precondition"/>
+		<states initialstate="Register"/>
+		<state ID="Setup" sub="response">
+			<if>
+				<and>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>Invite</expr>
+					</eq>
+					<and>
+						<dnc>
+							<msg_ref type="sip" hdr_instance="any">Invite.Require</msg_ref>
+							<expr>precondition</expr>
+						</dnc>
+						<dnc>
+							<msg_ref type="sip" hdr_instance="any">Invite.Supported</msg_ref>
+							<expr>precondition</expr>
+						</dnc>
+					</and>
+				</and>
+				<then>
+					<send protocol="sip" msgtype="100-INVITE" target="UE1" originator="DUT"/>
+					<send protocol="sip" msgtype="180-Invite" target="UE1" originator="DUT"/>
+				</then>
+				<else>
+					<fail/>
+				</else>
+			</if>
+		</state>
+		<transition from="Setup" to="EndCall1" event="INVITE"/>
+		<state ID="EndCall1">
+			<transition to="END" event="CANCEL"/>
+		</state>
+	</add_to>
+</pc2xml>

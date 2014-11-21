@@ -1,0 +1,799 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	PCPCII-135 : UPdate the script to accommodate a de-register message during the reboot. (ghassler 06/24/2009)
+	
+
+
+
+
+-->
+
+<!-- First are the document type and the attributes for our document -->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-EDVA 1.2.5" 
+	descrip="Ability of E-DVA To Implement the MWI Signal Types" 
+	number="RST-EDVA 1.2.5">
+	
+	<configure name="No Response Timeout" value="180000"/>
+
+	<!-- Next we define the each of state machines -->
+	<fsm name="Registrar">
+		<models>
+			<registrar/>
+		</models>
+		<!-- Next we define all of the network elements -->
+		<NE sim_type="term" elements="SCSCF1 PCSCF1" targets="SCSCF1"/>
+		<!-- All of the states for the test. References to "Step x" from the Default Message Flow - UE Registration (DUT) 
+        and UE Subscription (DUT) Sequence Diagram -->
+		<states initialstate="Reboot">
+			<state ID="Reboot" timer="5000">
+				<!-- First we need to power cycle the UE to conduct the test -->
+				<prelude once="true">
+					<start_capture>
+						<filter>
+							<var_expr>
+							<expr>host </expr>
+							<msg_ref type="platform">DUT.IP</msg_ref>
+						</var_expr>
+					</filter>
+					</start_capture>
+					<send protocol="utility" msgtype="SNMPSet">
+						<mod modtype="add" hdr="array">
+							<var_expr>
+									<expr>varBind 1 1 3 \r\n ][ , </expr>
+									<expr>DOCS-CABLE-DEVICE-MIB::docsDevResetNow.0,INTEGER,1][\r\n</expr>
+							</var_expr>
+						</mod>
+						<mod modtype="replace" hdr="agentip">
+							<msg_ref type="platform">DUT.CM IP Address</msg_ref>
+						</mod>
+						<!-- Always use version 2 for a CM reset -->
+						<mod modtype="replace" hdr="version">
+							<expr>2c</expr>
+						</mod>
+					</send>
+				</prelude>
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="utility">Response</msg_ref>
+							<expr>SNMPRespFailure</expr>
+						</eq>
+						<then>
+							<fail/>
+						</then>
+					</if>
+					<if>
+						<or>
+							<eq>
+								<msg_ref type="sip">REGISTER.Contact.expires</msg_ref>
+								<expr>0</expr>
+							</eq>
+							<eq>
+								<msg_ref type="sip">REGISTER.Expires.value</msg_ref>
+								<expr>0</expr>
+							</eq>
+						</or>
+						<then>
+							<send protocol="sip" msgtype="200-REGISTER"/>
+						</then>
+					</if>
+				</response>
+				<!-- Transitions for PendingRegistration state -->
+				<transition to="Reboot" event="SNMPResp"/>
+				<transition to="PendingRegistration" event="TimerExpired"/>
+				<transition to="END" event="SNMPRespFailure"/>
+				<transition to="Reboot" event="REGISTER"/>
+			</state>
+			<!-- PENDINGREGISTRATION State - Default Message Flow - 
+			UE Registration (DUT) Sequence Diagram-->
+			<state ID="PendingRegistration">
+				<!-- Step 1 from the Default Message Flow - 
+					UE Registration (DUT) Sequence Diagram- received REGISTER message-->
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>REGISTER</expr>
+						</eq>
+						<!-- Step-2 from the Default Message Flow - UE Registration (DUT) Sequence Diagram- send 401-REGISTER-->
+						<then>
+							<send protocol="sip" msgtype="401-REGISTER"/>
+						</then>
+					</if>
+				</response>
+				<!-- Transitions for PendingRegistration state -->
+				<transition to="Authorization" event="REGISTER"/>
+			</state>
+			<!--State changes from PENDINGREGISTRATION to AUTHORIZATION on receiving (Step-3) REGISTER message-->
+			<!-- AUTHORIZATION State -->
+			<!-- Step-3 from the Default Message Flow - UE Registration (DUT) Sequence Diagram- received REGISTER message-->
+			<state ID="Authorization">
+				<response>
+					<if>
+						<or>
+							<eq>
+								<msg_ref type="event"/>
+								<expr>AuthenticateSucceed</expr>
+							</eq>
+							<eq>
+								<msg_ref type="event"/>
+								<expr>AuthenticateFailed</expr>
+							</eq>
+						</or>
+						<then>
+							<!-- this is to prevent the AuthenticateFailed from being forwarded
+									to the next state on the AuthenticateSucceed -->
+						</then>
+						<elseif>
+							<and>
+								<eq>
+									<msg_ref type="sip">Request</msg_ref>
+									<expr>REGISTER</expr>
+								</eq>
+								<and>
+									<contains>
+										<msg_ref type="sip">REGISTER</msg_ref>
+										<expr>Authorization</expr>
+									</contains>
+									<digest/>
+								</and>
+							</and>
+							<then>
+								<generate event="AuthenticateSucceed"/>
+								<send protocol="sip" msgtype="200-Register"/>
+							</then>
+							<else>
+								<generate event="AuthenticateFailed"/>
+								<send protocol="sip" msgtype="503-Register"/>
+							</else>
+						</elseif>
+					</if>
+				</response>
+				<!-- Transitions for Authorization state -->
+				<transition to="Registered" event="AuthenticateSucceed"/>
+				<transition to="END" event="AuthenticateFailed"/>
+				<transition to="Authorization" event="REGISTER"/>
+			</state>
+			
+			<state ID="Registered">
+				<response>
+					<if>
+						<and>
+							<eq>
+								<msg_ref type="sip">Request</msg_ref>
+								<expr>SUBSCRIBE</expr>
+							</eq>
+							<contains>
+								<msg_ref type="sip">SUBSCRIBE.Event</msg_ref>
+								<expr>reg</expr>
+							</contains>
+						</and>
+						<then>
+							<send protocol="sip" msgtype="200-SUBSCRIBE"/>
+							<sleep time="100"/>
+							<send protocol="sip" msgtype="NOTIFY"/>
+						</then>
+					</if>
+					<if>
+						<and>
+							<eq>
+								<msg_ref type="sip">Request</msg_ref>
+								<expr>SUBSCRIBE</expr>
+							</eq>
+							<contains>
+								<msg_ref type="sip">SUBSCRIBE.Event</msg_ref>
+								<expr>message-summary</expr>
+							</contains>
+						</and>
+						<then>
+							<send protocol="sip" msgtype="200-SUBSCRIBE"/>
+							<sleep time="100"/>
+							<send protocol="sip" msgtype="NOTIFY"/>
+						</then>
+					</if>
+				</response>
+				<!-- Transitions for Registered state -->
+				<transition to="Registered" event="REGISTER"/>
+				<transition to="Registered" event="SUBSCRIBE"/>
+				<transition to="Subscribe2" event="200-NOTIFY"/>
+			</state>
+			
+			<state ID="Subscribe2">
+				<response>
+					<if>
+						<and>
+							<eq>
+								<msg_ref type="sip">Request</msg_ref>
+								<expr>SUBSCRIBE</expr>
+							</eq>
+							<contains>
+								<msg_ref type="sip">SUBSCRIBE.Event</msg_ref>
+								<expr>reg</expr>
+							</contains>
+						</and>
+						<then>
+							<send protocol="sip" msgtype="200-SUBSCRIBE"/>
+							<sleep time="100"/>
+							<send protocol="sip" msgtype="NOTIFY"/>
+						</then>
+					</if>
+					<if>
+						<and>
+							<eq>
+								<msg_ref type="sip">Request</msg_ref>
+								<expr>SUBSCRIBE</expr>
+							</eq>
+							<contains>
+								<msg_ref type="sip">SUBSCRIBE.Event</msg_ref>
+								<expr>message-summary</expr>
+							</contains>
+						</and>
+						<then>
+							<send protocol="sip" msgtype="200-SUBSCRIBE"/>
+							<sleep time="100"/>
+							<send protocol="sip" msgtype="NOTIFY"/>
+						</then>
+					</if>
+				</response>
+				<!-- Transitions for Registered state -->
+				<transition to="Subscribe2" event="REGISTER"/>
+				<transition to="Subscribe2" event="SUBSCRIBE"/>
+				<transition to="GetMWITable" event="200-NOTIFY"/>
+			</state>
+			
+			<state ID="GetMWITable">
+				<prelude once="true">
+					<send protocol="utility" msgtype="SNMPGetTable">
+						<mod modtype="add" hdr="oids">
+							<expr>CL-PKTC-EUE-EDVA-MIB::pktcEDVAMWISignalTypesTable</expr>
+						</mod>
+						<mod modtype="replace" hdr="version">
+							<expr>3</expr>
+						</mod>
+					</send>
+				</prelude>
+				<response>
+					<var name="line1">
+						<array_ref>SNMPResp.varBind</array_ref>
+						<where>
+							<contains>
+								<array_index index="* 0 0"/>
+								<expr>pktcEDVAMwiOnHook.1</expr>
+							</contains>
+						</where>
+					</var>
+					<if>
+						<eq>
+							<var_ref name="line1" index="0 0 2"/>
+							<expr>1</expr>
+						</eq>
+						<then>
+							<!--  Test for the pktcEDVAMwiOnHook   element -->
+							<verify step="3">
+								<eq>
+								<var_ref name="line1" index="0 0 2"/>
+								<expr>1</expr>
+							</eq>
+							</verify>
+						</then>
+					</if>
+					<if>
+						<eq>
+							<var_ref name="line1" index="0 1 2"/>
+							<expr>1</expr>
+						</eq>
+						<then>
+							<!--  Test for the pktcEDVAMwiOffHook   element -->
+							<verify step="3">
+								<eq>
+								<var_ref name="line1" index="0 1 2"/>
+								<expr>1</expr>
+							</eq>
+							</verify>
+						</then>
+					</if>
+					</response>
+				<transition to="SendMWINotify" event="SNMPResp"/>
+				<transition to="SendMWINotify" event="SNMPRespFailure"/>
+			</state>
+			
+			<state ID="SendMWINotify">
+				<prelude once="true">
+					<send protocol="sip" msgtype="NOTIFY" subscribeType="message-summary">
+						<mod modtype="replace" hdr="Voice-Message" body="simple-message-summary">
+							<expr>2/1 (0/0)</expr>
+						</mod>
+					</send>
+				</prelude>
+				<transition to="OffHook" event="200-NOTIFY"/>
+			</state>
+					
+			<state ID="OffHook">
+				<prelude>
+					<log step="4" verify="true" promptUser="true"
+						expr="Was the FSK tone played by the DUT indicating that there is a message waiting?"/>
+					 <send protocol="utility" msgtype="OffHook"/>
+				</prelude>
+				<postlude>
+					<log step="4" verify="true" promptUser="true"
+						expr="Was there a message waiting indication announcement played by the DUT in the receiver?"/>
+				</postlude>
+				<transition to="OnHook" event="OffHookComplete"/>
+			</state>
+			
+			<state ID="OnHook">
+				<prelude>
+					<send protocol="utility" msgtype="OnHook"/>
+				</prelude>
+				<!-- Transitions for OffHook state -->
+				<transition to="UpdateMWI" event="OnHookComplete"/>
+			</state>
+			
+			<state ID="UpdateMWI">
+				<prelude>
+					<sleep time="10000"/>
+					<send protocol="utility" msgtype="SNMPSet">
+						<mod modtype="add" hdr="array">
+							<var_expr>
+								<expr>varBind 1 1 3 \r\n ][ , </expr>
+								<expr>CL-PKTC-EUE-EDVA-MIB::pktcEDVAMwiOnHook.9,INTEGER,2][\r\n</expr>
+							</var_expr>
+						</mod>
+						<mod modtype="replace" hdr="version">
+							<expr>3</expr>
+						</mod>
+					</send>
+				</prelude>
+				<transition to="UpdateMWI2" event="SNMPResp"/>
+				<transition to="UpdateMWI2" event="SNMPRespFailure"/>
+			</state>
+				
+			<state ID="UpdateMWI2">
+				<prelude>
+					<send protocol="utility" msgtype="SNMPSet">
+						<mod modtype="add" hdr="array">
+							<var_expr>
+								<expr>varBind 1 1 3 \r\n ][ , </expr>
+								<expr>CL-PKTC-EUE-EDVA-MIB::pktcEDVAMwiOffHook.9,INTEGER,2][\r\n</expr>
+							</var_expr>
+						</mod>
+						<mod modtype="replace" hdr="version">
+							<expr>3</expr>
+						</mod>
+					</send>
+				</prelude>
+				<transition to="SendMWINotify2" event="SNMPResp"/>
+				<transition to="SendMWINotify2" event="SNMPRespFailure"/>
+			</state>
+			
+			<state ID="SendMWINotify2">
+				<prelude once="true">
+					<send protocol="sip" msgtype="NOTIFY" subscribeType="message-summary">
+						<mod modtype="replace" hdr="Voice-Message" body="simple-message-summary">
+							<expr>3/1 (0/0)</expr>
+						</mod>
+					</send>
+				</prelude>
+				<transition to="OffHook2" event="200-NOTIFY"/>
+			</state>
+			
+			<state ID="OffHook2">
+				<prelude>
+					<log step="7" verify="true" promptUser="true"
+						expr="Was there an indication played by the DUT that there is a message waiting?"/>
+					 <send protocol="utility" msgtype="OffHook"/>
+				</prelude>
+				<postlude>
+					<log step="7" verify="true" promptUser="true"
+						expr="Was there a message waiting indication announcement played by the DUT in the receiver?"/>
+				</postlude>
+				<transition to="OnHook2" event="OffHookComplete"/>
+			</state>
+		
+			<state ID="OnHook2">
+				<prelude>
+					<send protocol="utility" msgtype="OnHook"/>
+				</prelude>
+				<!-- Transitions for OffHook state -->
+				<transition to="EndSecureProv" event="OnHookComplete"/>
+			</state>
+			
+			<state ID="EndSecureProv">
+				<prelude>
+					<sleep time="10000"/>
+					<stop_capture/>
+					<log promptUser="true" expr="Configure the DUT to reprovision in hybrid mode."/>
+					<generate event="Branch1Event"/>
+				</prelude>
+				<transition to="Reboot2" event="Branch1Event"/>
+			</state>
+			
+			
+			<state ID="Reboot2" timer="5000">
+				<prelude once="true">
+					<start_capture>
+						<filter>
+							<var_expr>
+							<expr>host </expr>
+							<msg_ref type="platform">DUT.IP</msg_ref>
+						</var_expr>
+					</filter>
+					</start_capture>
+					<send protocol="utility" msgtype="SNMPSet">
+						<mod modtype="add" hdr="array">
+							<var_expr>
+									<expr>varBind 1 1 3 \r\n ][ , </expr>
+									<expr>DOCS-CABLE-DEVICE-MIB::docsDevResetNow.0,INTEGER,1][\r\n</expr>
+							</var_expr>
+						</mod>
+						<mod modtype="replace" hdr="agentip">
+							<msg_ref type="platform">DUT.CM IP Address</msg_ref>
+						</mod>
+						<!-- Always use version 2 for a CM reset -->
+						<mod modtype="replace" hdr="version">
+							<expr>2c</expr>
+						</mod>
+					</send>
+				</prelude>
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="utility">Response</msg_ref>
+							<expr>SNMPRespFailure</expr>
+						</eq>
+						<then>
+							<fail/>
+						</then>
+					</if>
+					<if>
+						<or>
+							<eq>
+								<msg_ref type="sip">REGISTER.Contact.expires</msg_ref>
+								<expr>0</expr>
+							</eq>
+							<eq>
+								<msg_ref type="sip">REGISTER.Expires.value</msg_ref>
+								<expr>0</expr>
+							</eq>
+						</or>
+						<then>
+							<send protocol="sip" msgtype="200-REGISTER"/>
+						</then>
+					</if>
+				</response>
+				<!-- Transitions for PendingRegistration state -->
+				<transition to="Reboot2" event="SNMPResp"/>
+				<transition to="PendingRegistration2" event="TimerExpired"/>
+				<transition to="END" event="SNMPRespFailure"/>
+				<transition to="Reboot2" event="REGISTER"/>
+			</state>
+		
+			<state ID="PendingRegistration2">
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>REGISTER</expr>
+						</eq>
+						<then>
+							<send protocol="sip" msgtype="401-REGISTER"/>
+						</then>
+					</if>
+				</response>
+				<transition to="Authorization2" event="REGISTER"/>
+			</state>
+			
+			<state ID="Authorization2">
+				<response>
+					<if>
+						<or>
+							<eq>
+								<msg_ref type="event"/>
+								<expr>AuthenticateSucceed</expr>
+							</eq>
+							<eq>
+								<msg_ref type="event"/>
+								<expr>AuthenticateFailed</expr>
+							</eq>
+						</or>
+						<then>
+							<!-- this is to prevent the AuthenticateFailed from being forwarded
+									to the next state on the AuthenticateSucceed -->
+						</then>
+						<elseif>
+							<and>
+								<eq>
+									<msg_ref type="sip">Request</msg_ref>
+									<expr>REGISTER</expr>
+								</eq>
+								<and>
+									<contains>
+										<msg_ref type="sip">REGISTER</msg_ref>
+										<expr>Authorization</expr>
+									</contains>
+									<digest/>
+								</and>
+							</and>
+							<then>
+								<generate event="AuthenticateSucceed"/>
+								<send protocol="sip" msgtype="200-Register"/>
+								<var name="regComplete">
+									<expr>FALSE</expr>
+								</var>
+								<var name="msComplete">
+									<expr>FALSE</expr>
+								</var>
+							</then>
+							<else>
+								<generate event="AuthenticateFailed"/>
+								<send protocol="sip" msgtype="503-Register"/>
+							</else>
+						</elseif>
+					</if>
+				</response>
+				<!-- Transitions for Authorization state -->
+				<transition to="Registered2" event="AuthenticateSucceed"/>
+				<transition to="END" event="AuthenticateFailed"/>
+				<transition to="Authorization2" event="REGISTER"/>
+			</state>
+			
+			<state ID="Registered2">
+				<response>
+					<if>
+						<and>
+							<eq>
+								<msg_ref type="sip">Request</msg_ref>
+								<expr>SUBSCRIBE</expr>
+							</eq>
+							<contains>
+								<msg_ref type="sip">SUBSCRIBE.Event</msg_ref>
+								<expr>reg</expr>
+							</contains>
+						</and>
+						<then>
+							<send protocol="sip" msgtype="200-SUBSCRIBE"/>
+							<sleep time="100"/>
+							<send protocol="sip" msgtype="NOTIFY"/>
+						</then>
+					</if>
+					<if>
+						<and>
+							<eq>
+								<msg_ref type="sip">Request</msg_ref>
+								<expr>SUBSCRIBE</expr>
+							</eq>
+							<contains>
+								<msg_ref type="sip">SUBSCRIBE.Event</msg_ref>
+								<expr>message-summary</expr>
+							</contains>
+						</and>
+						<then>
+							<send protocol="sip" msgtype="200-SUBSCRIBE"/>
+							<sleep time="100"/>
+							<send protocol="sip" msgtype="NOTIFY"/>
+						</then>
+					</if>
+				</response>
+				<!-- Transitions for Registered state -->
+				<transition to="Registered2" event="REGISTER"/>
+				<transition to="Registered2" event="SUBSCRIBE"/>
+				<transition to="Subscribe4" event="200-NOTIFY"/>
+			</state>
+			
+			<state ID="Subscribe4">
+				<response>
+					<if>
+						<and>
+							<eq>
+								<msg_ref type="sip">Request</msg_ref>
+								<expr>SUBSCRIBE</expr>
+							</eq>
+							<contains>
+								<msg_ref type="sip">SUBSCRIBE.Event</msg_ref>
+								<expr>reg</expr>
+							</contains>
+						</and>
+						<then>
+							<send protocol="sip" msgtype="200-SUBSCRIBE"/>
+							<sleep time="100"/>
+							<send protocol="sip" msgtype="NOTIFY"/>
+						</then>
+					</if>
+					<if>
+						<and>
+							<eq>
+								<msg_ref type="sip">Request</msg_ref>
+								<expr>SUBSCRIBE</expr>
+							</eq>
+							<contains>
+								<msg_ref type="sip">SUBSCRIBE.Event</msg_ref>
+								<expr>message-summary</expr>
+							</contains>
+						</and>
+						<then>
+							<send protocol="sip" msgtype="200-SUBSCRIBE"/>
+							<sleep time="100"/>
+							<send protocol="sip" msgtype="NOTIFY"/>
+						</then>
+					</if>
+				</response>
+				<!-- Transitions for Registered state -->
+				<transition to="Subscribe4" event="REGISTER"/>
+				<transition to="Subscribe4" event="SUBSCRIBE"/>
+				<transition to="GetMWITable2" event="200-NOTIFY"/>
+			</state>
+						
+			<state ID="GetMWITable2">
+				<prelude once="true">
+					<send protocol="utility" msgtype="SNMPGetTable">
+						<mod modtype="add" hdr="oids">
+							<expr>CL-PKTC-EUE-EDVA-MIB::pktcEDVAMWISignalTypesTable</expr>
+						</mod>
+						<mod modtype="replace" hdr="version">
+							<expr>2c</expr>
+						</mod>
+					</send>
+				</prelude>
+				<response>
+					<var name="line1_hybrid">
+						<array_ref>SNMPResp.varBind</array_ref>
+						<where>
+							<contains>
+								<array_index index="* 0 0"/>
+								<expr>pktcEDVAMwiOnHook.1</expr>
+							</contains>
+						</where>
+					</var>
+					<if>
+						<eq>
+							<var_ref name="line1_hybrid" index="0 0 2"/>
+							<expr>1</expr>
+						</eq>
+						<then>
+							<!--  Test for the pktcEDVAMwiOnHook   element -->
+							<verify step="14">
+								<eq>
+								<var_ref name="line1_hybrid" index="0 0 2"/>
+								<expr>1</expr>
+							</eq>
+							</verify>
+						</then>
+					</if>
+					<if>
+						<eq>
+							<var_ref name="line1_hybrid" index="0 1 2"/>
+							<expr>1</expr>
+						</eq>
+						<then>
+							<!--  Test for the pktcEDVAMwiOffHook   element -->
+							<verify step="14">
+								<eq>
+								<var_ref name="line1_hybrid" index="0 1 2"/>
+								<expr>1</expr>
+							</eq>
+							</verify>
+						</then>
+					</if>
+					</response>
+				<transition to="SendMWINotify3" event="SNMPResp"/>
+				<transition to="SendMWINotify3" event="SNMPRespFailure"/>
+			</state>
+			
+			<state ID="SendMWINotify3">
+				<prelude once="true">
+					<send protocol="sip" msgtype="NOTIFY" subscribeType="message-summary">
+						<mod modtype="replace" hdr="Voice-Message" body="simple-message-summary">
+							<expr>2/1 (0/0)</expr>
+						</mod>
+					</send>
+				</prelude>
+				<transition to="OffHook3" event="200-NOTIFY"/>
+			</state>
+					
+			<state ID="OffHook3">
+				<prelude>
+					<log step="14" verify="true" promptUser="true"
+						expr="Was the FSK tone played by the DUT indicating that there is a message waiting?"/>
+					 <send protocol="utility" msgtype="OffHook"/>
+				</prelude>
+				<postlude>
+					<log step="14" verify="true" promptUser="true"
+						expr="Was there a message waiting indication announcement played by the DUT in the receiver?"/>
+				</postlude>
+				<!-- Transitions for OffHook state -->
+				<transition to="OnHook3" event="OffHookComplete"/>
+			</state>
+			
+			<state ID="OnHook3">
+				<prelude>
+					<send protocol="utility" msgtype="OnHook"/>
+				</prelude>
+				<!-- Transitions for OffHook state -->
+				<transition to="UpdateMWI3" event="OnHookComplete"/>
+			</state>
+			
+			<state ID="UpdateMWI3">
+				<prelude>
+					<sleep time="10000"/>
+					<send protocol="utility" msgtype="SNMPSet">
+						<mod modtype="add" hdr="array">
+							<var_expr>
+								<expr>varBind 1 1 3 \r\n ][ , </expr>
+								<expr>CL-PKTC-EUE-EDVA-MIB::pktcEDVAMwiOnHook.9,INTEGER,2][\r\n</expr>
+							</var_expr>
+						</mod>
+						<mod modtype="replace" hdr="version">
+							<expr>3</expr>
+						</mod>
+					</send>
+				</prelude>
+				<transition to="UpdateMWI4" event="SNMPResp"/>
+				<transition to="UpdateMWI4" event="SNMPRespFailure"/>
+			</state>
+				
+			<state ID="UpdateMWI4">
+				<prelude>
+					<send protocol="utility" msgtype="SNMPSet">
+						<mod modtype="add" hdr="array">
+							<var_expr>
+								<expr>varBind 1 1 3 \r\n ][ , </expr>
+								<expr>CL-PKTC-EUE-EDVA-MIB::pktcEDVAMwiOffHook.9,INTEGER,2][\r\n</expr>
+							</var_expr>
+						</mod>
+						<mod modtype="replace" hdr="version">
+							<expr>3</expr>
+						</mod>
+					</send>
+				</prelude>
+				<transition to="SendMWINotify4" event="SNMPResp"/>
+				<transition to="SendMWINotify4" event="SNMPRespFailure"/>
+			</state>
+			
+			<state ID="SendMWINotify4">
+				<prelude once="true">
+					<send protocol="sip" msgtype="NOTIFY" subscribeType="message-summary">
+						<mod modtype="replace" hdr="Voice-Message" body="simple-message-summary">
+							<expr>3/1 (0/0)</expr>
+						</mod>
+					</send>
+				</prelude>
+				<transition to="OffHook4" event="200-NOTIFY"/>
+			</state>
+			
+			<state ID="OffHook4">
+				<prelude>
+					<log step="14" verify="true" promptUser="true"
+						expr="Was there an indication played by the DUT that there is a message waiting?"/>
+					 <send protocol="utility" msgtype="OffHook"/>
+				</prelude>
+				<postlude>
+					<log step="14" verify="true" promptUser="true"
+						expr="Was there a message waiting indication announcement played by the DUT in the receiver?"/>
+				</postlude>
+				<transition to="OnHook4" event="OffHookComplete"/>
+			</state>
+		
+			<state ID="OnHook4">
+				<prelude>
+					<send protocol="utility" msgtype="OnHook"/>
+				</prelude>
+				<!-- Transitions for OffHook state -->
+				<transition to="END" event="OnHookComplete"/>
+				<transition to="END" event="OnHookError"/>
+			</state>
+			
+		</states>
+	</fsm>
+</pc2xml>

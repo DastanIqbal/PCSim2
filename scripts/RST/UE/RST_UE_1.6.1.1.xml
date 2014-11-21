@@ -1,0 +1,89 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	PCPCII-139 : Update the Voicetronix modifiers to use the new values. (ghassler 07/10/2009)
+	PCPCII-209 : Correct transition to the END state and add verify logic for testing that no
+		INVITE is sent by the DUT. (ghassler 03/10/2010).
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-UE 1.6.1.1" 
+	descrip="DND activation – feature disabled " 
+	number="RST-UE 1.6.1.1">
+	
+	<fsm name="UE1">
+		<models>
+			<session/>
+		</models>
+	
+		<NE sim_type="term" elements="UE1 PCSCF2 SCSCF1 PCSCF1" targets="UE1"/>
+	
+		<states initialstate="Register">
+			<state ID="Register">
+				<transition to="OffHook" event="Registered"/>
+			</state>
+			
+			<state ID="OffHook">
+				<prelude>
+					<send protocol="utility" msgtype="OffHook"/>
+				</prelude>
+				<transition to="Setup" event="OffHookComplete"/>
+			</state>
+			
+			<state ID="Setup">
+				<prelude once="true">
+					<!-- Step 1 test case SIP 1.6.1.1 - Verify an error tone is played-->
+					<send protocol="utility" msgtype="DialDigits">
+						<mod modtype="add" hdr="number">
+							<expr>*78</expr>
+						</mod>
+					</send>
+					<sleep time="2000"/>
+					<log step="1" requirements="REQ13880" 
+						promptUser="True" yesExpected="True" verify="True" 
+						expr="Verify an error tone is played?"/>
+					<sleep time="2000"/>
+					<!-- Step 2 test case SIP 1.6.1.1 - Go on-hook on the device attached to the DUT (UE-A) and clean up.-->
+					<send protocol="utility" msgtype="OnHook"/>
+				</prelude>
+				<response>
+					<if>	
+						<or>
+							<eq>
+								<msg_ref type="utility">Response</msg_ref>
+								<expr>OnHookComplete</expr>
+							</eq>
+							<eq>
+								<msg_ref type="utility">Request</msg_ref>
+								<expr>INVITE</expr>
+							</eq>
+						</or>
+						<then>
+							<verify step="1" requirements="REQ13880">
+								<neq>
+									<msg_ref type="utility">Request</msg_ref>
+									<expr>INVITE</expr>
+								</neq>
+							</verify>
+						</then>
+					</if>
+				</response>
+				<transition to="Setup" event="DialDigitsComplete"/>
+				<transition to="END" event="INVITE"/>
+				<transition to="END" event="OnHookComplete"/>
+			</state>
+		</states>
+	</fsm>
+</pc2xml>

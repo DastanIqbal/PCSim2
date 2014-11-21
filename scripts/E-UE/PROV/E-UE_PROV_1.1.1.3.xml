@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+ Change History: (Author & Date)
+
+-->
+<!-- First are the document type and the attributes for our document -->
+<pc2xml version="$Revision: 8206 $" name="EUE_Prov_1.1.1.3" 
+	descrip="Basic Provisioning" 
+	number="EUE_Prov_1.1.1.3">
+
+	<template file="./templates/EUE_Prov_B_2_2_4.xml" name="BasicUE"/>
+</pc2xml>

@@ -1,0 +1,228 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+ Change History: (Author & Date)
+-->
+<pc2xml version="$Revision: 7768 $"
+        name="EUE Prov 1.1.2.15"
+        descrip="eUE invalidates ticket stored in NVRAM for application provisioning server."
+        number="EUE Prov 1.1.2.15">
+
+    <template file="./templates/EUE_Prov_B_1_1_1.xml" name="StoredTickets"/>
+
+
+    <add_to fsm="StoredTickets">
+        <transition from="StartCapture_RebootWait" to="EDVAProvisions1" event="TimerExpired"/>
+        <!-- Step 5. E/MTA DUT reports provisioning pass code (1) to the provisioning service (SNMP Entity). -->
+        <state ID="EDVAProvisions1">
+            <prelude once="true">
+                <stop_capture/>
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvisioningState.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">UE0.IP</msg_ref>
+                    </mod>
+					<mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="5">
+                    <contains>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>1</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="ClearKRB" event="SNMPResp"/>
+        </state>
+
+
+        <!-- Step 6. SNMPv3 Set pktcMtaDevResetKrbTickets to invalidateProvOnReboot =1
+                     SNMPv3 Browser reports success of SNMP SET operation. -->
+        <state ID="ClearKRB">
+            <prelude>
+                <send protocol="utility" msgtype="SNMPSet">
+                    <mod modtype="add" hdr="array">
+                        <var_expr>
+                            <expr>varBind 1 1 3 \r\n ][ , </expr>
+                            <!-- Is this really an 'invalidateProvOnReboot' -->
+                            <expr>PKTC-IETF-MTA-MIB::pktcMtaDevResetKrbTickets.0,BITS,1][\r\n</expr>
+                        </var_expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+                    <mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="6">
+                    <contains>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>1</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="Reset" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+
+        <!-- Step 8. Reset the MTA by setting the pktcMtaDevResetNow MIB Object to true (1). -->
+        <state ID="Reset" timer="150000">
+            <prelude once="true">
+                <start_capture>
+                    <filter>
+                        <var_expr>
+                            <expr>host </expr>
+                            <msg_ref type="platform">DUT.IP</msg_ref>
+                        </var_expr>
+                    </filter>
+                </start_capture>
+
+                <send protocol="utility" msgtype="SNMPSet">
+                    <mod modtype="add" hdr="array">
+                        <var_expr>
+                            <expr>varBind 1 1 3 \r\n ][ , </expr>
+                            <expr>PKTC-IETF-MTA-MIB::pktcMtaDevResetNow.0,INTEGER,1][\r\n</expr>
+                        </var_expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP Address</msg_ref>
+                    </mod>
+                    <mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPRespFailure</expr>
+                    </eq>
+                    <then>
+                        <fail/>
+                    </then>
+                </if>
+                <if>
+                    <or>
+                        <eq>
+                            <msg_ref type="sip">REGISTER.Contact.expires</msg_ref>
+                            <expr>0</expr>
+                        </eq>
+                        <eq>
+                            <msg_ref type="sip">REGISTER.Expires.value</msg_ref>
+                            <expr>0</expr>
+                        </eq>
+                    </or>
+                    <then>
+                        <send protocol="sip" msgtype="200-REGISTER"/>
+                    </then>
+                </if>
+            </response>
+            <transition to="EDVAProvisions2" event="TimerExpired"/>
+            <transition to="Reset" event="SNMPResp"/>
+            <transition to="Reset" event="REGISTER"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+
+        <!-- Step 9. E/MTA DUT reports provisioning pass code (1) to the provisioning service (SNMP Entity). -->
+        <state ID="EDVAProvisions2">
+            <prelude once="true">
+                <stop_capture/>
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvisioningState.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">UE0.IP</msg_ref>
+                    </mod>
+					<mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="9">
+                    <contains>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>1</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="VerifyMessaging" event="SNMPResp"/>
+        </state>
+
+
+        <state ID="VerifyMessaging">
+            <prelude once="true">
+                <stop_capture/>
+
+                <parse_capture name="eUE_Prov">
+                    <parser_filter protocol="pktc" ip="DUT.IP"/>
+                </parse_capture>
+
+                <!-- Step 11. MTA sent an AS(TGS) request to MSO KDC -->
+                <verify step="11">
+                    <eq>
+                        <capture_ref type="pktc" name="eUE_Prov">AP-REQ.ipv6.dst_host.show</capture_ref>
+                        <msg_ref type="platform">DUT.DHCP Server IP</msg_ref>
+                    </eq>
+                </verify>
+
+                <!-- Step 12. MSO KDC has responded with AS(TGS) reply
+                              First byte of the UDP payload must be 6B (6D for TGS), which defines AS Reply message type. -->
+                <verify step="12">
+                    <eq>
+                        <capture_ref type="pktc" name="eUE_Prov">AP-REP.ipv6.src_host.show</capture_ref>
+                        <msg_ref type="platform">DUT.DHCP Server IP</msg_ref>
+                    </eq>
+                    <!-- Here is where the payload check would go -->
+                </verify>
+
+
+                <!-- Step 13. Check for AP request (to Provisioning Application server)
+                              First 4 bytes of the UDP payload in order must be
+                                  0x02 (msg-id)
+                                  0x02 (SNMPV3 DOI)
+                                  0x10 (protocol version)
+                                  0x6E (APPLICATION 14) which defines AP Request -->
+                <verify step="13">
+                    <and>
+						<!--verifying msg-id-->
+                        <eq>
+                            <capture_ref type="pktc" name="eUE_Prov">AP-REQ.pktc.kmmid.show</capture_ref>
+							<expr>0x02</expr>
+                        </eq>
+							<!--verifying SNMPv3 DOI-->
+							<contains>
+								<capture_ref type="pktc" name="eUE_Prov">AP-REQ.pktc.doi.showname</capture_ref>
+								<expr>SNMPv3</expr>
+							</contains>
+
+								<!--verifying protocol version, but the field name is blank in the .pdml file. Therefore, cannot point to the value-->
+
+								<!--verifying APPLICATION 14 which can't be found in the .pdml file.-->
+                    </and>
+                </verify>
+				<generate event="SucceedEvent"/>
+            </prelude>
+			<transition to="END" event="SucceedEvent"/>
+        </state>
+    </add_to>
+</pc2xml>

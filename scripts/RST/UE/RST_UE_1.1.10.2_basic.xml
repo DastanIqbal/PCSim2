@@ -1,0 +1,159 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	PCPCII-122 : Consolidate the NOTIFY messages for CVF and SCF into a single message. (ghassler 3/16/2009)
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-UE 1.1.10.2_Basic" 
+	descrip="SUBSCRIBE message headers" 
+	number="RST-UE 1.1.10.2_Basic" inspector="disable">
+	
+	<template file="./templates/UERegAndSubTemp.xml" name="UE1"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="PendingRegistration" sub="prelude"/>
+		<state ID="Registered"/>
+		<state ID="Notification"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<state ID="PendingRegistration" sub="prelude">
+			<var name="SubscribeFeature1">
+				<expr>false</expr>
+			</var>
+		</state>
+		
+		<state ID="Registered">
+			<prelude once="true">
+				<send protocol="sip" msgtype="200-Register"/>
+			</prelude>
+			<response>
+				<!--  Check if the SUBSCRIBE is for reg event -->
+				<if>
+					<and>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>SUBSCRIBE</expr>
+						</eq>
+						<eq>
+							<msg_ref type="sip">SUBSCRIBE.Event.event-type</msg_ref>
+							<expr>reg</expr>
+						</eq>
+					</and>
+					<then>
+						<send protocol="sip" msgtype="200-SUBSCRIBE"/>
+						<send protocol="sip" msgtype="NOTIFY"/>
+					</then>
+				</if>
+				<if>
+					<eq>
+						<msg_ref type="sip" bodyType="xml">SUBSCRIBE.Event.auid</msg_ref>
+						<expr>&quot;com.cablelabs.pkt.rst.featureset.1&quot;</expr>
+					</eq>
+					<then>
+						<assign name="SubscribeFeature1">
+							<expr>true</expr>
+						</assign>
+						<send protocol="sip" msgtype="200-SUBSCRIBE"/>
+						<send protocol="sip" msgtype="NOTIFY" subscribeType="ua-profile">
+							<mod modtype="delete" hdr="SetElement" hdr_instance="3" body="xml"/>
+							<!-- PCPCII-122 remove the modifications so that the default value is used for SCF
+							mod modtype="delete" hdr="SetElement" hdr_instance="2" body="xml"/>
+							<mod modtype="delete" hdr="SCFForwardedCallCount" body="xml"/-->
+						</send>
+						<sleep time="300"/>
+						<!-- PCPCII-122 Remove redundant message
+						send protocol="sip" msgtype="NOTIFY" subscribeType="ua-profile">
+							<mod modtype="delete" hdr="SetElement" hdr_instance="3" body="xml"/>
+							<mod modtype="delete" hdr="SetElement" hdr_instance="1" body="xml"/>
+							<mod modtype="delete" hdr="CFVForwardedCallCount" body="xml"/>
+						</send-->
+					</then>
+				</if>
+				<if>
+					<eq>
+						<var_ref name="SubscribeFeature1"/>
+						<expr>true</expr>
+					</eq>
+					<then>
+						<generate event="Branch1Event"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Registered" event="SUBSCRIBE"/>
+			<transition to="Registered" event="200-NOTIFY"/>
+			<transition to="ChangeCFVCount" event="Branch1Event"/>
+		</state>
+		
+		<state ID="ChangeCFVCount">
+			<prelude>
+				<sleep time="2000"/>
+				<send protocol="sip" msgtype="NOTIFY" subscribeType="ua-profile">
+					<mod modtype="delete" hdr="SetElement" hdr_instance="3" body="xml"/>
+					<!-- PCPCII-122 Leave the SCF count untouched
+					mod modtype="delete" hdr="SetElement" hdr_instance="2" body="xml"/>
+					<mod modtype="delete" hdr="SCFForwardedCallCount" body="xml"/-->
+					<mod modtype="replace" hdr="CFVForwardedCallCount" body="xml" xml_value="true">
+						<expr>2</expr>
+					</mod>
+				</send>
+				<log step="6" requirements="REQ16717" promptUser="True" yesExpected="True" verify="True" expr="Verify that a ringsplash is heard at the UE?"/>
+			</prelude>
+			<transition to="ChangeSCFCount" event="200-NOTIFY"/>
+		</state>
+		
+		<state ID="ChangeSCFCount">
+			<prelude>
+				<sleep time="2000"/>
+				<send protocol="sip" msgtype="NOTIFY" subscribeType="ua-profile">
+					<mod modtype="delete" hdr="SetElement" hdr_instance="3" body="xml"/>
+					<!-- PCPCII-122 Set the CVF count to two
+					<mod modtype="delete" hdr="SetElement" hdr_instance="1" body="xml"/>
+					<mod modtype="delete" hdr="CFVForwardedCallCount" body="xml"/-->
+					<mod modtype="replace" hdr="CFVForwardedCallCount" body="xml" xml_value="true">
+						<expr>2</expr>
+					</mod>
+					<mod modtype="replace" hdr="SCFForwardedCallCount" body="xml" xml_value="true">
+						<expr>2</expr>
+					</mod>
+				</send>
+				<log step="7" requirements="REQ16717" promptUser="True" yesExpected="True" verify="True" expr="Verify that a ringsplash is heard at the UE?"/>
+			</prelude>
+			<transition to="NoCFVCountChange" event="200-NOTIFY"/>
+		</state>
+		
+		<state ID="NoCFVCountChange">
+			<prelude>
+				<sleep time="5000"/>
+				<send protocol="sip" msgtype="NOTIFY" subscribeType="ua-profile">
+					<mod modtype="delete" hdr="SetElement" hdr_instance="3" body="xml"/>
+					<!-- PCPCII-122 Leave the SCF in the message
+					mod modtype="delete" hdr="SetElement" hdr_instance="2" body="xml"/>
+					<mod modtype="delete" hdr="SCFForwardedCallCount" body="xml"/-->
+					<mod modtype="replace" hdr="CFVForwardedCallCount" body="xml" xml_value="true">
+						<expr>2</expr>
+					</mod>
+					<mod modtype="replace" hdr="SCFForwardedCallCount" body="xml" xml_value="true">
+						<expr>2</expr>
+					</mod>
+				</send>
+				<log step="8" requirements="REQ16717" promptUser="True" yesExpected="true" verify="True" expr="Verify that no ringsplash is heard at the UE?"/>
+			</prelude>
+			<transition to="END" event="200-NOTIFY"/>
+		</state>
+	</add_to>
+</pc2xml>

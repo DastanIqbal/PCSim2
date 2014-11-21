@@ -1,0 +1,409 @@
+################################################################################
+#// Filename: E-UE-DATA_1-2-3-4.test (PACT)
+#// Author:   Matthew Forbes
+#//
+#//
+#//
+#// Creation Date: November 12, 2008
+#// Modified by:
+#//            Matthew Forbes 2/8/10 - DUT should accept all SNMP SETs for Secure Flow, for
+#//            Hybrid flow, should accept all but ConfigKey and SolicitedKeyTimeout
+################################################################################
+#// Description:
+#//     TC2750 TEST CASE E-UE-DATA_1-2-5-1 Functionality and Content Verification for Read-write Objects
+#//
+#// Objective:
+#//     This test verifies that the eUE ability to properly implement the read-write  objects
+#//     for provisioning and management MIBs defined in CL-PKTC-EUE-PROV-MGMT_MIB.
+#//
+#//
+#// PacketCable DUT:
+#//     EDVA
+#//
+#// Test Steps:
+#//     - Initial configuration
+#//     - Start sniffer
+#//     - Reset DUT
+#//     - Check Provisioning state
+#//     - Invoke SNMPv3 API and bulk query MIB objects and validate values
+#//     - Stop sniffer
+#//     - Hybrid configuration
+#//     - Start sniffer
+#//     - Reset DUT
+#//     - Check Provisioning state
+#//     - Invoke SNMPv2 API and bulk query MIB objects and validate values
+#//     - Stop sniffer
+#//
+#//
+#// Notes:
+#//     - Requires provPrimitives.tcl
+#//
+#//
+################################################################################
+global SCRIPT_VERSION
+set SCRIPT_VERSION { # $Id: E-UE-DATA_1-2-3-4.test 7769 2011-01-25 18:13:14Z botte $ }
+
+set test_case E-UE-DATA_1-2-3-4-
+set step_num 1
+
+DoStep ${test_case}${step_num} "Initial Configuration" {
+    LogMsg "--- Init PROV module ---"
+    Init_PROV
+    # ProvCreateConfig 291 $MTA_MAC
+    PROV_SNMP_PRIV_PROTO DES
+    PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122 cfg-2834.bin
+    PROV_DEPLOY_DHCP
+} {PASS_STEP}
+
+DoStep ${test_case}[incr step_num] "Start sniffer" {
+    LogMsg "--- Start sniffer ---"
+    Init_CONTROLLER_LAN
+    SetupCaptureControllerLan "host $MTA_IP || udp port 67"
+    StartCaptureControllerLan
+} {PASS_STEP}
+
+DoStep "E-UE-DATA_1-2-5-1_5-3" "Reset CM/MTA" {
+    set val [SNMPvN_RESET $CM_IP]
+    LogMsg "--- Reset of CM and MTA has passed ---"
+} {
+    IsEqual $val 0
+}
+
+DoStep ${test_case}[incr step_num] "pktcMTADevProvisioningState Content Verification" {
+    # Wait for a minute to let CM/MTA starting to reboot
+    actionWait "Wait for CM/MTA to reboot" 60
+    # Get the OID from the MTA and check it using our previously defined
+    set val [GetProvState 1 600]
+    LogMsg "MTA Provisioning State"
+    LogMsg "             - Expected : 1"
+    LogMsg "             - Received : $val"
+} {
+    IsEqual $val 1
+}
+
+DoStep ${test_case}[incr step_num] "pktcMtaDevProvisioningTimer Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMP_GET $oid_pktcMtaDevProvisioningTimer $MTA_IP]
+    LogMsg "The Value pktcMtaDevProvisioningTimer is: $val"
+} {IsEqual $val "10"}
+
+DoStep ${test_case}[incr step_num] "pktcMtaDevProvisioningTimer Content set" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMP_SET $oid_pktcMtaDevProvisioningTimer Unsigned32 5 $MTA_IP]
+    LogMsg "The Value of pktcMtaDevProvisioningTimer is: $val"
+} {IsEqual $val 0}
+
+
+DoStep ${test_case}[incr step_num] "pktcMtaDevProvisioningTimer Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMP_GET $oid_pktcMtaDevProvisioningTimer $MTA_IP 20]
+    LogMsg "The Value pktcMtaDevProvisioningTimer is: $val"
+} {IsEqual $val "5"}
+
+DoStep ${test_case}[incr step_num] "pktcMtaDevConfigFile Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMP_GET $oid_pktcMtaDevConfigFile $MTA_IP]
+    LogMsg "The Value pktcMtaDevConfigFile is: $val"
+} {IsEqual $val "tftp://pacttftp.redlab.com/cfg-2834.bin"}
+
+DoStep ${test_case}[incr step_num] "pktcMtaDevConfigFile Content set" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMP_SET $oid_pktcMtaDevConfigFile STRING tftp://pacttftp.redlab.com/bogus.cfg $MTA_IP]
+    LogMsg "The Value of pktcMtaDevConfigFile is: $val"
+} {IsEqual $val 0}
+
+DoStep ${test_case}[incr step_num] "pktcMtaDevConfigFile Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMP_GET $oid_pktcMtaDevConfigFile $MTA_IP]
+    LogMsg "The Value pktcMtaDevConfigFile is: $val"
+} {IsEqual $val "tftp://pacttftp.redlab.com/bogus.cfg"}
+
+DoStep ${test_case}[incr step_num] "pktcMtaDevProvConfigHash Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMP_GET $oid_pktcMtaDevProvConfigHash $MTA_IP]
+    LogMsg "The Value pktcMtaDevProvConfigHash is: $val"
+# [ {IsEqual $val "49 8B 0C DE C9 89 5A 90 9B FF 15 F4 7E C7 01 10 1C 0C D2 18"}]
+} {IsEqual $val "55 57 C4 F5 3C 4E 64 F2 81 4C B2 D5 60 B2 8D 50 47 1F 04 67"}
+
+DoStep ${test_case}[incr step_num] "pktcMtaDevProvConfigHash Content set" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMP_SET $oid_pktcMtaDevProvConfigHash OCTET-STRING "CAFEBABE00112233445566778899CAFEBABE0011" $MTA_IP]
+    LogMsg "The Value of pktcMtaDevProvConfigHash is: $val"
+} {IsEqual $val 0}
+
+DoStep ${test_case}[incr step_num] "pktcMtaDevProvConfigHash Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMP_GET $oid_pktcMtaDevProvConfigHash $MTA_IP 20]
+    LogMsg "The Value pktcMtaDevProvConfigHash is: $val"
+} {IsEqual $val "CA FE BA BE 00 11 22 33 44 55 66 77 88 99 CA FE BA BE 00 11"}
+
+DoStep ${test_case}[incr step_num] "pktcMtaDevProvConfigKey Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMP_GET $oid_pktcMtaDevProvConfigKey $MTA_IP]
+    LogMsg "The Value pktcMtaDevProvConfigKey is: $val"
+} {IsEqual $val "11 23 45 67 89 AB CD EF 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00"}
+
+#2/8/10
+# DoStep ${test_case}[incr step_num] "pktcMtaDevProvConfigKey Content set" {
+    # # Get the OID from the MTA and check it using our previously defined
+    # set val [SNMP_SET $oid_pktcMtaDevProvConfigKey OCTET-STRING "CAFEBABE00112233" $MTA_IP]
+    # LogMsg "The Value of pktcMtaDevProvConfigKey is: $val"
+# } {IsEqual $val 2}
+
+DoStep ${test_case}[incr step_num] "pktcMtaDevProvConfigKey Content set" {
+    # Get the OID from the MTA and check it using our previously defined
+    # set val [SNMP_SET $oid_pktcMtaDevProvConfigKey OCTET-STRING "CAFEBABE00112233000000000000000000000000000000000000000000000000" $MTA_IP]
+    # set val [SNMP_SET $oid_pktcMtaDevProvConfigKey OCTET-STRING "CAFEBABE00112233" $MTA_IP]
+    set val [SNMP_SET $oid_pktcMtaDevProvConfigKey OCTET-STRING "FEDCBA9876543211FEDCBA9876543211FEDCBA9876543211FEDCBA9876543211" $MTA_IP]
+    LogMsg "The Value of pktcMtaDevProvConfigKey is: $val"
+} {IsEqual $val 0}
+
+DoStep ${test_case}[incr step_num] "pktcMtaDevProvConfigKey Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMP_GET $oid_pktcMtaDevProvConfigKey $MTA_IP 20]
+    LogMsg "The Value pktcMtaDevProvConfigKey is: $val"
+# {IsEqual $val "CA FE BA BE 00 11 22 33 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00"}
+# {IsEqual $val "CA FE BA BE 00 11 22 33"}
+} {IsEqual $val "FE DC BA 98 76 54 32 11 FE DC BA 98 76 54 32 11 FE DC BA 98 76 54 32 11 FE DC BA 98 76 54 32 11"}
+
+verify_signal "try other values"
+
+DoStep ${test_case}[incr step_num] "pktcMtaDevProvConfigEncryptAlg Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMP_GET $oid_pktcMtaDevProvConfigEncryptAlg $MTA_IP]
+    LogMsg "The Value pktcMtaDevProvConfigEncryptAlg is: $val"
+} {IsEqual $val "1"}
+
+DoStep ${test_case}[incr step_num] "pktcMtaDevProvConfigEncryptAlg Content set" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMP_SET $oid_pktcMtaDevProvConfigEncryptAlg INTEGER "0" $MTA_IP]
+    LogMsg "The Value of pktcMtaDevProvConfigEncryptAlg is: $val"
+} {IsEqual $val 0}
+
+
+DoStep ${test_case}[incr step_num] "pktcMtaDevProvConfigEncryptAlg Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMP_GET $oid_pktcMtaDevProvConfigEncryptAlg $MTA_IP 20]
+    LogMsg "The Value pktcMtaDevProvConfigEncryptAlg is: $val"
+} {IsEqual $val "0"}
+
+DoStep ${test_case}[incr step_num] "pktcMtaDevProvSolicitedKeyTimeout Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMP_GET $oid_pktcMtaDevProvSolicitedKeyTimeout $MTA_IP]
+    LogMsg "The Value pktcMtaDevProvSolicitedKeyTimeout is: $val"
+} {IsEqual $val "3"}
+
+DoStep ${test_case}[incr step_num] "pktcMtaDevProvSolicitedKeyTimeout Content set" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMP_SET $oid_pktcMtaDevProvSolicitedKeyTimeout Unsigned32 "2" $MTA_IP]
+    LogMsg "The Value of pktcMtaDevProvSolicitedKeyTimeout is: $val"
+} {IsEqual $val 0}
+
+
+DoStep ${test_case}[incr step_num] "pktcMtaDevProvSolicitedKeyTimeout Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMP_GET $oid_pktcMtaDevProvSolicitedKeyTimeout $MTA_IP 20]
+    LogMsg "The Value pktcMtaDevProvSolicitedKeyTimeout is: $val"
+} {IsEqual $val "2"}
+
+DoStep ${test_case}[incr step_num] "Stop Sniffer" {
+    LogMsg "--- Stop Sniffer ---"
+    StopCaptureControllerLan
+    SaveToFileControllerLan "_Secure_Prov"
+} { PASS_STEP }
+
+DoStep ${test_case}[incr step_num] "Configure Provisioning Server" {
+    PROV_SNMP_PRIV_PROTO NULL
+    PROV_MODIFY_DEVICE $MTA_MAC HYBRID2 cfg-2834_Hybrid.bin
+    PROV_DEPLOY_DHCP
+} { PASS_STEP }
+
+
+DoStep ${test_case}[incr step_num] "Start sniffer" {
+    LogMsg "--- Start sniffer ---"
+    # Init_CONTROLLER_LAN
+    SetupCaptureControllerLan "host $MTA_IP || udp port 67 || host $CM_IP"
+    StartCaptureControllerLan
+} {PASS_STEP}
+
+############### Reset CM and MTA and Verify Provisioning ################
+
+DoStep "E-UE-DATA_1-2-5-1_5-3" "Reset CM/MTA" {
+    set val [SNMPvN_RESET $CM_IP]
+    LogMsg "--- Reset of CM and MTA has passed ---"
+} {
+    IsEqual $val 0
+}
+
+DoStep "E-UE-DATA_1-2-5-1_5-4" "pktcMTADevProvisioningState Content Verification" {
+    # Wait for a minute to let CM/MTA starting to reboot
+    actionWait "Wait for CM/MTA to reboot" 120
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMPvN_GET $oid_pktcMtaDevProvisioningState $MTA_IP]
+    LogMsg "MTA Provisioning State"
+    LogMsg "             - Expected : 1"
+    LogMsg "             - Received : $val"
+} {
+    IsEqual $val 1
+}
+
+DoStep ${test_case}[incr step_num] "pktcMtaDevProvisioningTimer Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMPvN_GET $oid_pktcMtaDevProvisioningTimer $MTA_IP]
+    LogMsg "The Value pktcMtaDevProvisioningTimer is: $val"
+} {IsEqual $val "10"}
+
+DoStep ${test_case}[incr step_num] "pktcMtaDevProvisioningTimer Content set" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMPvN_SET $oid_pktcMtaDevProvisioningTimer Unsigned32 5 $MTA_IP]
+    LogMsg "The Value of pktcMtaDevProvisioningTimer is: $val"
+} {IsEqual $val 0}
+
+
+DoStep ${test_case}[incr step_num] "pktcMtaDevProvisioningTimer Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMPvN_GET $oid_pktcMtaDevProvisioningTimer $MTA_IP]
+    LogMsg "The Value pktcMtaDevProvisioningTimer is: $val"
+} {IsEqual $val "5"}
+
+DoStep ${test_case}[incr step_num] "pktcMtaDevConfigFile Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMPvN_GET $oid_pktcMtaDevConfigFile $MTA_IP]
+    LogMsg "The Value pktcMtaDevConfigFile is: $val"
+} {IsEqual $val "tftp://pacttftp.redlab.com/cfg-2834_Hybrid.bin"}
+
+DoStep ${test_case}[incr step_num] "pktcMtaDevConfigFile Content set" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMPvN_SET $oid_pktcMtaDevConfigFile STRING tftp://pacttftp.redlab.com/bogus.cfg $MTA_IP]
+    LogMsg "The Value of pktcMtaDevConfigFile is: $val"
+} {IsEqual $val 0}
+
+
+DoStep ${test_case}[incr step_num] "pktcMtaDevConfigFile Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMPvN_GET $oid_pktcMtaDevConfigFile $MTA_IP]
+    LogMsg "The Value pktcMtaDevConfigFile is: $val"
+} {IsEqual $val "tftp://pacttftp.redlab.com/bogus.cfg"}
+
+DoStep ${test_case}[incr step_num] "pktcMtaDevProvConfigHash Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMPvN_GET $oid_pktcMtaDevProvConfigHash $MTA_IP]
+    LogMsg "The Value pktcMtaDevProvConfigHash is: $val"
+} {IsEqual $val "D6 27 69 C1 7F 99 83 00 BA 6C 25 C6 11 4E 61 65 2A 33 E4 07"}
+
+DoStep ${test_case}[incr step_num] "pktcMtaDevProvConfigHash Content set" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMPvN_SET $oid_pktcMtaDevProvConfigHash x "CAFEBABE00112233445566778899CAFEBABE0011" $MTA_IP]
+    LogMsg "The Value of pktcMtaDevProvConfigHash is: $val"
+} {IsEqual $val 0}
+
+
+DoStep ${test_case}[incr step_num] "pktcMtaDevProvConfigHash Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMPvN_GET $oid_pktcMtaDevProvConfigHash $MTA_IP]
+    LogMsg "The Value pktcMtaDevProvConfigHash is: $val"
+} {IsEqual $val "CA FE BA BE 00 11 22 33 44 55 66 77 88 99 CA FE BA BE 00 11"}
+
+DoStep ${test_case}[incr step_num] "pktcMtaDevProvConfigKey Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMPvN_GET $oid_pktcMtaDevProvConfigKey $MTA_IP]
+    LogMsg "The Value pktcMtaDevProvConfigKey is: $val"
+} {IsEqual $val ""}
+
+DoStep ${test_case}[incr step_num] "pktcMtaDevProvConfigKey Content set" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMPvN_SET $oid_pktcMtaDevProvConfigKey x "CAFEBABE00112233000000000000000000000000000000000000000000000000" $MTA_IP]
+    LogMsg "The Value of pktcMtaDevProvConfigKey is: $val"
+} {IsEqual $val 2}
+
+#2/8/10
+# DoStep ${test_case}[incr step_num] "pktcMtaDevProvConfigKey Content Verification" {
+    # # Get the OID from the MTA and check it using our previously defined
+    # set val [SNMPvN_GET $oid_pktcMtaDevProvConfigKey $MTA_IP]
+    # LogMsg "The Value pktcMtaDevProvConfigKey is: $val"
+# } {IsEqual $val "CA FE BA BE 00 11 22 33"}
+
+DoStep ${test_case}[incr step_num] "pktcMtaDevProvConfigEncryptAlg Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMPvN_GET $oid_pktcMtaDevProvConfigEncryptAlg $MTA_IP]
+    LogMsg "The Value pktcMtaDevProvConfigEncryptAlg is: $val"
+} {
+    # IsEqual $val "0"
+    IsEqual $val 1
+}
+
+DoStep ${test_case}[incr step_num] "pktcMtaDevProvConfigEncryptAlg Content set" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMPvN_SET $oid_pktcMtaDevProvConfigEncryptAlg INTEGER "0" $MTA_IP]
+    LogMsg "The Value of pktcMtaDevProvConfigEncryptAlg is: $val"
+} {
+    IsEqual $val 0
+    
+}
+
+
+# DoStep ${test_case}[incr step_num] "pktcMtaDevProvConfigEncryptAlg Content Verification" {
+    # # Get the OID from the MTA and check it using our previously defined
+    # set val [SNMPvN_GET $oid_pktcMtaDevProvConfigEncryptAlg $MTA_IP]
+    # LogMsg "The Value pktcMtaDevProvConfigEncryptAlg is: $val"
+# } {IsEqual $val "0"}
+
+DoStep ${test_case}[incr step_num] "pktcMtaDevProvSolicitedKeyTimeout Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMPvN_GET $oid_pktcMtaDevProvSolicitedKeyTimeout $MTA_IP]
+    LogMsg "The Value pktcMtaDevProvSolicitedKeyTimeout is: $val"
+} {IsEqual $val "0"}
+
+DoStep ${test_case}[incr step_num] "pktcMtaDevProvSolicitedKeyTimeout Content set" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMPvN_SET $oid_pktcMtaDevProvSolicitedKeyTimeout Unsigned32 "2" $MTA_IP]
+    LogMsg "The Value of pktcMtaDevProvSolicitedKeyTimeout is: $val"
+} {IsEqual $val 2}
+
+
+# DoStep ${test_case}[incr step_num] "pktcMtaDevProvSolicitedKeyTimeout Content Verification" {
+    # # Get the OID from the MTA and check it using our previously defined
+    # set val [SNMPvN_GET $oid_pktcMtaDevProvSolicitedKeyTimeout $MTA_IP]
+    # LogMsg "The Value pktcMtaDevProvSolicitedKeyTimeout is: $val"
+# } {IsEqual $val "2"}
+
+DoStep ${test_case}[incr step_num] "Stop Sniffer" {
+    LogMsg "--- Stop Sniffer ---"
+    StopCaptureControllerLan
+    SaveToFileControllerLan "_Hybrid_Prov"
+} { PASS_STEP }
+
+DoStep ${test_case}[incr step_num] "Configure Provisioning Server" {
+    PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122 Device_Level_Secure.cfg
+    PROV_DEPLOY_DHCP
+} { PASS_STEP }
+
+
+############### Reset CM and MTA and Verify Provisioning ################
+
+DoStep ${test_case}[incr step_num] "Reset CM/MTA" {
+    set val [SNMPvN_RESET $CM_IP]
+    LogMsg "--- Reset of CM and MTA has passed ---"
+} {
+    IsEqual $val 0
+}
+
+DoStep ${test_case}[incr step_num] "pktcMTADevProvisioningState Content Verification" {
+    # Wait for a minute to let CM/MTA starting to reboot
+    actionWait "Wait for CM/MTA to reboot" 60
+    # Get the OID from the MTA and check it using our previously defined
+    set val [GetProvState 1 600]
+    LogMsg "MTA Provisioning State"
+    LogMsg "             - Expected : 1"
+    LogMsg "             - Received : $val"
+} {
+    IsEqual $val 1
+}
+
+################################################################################
+# Cleanup
+################################################################################
+set CONTINUE_PAST_STEP_ERROR 0
+Cleanup
+
+

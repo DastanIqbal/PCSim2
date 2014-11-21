@@ -1,0 +1,283 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+ Change History: (Author & Date)
+
+
+
+-->
+<!-- First are the document type and the attributes for our document -->
+<pc2xml version="$Revision: 7768 $" name="EUE Prov 2.1.2.5" 
+		descrip="Ability of eUE to Reject a Configuration File That Can not be Authenticated By Its Corresponding Hash Value in IPv6" 
+		number="EUE Prov 2.1.2.5">
+
+	<!-- Next we define the each of state machines -->
+	<template file="./templates/EUE_Prov_B_1_1_1.xml" name="RebootCM"/>
+	
+	<add_to fsm="RebootCM">
+		<transition from="StartCapture_RebootWait" to="VerifyBootState" event="TimerExpired"/>
+	
+		<state ID="VerifyBootState">
+			<prelude once="true">
+				<send protocol="utility" msgtype="SNMPGet">
+					<mod modtype="add" hdr="oids">
+						<expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvisioningState.0</expr>
+					</mod>
+					<mod modtype="replace" hdr="agentip">
+						<msg_ref type="platform">DUT.IP</msg_ref>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="2">
+					<contains>
+						<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+						<expr>1</expr>
+					</contains>
+				</verify>
+				
+			</response>
+			<postlude>
+				<stop_capture/>
+			</postlude>
+			<transition to="GetCurrentHash" event="SNMPResp"/>
+			<transition to="GetCurrentHash" event="SNMPRespFailure"/>
+		</state>
+		
+		<state ID="GetCurrentHash">
+			<prelude>
+				<send protocol="utility" msgtype="SNMPGet">
+					<mod modtype="add" hdr="oids">
+						<expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvConfigHash.0</expr>
+					</mod>
+					<mod modtype="replace" hdr="agentip">
+						<msg_ref type="platform">DUT.IP</msg_ref>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<var name="originalHash">
+						<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+				</var>
+			</response>
+			<postlude>
+				<stop_capture/>
+			</postlude>
+			<transition to="ConfigureInvalidHash" event="SNMPResp"/>
+			<transition to="ConfigureInvalidHash" event="SNMPRespFailure"/>
+		</state>
+		
+		<!--state ID="ConfigureInvalidHash" provFile="E-UE_PROV_v6_2.1.2.5_2.bin" 
+				policyFile="MTAFORCW122_test" nextState="Reboot2"/-->
+		
+		<state ID="ConfigureInvalidHash">
+			<prelude>
+				<log promptUser="true" expr="Configure the device with cfg-2833_hash.bin, deploy and clik OK."/>
+				<generate event="Branch1Event"/>
+			</prelude>
+			<transition to="Reboot2" event="Branch1Event"/>
+		</state>
+				
+		<state ID="Reboot2" timer="5000">
+			<!-- First we need to power cycle the UE to conduct the test -->
+			<prelude once="true" >
+				<send protocol="utility" msgtype="SNMPSet">
+					<mod modtype="add" hdr="array">
+						<var_expr>
+							<expr>varBind 1 1 3 \r\n ][ , </expr>
+							<expr>DOCS-CABLE-DEVICE-MIB::docsDevResetNow.0,INTEGER,1][\r\n</expr>
+						</var_expr>
+					</mod>
+					<mod modtype="replace" hdr="agentip">
+						<msg_ref type="platform">DUT.CM IP Address</msg_ref>
+					</mod>
+					<!-- Always use version 2 for a CM reset -->
+					<mod modtype="replace" hdr="version">
+						<expr>2c</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="utility">Response</msg_ref>
+						<expr>SNMPRespFailure</expr>
+					</eq>
+					<then>
+						<fail/>
+					</then>
+				</if>
+				<if>
+					<or>
+						<eq>
+							<msg_ref type="sip">REGISTER.Contact.expires</msg_ref>
+							<expr>0</expr>
+						</eq>
+						<eq>
+							<msg_ref type="sip">REGISTER.Expires.value</msg_ref>
+							<expr>0</expr>
+						</eq>
+					</or>
+					<then>
+						<send protocol="sip" msgtype="200-REGISTER"/>
+					</then>
+				</if>
+			</response>
+			<!-- Test cases deriving their functionality from this template
+				should change the following transition to some local state -->
+			<transition to="Reboot2" event="SNMPResp"/>
+			<transition to="StartCapture_RebootWait2" event="TimerExpired"/>
+			<transition to="END" event="SNMPRespFailure"/>
+			<transition to="Reboot2" event="REGISTER"/>
+		</state>
+						
+		<state ID="StartCapture_RebootWait2" timer="120000">
+			<prelude once="true" >
+				<start_capture>
+					<filter>
+						<var_expr>
+							<expr>host </expr>
+							<msg_ref type="platform">DUT.IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.DHCP Server IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.DHCP CM Gateway IP</msg_ref>
+						</var_expr>
+					</filter>
+				</start_capture>
+			</prelude>
+			<transition to="VerifyState" event="TimerExpired"/>
+		</state>
+			
+		<state ID="VerifyState">
+			<prelude>
+				<send protocol="utility" msgtype="SNMPGet">
+					<mod modtype="add" hdr="oids">
+						<expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvisioningState.0</expr>
+					</mod>
+					<mod modtype="replace" hdr="agentip">
+						<msg_ref type="platform">DUT.IP</msg_ref>
+					</mod>
+				</send>
+				<stop_capture/>
+				<parse_capture name="eCM_DHCPv4">
+					<parser_filter protocol="bootp" clientMAC="DUT.CM MAC Address"/>
+				</parse_capture>
+				<parse_capture name="eUE_DHCPv6">
+					<parser_filter protocol="dhcpv6" clientMAC="DUT.MAC Address"/>
+				</parse_capture>
+				<parse_capture name="eUE_Prov">
+					<parser_filter protocol="snmp" ip="DUT.IP"/>
+				</parse_capture>
+			</prelude>
+			<response>
+				<verify step="7">
+					<eq>
+						<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+						<expr>3</expr>
+					</eq>
+				</verify>
+				<verify step="6, 8">
+					<eq>
+						<capture_ref type="snmp" name="eUE_Prov">Inform Request.ipv6.dst_host.show</capture_ref>
+						<msg_ref type="platform">DUT.DHCP Server IP</msg_ref>
+					</eq>
+				</verify>
+				<verify step="7, 8">
+					<or>
+						<eq>
+							<capture_ref type="snmp" name="eUE_Prov" msg_instance="3">Inform Request.msgData.plaintext.data.informRequest.variable_bindings.1-3-6-1-4-1-4491-2-2-3-5-1-1-1-3.g32.show</capture_ref>
+							<expr>3</expr>
+						</eq>
+						<or>
+							<eq>
+								<capture_ref type="snmp" name="eUE_Prov" msg_instance="4">Inform Request.msgData.plaintext.data.informRequest.variable_bindings.1-3-6-1-4-1-4491-2-2-3-5-1-1-1-3.g32.show</capture_ref>
+								<expr>3</expr>
+							</eq>
+							<eq>
+								<capture_ref type="snmp" name="eUE_Prov" msg_instance="5">Inform Request.msgData.plaintext.data.informRequest.variable_bindings.1-3-6-1-4-1-4491-2-2-3-5-1-1-1-3.g32.show</capture_ref>
+								<expr>3</expr>
+							</eq>
+						</or>
+					</or>
+				</verify>
+				<verify step="8">
+					<notnull>
+						<capture_ref type="bootp" name="eCM_DHCPv4">ACK.num</capture_ref>
+					</notnull>
+				</verify>
+				
+				<verify step="8">
+					<notnull>
+						<capture_ref type="dhcpv6" name="eUE_DHCPv6">Reply.num</capture_ref>
+					</notnull>
+				</verify>
+			</response>
+			<postlude>
+				
+			</postlude>
+			<transition to="VerifyInvalidHash" event="SNMPResp"/>
+			<transition to="VerifyInvalidHash" event="SNMPRespFailure"/>
+		</state>
+				
+		<state ID="VerifyInvalidHash">
+			<prelude>
+			  <send protocol="utility" msgtype="SNMPGet">
+					<mod modtype="add" hdr="oids">
+						<expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvConfigHash.0</expr>
+					</mod>
+					<mod modtype="replace" hdr="agentip">
+						<msg_ref type="platform">DUT.IP</msg_ref>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="8">
+					<neq>
+						<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+						<var_ref name="originalHash"/>
+					</neq>
+				</verify>
+			</response>
+			<postlude>
+				<stop_capture/>
+			</postlude>
+			<transition to="VerifyCfgFile" event="SNMPResp"/>
+			<transition to="VerifyCfgFile" event="SNMPRespFailure"/>
+		</state>
+		
+		<state ID="VerifyCfgFile">
+			<prelude>
+			  <send protocol="utility" msgtype="SNMPGet">
+					<mod modtype="add" hdr="oids">
+						<expr>PKTC-IETF-MTA-MIB::pktcMtaDevConfigFile.0</expr>
+					</mod>
+					<mod modtype="replace" hdr="agentip">
+						<msg_ref type="platform">DUT.IP</msg_ref>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="8">
+					<contains>
+						<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+						<expr>cfg-2833_hash.bin</expr>
+					</contains>
+				</verify>
+			</response>
+			<postlude>
+				<stop_capture/>
+			</postlude>
+			<transition to="END" event="SNMPResp"/>
+			<transition to="END" event="SNMPRespFailure"/>
+		</state>
+	</add_to>
+</pc2xml>

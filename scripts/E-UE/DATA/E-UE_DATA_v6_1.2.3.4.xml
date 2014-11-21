@@ -1,0 +1,1318 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+ Change History: (Author & Date)
+-->
+<!-- Document type and attributes. -->
+<pc2xml version="$Revision: 6076 $"
+        name="E-UE_DATA_1.2.3.4"
+        descrip="eUE implements read-write MIBs defined in CL-PKTC-EUE-PROV-MGMT-MIB."
+        number="E-UE_DATA_1.2.3.4">
+
+
+    <!-- Reset UE; start capture. -->
+    <template file="./templates/EUE_Prov_B_1_1_1.xml" name="EUEDevOpTable"/>
+
+    <add_to fsm="EUEDevOpTable">
+        <transition from="StartCapture_RebootWait" to="EUEProvisions1" event="TimerExpired"/>
+
+
+        <!--
+            pktcMtaDevProvisioningTimer       Unsigned                 32 0 30 10
+            pktcMtaDevConfigFile 			  SnmpAdminString          URL of configuration file for download NA
+            pktcMtaDevProvConfigHash          Octet String             SHA-1 value provided by Prov entity NA
+            pktcMtaDevProvConfigKey           Octet String             Key (secure) or null string (non-secure) NA
+            pktcMtaDevProvConfigEncryptAlg    pktcMtaDevProvEncryptAlg 0 - none 1 - des64CbcMode 1 - des64CbcMode
+            pktcMtaDevProvSolicitedKeyTimeout Unsigned32               0 180 0  non-secure mode 3  secure mode
+        -->
+
+        <!-- vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv -->
+        <!-- ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ -->
+        <!-- 8 If eUE supports IPv6, continue with Step 9. -->
+        <!-- 9 Reconfigure. -->
+        <!-- 10 Reset. The E-UE DUT provisions successfully and becomes operational. -->
+        <state ID="EUEProvisions1">
+            <prelude once="true">
+				<stop_capture/>				
+				<parse_capture name="tftp_1">
+					<parser_filter protocol="tftp" ip="DUT.IP"/>
+				</parse_capture>
+				
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvisioningState.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+					<mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="10">
+                    <contains>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>1</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="SNMPGet1" event="SNMPResp"/>
+            <transition to="SNMPGet1" event="SNMPRespFailure"/>
+        </state>
+
+
+        <!-- 11 Repeat Steps 3 and 4 of the test. -->
+				
+		<!-- pktcMtaDevProvisioningTimer = 10 -->
+        <state ID="SNMPGet1">
+            <prelude once="true">				
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvisioningTimer.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+					<mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+				</send>
+            </prelude>
+            <response>
+                <verify step="11-3">
+                    <eq>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>10</expr>
+                    </eq>
+                </verify>
+            </response>
+            <transition to="SNMPGet2" event="SNMPResp"/>
+            <transition to="SNMPGet2" event="SNMPRespFailure"/>
+        </state>
+
+		<!-- pktcMtaDevConfigFile = URL of configuration file for download -->
+		<!-- ideally, the name of the file and its path has to be parsed from the SNMP in the capture during the reboot.
+		But, the PDML file shows 1.3.6.1.2.1.140.1.2.9.0 value only with Hex value, instead of ASCII. 
+		Therefore, this step grabs the file name from the tftp read request in the capture.-->
+        <state ID="SNMPGet2">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>PKTC-IETF-MTA-MIB::pktcMtaDevConfigFile.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+					<mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="11-3">
+                    <contains>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <capture_ref type="tftp" name="tftp_1">Read Request.source_file.show</capture_ref>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="SNMPGet3" event="SNMPResp"/>
+            <transition to="SNMPGet3" event="SNMPRespFailure"/>
+        </state>
+
+		<!-- pktcMtaDevProvConfigHash = SHA-1 value provided by Prov entity -->
+        <state ID="SNMPGet3">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvConfigHash.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+					<mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>					
+                </send>
+            </prelude>
+            <response>
+                <verify step="11-3">
+                    <notnull>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                    </notnull>
+                </verify>
+            </response>
+            <transition to="SNMPGet4" event="SNMPResp"/>
+            <transition to="SNMPGet4" event="SNMPRespFailure"/>
+        </state>
+
+		<!-- pktcMtaDevProvConfigKey - Decryption key provided by Prov entity (When key value is less than 32 octets most significant unused bits must be set to zero.)-->
+        <state ID="SNMPGet4">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvConfigKey.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+					<mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="11-3">
+                    <notnull>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                    </notnull>
+                </verify>
+            </response>
+            <transition to="SNMPGet5" event="SNMPResp"/>
+            <transition to="SNMPGet5" event="SNMPRespFailure"/>
+        </state>
+                
+        <!-- pktcMtaDevProvConfigEncryptAlg = 1 -->
+        <state ID="SNMPGet5">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvConfigEncryptAlg.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+					<mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="11-3">
+                    <eq>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>1</expr>
+                    </eq>
+                </verify>
+            </response>
+            <transition to="SNMPGet6" event="SNMPResp"/>
+            <transition to="SNMPGet6" event="SNMPRespFailure"/>
+        </state>
+		
+        <!-- pktcMtaDevProvSolicitedKeyTimeout = 3 -->
+        <state ID="SNMPGet6">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvSolicitedKeyTimeout.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+					<mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="11-3">
+                    <eq>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>3</expr>
+                    </eq>
+                </verify>
+            </response>
+            <transition to="SNMPSet1" event="SNMPResp"/>
+            <transition to="SNMPSet1" event="SNMPRespFailure"/>
+        </state>
+
+
+        <!-- vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv -->
+        <!-- ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ -->
+        <!-- 4 SNMPv3 Set of read-write objects in table. Change to syntactically correct value.
+               eUE returns default or valid value for each object as follows
+               pktcMtaDevProvisioningTimer  - 10
+               pktcMtaDevConfigFile - URL of configuration file for download
+               pktcMtaDevProvConfigHash - SHA-1 value provided by Prov entity
+               pktcMtaDevProvConfigKey - Decryption key provided by Prov entity
+               When key value is less than 32 octets most significant unused bits must be set to zero.
+               pktcMtaDevProvConfigEncryptAlg - 1
+               pktcMtaDevProvSolicitedKeyTimeout - 3
+               In each case, eUE allows value in object to be updated. -->
+        <state ID="SNMPSet1" timer="10000">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPSet">
+                    <mod modtype="add" hdr="array">
+                        <var_expr>
+                            <expr>varBind 1 1 3 \r\n ][ , </expr>
+                            <expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvisioningTimer.0,Unsigned32,11][\r\n</expr>
+                        </var_expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+                    <mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPRespFailure</expr>
+                    </eq>
+                <then>
+                    <fail/>
+                </then>
+                </if>
+                <verify step="11-4">
+                    <eq>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>11</expr>
+                   </eq>
+                </verify>
+            </response>
+            <transition to="SNMPSet2" event="SNMPResp"/>
+            <transition to="SNMPSet2" event="SNMPRespFailure"/>
+        </state>
+
+        <state ID="SNMPSet2" timer="10000">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPSet">
+                    <mod modtype="add" hdr="array">
+                        <var_expr>
+                            <expr>varBind 1 1 3 \r\n ][ , </expr>
+                            <expr>PKTC-IETF-MTA-MIB::pktcMtaDevConfigFile.0,STRING,tftp://tftpserver/config.cfg][\r\n</expr>
+                        </var_expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+                    <mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPRespFailure</expr>
+                    </eq>
+                <then>
+                    <fail/>
+                </then>
+                </if>
+                <verify step="11-4">
+                    <eq>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>tftp://tftpserver/config.cfg</expr>
+                    </eq>
+                </verify>
+            </response>
+            <transition to="SNMPSet3" event="SNMPResp"/>
+            <transition to="SNMPSet3" event="SNMPRespFailure"/>
+        </state>
+
+        <state ID="SNMPSet3" timer="10000">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPSet">
+                    <mod modtype="add" hdr="array">
+                        <var_expr>
+                            <expr>varBind 1 1 3 \r\n ][ , </expr>
+                            <expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvConfigHash.0,Hex-STRING,00 01 02 03 04 05 06 07 08 09 0A 0B 0C 0D 0E 0F 10 11 12 13][\r\n</expr>
+                        </var_expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+                    <mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPRespFailure</expr>
+                    </eq>
+                <then>
+                    <fail/>
+                </then>
+                </if>
+                <verify step="11-4">
+                    <eq>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>00 01 02 03 04 05 06 07 08 09 0A 0B 0C 0D 0E 0F 10 11 12 13</expr>
+                    </eq>
+                </verify>
+            </response>
+            <transition to="SNMPSet4" event="SNMPResp"/>
+            <transition to="SNMPSet4" event="SNMPRespFailure"/>
+        </state>
+
+        <state ID="SNMPSet4" timer="10000">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPSet">
+                    <mod modtype="add" hdr="array">
+                        <var_expr>
+                            <expr>varBind 1 1 3 \r\n ][ , </expr>
+                            <expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvConfigKey.0,Hex-STRING,00 01 02 03 04 05 06 07 08 09 0A 0B 0C 0D 0E 0F 10 11 12 13 14 15 16 17 18 19 1A 1B 1C 1D 1E 1F][\r\n</expr>
+                        </var_expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+                    <mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPRespFailure</expr>
+                    </eq>
+                <then>
+                    <fail/>
+                </then>
+                </if>
+                <verify step="11-4">
+                    <eq>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>1</expr>
+                    </eq>
+                </verify>
+            </response>
+            <transition to="SNMPSet5" event="SNMPResp"/>
+            <transition to="SNMPSet5" event="SNMPRespFailure"/>
+        </state>
+
+        <state ID="SNMPSet5" timer="10000">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPSet">
+                    <mod modtype="add" hdr="array">
+                        <var_expr>
+                            <expr>varBind 1 1 3 \r\n ][ , </expr>
+                            <expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvConfigEncryptAlg.0,INTEGER,0][\r\n</expr>
+                        </var_expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+                    <mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPRespFailure</expr>
+                    </eq>
+                <then>
+                    <fail/>
+                </then>
+                </if>
+                <verify step="11-4">
+                    <eq>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>0</expr>
+                    </eq>
+                </verify>
+            </response>
+            <transition to="SNMPSet6" event="SNMPResp"/>
+            <transition to="SNMPSet6" event="SNMPRespFailure"/>
+        </state>
+
+        <state ID="SNMPSet6" timer="10000">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPSet">
+                    <mod modtype="add" hdr="array">
+                        <var_expr>
+                            <expr>varBind 1 1 3 \r\n ][ , </expr>
+                            <expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvSolicitedKeyTimeout.0,Unsigned32,100][\r\n</expr>
+                        </var_expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+                    <mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPRespFailure</expr>
+                    </eq>
+                <then>
+                    <fail/>
+                </then>
+                </if>
+                <verify step="11-4">
+                    <eq>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>100</expr>
+                    </eq>
+                </verify>
+            </response>
+            <transition to="SNMPCheck1" event="SNMPResp"/>
+            <transition to="SNMPCheck1" event="SNMPRespFailure"/>
+        </state>
+
+        <!-- vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv -->
+        <!-- ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ -->
+        <state ID="SNMPCheck1">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvisioningTimer.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+					<mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="11-4">
+                    <eq>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>11</expr>
+                    </eq>
+                </verify>
+            </response>
+            <transition to="SNMPCheck2" event="SNMPResp"/>
+            <transition to="SNMPCheck2" event="SNMPRespFailure"/>
+        </state>
+
+        <state ID="SNMPCheck2">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>PKTC-IETF-MTA-MIB::pktcMtaDevConfigFile.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+					<mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="11-4">
+                    <eq>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>tftp://tftpserver/config.cfg</expr>
+                    </eq>
+                </verify>
+            </response>
+            <transition to="SNMPCheck3" event="SNMPResp"/>
+            <transition to="SNMPCheck3" event="SNMPRespFailure"/>
+        </state>
+
+        <state ID="SNMPCheck3">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvConfigHash.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+					<mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="11-4">
+                    <eq>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>00 01 02 03 04 05 06 07 08 09 0A 0B 0C 0D 0E 0F 10 11 12 13</expr>
+                    </eq>
+                </verify>
+            </response>
+            <transition to="SNMPCheck4" event="SNMPResp"/>
+            <transition to="SNMPCheck4" event="SNMPRespFailure"/>
+        </state>
+
+        <state ID="SNMPCheck4">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvConfigKey.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+					<mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="11-4">
+                    <eq>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>00 01 02 03 04 05 06 07 08 09 0A 0B 0C 0D 0E 0F 10 11 12 13 14 15 16 17 18 19 1A 1B 1C 1D 1E 1F</expr>
+                    </eq>
+                </verify>
+            </response>
+            <transition to="SNMPCheck5" event="SNMPResp"/>
+            <transition to="SNMPCheck5" event="SNMPRespFailure"/>
+        </state>
+
+        <state ID="SNMPCheck5">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvConfigEncryptAlg.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+					<mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="11-4">
+                    <eq>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>0</expr>
+                    </eq>
+                </verify>
+            </response>
+            <transition to="SNMPCheck6" event="SNMPResp"/>
+            <transition to="SNMPCheck6" event="SNMPRespFailure"/>
+        </state>
+
+        <state ID="SNMPCheck6">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvSolicitedKeyTimeout.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+					<mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="11-4">
+                    <eq>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>100</expr>
+                    </eq>
+                </verify>
+            </response>
+            <transition to="ReConfigure2" event="SNMPResp"/>
+            <transition to="ReConfigure2" event="SNMPRespFailure"/>
+        </state>
+
+
+        <!-- vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv -->
+        <!-- ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ -->
+        <!-- 14 Repeat Steps 3 and 4 above using SNMPv2. -->
+        <!-- 3 SNMPv2 Get of objects in table above.
+               eUE returns default or valid value for each object as follows:
+               pktcMtaDevProvisioningTimer  - 10
+               pktcMtaDevConfigFile - URL of configuration file for download
+               pktcMtaDevProvConfigHash - SHA-1 value provided by Prov entity
+               pktcMtaDevProvConfigKey - Decryption key provided by Prov entity
+               When key value is less than 32 octets most significant unused bits must be set to zero.
+               pktcMtaDevProvConfigEncryptAlg - 1
+               pktcMtaDevProvSolicitedKeyTimeout - 3 -->
+			   
+        <state ID="ReConfigure2"
+			   provFile="v6.C.1.2.3_Hybrid.bin"
+               policyFile="X_eUEv6_Hybrid"
+               nextState="Reset2"/>
+			   
+        <!-- 13 E-UE DUT provisions successfully and becomes operational. -->
+        <state ID="Reset2" timer="120000">
+            <prelude once="true">
+                <start_capture>
+                    <filter>
+                        <var_expr>
+							<expr>host </expr>
+							<msg_ref type="platform">DUT.IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.CM IP Address</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.DHCP Server IP</msg_ref>
+						</var_expr>
+                    </filter>
+                </start_capture>
+
+                <send protocol="utility" msgtype="SNMPSet">
+                    <mod modtype="add" hdr="array">
+                        <var_expr>
+                            <expr>varBind 1 1 3 \r\n ][ , </expr>
+                            <expr>DOCS-CABLE-DEVICE-MIB::docsDevResetNow.0,INTEGER,1][\r\n</expr>
+                        </var_expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.CM IP Address</msg_ref>
+                    </mod>
+                    <!-- Always use version 2c for a CM reset -->
+					<mod modtype="replace" hdr="version">
+						<expr>2c</expr>
+					</mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPRespFailure</expr>
+                    </eq>
+                    <then>
+                        <fail/>
+                    </then>
+                </if>
+                <if>
+                    <or>
+                        <eq>
+                            <msg_ref type="sip">REGISTER.Contact.expires</msg_ref>
+                            <expr>0</expr>
+                        </eq>
+                        <eq>
+                            <msg_ref type="sip">REGISTER.Expires.value</msg_ref>
+                            <expr>0</expr>
+                        </eq>
+                    </or>
+                    <then>
+                        <send protocol="sip" msgtype="200-REGISTER"/>
+                    </then>
+                </if>
+            </response>
+            <transition to="EUEProvisions2" event="TimerExpired"/>
+            <transition to="Reset2" event="SNMPResp"/>
+            <transition to="Reset2" event="REGISTER"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+        <!-- 13b. -->
+        <state ID="EUEProvisions2">
+            <prelude once="true">
+				<stop_capture/>				
+				<parse_capture name="tftp_2">
+					<parser_filter protocol="tftp" ip="DUT.IP"/>
+				</parse_capture>
+				
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvisioningState.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+					<mod modtype="replace" hdr="version">
+                        <expr>2c</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="14b-2b">
+                    <contains>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>1</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="SNMPGet1h" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+
+        <!-- 14 Using SNMPv2 manager repeat Steps 3 and 4 of the test case. -->
+				
+		<!-- pktcMtaDevProvisioningTimer = 10 -->
+        <state ID="SNMPGet1h">
+            <prelude once="true">				
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvisioningTimer.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+					<mod modtype="replace" hdr="version">
+                        <expr>2c</expr>
+                    </mod>
+				</send>
+            </prelude>
+            <response>
+                <verify step="14-3h">
+                    <eq>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>10</expr>
+                    </eq>
+                </verify>
+            </response>
+            <transition to="SNMPGet2h" event="SNMPResp"/>
+            <transition to="SNMPGet2h" event="SNMPRespFailure"/>
+        </state>
+
+		<!-- pktcMtaDevConfigFile = URL of configuration file for download -->
+		<!-- ideally, the name of the file and its path has to be parsed from the SNMP in the capture during the reboot.
+		But, the PDML file shows 1.3.6.1.2.1.140.1.2.9.0 value only with Hex value, instead of ASCII. 
+		Therefore, this step grabs the file name from the tftp read request in the capture.-->
+        <state ID="SNMPGet2h">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>PKTC-IETF-MTA-MIB::pktcMtaDevConfigFile.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+					<mod modtype="replace" hdr="version">
+                        <expr>2c</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="14-3h">
+                    <contains>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <capture_ref type="tftp" name="tftp_2">Read Request.source_file.show</capture_ref>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="SNMPGet3h" event="SNMPResp"/>
+            <transition to="SNMPGet3h" event="SNMPRespFailure"/>
+        </state>
+
+		<!-- pktcMtaDevProvConfigHash = SHA-1 value provided by Prov entity -->
+        <state ID="SNMPGet3h">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvConfigHash.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+					<mod modtype="replace" hdr="version">
+                        <expr>2c</expr>
+                    </mod>					
+                </send>
+            </prelude>
+            <response>
+                <verify step="14-3h">
+                    <notnull>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                    </notnull>
+                </verify>
+            </response>
+            <transition to="SNMPGet4h" event="SNMPResp"/>
+            <transition to="SNMPGet4h" event="SNMPRespFailure"/>
+        </state>
+
+		<!-- pktcMtaDevProvConfigKey - Decryption key provided by Prov entity (When key value is less than 32 octets most significant unused bits must be set to zero.)-->
+        <state ID="SNMPGet4h">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvConfigKey.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+					<mod modtype="replace" hdr="version">
+                        <expr>2c</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="14-3h">
+                    <contains>
+                        <msg_ref type="utility" index="0 0 0">SNMPResp.varBind</msg_ref>
+						<expr>""</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="SNMPGet5h" event="SNMPResp"/>
+            <transition to="SNMPGet5h" event="SNMPRespFailure"/>
+        </state>
+                
+        <!-- pktcMtaDevProvConfigEncryptAlg = 1 -->
+        <state ID="SNMPGet5h">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvConfigEncryptAlg.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+					<mod modtype="replace" hdr="version">
+                        <expr>2c</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="14-3h">
+                    <eq>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>1</expr>
+                    </eq>
+                </verify>
+            </response>
+            <transition to="SNMPGet6h" event="SNMPResp"/>
+            <transition to="SNMPGet6h" event="SNMPRespFailure"/>
+        </state>
+		
+        <!-- pktcMtaDevProvSolicitedKeyTimeout = 0 -->
+        <state ID="SNMPGet6h">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvSolicitedKeyTimeout.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+					<mod modtype="replace" hdr="version">
+                        <expr>2c</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="14-3h">
+                    <eq>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>0</expr>
+                    </eq>
+                </verify>
+            </response>
+            <transition to="SNMPSet1h" event="SNMPResp"/>
+            <transition to="SNMPSet1h" event="SNMPRespFailure"/>
+        </state>
+
+
+        <!-- vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv -->
+        <!-- ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ -->
+        <!-- 4 SNMPv3 Set of read-write objects in table. Change to syntactically correct value.
+               eUE returns default or valid value for each object as follows
+               pktcMtaDevProvisioningTimer  - 10
+               pktcMtaDevConfigFile - URL of configuration file for download
+               pktcMtaDevProvConfigHash - SHA-1 value provided by Prov entity
+               pktcMtaDevProvConfigKey - Decryption key provided by Prov entity
+               When key value is less than 32 octets most significant unused bits must be set to zero.
+               pktcMtaDevProvConfigEncryptAlg - 1
+               pktcMtaDevProvSolicitedKeyTimeout - 3
+               In each case, eUE allows value in object to be updated. -->
+        <state ID="SNMPSet1h" timer="10000">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPSet">
+                    <mod modtype="add" hdr="array">
+                        <var_expr>
+                            <expr>varBind 1 1 3 \r\n ][ , </expr>
+                            <expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvisioningTimer.0,Unsigned32,11][\r\n</expr>
+                        </var_expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+                    <mod modtype="replace" hdr="version">
+                        <expr>2c</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPRespFailure</expr>
+                    </eq>
+                <then>
+                    <fail/>
+                </then>
+                </if>
+                <verify step="14-4h">
+                    <eq>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>11</expr>
+                   </eq>
+                </verify>
+            </response>
+            <transition to="SNMPSet2h" event="SNMPResp"/>
+            <transition to="SNMPSet2h" event="SNMPRespFailure"/>
+        </state>
+
+        <state ID="SNMPSet2h" timer="10000">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPSet">
+                    <mod modtype="add" hdr="array">
+                        <var_expr>
+                            <expr>varBind 1 1 3 \r\n ][ , </expr>
+                            <expr>PKTC-IETF-MTA-MIB::pktcMtaDevConfigFile.0,STRING,tftp://tftpserver/config.cfg][\r\n</expr>
+                        </var_expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+                    <mod modtype="replace" hdr="version">
+                        <expr>2c</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPRespFailure</expr>
+                    </eq>
+                <then>
+                    <fail/>
+                </then>
+                </if>
+                <verify step="14-4h">
+                    <eq>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>tftp://tftpserver/config.cfg</expr>
+                    </eq>
+                </verify>
+            </response>
+            <transition to="SNMPSet3h" event="SNMPResp"/>
+            <transition to="SNMPSet3h" event="SNMPRespFailure"/>
+        </state>
+
+        <state ID="SNMPSet3h" timer="10000">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPSet">
+                    <mod modtype="add" hdr="array">
+                        <var_expr>
+                            <expr>varBind 1 1 3 \r\n ][ , </expr>
+                            <expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvConfigHash.0,Hex-STRING,00 01 02 03 04 05 06 07 08 09 0A 0B 0C 0D 0E 0F 10 11 12 13][\r\n</expr>
+                        </var_expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+                    <mod modtype="replace" hdr="version">
+                        <expr>2c</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPRespFailure</expr>
+                    </eq>
+                <then>
+                    <fail/>
+                </then>
+                </if>
+                <verify step="14-4h">
+                    <eq>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>00 01 02 03 04 05 06 07 08 09 0A 0B 0C 0D 0E 0F 10 11 12 13</expr>
+                    </eq>
+                </verify>
+            </response>
+            <transition to="SNMPSet4h" event="SNMPResp"/>
+            <transition to="SNMPSet4h" event="SNMPRespFailure"/>
+        </state>
+
+        <state ID="SNMPSet4h" timer="10000">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPSet">
+                    <mod modtype="add" hdr="array">
+                        <var_expr>
+                            <expr>varBind 1 1 3 \r\n ][ , </expr>
+                            <expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvConfigKey.0,Hex-STRING,00 01 02 03 04 05 06 07 08 09 0A 0B 0C 0D 0E 0F 10 11 12 13 14 15 16 17 18 19 1A 1B 1C 1D 1E 1F][\r\n</expr>
+                        </var_expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+                    <mod modtype="replace" hdr="version">
+                        <expr>2c</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPResp</expr>
+                    </eq>
+                <then>
+                    <fail/>
+                </then>
+                </if>
+                <verify step="14-4h">
+                    <contains>
+                        <msg_ref type="utility">SNMPRespFailure.errorString</msg_ref>
+                        <expr>inconsistentValue</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="SNMPSet5h" event="SNMPResp"/>
+            <transition to="SNMPSet5h" event="SNMPRespFailure"/>
+        </state>
+
+        <state ID="SNMPSet5h" timer="10000">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPSet">
+                    <mod modtype="add" hdr="array">
+                        <var_expr>
+                            <expr>varBind 1 1 3 \r\n ][ , </expr>
+                            <expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvConfigEncryptAlg.0,INTEGER,0][\r\n</expr>
+                        </var_expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+                    <mod modtype="replace" hdr="version">
+                        <expr>2c</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPRespFailure</expr>
+                    </eq>
+                <then>
+                    <fail/>
+                </then>
+                </if>
+                <verify step="14-4h">
+                    <eq>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>0</expr>
+                    </eq>
+                </verify>
+            </response>
+            <transition to="SNMPSet6h" event="SNMPResp"/>
+            <transition to="SNMPSet6h" event="SNMPRespFailure"/>
+        </state>
+
+        <state ID="SNMPSet6h" timer="10000">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPSet">
+                    <mod modtype="add" hdr="array">
+                        <var_expr>
+                            <expr>varBind 1 1 3 \r\n ][ , </expr>
+                            <expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvSolicitedKeyTimeout.0,Unsigned32,100][\r\n</expr>
+                        </var_expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+                    <mod modtype="replace" hdr="version">
+                        <expr>2c</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPResp</expr>
+                    </eq>
+                <then>
+                    <fail/>
+                </then>
+                </if>
+                <verify step="14-4h">
+                    <contains>
+                        <msg_ref type="utility">SNMPRespFailure.errorString</msg_ref>
+                        <expr>inconsistentValue</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="SNMPCheck1h" event="SNMPResp"/>
+            <transition to="SNMPCheck1h" event="SNMPRespFailure"/>
+        </state>
+
+        <!-- vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv -->
+        <!-- ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ -->
+        <state ID="SNMPCheck1h">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvisioningTimer.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+					<mod modtype="replace" hdr="version">
+						<expr>2c</expr>
+					</mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="14-4h">
+                    <eq>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>11</expr>
+                    </eq>
+                </verify>
+            </response>
+            <transition to="SNMPCheck2h" event="SNMPResp"/>
+            <transition to="SNMPCheck2h" event="SNMPRespFailure"/>
+        </state>
+
+        <state ID="SNMPCheck2h">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>PKTC-IETF-MTA-MIB::pktcMtaDevConfigFile.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+					<mod modtype="replace" hdr="version">
+						<expr>2c</expr>
+					</mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="14-4h">
+                    <eq>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>tftp://tftpserver/config.cfg</expr>
+                    </eq>
+                </verify>
+            </response>
+            <transition to="SNMPCheck3h" event="SNMPResp"/>
+            <transition to="SNMPCheck3h" event="SNMPRespFailure"/>
+        </state>
+
+        <state ID="SNMPCheck3h">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvConfigHash.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+					<mod modtype="replace" hdr="version">
+						<expr>2c</expr>
+					</mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="14-4h">
+                    <eq>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>00 01 02 03 04 05 06 07 08 09 0A 0B 0C 0D 0E 0F 10 11 12 13</expr>
+                    </eq>
+                </verify>
+            </response>
+            <transition to="SNMPCheck4h" event="SNMPResp"/>
+            <transition to="SNMPCheck4h" event="SNMPRespFailure"/>
+        </state>
+
+        <state ID="SNMPCheck4h">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvConfigKey.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+					<mod modtype="replace" hdr="version">
+						<expr>2c</expr>
+					</mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="14-4h">
+                    <contains>
+                        <msg_ref type="utility" index="0 0 0">SNMPResp.varBind</msg_ref>
+                        <expr>""</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="SNMPCheck5h" event="SNMPResp"/>
+            <transition to="SNMPCheck5h" event="SNMPRespFailure"/>
+        </state>
+
+        <state ID="SNMPCheck5h">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvConfigEncryptAlg.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+					<mod modtype="replace" hdr="version">
+						<expr>2c</expr>
+					</mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="14-4h">
+                    <eq>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>0</expr>
+                    </eq>
+                </verify>
+            </response>
+            <transition to="SNMPCheck6h" event="SNMPResp"/>
+            <transition to="SNMPCheck6h" event="SNMPRespFailure"/>
+        </state>
+
+        <state ID="SNMPCheck6h">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvSolicitedKeyTimeout.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+					<mod modtype="replace" hdr="version">
+						<expr>2c</expr>
+					</mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="14-4h">
+                    <eq>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>0</expr>
+                    </eq>
+                </verify>
+            </response>
+            <transition to="END" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+	</add_to>
+</pc2xml>

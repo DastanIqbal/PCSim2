@@ -1,0 +1,393 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="SIP-UE 1.1.2.1" 
+	descrip="Re-Registration Details " 
+	number="SIP-UE 1.1.2.1" inspector="disable">
+	
+	<template name="Registrar" file="./templates/UERegAndSubTemp.xml"/>
+	<template name="UE1" file="./templates/CallOrigAtUETemp.xml"/>
+	<configure name="No Response Timeout" value="800000"/>
+	
+	<add_to fsm="UE1">
+		<states initialstate="WaitRegistered"/>
+		<state ID="WaitRegistered">
+			<transition to="WaitRegistered2" event="Registered"/>
+		</state>
+		<state ID="WaitRegistered2">
+			<transition to="OffHook" event="Registered"/>
+		</state>
+	</add_to>
+	
+	<remove_from fsm="Registrar">
+		<state ID="Registered" sub="prelude"/>
+		<state ID="Notification"/>
+	</remove_from>
+	
+	<remove_from fsm="UE1">
+		<state ID="Register"/>
+		<state ID="Setup"/>
+	</remove_from>
+	
+	<add_to fsm="Registrar">
+		<state ID="Registered" sub="prelude">
+			<send protocol="sip" msgtype="200-Register">
+				<!-- Step 2 of test case 1.1.2.1- Expires value is set to 120 sec-->
+				<mod modtype="replace" hdr="Contact" param="expires">
+					<expr>120</expr>
+				</mod>
+			</send>
+		</state>
+		
+		<state ID="Notification">
+			<transition to="Verify" event="200-NOTIFY"/>
+		</state>
+		
+		<!-- Step 3 of test case 1.1.2.1- After 60 seconds UE transmits a re-REGISTER request -->
+		<state ID="Verify">
+			<response>
+				<verify step="3" requirements="REQ16906">
+					<and>
+						<gte>
+							<msg_ref type="sip">REGISTER.TIMESTAMP</msg_ref>
+							<add_ref type="sip" msg_instance="last" value="58500">200-REGISTER.TIMESTAMP</add_ref>
+						</gte>
+						<lte>
+							<msg_ref type="sip">REGISTER.TIMESTAMP</msg_ref>
+							<add_ref type="sip" msg_instance="last" value="61500">200-REGISTER.TIMESTAMP</add_ref>
+						</lte>
+					</and>
+					<then>
+						<!-- Step 4 of test case 1.1.2.1- Continue re-registration -->
+						<send protocol="sip" msgtype="401-REGISTER"/>
+					</then>
+				</verify>
+			</response>
+			<transition to="Re-Authorization" event="REGISTER"/>
+		</state>
+		
+		<state ID="Re-Authorization">
+			<response>
+				<!-- Step-4,5 test case 1.1.2.1 - received REGISTER message - authorization-->
+				<if>
+					<or>
+						<eq>
+							<msg_ref type="event"/>
+							<expr>AuthenticateSucceed</expr>
+						</eq>
+						<eq>
+							<msg_ref type="event"/>
+							<expr>AuthenticateFailed</expr>
+						</eq>
+					</or>
+					<then>
+						<!-- this is to prevent the AuthenticateFailed from being forwarded
+									to the next state on the AuthenticateSucceed -->
+					</then>
+					<elseif>
+						<and>
+							<eq>
+								<msg_ref type="sip">Request</msg_ref>
+								<expr>REGISTER</expr>
+							</eq>
+							<and>
+								<contains>
+									<msg_ref type="sip">REGISTER</msg_ref>
+									<expr>Authorization</expr>
+								</contains>
+								<digest/>
+							</and>
+						</and>
+						<then>
+							<generate event="AuthenticateSucceed"/>
+						</then>
+						<else>
+							<generate event="AuthenticateFailed"/>
+							<send protocol="sip" msgtype="503-Register"/>
+						</else>
+					</elseif>
+				</if>
+			</response>
+			<transition to="2nd Registered" event="AuthenticateSucceed"/>
+			<transition to="END" event="AuthenticateFailed"/>
+			<transition to="Re-Authorization" event="REGISTER"/>
+		</state>
+		
+		<state ID="2nd Registered">
+			<prelude once="once">
+				<send protocol="sip" msgtype="200-Register">
+					<!-- Step 5 of test case 1.1.2.1- Expires value is set to 1320 sec-->
+					<mod modtype="replace" hdr="Contact" param="expires">
+						<expr>1320</expr>
+					</mod>
+				</send>
+				<generate event="Registered" fsm="UE1"/>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>Register</expr>
+					</eq>
+					<then>
+						<verify step="6" requirements="REQ16906">
+							<and>
+								<gte>
+									<msg_ref type="sip">REGISTER.TIMESTAMP</msg_ref>
+									<add_ref type="sip" msg_instance="last" value="718500">200-REGISTER.TIMESTAMP</add_ref>
+								</gte>
+								<lte>
+									<msg_ref type="sip">REGISTER.TIMESTAMP</msg_ref>
+									<add_ref type="sip" msg_instance="last" value="721500">200-REGISTER.TIMESTAMP</add_ref>
+								</lte>
+							</and>
+						</verify>
+						<verify step="7" requirements="REQ16831">
+							<contains>
+								<msg_ref type="sip">REGISTER.From</msg_ref>
+								<msg_ref type="platform">DUT.pui</msg_ref>
+							</contains>
+						</verify>
+						<verify step="7" requirements="REQ16831">
+							<contains>
+								<msg_ref type="sip">REGISTER.To</msg_ref>
+								<msg_ref type="platform">DUT.pui</msg_ref>
+							</contains>
+						</verify>
+						<verify step="8" requirements="REQ16909, REQ16910, REQ16911">
+							<contains>
+								<msg_ref type="sip">REGISTER.Authorization.username</msg_ref>
+								<msg_ref type="platform">DUT.prui</msg_ref>
+							</contains>
+						</verify>
+						<verify step="9" requirements="REQ16909, REQ16912">
+							<eq>
+								<msg_ref type="sip">REGISTER.Authorization.realm</msg_ref>
+								<msg_ref type="sip" msg_instance="last">401-REGISTER.WWW-Authenticate.realm</msg_ref>
+							</eq>
+						</verify>
+						<verify step="10" requirements="REQ16909, REQ16913">
+							<contains>
+								<msg_ref type="sip">REGISTER.Authorization.uri</msg_ref>
+								<msg_ref type="platform">DUT.domain</msg_ref>
+							</contains>
+						</verify>
+						<verify step="13" requirements="REQ16909, REQ16916">
+							<contains>
+								<msg_ref type="sip">REGISTER.From.name-addr</msg_ref>
+								<msg_ref type="platform">DUT.pui</msg_ref>
+							</contains>
+						</verify>
+						<verify step="14" requirements="REQ16909, REQ16917">
+							<contains>
+								<msg_ref type="sip">REGISTER.To.name-addr</msg_ref>
+								<msg_ref type="platform">DUT.pui</msg_ref>
+							</contains>
+						</verify>
+						<verify step="15" requirements="REQ16909, REQ16918">
+							<or>
+								<contains>
+									<msg_ref type="sip">REGISTER.Contact.name-addr</msg_ref>
+									<msg_ref type="platform">DUT.IP</msg_ref>
+								</contains>
+								<contains>
+									<msg_ref type="sip">REGISTER.Contact.name-addr</msg_ref>
+									<msg_ref type="platform">DUT.FQDN</msg_ref>
+								</contains>
+							</or>
+						</verify>
+						<verify step="15" requirements="REQ16909, REQ16918">
+							<or>
+								<contains>
+									<msg_ref type="sip">REGISTER.Contact</msg_ref>
+									<expr>+sip.instance</expr>
+								</contains>
+								<eq>
+									<msg_ref type="sip">REGISTER.Contact.sip-instance</msg_ref>
+									<msg_ref type="platform">DUT.sip instance uuid</msg_ref>
+								</eq>
+							</or>
+						</verify>
+						<!--  verify step="15" requirements="REQ16909, REQ16919" is not 
+					applicable for an e-DVA so this test is being ignored for the time
+					being -->
+						<verify step="17" requirements="REQ16909, REQ16920">
+							<or>
+								<contains>
+									<msg_ref type="sip">REGISTER.Via.sent-by</msg_ref>
+									<msg_ref type="platform">DUT.FQDN</msg_ref>
+								</contains>
+								<contains>
+									<msg_ref type="sip">REGISTER.Via.sent-by</msg_ref>
+									<msg_ref type="platform">DUT.IP</msg_ref>
+								</contains>
+							</or>
+						</verify>
+						<verify step="18" requirements="REQ16909, REQ16921">
+							<or>
+								<eq>
+									<msg_ref type="sip">REGISTER.Contact.expires</msg_ref>
+									<expr>600000</expr>
+								</eq>
+								<eq>
+									<msg_ref type="sip">REGISTER.Expires.value</msg_ref>
+									<expr>600000</expr>
+								</eq>
+							</or>
+						</verify>
+						<verify step="19" requirements="REQ16909, REQ16922">
+							<contains>
+								<msg_ref type="sip">REGISTER.Request-Line.Request-URI</msg_ref>
+								<msg_ref type="platform">DUT.domain</msg_ref>
+							</contains>
+						</verify>
+						<verify step="20" requirements="REQ16909, REQ16925">
+							<dnc>
+								<msg_ref type="sip">REGISTER.Supported</msg_ref>
+								<expr>path</expr>
+							</dnc>
+						</verify>
+						<!-- Step 4 of test case 1.1.2.1- Continue re-registration -->
+						<send protocol="sip" msgtype="401-REGISTER"/>
+					</then>
+				</if>
+			</response>
+			<transition to="2nd Re-Authorization" event="REGISTER"/>
+		</state>
+		
+		<state ID="2nd Re-Authorization">
+			<response>
+				<!-- Step-4,5 test case 1.1.2.1 - received REGISTER message - authorization-->
+				<if>
+					<or>
+						<eq>
+							<msg_ref type="event"/>
+							<expr>AuthenticateSucceed</expr>
+						</eq>
+						<eq>
+							<msg_ref type="event"/>
+							<expr>AuthenticateFailed</expr>
+						</eq>
+					</or>
+					<then>
+						<!-- this is to prevent the AuthenticateFailed from being forwarded
+									to the next state on the AuthenticateSucceed -->
+					</then>
+					<elseif>
+						<and>
+							<eq>
+								<msg_ref type="sip">Request</msg_ref>
+								<expr>REGISTER</expr>
+							</eq>
+							<and>
+								<contains>
+									<msg_ref type="sip">REGISTER</msg_ref>
+									<expr>Authorization</expr>
+								</contains>
+								<digest/>
+							</and>
+						</and>
+						<then>
+							<generate event="AuthenticateSucceed"/>
+						</then>
+						<else>
+							<generate event="AuthenticateFailed"/>
+							<send protocol="sip" msgtype="503-Register"/>
+						</else>
+					</elseif>
+				</if>
+			</response>
+			<transition to="2nd Re-Authorization" event="REGISTER"/>
+			<transition to="2nd Re-Registered" event="AuthenticateSucceed"/>
+			<transition to="END" event="AuthenticateFailed"/>
+		</state>
+		
+		<state ID="2nd Re-Registered">
+			<prelude once="true">
+				<!-- Step 16 of test case 1.1.2.1- Continue 2nd re-registration -->
+				<send protocol="sip" msgtype="200-Register"/>
+				<generate event="Registered" fsm="UE1"/>
+			</prelude>
+			<response>
+				<if>
+					<and>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>SUBSCRIBE</expr>
+						</eq>
+						<or>
+							<contains>
+								<msg_ref type="sip">SUBSCRIBE.Event</msg_ref>
+								<expr>reg</expr>
+							</contains>
+							<or>
+								<contains>
+									<msg_ref type="sip">SUBSCRIBE.Event</msg_ref>
+									<expr>dialog</expr>
+								</contains>
+								<contains>
+									<msg_ref type="sip">SUBSCRIBE.Event</msg_ref>
+									<expr>message-summary</expr>
+								</contains>
+							</or>
+						</or>
+					</and>
+					<then>
+						<send protocol="sip" msgtype="200-SUBSCRIBE"/>
+						<sleep time="100"/>
+						<send protocol="sip" msgtype="NOTIFY"/>
+					</then>
+				</if>
+			</response>
+			<transition to="2nd Re-Registered" event="REGISTER"/>
+			<transition to="2nd Re-Registered" event="SUBSCRIBE"/>
+			<transition to="2nd Re-Registered" event="200-NOTIFY"/>
+		</state>
+	</add_to>
+	<add_to fsm="UE1">
+		<state ID="Setup">
+			<prelude once="true">
+				<send protocol="utility" msgtype="DialDigits">
+					<mod modtype="add" hdr="number">
+						<msg_ref type="platform">UE1.phone number 1</msg_ref>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<neq>
+						<msg_ref type="event"/>
+						<expr>DialDigitsComplete</expr>
+					</neq>
+					<then>
+						<verify step="23" requirements="REQ16909, REQ16927, REQ16929">
+							<contains>
+								<msg_ref type="sip" hdr_instance="2">INVITE.Route.route-param</msg_ref>
+								<msg_ref type="sip" fsm="Registrar" msg_instance="last">200-REGISTER.Service-Route.sr-value</msg_ref>
+							</contains>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<transition to="Setup" event="DialDigitsComplete"/>
+			<transition to="END" event="INVITE"/>
+		</state>
+	</add_to>
+</pc2xml>

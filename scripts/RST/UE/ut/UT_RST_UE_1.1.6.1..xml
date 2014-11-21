@@ -1,0 +1,67 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+
+<!-- First are the document type and the attributes for our document -->
+<pc2xml version="$Revision: 8188 $" name="UT_RST-UE 1.1.6.1" descrip="UE Status Change" number="UT_RST-UE 1.1.6.1">
+	<fsm name="UT_RST-UE 1.1.6.1">
+		<models>
+			<registrar/>
+		</models>
+		<NE sim_type="term" elements="DUT" targets="UE0 DUT"/>
+		<states initialstate="PendingRegister">
+			<state ID="PendingRegister" timer="500">
+				<transition to="Setup" event="Registered"/>
+				<transition to="Register" event="TimerExpired"/>
+			</state>
+			<!-- REGISTER State -->
+			<state ID="Register" timer="6000">
+				<prelude>
+					<send protocol="sip" msgtype="Register" target="PCSCF1" originator="DUT"/>
+				</prelude>
+				<transition to="PendingRegister1" event="TimerExpired"/>
+			</state>
+			<state ID="PendingRegister1">
+				<prelude>
+					<send protocol="sip" msgtype="Register" target="PCSCF1" originator="DUT"/>
+				</prelude>
+				<transition to="Authorization" event="423-REGISTER"/>
+			</state>
+			<state ID="Authorization">
+				<prelude>
+					<send protocol="sip" msgtype="Register" target="PCSCF1" originator="DUT">
+						<mod modtype="replace" hdr="Contact" param="expires">
+							<add_ref type="sip" msg_instance="last" value="1">423-REGISTER.Min-Expires.value</add_ref>
+						</mod>
+					</send>
+				</prelude>
+				<transition to="PendingRegistration2" event="200-REGISTER"/>
+				<transition to="END" event="5xx-REGISTER"/>
+			</state>
+			<state ID="PendingRegister2">
+				<prelude>
+					<sleep time="3000"/>
+					<send protocol="sip" msgtype="Register" target="PCSCF1" originator="DUT"/>
+					<generate event="SucceedEvent"/>
+				</prelude>
+				<transition to="END" event="SucceedEvent"/>
+			</state>
+		</states>
+	</fsm>
+</pc2xml>

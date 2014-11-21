@@ -1,0 +1,115 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+ Change History: (Author & Date)
+	PCPCII-131 : Change the template from the originating to terminating. (ghassler 06/11/2009)
+	PCPCII-139 : Update the Voicetronix modifiers to use the new values. (ghassler 07/10/2009)
+	PCPCII-332 : Update the script to the updated test case in the issue. (ghassler 06/09/2010)
+	PCPCII-512 : Correct the transistions in the HookFlash2 state to go to the correct state 
+		(HookFlash2 not HookFlash). (ghassler 07/14/2010)
+	PCPCII-539 : Have denial tone prompt allow the user to respond with a Yes or No by adding
+		the verify attribute to the log tag. (ghassler 09/27/2010)
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-UE 1.5.3.13" 
+	descrip="Call Hold - feature not available " 
+	number="RST-UE 1.5.3.13">
+	
+	<template file="./templates/CallTermAtUETemp.xml" name="UE1"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Connected"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<state ID="Connected" timer="7000">
+			<prelude once="true">
+				<send protocol="sip" msgtype="ACK"/>
+			</prelude>
+			<transition to="Connected" event="OffHookComplete"/>
+			<transition to="HookFlash" event="TimerExpired"/>
+		</state>
+		
+		<state ID="HookFlash">
+			<prelude once="true">
+				<send protocol="utility" msgtype="HookFlash"/>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>REINVITE</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="100-INVITE"/>
+						<send protocol="sip" msgtype="200-INVITE"/>
+					</then>
+				</if>
+			</response>
+			<transition to="HookFlash" event="HookFlashComplete"/>
+			<transition to="HookFlash" event="REINVITE"/>
+			<transition to="HookFlash" event="xxx-INVITE"/>
+			<transition to="OnHold" event="ACK"/>
+		</state>
+			
+		<state ID="OnHold">
+			<prelude>
+				<send protocol="utility" msgtype="DialDigits">
+					<mod modtype="add" hdr="number">
+						<expr>*52</expr>
+					</mod>
+					<mod modtype="replace" hdr="voiceport">
+						<msg_ref type="platform">Platform.voiceport0</msg_ref>
+					</mod>
+				</send>
+			</prelude>
+			<postlude>
+				<log promptUser="true" yesExpected="true" verify="true"
+					step="2" requirement="REQ23112"
+					expr="Is the DUT playing a denial announcement or a denial tone?"/>
+			</postlude>
+			<transition to="HookFlash2" event="DialDigitsComplete"/>
+		</state>
+		
+		<state ID="HookFlash2">
+			<prelude once="true">
+				<send protocol="utility" msgtype="HookFlash"/>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>REINVITE</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="100-INVITE"/>
+						<send protocol="sip" msgtype="200-INVITE"/>
+					</then>
+				</if>
+			</response>
+			<transition to="HookFlash2" event="HookFlashComplete"/>
+			<transition to="HookFlash2" event="REINVITE"/>
+			<transition to="HookFlash2" event="xxx-INVITE"/>
+			<transition to="OnHook" event="ACK"/>
+		</state>
+		
+		<transition from="OnHook" to="WaitBye" event="OnHookComplete"/>
+		
+		<state ID="WaitBye">
+			<postlude>
+				<send protocol="sip" msgtype="200-BYE"/>
+			</postlude>
+			<transition to="END" event="BYE"/>
+		</state>
+	</add_to>			
+	
+</pc2xml>

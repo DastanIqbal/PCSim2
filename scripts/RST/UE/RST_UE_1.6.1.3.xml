@@ -1,0 +1,175 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	PCPCII-139 : Update the Voicetronix modifiers to use the new values. (ghassler 07/10/2009)
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-UE 1.6.1.3" 
+	descrip=" Do-Not-Disturb –MWI feature interaction " 
+	number="RST-UE 1.6.1.3" inspector="disable">
+	
+	<template file="./templates/UERegAndSubTemp.xml" name="Registrar"/>
+	<template file="./templates/CallOrigAtUETemp.xml" name="UE1"/>
+	
+	<remove_from fsm="Registrar">
+		<state ID="Registered"/>
+		<state ID="Notification"/>
+	</remove_from>
+
+	<remove_from fsm="UE1">
+		<NE target="*78 *79"/>
+		<state ID="Setup"/>
+	</remove_from>
+	
+	<add_to fsm="Registrar">
+		<state ID="Registered">
+			<prelude once="true">
+				<send protocol="sip" msgtype="200-Register"/>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">SUBSCRIBE.Event.event-type</msg_ref>
+						<expr>reg</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="200-SUBSCRIBE"/>
+						<sleep time="100"/>
+						<send protocol="sip" msgtype="NOTIFY"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Registered" event="SUBSCRIBE"/>
+			<transition to="WaitMWISubscribe" event="200-NOTIFY"/>
+		</state>
+		
+		<state ID="WaitMWISubscribe">
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">SUBSCRIBE.Event.event-type</msg_ref>
+						<expr>message-summary</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="200-SUBSCRIBE"/>
+						<sleep time="100"/>
+						<send protocol="sip" msgtype="NOTIFY"/>
+					</then>
+				</if>
+			</response>
+			<transition to="WaitMWISubscribe" event="SUBSCRIBE"/>
+			<transition to="WaitSubscribeComplete" event="200-NOTIFY"/>
+		</state>
+		
+		<state ID="WaitSubscribeComplete">
+			<prelude once="true">
+				<generate event="SucceedEvent" fsm="UE1"/>
+			</prelude>
+			<transition to="Send2ndNotify" event="Branch1Event"/>
+		</state>
+		
+		<state ID="Send2ndNotify">
+			<prelude>
+				<send protocol="sip" msgtype="NOTIFY">
+					<mod modtype="replace" hdr="Voice-Message" param="new-msgs">
+						<expr>1</expr>
+					</mod>
+				</send>
+				
+				<log step="3" requirements="REQ13898" 
+					promptUser="True" yesExpected="True" verify="True" 
+					expr="Verify that UE-A does NOT play on-hook message waiting audible indicator (ringsplash)"/>
+		
+			</prelude>
+			
+			<postlude>
+				<generate event="Branch2Event" fsm="UE1"/>
+			</postlude>
+			<transition to="Received200Notify" event="200-NOTIFY"/>
+		</state>
+		
+		<state ID="Received200Notify" ES="true"/>
+	</add_to>
+	
+	<add_to fsm="UE1">
+		<NE targets="*79 *78"/>
+		<states initialstate="WaitSucceedEvent"/>
+		
+		<state ID="WaitSucceedEvent">
+			<transition to="OffHook" event="SucceedEvent"/>
+		</state>
+		
+		<state ID="Setup">
+			<prelude once="true">
+				<send protocol="utility" msgtype="DialDigits">
+					<mod modtype="add" hdr="number">
+						<expr>*78</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>Invite</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="200-INVITE"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Setup" event="DialDigitsComplete"/>
+			<transition to="Setup" event="INVITE"/>
+			<transition to="EndTheCall" event="ACK"/>
+		</state>
+		
+		<state ID="EndTheCall" ES="true">
+			<transition to="2ndDial" event="SessionTerminated"/>
+		</state>
+		
+		<state ID="2ndDial">
+			<prelude>
+				<generate event="Branch1Event" fsm="Registrar"/>
+			</prelude>
+			<postlude>
+				<send protocol="utility" msgtype="DialDigits">
+					<mod modtype="add" hdr="number">
+						<expr>*79</expr>
+					</mod>
+				</send>
+			</postlude>
+			<transition to="Setup2" event="Branch2Event"/>
+		</state>
+		
+		<state ID="Setup2">
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>Invite</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="200-INVITE"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Setup2" event="INVITE"/>
+			<transition to="Setup2" event="DialDigitsComplete"/>
+			<transition to="END" event="ACK"/>
+		</state>
+	</add_to>
+</pc2xml>

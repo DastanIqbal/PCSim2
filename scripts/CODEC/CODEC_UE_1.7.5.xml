@@ -1,0 +1,71 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+ Change History: (Author & Date)
+	
+
+
+
+
+-->
+<pc2xml version="$Revision: 6714 $" 
+	name="CODEC-MEDIA_1.7.5" 
+	descrip="DTMF Tone Transmission nontelephone event (G722)" 
+	number="CODEC-MEDIA_1.7.5">
+	
+	<template file="./templates/Proxy.xml" name="SCSCF1"/>
+	
+	<remove_from fsm="SCSCF1">
+		<state ID="OffHook"/>
+		<state ID="Connected"/>
+	</remove_from>
+	
+	<add_to fsm="SCSCF1">
+		<state ID="Register" sub="prelude">
+			<!-- Step-1 test case Appendix B.9 Common Test Procedures -->
+			<log promptUser="true" 
+			expr="Connect the SAGE 930 or their equivalents to UE0 and UE1."/>
+		</state>
+		
+		<state ID="OffHook">
+			<prelude>
+				<start_capture>
+					<filter>
+						<var_expr>
+							<expr>host </expr>
+							<msg_ref type="platform">PCSCF1.IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">UE0.IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">UE1.IP</msg_ref>
+						</var_expr>
+					</filter>
+				</start_capture>
+				<sleep time="5000"/>
+				<send protocol="utility" msgtype="OffHook"/>
+			</prelude>
+			<transition to="Setup" event="OffHookComplete"/>
+		</state>
+		
+		<state ID="Connected" timer="10000">
+			<prelude>
+				<!-- Step - 1 test case Appendix B.9 Common Test Procedures -->
+				<log expr="From the DUT, send 0, 1, 2, 3, and 4 on the SAGE 930 or equivalent."/>
+				
+				<log step="2" requirements="REQ13338 REQ13341 REQ13352" 
+					promptUser="True" yesExpected="True" verify="True" 
+					expr="Verify No DTMF packet reception on the SAGE device."/>
+			<!--generate event="SucceedEvent"/-->							
+			</prelude>
+			<transition to="OnHook" event="TimerExpired"/>
+		</state>
+	</add_to>
+</pc2xml>

@@ -1,0 +1,137 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="SIP-UE 1.24.4" 
+	descrip="Session Set up in Dual Stack mode –IPv4 Manages to Establish a Session" 
+	number="SIP-UE 1.24.4">
+	
+	<template file="./templates/CallTermAtUETemp.xml" name="UE1"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Setup"/>
+		<state ID="Connected"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<state ID="Setup">
+			<prelude once="true">
+				<send protocol="sip" msgtype="Invite">
+					<!-- Step 1 from the test case SIP 1.9.3 - 
+					Execute step 1 with the following modification to the INVITE-->
+					<mod modtype="replace" hdr="t" param="stop">
+						<expr>0\r\na=ice-lite</expr>
+					</mod>
+					<mod modtype="replace" hdr="ptime" param="value">
+						<var_expr>
+							<expr>20\r\na=ice-pwd:</expr>
+							<msg_ref type="platform">UE1.STUN Password Credential</msg_ref>
+							<expr>\r\na=ice-ufrag:</expr>
+							<msg_ref type="platform">UE1.STUN Username Credential</msg_ref>
+							<expr>\r\na=candidate:1 1 UDP 32564 </expr>
+							<msg_ref type="platform">UE1.IP</msg_ref>
+							<expr> </expr>
+							<msg_ref type="platform">UE1.SDPPort</msg_ref>
+							<expr> typ host\r\n</expr>
+							<expr>a=candidate:2 1 UDP 787 </expr>
+							<msg_ref type="platform">UE1.IP2</msg_ref>
+							<expr> </expr>
+							<msg_ref type="platform">UE1.SDPPort2</msg_ref>
+							<expr> typ host</expr>
+						</var_expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<!-- Step 1 from the test case SIP 1.9.3- 
+				UE Responds with 415 (Unsupported Media Type) with an Accept-Language header -->
+				<if>
+					<eq>
+						<msg_ref type="sip">Response</msg_ref>
+						<expr>18x-INVITE</expr>
+					</eq>
+					<then>
+						<verify step="2" requirements="RFC481, RFC482, RFC483">
+							<and>
+								<eq>
+									<msg_ref type="sip" msg_instance="last" hdr_instance="1">INVITE.Record-Route</msg_ref>
+									<msg_ref type="sip" hdr_instance="1">Response.Record-Route</msg_ref>
+								</eq>
+							<and>
+								<eq>
+									<msg_ref type="sip" msg_instance="last" hdr_instance="2">INVITE.Record-Route</msg_ref>
+									<msg_ref type="sip" hdr_instance="2">Response.Record-Route</msg_ref>
+								</eq>
+							<and>
+								<eq>
+									<msg_ref type="sip" msg_instance="last" hdr_instance="3">INVITE.Record-Route</msg_ref>
+									<msg_ref type="sip" hdr_instance="3">Response.Record-Route</msg_ref>
+								</eq>
+							<and>
+								<eq>
+									<msg_ref type="sip" msg_instance="last" hdr_instance="4">INVITE.Record-Route</msg_ref>
+									<msg_ref type="sip" hdr_instance="4">Response.Record-Route</msg_ref>
+								</eq>
+								<ipv4>
+									<msg_ref type="sip">Response.Contact.domain</msg_ref>
+								</ipv4>
+							</and>
+							</and>
+							</and>
+							</and>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<transition to="Setup" event="100-INVITE"/>
+			<transition to="Alerting" event="180-INVITE"/>
+			<transition to="Alerting" event="183-INVITE"/>
+		</state>
+		
+		<state ID="Connected" timer="30000">
+			<prelude once="true">
+				<send protocol="sip" msgtype="ACK"/>
+				<verify step="3" requirements="REQ19520, REQ19527">
+					<ipv4>
+						<msg_ref type="sdp" msg_instance="last">200-INVITE.host-1.connection-address</msg_ref>
+					</ipv4>
+				</verify>
+				
+				<send protocol="utility" msgtype="VerifyVoicePath2Way">
+					<mod modtype="replace" hdr="from voiceport">
+						<msg_ref type="platform">Platform.voiceport0</msg_ref>
+					</mod>
+					<mod modtype="replace" hdr="to voiceport">
+						<msg_ref type="platform">Platform.voiceport1</msg_ref>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="5" requirements="REQ19520, REQ19527">
+					<eq>
+						<msg_ref type="utility">Response</msg_ref>
+						<expr>VerifyVoicePath2WayComplete</expr>
+					</eq>
+				</verify>		
+			</response>
+			<transition to="END" event="VerifyVoicePath2WayComplete"/>
+			<transition to="END" event="VerifyVoicePath2WayError"/>
+		</state>
+	</add_to>
+</pc2xml>

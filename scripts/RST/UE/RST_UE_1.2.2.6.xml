@@ -1,0 +1,112 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	PCPCIIAPPSATP-85 : Update the script to use periods instead of spaces for the Request-URI in step
+		7. (ghassler 04/30/2010)
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-UE 1.2.2.6" 
+	descrip="Global Tel URI in P-Asserted-Identity header" 
+	number="RST-UE 1.2.2.6">
+	
+	<fsm name="RST 1.2.2.6 Term Call">
+		<models>
+			<session/>
+		</models>
+		
+		<NE sim_type="orig" elements="UE1 PCSCF2 SCSCF1 PCSCF1" 
+			targets="UE1 226071234567 6071234567 226071234567891"/>
+		
+		<states initialstate="Register">
+			<state ID="Register">
+				<transition to="Setup" event="Registered"/>
+			</state>
+			
+			<state ID="Setup">
+				<prelude>
+					<send protocol="sip" msgtype="Invite">
+						<!-- Step 1 test case SIP 1.2.2.6-->
+						<mod modtype="replace" hdr="P-Asserted-Identity">
+							<expr>tel:+226071234567</expr>
+						</mod>
+					</send>
+					<log promptUser="True" yesExpected="True" verify="True" 
+						step="2" requirements="REQ14458" 
+						expr="Verify the Caller ID display has 226071234567 or 6071234567 in the number field?"/>
+				</prelude>
+				<transition to="EndSession" event="xxx-INVITE"/>
+			</state>
+			
+			<state ID="EndSession" ES="true">
+				<transition to="Setup1" event="SessionTerminated"/>
+			</state>
+			
+			<state ID="Setup1">
+				<prelude>
+					<send protocol="sip" msgtype="Invite">
+						<!-- Step 4 test case SIP 1.2.2.6-->
+						<mod modtype="replace" hdr="P-Asserted-Identity">
+							<expr>tel:+22-607-123-4567</expr>
+						</mod>
+					</send>
+					<log promptUser="True" yesExpected="True" verify="True" 
+						step="5" requirements="REQ14458" 
+						expr="Verify the Caller ID display has 226071234567 or 6071234567 in the number field?"/>
+				</prelude>
+				<transition to="EndSession1" event="xxx-INVITE"/>
+			</state>
+			
+			<state ID="EndSession1" ES="true">
+				<transition to="Setup2" event="SessionTerminated"/>
+			</state>
+			
+			<state ID="Setup2">
+				<prelude>
+					<send protocol="sip" msgtype="Invite">
+						<!-- Step 7 test case SIP 1.2.2.6-->
+						<mod modtype="replace" hdr="P-Asserted-Identity">
+							<expr>tel:+22.607.123.4567</expr>
+						</mod>
+					</send>
+					<log promptUser="True" yesExpected="True" verify="True" 
+						step="8" requirements="REQ14458" 
+						expr="Verify the Caller ID display has 226071234567 or 6071234567 in the number field?"/>
+				</prelude>
+				<transition to="EndSession2" event="xxx-INVITE"/>
+			</state>
+			
+			<state ID="EndSession2" ES="true">
+				<transition to="Setup3" event="SessionTerminated"/>
+			</state>
+			
+			<state ID="Setup3">
+				<prelude>
+					<send protocol="sip" msgtype="Invite">
+						<!-- Step 10 test case SIP 1.2.2.6-->
+						<mod modtype="replace" hdr="P-Asserted-Identity">
+							<expr>tel:+226071234567891</expr>
+						</mod>
+					</send>
+					<log promptUser="True" yesExpected="True" verify="True" 
+						step="11" requirements="REQ14459" 
+						expr="Verify the Caller ID display has 226071234567891 or 6071234567891 in the number field?"/>
+				</prelude>
+				<transition to="END" event="xxx-INVITE"/>
+			</state>
+		</states>
+	</fsm>
+</pc2xml>

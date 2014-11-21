@@ -1,0 +1,105 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-UE 1.5.4.5" 
+	descrip="Blind Call Transfer Timeout - Transferor " 
+	number="RST-UE 1.5.4.5" inspector="disable">
+	
+	<template file="./templates/Call_Transfer_Transferor.xml"/>
+	
+	<remove_from fsm="UE1 Calls DUT">
+		<state ID="UE1Wait"/>
+		<state ID="UE1WaitForByeOrSucceed"/>
+		<state ID="UE1WaitBYE"/>
+	</remove_from>
+	
+	<add_to fsm="UE1 Calls DUT">
+		<transition from="UE1SendNotify" to="UE1WaitBYE" event="200-NOTIFY"/>
+		
+		<state ID="UE1Wait" timer="29000">
+			<prelude once="true">
+				<!-- Step 3 test case SIP xxx -->
+				<send protocol="utility" msgtype="DialDigits">
+					<mod modtype="add" hdr="number">
+						<msg_ref type="platform">UE2.phone number 1</msg_ref>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>REFER</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="202-REFER"/>
+					</then>
+				</if>
+			</response>
+			<transition to="UE1Wait" event="REFER"/>
+			<transition to="UE1Wait" event="DialDigitsComplete"/>
+			<transition to="UE1WaitBYE" event="TimerExpired"/>
+			<transition to="UE1WaitBYE" event="200-NOTIFY"/>
+		</state>
+
+		<state ID="UE1WaitBYE" timer="30000">
+			<response>
+				<verify step="6" requirements="REQ13845, REQ14500">
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>BYE</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="200-BYE"/>
+					</then>
+				</verify>
+			</response>
+			<transition to="END" event="BYE"/>
+		</state>
+	</add_to>
+	
+	<add_to fsm="UE2 Calls DUT">
+		<transition from="UE2Alerting" to="HangUpDUT" event="ALERTING_UAS"/>
+		
+		<state ID="HangUpDUT">
+			<prelude>
+				<!-- Hang up on DUT..-->
+				<send protocol="utility" msgtype="OnHook"/>
+			</prelude>
+			<transition to="WaitCancel" event="OnHookComplete"/>
+		</state>
+		
+		<state ID="WaitCancel">
+			<response>
+				<verify step="9" requirements="REQ13845, REQ14500">
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>CANCEL</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="200-CANCEL"/>
+						<send protocol="sip" msgtype="487-INVITE"/>
+					</then>
+				</verify>
+			</response>
+			<transition to="UE2EndDialog" event="CANCEL"/>
+		</state>
+	</add_to>
+</pc2xml>

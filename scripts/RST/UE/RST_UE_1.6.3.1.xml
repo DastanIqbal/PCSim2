@@ -1,0 +1,84 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	PCPCII-139 : Update the Voicetronix modifiers to use the new values. (ghassler 07/10/2009)
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-UE 1.6.3.1" 
+	descrip="Distinctive Alerting – feature disabled " 
+	number="RST-UE 1.6.3.1">
+
+	<fsm name="Orig call template">
+		<models>
+			<session/>
+		</models>
+	
+		<NE sim_type="term" elements="UE1 PCSCF2 SCSCF1 PCSCF1" targets="UE1"/>
+	
+		<states initialstate="Register">
+			<state ID="Register">
+				<transition to="OffHook" event="Registered"/>
+			</state>
+			
+			<state ID="OffHook">
+				<prelude>
+					<send protocol="utility" msgtype="OffHook"/>
+				</prelude>
+				<transition to="Dial" event="OffHookComplete"/>
+			</state>
+			
+			<state ID="Dial">
+				<prelude>
+					<!-- Step 2 test case SIP 1.6.3.1 - Go off-hook on the device 
+					attached to the DUT (UE-A) and dial *61.-->
+					<send protocol="utility" msgtype="DialDigits">
+						<mod modtype="add" hdr="number">
+							<expr>*61</expr>
+						</mod>
+					</send>
+				</prelude>
+				<transition to="Setup" event="DialDigitsComplete"/>
+			</state>
+			
+			<state ID="Setup" timer="10000">
+				<prelude>
+					<!-- Step 1 test case SIP 1.6.3.1 - Verify an error tone is played-->
+					<log step="1" requirements="REQ13906" 
+						promptUser="True" yesExpected="True" verify="True" 
+						expr="Verify an error tone is played?"/>
+				</prelude>
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="event"/>
+							<expr>TimerExpired</expr>
+						</eq>
+						<then>
+							<verify step="1" requirements="REQ13906">
+								<eq>
+									<msg_ref type="event"/>
+									<expr>TimerExpired</expr>
+								</eq>
+							</verify>
+						</then>
+					</if>
+				</response>
+				<transition to="END" event="TimerExpired"/>
+			</state>
+		</states>
+	</fsm>
+</pc2xml>

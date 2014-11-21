@@ -1,0 +1,110 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+ Change History: (Author & Date)
+	PCPCII-131 : Change the template from the originating to terminating. (ghassler 06/11/2009)
+	PCPCII-174 : Update the script to the D11 version of the ATP (ghassler 01/26/2010)
+	PCPCII-203 : Update the verify of step 2 to test that the event is equal to TimerExpired.
+		(ghassler 02/25/2010)
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-UE 1.5.3.14" 
+	descrip="Call Hold – Configurable Local Media Hold" 
+	number="RST-UE 1.5.3.14">
+	
+	<template file="./templates/CallOrigAtUETemp.xml" name="UE1"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Connected"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<state ID="Connected" timer="3000">
+			<transition to="HookFlash" event="TimerExpired"/>
+		</state>
+		
+		<state ID="HookFlash">
+			<prelude once="true">
+				<start_capture>
+					<filter>
+						<var_expr>
+							<expr>host </expr>
+							<msg_ref type="platform">UE0.IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">Platform.SIP Stack 1 IP Address</msg_ref>
+						</var_expr>
+					</filter>
+				</start_capture>
+				<send protocol="utility" msgtype="HookFlash"/>
+			</prelude>
+			<transition to="SpecialHold" event="HookFlashComplete"/>
+		</state>
+		
+		<state ID="SpecialHold">
+			<prelude once="true">
+				<send protocol="utility" msgtype="DialDigits">
+					<mod modtype="add" hdr="number">
+						<expr>*52</expr>
+					</mod>
+				</send>
+			</prelude>
+			<transition to="OnHold" event="DialDigitsComplete"/>
+		</state>
+				
+		<state ID="OnHold" timer="15000">
+			<response>
+				<verify step="2" requirements="REQ23440, REQ23441, REQ23442, REQ23443, REQ23444">
+					<eq>
+						<msg_ref type="event"/>
+						<expr>TimerExpired</expr>
+					</eq>
+				</verify>
+			</response>
+			
+			<transition to="OnHook2" event="TimerExpired"/>
+		</state>
+		
+		<state ID="OnHook2">
+			<prelude>
+				<stop_capture/>
+				<send protocol="utility" msgtype="OnHook"/>
+			</prelude>
+			<transition to="VerifyRing" event="OnHookComplete"/>
+		</state>
+		
+		<state ID="VerifyRing">
+			<prelude once="true">
+				<send protocol="utility" msgtype="VerifyRing"/>
+			</prelude>
+			<response>
+				<verify step="3" requirements="REQ13812">
+					<eq>
+						<msg_ref type="utility">Response</msg_ref>
+						<expr>VerifyRingComplete</expr>
+					</eq>
+				</verify>
+			</response>
+			<postlude>
+				<log promptUser="true" verify="true" 
+					step="2" requirement="REQ23440, REQ23441, REQ23442, REQ23443, REQ23444"
+					expr="In the capture file, did the DUT stop sending RTP packets after *52 was dialed?"/>
+				<log promptUser="true" verify="true" 
+					step="2" requirement="REQ23440, REQ23441, REQ23442, REQ23443, REQ23444"
+					expr="In the capture file, did the DUT continue to send RTCP packets after *52 was dialed?"/>
+			</postlude>
+			<transition to="END" event="VerifyRingComplete"/>
+			<transition to="END" event="VerifyRingError"/>
+		</state>
+	</add_to>			
+	
+</pc2xml>

@@ -1,0 +1,162 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+ Change History: (Author & Date)
+	PCPCIIATP-114 : Update the fmtp media line to use '=' instead of ':' between a parameter and its 
+			value. (ghassler 01/13/2010)
+	PCPCII-266 : Add rtpmap line for t38, correct ptime and FaxVersion tests. (ghassler 05/12/2010)
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="CODEC-MEDIA_1.3.2.7" 
+	descrip="UE supports T.38 Version '0' support and default Packetization (UE Terminating)" 
+	number="CODEC-MEDIA_1.3.2.7">
+	
+	<template file="./templates/CallTermAtUETemp.xml" name="UE1"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Connected"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<state ID="Connected" timer="30000">
+			<prelude once="true">
+				<send protocol="sip" msgtype="ACK"/>
+				<start_capture>
+					<filter>
+						<var_expr>
+							<expr>host </expr>
+							<msg_ref type="platform">PCSCF1.IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">UE0.IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">UE1.IP</msg_ref>
+						</var_expr>
+					</filter>
+				</start_capture>
+				<sleep time="5000"/>
+				<send protocol="sip" msgtype="REINVITE">
+					<mod modtype="delete" hdr="audio"/>
+					<mod modtype="delete" hdr="media-modifier"/>
+					<mod modtype="delete" hdr="TIAS-modifier"/>
+					<mod modtype="delete" hdr="max-packet-rate"/>
+					<mod modtype="delete" hdr="rtpmap"/>
+					<mod modtype="delete" hdr="mode"/>
+					<mod modtype="delete" hdr="ptime"/>
+					<mod modtype="add" hdr="SDP">
+						<var_expr>
+							<expr>m=audio </expr>
+							<msg_ref type="platform">UE1.SDPPort2</msg_ref>
+							<expr> RTP/AVP 0 99\r\nb=AS:80\r\nb=TIAS:64000\r\na=maxprate:50\r\na=rtpmap:99 t38/8000\r\n</expr>
+							<expr>a=fmtp:99 T38FaxRateManagement=transferredTCF;T38FaxMaxDatagram=173</expr>
+						</var_expr>
+					</mod>
+					<mod modtype="replace" hdr="s" param="name">
+						<expr>VoiceFax</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Response</msg_ref>
+						<expr>200-INVITE</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="ACK"/>
+						<verify step="2" requirements="REQ12589, REQ12592">
+							<eq>
+								<msg_ref type="sdp">200-INVITE.audio.payload-type</msg_ref>
+								<expr>0 99</expr>
+							</eq>
+						</verify>
+						
+						<verify step="2" requirements="REQ12589, REQ12592">
+							<eq>
+								<msg_ref type="sdp">200-INVITE.media-modifier.value</msg_ref>
+								<expr>80</expr>
+							</eq>
+						</verify>
+						
+						<verify step="2" requirements="REQ12589, REQ12592">
+							<eq>
+								<msg_ref type="sdp">200-INVITE.TIAS-modifier.value</msg_ref>
+								<expr>64000</expr>
+							</eq>
+						</verify>
+						
+						<verify step="2" requirements="REQ12589, REQ12592">
+							<or>
+								<eq>
+									<msg_ref type="sdp">200-INVITE.fax-version.value</msg_ref>
+									<expr>0</expr>
+								</eq>
+								<null>
+									<msg_ref type="sdp">200-INVITE.fax-version.value</msg_ref>
+								</null>
+							</or>
+						</verify>
+						
+						<verify step="2" requirements="REQ12589, REQ12592">
+							<or>
+								<eq>
+									<msg_ref type="sdp">200-INVITE.ptime.value</msg_ref>
+									<expr>20</expr>
+								</eq>
+								<null>
+									<msg_ref type="sdp">200-INVITE.ptime.value</msg_ref>
+								</null>
+							</or>
+						</verify>
+						
+						<verify step="2" requirements="REQ12589, REQ12592">
+							<eq>
+								<msg_ref type="sip" msg_instance="last">200-Invite.fmtp-fax.payload-type</msg_ref>
+								<expr>99</expr>
+							</eq>
+						</verify>
+						
+						<verify step="2" requirements="REQ12589, REQ12592">
+							<contains>
+								<msg_ref type="sdp" msg_instance="last">200-Invite.fmtp-fax.params</msg_ref>
+								<expr>T38FaxRateManagement=transferredTCF</expr>
+							</contains>
+						</verify>
+						
+						<verify step="2" requirements="REQ12589, REQ12592">
+							<contains>
+								<msg_ref type="sdp" msg_instance="last">200-Invite.fmtp-fax.params</msg_ref>
+								<expr>T38FaxMaxDatagram=173</expr>
+							</contains>
+						</verify>
+						
+					</then>
+				</if>
+			</response>
+			<transition to="Connected" event="OffHookComplete"/>
+			<transition to="Connected" event="xxx-INVITE"/>
+			<transition to="Validate" event="TimerExpired"/>
+		</state>
+		
+		<state ID="Validate">
+			<prelude>
+				<stop_capture/>
+				<log step="4" requirements="REQ12544"
+					promptUser="true" verify="true"
+					expr="In the capture file, verify that the packetization rate is approximately 20 msec for each of the packets during the fax.\n"/>
+				<generate event="SucceedEvent"/>
+			</prelude>
+			<transition to="Releasing" event="SucceedEvent"/>
+		</state>
+	</add_to>
+</pc2xml>

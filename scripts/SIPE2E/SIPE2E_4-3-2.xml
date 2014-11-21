@@ -1,0 +1,544 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+-->
+
+<!-- First are the document type and the attributes for our document -->
+<pc2xml version="$Revision: 6675 $" 
+	name="SIPE2E 4.3.2" 
+	descrip="This is a template to emulate the creation and termination of a dialog from a UE (UE1) calling (UE2) and then the reverse." 
+	number="1">
+	
+	<fsm name="UE1">
+		<models>
+			<session/>
+		</models>
+	
+		<NE sim_type="orig" elements="UE1" targets="UE1"/>
+	
+		<states initialstate="WaitUE2Register">
+			<state ID="WaitUE2Register">
+				<transition to="UE1Registering" event="Registered"/>
+			</state>
+			
+			<state ID="UE1Registering">
+				<prelude>
+					<send protocol="sip" msgtype="Register" target="PCSCF1"/>
+				</prelude>
+				<transition to="UE1Digest" event="401-Register"/>
+				<transition to="UE1Subscribe" event="200-Register"/>
+			</state>
+			
+			<state ID="UE1Digest">
+				<prelude>
+					<send protocol="sip" msgtype="Register" target="PCSCF1"/>
+				</prelude>
+				<transition to="UE1Subscribe" event="200-Register"/>
+			</state>
+			
+			<state ID="UE1Subscribe">
+				<prelude once="true">
+					<send protocol="sip" msgtype="SUBSCRIBE" subscribeType="reg" target="PCSCF1"/>
+				</prelude>
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>NOTIFY</expr>
+						</eq>
+						<then>
+							<send protocol="sip" msgtype="200-NOTIFY" target="PCSCF1"/>
+							<generate event="Registered" fsm="UE2"/>
+						</then>
+					</if>
+				</response>
+				<transition to="UE1Subscribe" event="200-SUBSCRIBE"/>
+				<transition to="UE1Setup" event="NOTIFY"/>
+			</state>
+					
+			<state ID="UE1Setup">
+				<prelude once="true">
+					<send protocol="sip" msgtype="Invite" target="PCSCF1" destination="UE2"/>
+				</prelude>
+				<response>
+					<if>
+						<contains>
+							<msg_ref type="sip" msg_instance="last" hdr_instance="any">18x-Invite.Require</msg_ref>
+							<expr>100rel</expr>
+						</contains>
+						<then>
+							<send protocol="sip" msgtype="Prack" target="PCSCF1" destination="UE2"/>
+						</then>
+					</if>
+				</response>
+				<transition to="UE1Setup" event="4xx-INVITE"/>
+				<transition to="UE1Setup" event="5xx-INVITE"/>
+				<transition to="Call1Complete" event="ACK"/>
+				<transition to="UE1Connected" event="200-INVITE"/>
+			</state>
+			
+			<state ID="Call1Complete" ES="true">
+				<transition to="UE2CallingSetup" event="SessionTerminated"/>
+			</state>
+			
+			<state ID="UE2CallingSetup">
+				<prelude once="true">
+					<generate event="Branch1Event" fsm="UE2"/>
+					<generate event="Branch1Event" fsm="UE3"/>
+					<generate event="Branch1Event" fsm="UE4"/>
+					<generate event="Branch1Event" fsm="UE5"/>
+					<generate event="Branch1Event" fsm="UE6"/>
+					<generate event="Branch1Event" fsm="UE7"/>
+					<generate event="Branch1Event" fsm="UE8"/>
+				</prelude>
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>Invite</expr>
+						</eq>
+						<then>
+							<send protocol="sip" msgtype="302-INVITE" target="PCSCF1" destination="UE2">
+								<mod modtype="add" hdr="Contact">
+									<var_expr>
+										<expr>&lt;sip:</expr>
+										<msg_ref type="platform">UE4.phone number 1</msg_ref>
+										<expr>@</expr>
+										<msg_ref type="platform">UE4.FQDN</msg_ref>
+										<expr>&gt;</expr>
+									</var_expr>
+								</mod>
+							</send>
+						</then>
+					</if>
+				</response>
+				<transition to="UE2CallingSetup" event="INVITE"/>
+				<transition to="Call2Complete" event="ACK"/>
+			</state>
+			
+			<state ID="Call2Complete" ES="true"/>
+		</states>
+	</fsm>
+	
+	<fsm name="UE2" sipStack="SIP Stack 2">
+		<models>
+			<session/>
+		</models>
+		<NE sim_type="term" elements="UE2" targets="UE2"/>
+		
+		<states initialstate="UE2Registering">
+		
+			<state ID="UE2Registering">
+				<prelude>
+					<log promptUser="true" expr="Configure the SF to preform SIP Redirect Queries to the ENUM Server."/>
+					<generate event="Branch5Event" fsm="UE3"/>
+					<generate event="Branch5Event" fsm="UE4"/>
+					<generate event="Branch5Event" fsm="UE5"/>
+					<generate event="Branch5Event" fsm="UE6"/>
+					<generate event="Branch5Event" fsm="UE7"/>
+					<generate event="Branch5Event" fsm="UE8"/>
+					<start_capture/>
+					<sleep time="1000"/>
+					<send protocol="sip" msgtype="Register" target="PCSCF2"/>
+				</prelude>
+				<transition to="UE2Digest" event="401-Register"/>
+				<transition to="UE2Subscribe" event="200-Register"/>
+			</state>
+			
+			<state ID="UE2Digest">
+				<prelude>
+					<send protocol="sip" msgtype="Register" target="PCSCF2"/>
+				</prelude>
+				<transition to="UE2Subscribe" event="200-Register"/>
+			</state>
+			
+			<state ID="UE2Subscribe">
+				<prelude once="true">
+					<send protocol="sip" msgtype="SUBSCRIBE"  subscribeType="reg" target="PCSCF2"/>
+				</prelude>
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>NOTIFY</expr>
+						</eq>
+						<then>
+							<send protocol="sip" msgtype="200-NOTIFY" target="PCSCF2"/>
+							<generate event="Registered" fsm="UE2"/>
+						</then>
+					</if>
+				</response>
+				<transition to="UE2Subscribe" event="200-SUBSCRIBE"/>
+				<transition to="UE2Registered" event="NOTIFY"/>
+			</state>
+			
+			<state ID="UE2Registered">
+				<prelude>
+					<generate event="Registered" fsm="UE1"/>
+				</prelude>
+				<transition to="UE2Setup" event="Registered"/>
+			</state>
+			
+			<state ID="UE2Setup">
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>Invite</expr>
+						</eq>
+						<then>
+							<send protocol="sip" msgtype="302-INVITE" target="PCSCF2" destination="UE1">
+								<mod modtype="add" hdr="Contact">
+									<var_expr>
+										<expr>&lt;sip:</expr>
+										<msg_ref type="platform">UE4.phone number 1</msg_ref>
+										<expr>@</expr>
+										<msg_ref type="platform">UE4.FQDN</msg_ref>
+										<expr>&gt;</expr>
+									</var_expr>
+								</mod>
+							</send>
+						</then>
+					</if>
+				</response>	
+				<transition to="UE2Setup" event="INVITE"/>
+				<transition to="UE2CallComplete" event="ACK"/>
+			</state>
+			
+			<state ID="UE2CallComplete" ES="true" offHookOK="true">
+				<transition to="WaitUE1" event="SessionTerminated"/>
+			</state>
+			
+			<state ID="WaitUE1">
+				<transition to="CallUE1" event="Branch1Event"/>
+			</state>
+			
+			<state ID="CallUE1">
+				<prelude>
+					<send protocol="sip" msgtype="Invite" target="PCSCF2" destination="UE1"/>
+				</prelude>
+				<response>
+					<if>
+						<contains>
+							<msg_ref type="sip" msg_instance="last" hdr_instance="any">18x-Invite.Require</msg_ref>
+							<expr>100rel</expr>
+						</contains>
+						<then>
+							<send protocol="sip" msgtype="Prack" target="PCSCF2" destination="UE1"/>
+						</then>
+					</if>
+				</response>
+				<transition to="CallUE1" event="4xx-INVITE"/>
+				<transition to="CallUE1" event="5xx-INVITE"/>
+				<transition to="CallUE1Released" event="ACK"/>
+			</state>
+			
+			<state ID="CallUE1Released" ES="true" offHookOK="true"/>
+		</states>
+	</fsm>
+	
+	<fsm name="UE3">
+		<models>
+			<session/>
+		</models>
+	
+		<NE sim_type="orig" elements="UE3" targets="UE3"/>
+	
+		<states initialstate="WaitUE2Register">
+			<state ID="WaitUE2Register">
+				<transition to="UE3Registering" event="Branch5Event"/>
+			</state>
+			
+			<state ID="UE3Registering">
+				<prelude>
+					<send protocol="sip" msgtype="Register" target="PCSCF1"/>
+				</prelude>
+				<transition to="UE3Digest" event="401-Register"/>
+				<transition to="UE3Subscribe" event="200-Register"/>
+			</state>
+			
+			<state ID="UE3Digest">
+				<prelude>
+					<send protocol="sip" msgtype="Register" target="PCSCF1"/>
+				</prelude>
+				<transition to="UE3Subscribe" event="200-Register"/>
+			</state>
+			
+			<state ID="UE3Subscribe">
+				<prelude once="true">
+					<send protocol="sip" msgtype="SUBSCRIBE" subscribeType="reg" target="PCSCF1"/>
+				</prelude>
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>NOTIFY</expr>
+						</eq>
+						<then>
+							<send protocol="sip" msgtype="200-NOTIFY" target="PCSCF1"/>
+							<generate event="Registered" fsm="UE4"/>
+						</then>
+					</if>
+				</response>
+				<transition to="UE3Subscribe" event="200-SUBSCRIBE"/>
+				<transition to="WaitCall1" event="NOTIFY"/>
+			</state>
+			
+			<state ID="WaitCall1">
+				<transition to="UE4CallingSetup" event="Branch1Event"/>
+			</state>
+					
+			<state ID="UE3Setup">
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>Invite</expr>
+						</eq>
+						<then>
+							<send protocol="sip" msgtype="302-INVITE" target="PCSCF1" destination="UE2">
+								<mod modtype="add" hdr="Contact">
+									<var_expr>
+										<expr>&lt;sip:</expr>
+										<msg_ref type="platform">UE5.phone number 1</msg_ref>
+										<expr>@</expr>
+										<msg_ref type="platform">UE5.FQDN</msg_ref>
+										<expr>&gt;</expr>
+									</var_expr>
+								</mod>
+							</send>
+						</then>
+					</if>
+				</response>	
+				<transition to="UE3Setup" event="INVITE"/>
+				<transition to="UE3CallComplete" event="ACK"/>
+			</state>
+			
+			<state ID="UE3CallComplete" ES="true"/>
+		</states>
+	</fsm>
+	
+	<fsm name="UE4" sipStack="SIP Stack 2">
+		<models>
+			<session/>
+		</models>
+		<NE sim_type="term" elements="UE4" targets="UE4"/>
+		
+		<states initialstate="WaitUE2Register">
+			<state ID="WaitUE2Register">
+				<transition to="UE4Registering" event="Branch5Event"/>
+			</state>
+		
+			<state ID="UE4Registering">
+				<prelude>
+					<send protocol="sip" msgtype="Register" target="PCSCF2"/>
+				</prelude>
+				<transition to="UE4Digest" event="401-Register"/>
+				<transition to="UE4Subscribe" event="200-Register"/>
+			</state>
+			
+			<state ID="UE4Digest">
+				<prelude>
+					<send protocol="sip" msgtype="Register" target="PCSCF2"/>
+				</prelude>
+				<transition to="UE4Subscribe" event="200-Register"/>
+			</state>
+			
+			<state ID="UE4Subscribe">
+				<prelude once="true">
+					<send protocol="sip" msgtype="SUBSCRIBE"  subscribeType="reg" target="PCSCF2"/>
+				</prelude>
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>NOTIFY</expr>
+						</eq>
+						<then>
+							<send protocol="sip" msgtype="200-NOTIFY" target="PCSCF2"/>
+							<generate event="Registered" fsm="UE4"/>
+						</then>
+					</if>
+				</response>
+				<transition to="UE4Subscribe" event="200-SUBSCRIBE"/>
+				<transition to="UE4Registered" event="NOTIFY"/>
+			</state>
+			
+			<state ID="UE4Registered">
+				<prelude>
+					<generate event="Registered" fsm="UE3"/>
+				</prelude>
+				<transition to="UE4Setup" event="Registered"/>
+			</state>
+			
+			<state ID="UE4Setup">
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>Invite</expr>
+						</eq>
+						<then>
+							<send protocol="sip" msgtype="302-INVITE" target="PCSCF1" destination="UE1">
+								<mod modtype="add" hdr="Contact">
+									<var_expr>
+										<expr>&lt;sip:</expr>
+										<msg_ref type="platform">UE6.phone number 1</msg_ref>
+										<expr>@</expr>
+										<msg_ref type="platform">UE6.FQDN</msg_ref>
+										<expr>&gt;</expr>
+									</var_expr>
+								</mod>
+							</send>
+						</then>
+					</if>
+				</response>	
+				<transition to="UE4Setup" event="INVITE"/>
+				<transition to="UE4CallComplete" event="ACK"/>
+			</state>
+									
+			<state ID="UE4CallComplete" ES="true" offHookOK="true"/>
+		</states>
+	</fsm>
+	
+	<fsm name="UE5">
+		<models>
+			<session/>
+		</models>
+	
+		<NE sim_type="orig" elements="UE5" targets="UE5"/>
+	
+		<states initialstate="WaitUE2Register">
+			<state ID="WaitUE2Register">
+				<transition to="UE5Registering" event="Branch5Event"/>
+			</state>
+			
+			<state ID="UE5Registering">
+				<prelude>
+					<send protocol="sip" msgtype="Register" target="PCSCF1"/>
+				</prelude>
+				<transition to="UE5Digest" event="401-Register"/>
+				<transition to="UE5Subscribe" event="200-Register"/>
+			</state>
+			
+			<state ID="UE5Digest">
+				<prelude>
+					<send protocol="sip" msgtype="Register" target="PCSCF1"/>
+				</prelude>
+				<transition to="UE5Subscribe" event="200-Register"/>
+			</state>
+			
+			<state ID="UE5Subscribe">
+				<prelude once="true">
+					<send protocol="sip" msgtype="SUBSCRIBE" subscribeType="reg" target="PCSCF1"/>
+				</prelude>
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>NOTIFY</expr>
+						</eq>
+						<then>
+							<send protocol="sip" msgtype="200-NOTIFY" target="PCSCF1"/>
+							<generate event="Registered" fsm="UE6"/>
+						</then>
+					</if>
+				</response>
+				<transition to="UE5Subscribe" event="200-SUBSCRIBE"/>
+				<transition to="WaitCall1" event="NOTIFY"/>
+			</state>
+			
+			<state ID="WaitCall1">
+				<transition to="UE4CallingSetup" event="Branch1Event"/>
+			</state>
+					
+			<state ID="UE5NoCall" timer="20000">
+				<response>
+					<verify>
+						<eq>
+							<msg_ref type="event"/>
+							<expr>TimerExpired</expr>
+						</eq>
+					</verify>
+				</response>
+				<transition to="END" event="TimerExpired"/>
+			</state>
+		</states>
+	</fsm>
+	
+	<fsm name="UE6" sipStack="SIP Stack 2">
+		<models>
+			<session/>
+		</models>
+		<NE sim_type="term" elements="UE6" targets="UE6"/>
+		
+		<states initialstate="WaitUE2Register">
+			<state ID="WaitUE2Register">
+				<transition to="UE6Registering" event="Branch5Event"/>
+			</state>
+		
+			<state ID="UE6Registering">
+				<prelude>
+					<send protocol="sip" msgtype="Register" target="PCSCF2"/>
+				</prelude>
+				<transition to="UE6Digest" event="401-Register"/>
+				<transition to="UE6Subscribe" event="200-Register"/>
+			</state>
+			
+			<state ID="UE6Digest">
+				<prelude>
+					<send protocol="sip" msgtype="Register" target="PCSCF2"/>
+				</prelude>
+				<transition to="UE6Subscribe" event="200-Register"/>
+			</state>
+			
+			<state ID="UE6Subscribe">
+				<prelude once="true">
+					<send protocol="sip" msgtype="SUBSCRIBE"  subscribeType="reg" target="PCSCF2"/>
+				</prelude>
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>NOTIFY</expr>
+						</eq>
+						<then>
+							<send protocol="sip" msgtype="200-NOTIFY" target="PCSCF2"/>
+							<generate event="Registered" fsm="UE6"/>
+						</then>
+					</if>
+				</response>
+				<transition to="UE6Subscribe" event="200-SUBSCRIBE"/>
+				<transition to="UE6Registered" event="NOTIFY"/>
+			</state>
+			
+			<state ID="UE6Setup" timer="20000">
+				<response>
+					<verify>
+						<eq>
+							<msg_ref type="event"/>
+							<expr>TimerExpired</expr>
+						</eq>
+					</verify>
+				</response>
+				<transition to="UE6CallComplete" event="TimerExpired"/>
+			</state>
+			
+			<state ID="UE6CallComplete" ES="true" offHookOK="true"/>
+		</states>
+	</fsm>
+</pc2xml>

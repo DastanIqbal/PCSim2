@@ -1,0 +1,164 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	PCPCII-139 : Update the Voicetronix modifiers to use the new values. (ghassler 07/10/2009)
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-UE 1.5.3.3" 
+	descrip="Call Hold – incoming call " 
+	number="RST-UE 1.5.3.3">
+	
+	<template file="./templates/CallTermAtUETemp.xml" name="UE1"/>
+	<template file="./templates/CallTermAtUETemp.xml" name="UE2"/>
+	
+	<add_to fsm="UE2">
+		<states initialstate="WaitSucceed"/>
+		<state ID="WaitSucceed">
+			<transition to="Setup" event="SucceedEvent"/>
+		</state>
+	</add_to>
+	
+	<remove_from fsm="UE1">
+		<state ID="Connected"/>
+		<state ID="OnHook"/>
+	</remove_from>
+	
+	<remove_from fsm="UE2">
+		<NE elements="UE1" targets="UE1"/>
+		<state ID="Setup"/>
+		<state ID="Proceeding"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<state ID="Connected">
+			<prelude once="true">
+				<send protocol="sip" msgtype="ACK"/>
+				<sleep time="3000"/>
+				<!-- Step 2 of test case 1.5.3.2 - -->
+				<send protocol="utility" msgtype="HookFlash"/>
+			</prelude>
+			<transition to="Connected" event="OffHookComplete"/>
+			<transition to="HookFlash1" event="HookFlashComplete"/>
+		</state>
+		
+		<state ID="HookFlash1">
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>REInvite</expr>
+					</eq>
+					<then>
+						<!-- Step 2 of test case 1.5.3.2 - -->
+						<send protocol="sip" msgtype="100-INVITE"/>
+						<send protocol="sip" msgtype="200-INVITE"/>
+					</then>
+				</if>
+			</response>
+			<transition to="HookFlash2" event="REInvite"/>
+		</state>
+		
+		<state ID="HookFlash2">
+			<response>
+				<if>
+					<!-- Step 2 of test case 1.5.3.2 - -->
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>ACK</expr>
+					</eq>
+					<then>
+						<sleep time="5000"/>
+						<!-- Step 3 of test case 1.5.3.2 - -->
+						<send protocol="utility" msgtype="DialDigits">
+							<mod modtype="add" hdr="number">
+								<expr>*52</expr>
+							</mod>
+						</send>
+					</then>
+				</if>
+			</response>
+			<transition to="HookFlash2" event="ACK"/>
+			<transition to="StartUE2Call" event="DialDigitsComplete"/>
+		</state>
+		
+		<state ID="StartUE2Call">
+			<prelude>
+				<generate event="SucceedEvent" fsm="UE2"/>
+			</prelude>
+			<transition to="OnHook" event="SucceedEvent"/>
+		</state>
+		
+		<state ID="OnHook">
+			<prelude>
+				<send protocol="utility" msgtype="OnHook"/>
+			</prelude>
+			<transition to="END" event="OnHookComplete"/>
+		</state>
+	</add_to>
+	
+	<add_to fsm="UE2">
+		<NE elements="UE2" targets="UE2"/>
+		<state ID="Setup">
+			<prelude>
+				<send protocol="sip" msgtype="Invite"/>
+			</prelude>
+			<response>
+				<if>
+					<gt>
+						<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+						<expr>100</expr>
+					</gt>
+					<then>
+						<verify step="4" requirements="REQ13819" group="busy">
+							<eq>
+								<msg_ref type="sip">Response</msg_ref>
+								<expr>486-INVITE</expr>
+							</eq>
+						</verify>
+					</then>
+				</if>
+			</response>	
+			<transition to="Proceeding" event="100-INVITE"/>
+			<transition to="EndCall" event="xxx-INVITE"/>
+		</state>
+		
+		<state ID="Proceeding">
+			<response>
+				<if>
+					<gt>
+						<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+						<expr>100</expr>
+					</gt>
+					<then>
+						<verify step="4" requirements="REQ13819" group="busy">
+							<eq>
+								<msg_ref type="sip">Response</msg_ref>
+								<expr>486-INVITE</expr>
+							</eq>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<transition to="EndCall" event="xxx-INVITE"/>
+		</state>
+		<state ID="EndCall" ES="true">
+			<prelude>
+				<generate event="SucceedEvent" fsm="UE1"/>
+			</prelude>
+		</state>
+	</add_to>
+</pc2xml>

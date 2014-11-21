@@ -1,0 +1,151 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+ Change History: (Author & Date)
+
+
+
+-->
+
+<pc2xml version="$Revision: 7768 $" 
+	name="E-UE_Data_1.2.4.1-02" 
+	descrip="Support for local logging of events"
+	number="E-UE_Data_1.2.4.1-02">
+
+	<!-- template file="./templates/EUE_Prov_B_2_2_1.xml" name="SecureUE"/ -->
+	<template file="./templates/EUE_Prov_B_1_1_1.xml" name="EvControl"/>
+	<add_to fsm="EvControl">
+		
+		<!--transition from="IP4 Provision" to="VerifyPktcDevEvControl" event="SNMPResp" />
+		<transition from="IP6 Provision" to="VerifyPktcDevEvControl" event="SNMPResp" /-->
+		<transition from="StartCapture_RebootWait" to="EUEProvision" event="TimerExpired"/>
+
+        <state ID="EUEProvision" timer="30000">
+            <prelude once="true">				
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvisioningState.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+					<mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="5">
+                    <eq>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>1</expr>
+                    </eq>
+                </verify>
+            </response>
+            <transition to="NoteValues" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+		
+		<state ID="NoteValues">
+			<prelude once="true" >
+				<stop_capture/>
+				<parse_capture name="eUE_DHCPv6">
+					<parser_filter protocol="dhcpv6" clientMAC="DUT.MAC Address"/>
+				</parse_capture>
+				<parse_capture name="eUE_Syslog">
+					<parser_filter protocol="syslog" ip="DUT.IP"/>
+				</parse_capture>
+				
+				<generate event="Branch1Event"/>
+			</prelude>
+			<response>			
+				<verify step="6">
+					<contains ignoreCase="true">
+						<capture_ref type="syslog" name="eUE_Syslog" msg_instance="last">syslog.msg.show</capture_ref>
+						<expr>Provisioning Complete</expr>
+					</contains>
+				</verify>
+			</response>					
+            <transition to="checkMIBTable" event="Branch1Event"/>
+		</state>
+			
+		<state ID="checkMIBTable" timer="30000">
+			<prelude once="true" >
+			 	<send protocol="utility" msgtype="SNMPGetTable">
+                    <mod modtype="add" hdr="oids">
+                        <expr>PKTC-EVENT-MIB::pktcDevEventLogTable</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+					<mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+			</prelude>
+			
+			<response>
+				<verify step="7">
+					<isDate>
+						<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+					</isDate>
+				</verify>
+				
+				<verify step="7">
+					<eq>
+						<msg_ref type="utility" index="0 10 2">SNMPResp.varBind</msg_ref>
+						<expr>4491</expr>
+					</eq>
+				</verify>
+				
+				<verify step="7">
+					<eq>
+						<msg_ref type="utility" index="0 11 2">SNMPResp.varBind</msg_ref>
+						<expr>4000951500</expr>
+					</eq>
+				</verify>
+
+				<verify step="7">
+					<eq ignoreCase="true">
+						<msg_ref type="utility" index="0 12 2">SNMPResp.varBind</msg_ref>
+						<expr>Provisioning Complete</expr>
+					</eq>
+				</verify>
+				
+				<verify step="7">
+					<and>
+						<contains>
+							<msg_ref type="utility" index="0 13 2">SNMPResp.varBind</msg_ref>
+							<!--host name and domain name -->
+							<capture_ref type="dhcpv6" name="eUE_DHCPv6">Reply.Relay.Option39.Domain.show</capture_ref>
+						</contains>
+						<contains>
+							<msg_ref type="utility" index="0 13 2">SNMPResp.varBind</msg_ref>
+							<!-- IP Address -->
+							<capture_ref type="dhcpv6" name="eUE_DHCPv6">Reply.Relay.Option3.Option5.IPv6 address.show</capture_ref>
+						</contains>
+					</and>
+				</verify>
+				
+				<verify step="7">
+					<contains>
+						<msg_ref type="utility" index="0 14 2">SNMPResp.varBind</msg_ref>
+						<expr>1</expr>
+					</contains>
+				</verify>				
+			</response>
+
+            <transition to="END" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+		</state>		
+	
+	</add_to>
+</pc2xml>

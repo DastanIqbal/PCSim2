@@ -1,0 +1,6 @@
+package com.cablelabs.hss;
+
+public enum SessionCase {
+
+	ORIGINATING, TERMINATING_REGISTERED, TERMINATING_UNREGISTERED, ORIGINATING_UNREGISTERED
+}

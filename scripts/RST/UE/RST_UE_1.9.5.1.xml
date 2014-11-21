@@ -1,0 +1,140 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	PCPCII-139 : Update the Voicetronix modifiers to use the new values. (ghassler 07/10/2009)
+	PCPCII-174 : Update the script to the D11 version of the ATP (ghassler 01/26/2010)
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-UE 1.9.5.1" 
+	descrip=" Ringback feature with the receiver on-hook " 
+	number="RST-UE 1.9.5.1" inspector="disable">
+	
+	<template file="./templates/CallOrigAtUETemp.xml"/>
+	
+	<remove_from fsm="Orig call template">
+		<state ID="Setup" sub="prelude"/>
+		<state ID="Connected"/>
+		<state ID="OnHook"/>
+		<state ID="Releasing"/>
+	</remove_from>
+	
+	<add_to fsm="Orig call template">
+		<NE targets="service:sos"/>
+		
+		<state ID="Setup" sub="prelude" once="true">
+			<!-- Step 1 test case SIP 1.9.5.1 Initiate an emergency call 
+			session (by dialing 911 on the phone) from  -->
+			<send protocol="utility" msgtype="DialDigits">
+				<mod modtype="add" hdr="number">
+					<expr>911</expr>
+				</mod>
+			</send>
+		</state>
+		
+		<state ID="Connected" timer="5000">
+			<transition to="OnHook" event="TimerExpired"/>
+		</state>
+		
+		<state ID="OnHook">
+			<prelude>
+				<send protocol="utility" msgtype="OnHook"/>
+			</prelude>
+			<transition to="UE1GoOnHold" event="OnHookComplete"/>
+		</state>
+		
+		<state ID="UE1GoOnHold">
+			<response>
+				<if>
+					<and>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>REINVITE</expr>
+						</eq>
+						<contains>
+							<msg_ref type="sip">REINVITE.SDP</msg_ref>
+							<expr>a=inactive</expr>
+						</contains>
+					</and>
+					<then>
+						<!-- HookFlash Step 2 and 3 -Sending 100-Invite and 200-Invite to Invite -->
+						<send protocol="sip" msgtype="100-INVITE"/>
+						<send protocol="sip" msgtype="200-INVITE"/>
+					</then>
+				</if>
+			</response>
+			<transition to="SendReinvite" event="ACK"/>
+			<transition to="UE1GoOnHold" event="REInvite"/>
+			<transition to="UE1GoOnHold" event="HookFlashComplete"/>
+		</state>
+		
+		<state ID="SendReinvite">
+			<prelude once="true">
+				<!-- Step 3 test case SIP 1.9.5.1 Initiate Ringback as per 
+				step 5-6 [UE Hook Flash Case Flow].from the PSAP(SS) and the network sends   -->
+				<send protocol="sip" msgtype="REINVITE">
+					<mod modtype="replace" hdr="Priority">
+						<expr>emergency</expr>
+					</mod>
+				</send>
+			</prelude>
+			<transition to="SendReinvite" event="100-INVITE"/>
+			<transition to="UE1GoOffHold" event="18x-INVITE"/>
+		</state>
+		
+		<state ID="UE1GoOffHold" timer="60000">
+			<prelude once="true">
+				<!-- Step 3 test case SIP 1.9.5.1 Verify that the UE accepts the 
+				RE-INVITE and using the ringtone specified in the Alert-info header, 
+				rings the phone at the user side -->
+				<send protocol="utility" msgtype="VerifyRing"/>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Response</msg_ref>
+						<expr>200-INVITE</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="ACK"/>
+					</then>
+				</if>
+				<if>
+					<eq>
+						<msg_ref type="utility">Response</msg_ref>
+						<expr>VerifyRingComplete</expr>
+					</eq>
+					<then>
+						<verify step="3" requirements="REQ14072, REQ14073">
+							 <eq>
+								<msg_ref type="utility">Response</msg_ref>
+								<expr>VerifyRingComplete</expr>
+							</eq>
+							<then>
+								<!-- Step 4 test case SIP 1.9.5.1 Pick the phone off-hook. -->
+								<send protocol="utility" msgtype="OffHook"/>
+							</then>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<transition to="UE1GoOffHold" event="Invite"/>
+			<transition to="UE1GoOffHold" event="OffHookComplete"/>
+			<transition to="UE1GoOffHold" event="VerifyRingComplete"/>
+			<transition to="UE1GoOffHold" event="200-INVITE"/>
+			<transition to="END" event="TimerExpired"/>
+		</state>
+	</add_to>
+</pc2xml>

@@ -1,0 +1,99 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+Change History: (Author & Date)
+
+
+-->
+<!-- Document type and attributes. -->
+<pc2xml version="$Revision: 6076 $"
+        name="E-UE_PROV_1.1.2.39"
+        descrip="eUE does NOT proceed with Secure Provisioning Flow when no ToD received by eCM."
+        number="E-UE_PROV_1.1.2.39">
+
+
+    <!-- Reset UE; start capture. -->
+    <template file="./templates/EUE_Prov_B_1_1_1.xml" name="SecProvFlow"/>
+
+    <add_to fsm="SecProvFlow">
+        <transition from="StartCapture_RebootWait" to="VerifyMessages" event="TimerExpired"/>
+
+
+        <state ID="VerifyMessages">
+		<prelude once="true">
+			<sleep time="30000"/>
+
+			<parse_capture name="eUE_DHCPv6">
+			    <parser_filter protocol="dhcpv6" clientMAC="DUT.MAC Address"/>
+			</parse_capture>
+			<parse_capture name="eUE_SysLog">
+			    <parser_filter protocol="syslog" ip="DUT.IP"/>
+			</parse_capture>
+			<parse_capture name="eUE_DNS">
+			    <parser_filter protocol="dns" ip="DUT.IP"/>
+			</parse_capture>
+			
+			<!-- Allow 2 minutes for provisioning. -->
+			<sleep time="120000"/>
+
+			<!-- 10 DHCPv6 SOLICIT and REQUEST messages sent by the eUE. -->
+			<verify step="10">
+			    <and>
+				<notnull>
+				    <capture_ref type="dhcpv6" name="eUE_DHCPv6">Solicit.num</capture_ref>
+				</notnull>
+				<notnull>
+				    <capture_ref type="dhcpv6" name="eUE_DHCPv6">Request.num</capture_ref>
+				</notnull>
+			    </and>
+			</verify>
+
+			<!-- 11 eUE acquired an IPv6 address. -->
+			<verify step="11">
+				<notnull>
+				    <capture_ref type="syslog" name="eUE_SysLog">syslog.num</capture_ref>
+				</notnull>
+			</verify>
+
+			<!-- 12 eUE sends Event EUE-EV-5 (4000960004) to Syslog Server. -->
+			<verify step="12">
+			    <and>
+				<eq>
+				    <capture_ref type="syslog" name="eUE_SysLog">syslog.ipv6.dst_host.show</capture_ref>
+				    <msg_ref type="platform">DUT.Syslog IP</msg_ref>
+				</eq>
+				<contains>
+				    <capture_ref type="syslog" name="eUE_SysLog">syslog.msg.show</capture_ref>
+				    <expr>4000960004</expr>
+				</contains>
+			    </and>
+			</verify>
+
+			<!-- 13 eUE has relinquished its IPv6 address, that is, returns to step one of provisioning flow. -->
+			<verify step="13">
+				<notnull>
+				    <capture_ref type="dhcpv6" name="eUE_DHCPv6">Release.num</capture_ref>
+				</notnull>
+			</verify>
+
+			<!-- 14 eUE does not go beyond eUE-4 of provisioning flow. -->
+			<verify step="14">
+				<null>
+				    <capture_ref type="dns" name="eUE_DNS">Request.num</capture_ref>
+				</null>
+			</verify>
+			<generate event="SucceedEvent"/>
+		</prelude>
+
+		<transition to="END" event="SucceedEvent"/>
+        </state>
+    </add_to>
+</pc2xml>

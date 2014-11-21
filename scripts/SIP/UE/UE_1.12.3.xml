@@ -1,0 +1,59 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="SIP-UE 1.12.3" 
+	descrip="491 error code response to an Update that contains an Offer when previous offer has not received an answer." number="SIP-UE 1.12.3">
+	
+	<template file="./templates/CallOrigAtUETemp.xml" name="UE1"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Alerting" sub="transition">
+			<transition from="Alerting" to="Answer" event="ALERTING_UAS"/>
+		</state>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<transition from="Setup" to="EarlyDialog" event="EARLY_DIALOG_UAS"/>
+		<transition from="Alerting" to="EarlyDialog" event="EARLY_DIALOG_UAS"/>
+		
+		<!-- Enter this state when EARLY_DIALOG_UAS is attained -->
+		<state ID="EarlyDialog" timer="10000">
+			<prelude>
+				<send protocol="sip" msgtype="UPDATE" bodies="SDP"/>
+			</prelude>
+			<response>
+				<if>
+					<gt>
+						<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+						<expr>100</expr>
+					</gt>
+					<then>
+						<verify step="3" requirements="RFC1424">
+							<eq>
+								<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+								<expr>491</expr>
+							</eq>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<transition to="Answer" event="xxx-UPDATE"/>
+		</state>
+	</add_to>
+</pc2xml>

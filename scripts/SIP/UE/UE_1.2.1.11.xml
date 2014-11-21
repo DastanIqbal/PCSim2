@@ -1,0 +1,63 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	PCPCII-155 : Add if block around verify so that we don't test against the DialDigits response. (ghassler 11/10/2009)
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="SIP-UE 1.2.1.11" 
+	descrip="UE Populates From and P-Preferred-Identity headers when privacy is configured" 
+	number="SIP-UE 1.2.1.11">
+	
+	<template name="UE1" file="./templates/CallOrigAtUETemp.xml"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Setup"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<state ID="Setup">
+			<prelude once="true">
+				<send protocol="utility" msgtype="DialDigits">
+					<mod modtype="add" hdr="number">
+						<msg_ref type="platform">UE1.phone number 1</msg_ref>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<!-- PCPCII-155 Add logic to only execute the verify when the correct event arrives -->
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>INVITE</expr>
+					</eq>
+					<then>
+						<verify step="2" requirements="REQ17046">
+							<eq ignoreCase="true">
+								<!--Step 2 test case SIP 1.2.1.11 -
+								Verify the FROM header is present and contains the value "Anonymous".-->
+								<msg_ref type="sip">INVITE.From.display-name</msg_ref>
+								<expr>&quot;Anonymous&quot;</expr>
+							</eq>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<transition to="Setup" event="DialDigitsComplete"/>
+			<transition to="END" event="Invite"/>
+		</state>
+	</add_to>
+</pc2xml>

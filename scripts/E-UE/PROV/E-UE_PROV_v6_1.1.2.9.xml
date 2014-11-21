@@ -1,0 +1,108 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+ Change History: (Author & Date)
+
+
+
+-->
+<!-- Document type and attributes. -->
+<pc2xml version="$Revision: 6076 $"
+        name="E-UE_PROV_1.1.2.9"
+        descrip="eUE implements sub-option 4 back-off and retry parameters of DHCP configuration."
+        number="E-UE_PROV_1.1.2.9">
+
+
+    <!-- Reset UE; start capture. -->
+    <template file="./templates/EUE_Prov_B_1_1_1.xml" name="BackOffRetry"/>
+
+
+    <add_to fsm="BackOffRetry">
+        <transition from="StartCapture_RebootWait" to="EUEProvisions" event="TimerExpired"/>
+
+        <state ID="EUEProvisions">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvisioningState.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">UE0.IP</msg_ref>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="2">
+                    <contains>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>1</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="VerifyRealmTable" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+
+        <!-- 8 RealmTable for the Realm Name supplied in the Suboption-6: 
+                   0 8000 pktcMtaDevRealmUnsolicitedKeyNomTimeout
+                   4 255 pktcMtaDevRealmUnsolicitedKeyMaxTimeout
+                   8 1 pktcMtaDevRealmUnsolicitedKeyMaxRetries
+               same as supplied in suboption-4 -->
+        <state ID="VerifyRealmTable">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPGetTable">
+                    <mod modtype="add" hdr="oids">
+                        <expr>PKTC-IETF-MTA-MIB::pktcMtaDevRealmTable</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP Address</msg_ref>
+                    </mod>
+                    <mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPResp</expr>
+                    </eq>
+                <then>
+                    <verify step="8">
+                        <and>
+                            <eq>
+                                <!-- pktcMtaDevProvUnsolicitedKeyMaxTimeout -->
+                                <msg_ref type="utility" index="0 4 2">SNMPResp.varBind</msg_ref>
+                                <expr>255</expr>
+                            </eq>
+                        <and>
+                            <eq>
+                                <!-- pktcMtaDevProvUnsolicitedKeyNomTimeout -->
+                                <msg_ref type="utility" index="0 5 2">SNMPResp.varBind</msg_ref>
+                                <expr>8000</expr>
+                            </eq>
+                            <eq>
+                                <!-- pktcMtaDevProvUnsolicitedKeyMaxRetries -->
+                                <msg_ref type="utility" index="0 6 2">SNMPResp.varBind</msg_ref>
+                                <expr>1</expr>
+                            </eq>
+                        </and>
+                        </and>
+                    </verify>
+                </then>
+                </if>
+            </response>
+			<transition to="END" event="SNMPResp"/>
+        </state>
+    </add_to>
+</pc2xml>

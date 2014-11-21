@@ -1,0 +1,142 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+ Change History: (Author & Date)
+	PCPCII-86 : Update the script to prompt for verification of the metrics in the RTCP messages. Also correct
+		typo and change Jitter Buffer Rate to 0-15 range. (ghassler 2/26/09)
+
+	PCPCII-137 & PCPCII-140 - Update the script to match all of the changes made to the D09 version of the
+		ATP. (ghassler 07/01/2009 & 08/04/2009)
+
+	PCPCIIATP-162 - Update the script to allow a value of 127 for several values being tested. (ghassler 05/18/2010)
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="CODEC-MEDIA_1.2.9" 
+	descrip="RTCP-XR Support" 
+	number="CODEC-MEDIA_1.2.9">
+	
+	<template file="./templates/Proxy.xml" name="SCSCF1"/>
+	
+	<remove_from fsm="SCSCF1">
+		<state ID="Connected"/>
+	</remove_from>
+	
+	<add_to fsm="SCSCF1">
+		<!-- STEP 1 -->
+		<state ID="Register" sub="prelude">
+			<start_capture>
+				<filter>
+					<var_expr>
+						<expr>host </expr>
+						<msg_ref type="platform">PCSCF1.IP</msg_ref>
+						<expr> || host </expr>
+						<msg_ref type="platform">UE0.IP</msg_ref>
+						<expr> || host </expr>
+						<msg_ref type="platform">UE1.IP</msg_ref>
+					</var_expr>
+				</filter>
+			</start_capture>
+		</state>
+		
+		<state ID="Connected" timer="5000">
+			<postlude>
+				<!--  STEP 1 of B.12 Common Procedure -->
+				<log promptUser="true" 
+					expr="Transmit the tone, 1000Hz at -3.0dbm, from the DUT to UE-1."/>
+				<log step="1" requirements="REQ20485, REQ20486, REQ20487, REQ22116, REQ22123"
+					promptUser="true" verify="true"
+					expr="Verify that the tone is played at least at -30.0 dbm on UE=1.\n"/>
+					
+				<log promptUser="true" 
+					expr="Transmit the tone, 1500Hz at -6.0dbm, from UE-1 to the DUT."/>
+				<log step="1" requirements="REQ20485, REQ20486, REQ20487, REQ22116, REQ22123"
+					promptUser="true" verify="true"
+					expr="Verify that the tone is played at least at -30.0 dbm on the DUT.\n"/>
+			</postlude>			
+			<transition to="VerifyRTCP" event="TimerExpired"/>
+		</state>
+		
+		<state ID="VerifyRTCP">
+			<prelude>
+				<!-- STEP 2 (Step 2 of B.12) -->
+				<verify step="2" requirements="REQ22123">
+					<contains>
+						<msg_ref type="sip" msg_instance="last">Invite.SDP</msg_ref>
+						<expr>a=rtcp-xr:voip-metrics</expr>
+					</contains>
+				</verify>
+				<verify step="2" requirements="REQ22123">
+					<or>
+						<contains>
+							<msg_ref type="sip" msg_instance="last">18x-Invite.SDP</msg_ref>
+							<expr>a=rtcp-xr:voip-metrics</expr>
+						</contains>
+						<or>
+							<contains>
+								<msg_ref type="sip" msg_instance="last">200-UPDATE.SDP</msg_ref>
+								<expr>a=rtcp-xr:voip-metrics</expr>
+							</contains>
+							<contains>
+								<msg_ref type="sip" msg_instance="last">200-Invite.SDP</msg_ref>
+								<expr>a=rtcp-xr:voip-metrics</expr>
+							</contains>
+						</or>
+					</or>
+				</verify>
+				<stop_capture/>
+				
+				<!-- PCPCII-86 Add prompt for verifying metric information in capture -->
+				<log step="2" promptUser="true" verify="true"
+					expr="verify VoIP Metrics in RTCP (Extended Report) payload.\nNOTE: Verification of values is done after SIP session negotiation is completed\n(after ACK message) and before the call has terminated by the BYE."/>
+					
+				<log step="4" requirements="REQ12696, REQ12697, REQ15929" 
+					promptUser="True" yesExpected="True" verify="True"
+					expr="Verify Packet Loss:\n Loss Rate (NLR=0-0.996 or 127)\n"/>
+				
+				<log step="4" requirements="REQ12696, REQ12697, REQ15929" 
+					promptUser="True" yesExpected="True" verify="True" 
+					expr="Verify Discard: \nJitter Buffer Discard Rate (JDR=0-0.996 or 127)\n"/>
+				
+				<log step="4" requirements="REQ12696, REQ12697, REQ15929" 
+					promptUser="True" yesExpected="True" verify="True" 
+					expr="Verify Burst:Burst Loss Density (BLD=0-0.996 or 127)\nBurst Duration (BD=0-65535msec or 127)\n"/>
+				
+				<log step="4" requirements="REQ12696, REQ12697, REQ15929" 
+					promptUser="True" yesExpected="True" verify="True" 
+					expr="Verify Gap: Gap Loss Density (GLD=0-0.996 or 127),\nGap Duration (GD=0-65535msec or 127), \nMinimum Gap Threshold (*GMIN=16 or 127)\n"/>
+				
+				<log step="5" requirements="REQ12698" 
+					promptUser="True" yesExpected="True" verify="True" 
+					expr="Verify Delay:Delay: Round Trip Delay (RTD=0-65535msec),\nEnd Test Delay (ESD=0-65535msec)\n"/>
+				
+				<log step="6" requirements="REQ12699, REQ12700" 
+					promptUser="True" yesExpected="True" verify="True" 
+					expr="Verify Signal:\nSignal Level (SL=-30 to 3db0),\nNoise Level (NL=-40 to -70db0),\nResidual Echo Return Loss (RERL=0 to 80db)\n"/>
+				
+				<log step="7" requirements="REQ11647, REQ12701, REQ12702, REQ12703, REQ12704, REQ12705, REQ12706, REQ12707, REQ12708, REQ12709" 
+					promptUser="True" yesExpected="True" verify="True" 
+					expr="Call Quality: \nTransmission and Listening Quality,\nor &quot;R Factor&quot;(RCQ=0-100 and RLQ=0-100),\nExternal R Factor (0-100, or 127),\nMean Option Score-Listening Quality (MOSLQ=10-50),\nMOS for Conversation Quality (MOSCQ=10-50).\n"/>
+					
+				<log step="8" requirements="REQ12710" 
+					promptUser="True" yesExpected="True" verify="True" 
+					expr="Endpoint Configuration:\nPacket Loss Concealment (PLC=0-3),\nJitter Buffer Type (JBA=0-3),\nJitter Buffer Rate (JBR=0-15),\nJitter Buffer Nominal (JBN=0-65535),\nJitter Buffer Maximum (JBM=0-65535),\nJitter Buffer Absolute (JBX=0-65535).\n"/>
+				
+				<log step="9" requirements="REQ22120, REQ15928" 
+					promptUser="True" yesExpected="True" verify="True" 
+					expr="Verify that the Sender Reports has the correct packet type of 200 and the Receiver Reports have a packet type of 201.\n"/>
+					
+				<generate event="SucceedEvent"/>
+			</prelude>
+			<transition to="OnHook" event="SucceedEvent"/>
+		</state>
+	</add_to>
+</pc2xml>

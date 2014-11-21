@@ -1,0 +1,117 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="CODEC-MEDIA_1.3.3.1" 
+	descrip=" V.152 support" 
+	number="CODEC-MEDIA_1.3.3.1">
+	
+	<template file="./templates/Proxy.xml" name="SCSCF1"/>
+	
+	<remove_from fsm="SCSCF1">
+		<state ID="Connected"/>
+	</remove_from>
+	
+	<add_to fsm="SCSCF1">
+		<state ID="Connected">
+			<prelude>
+				<!-- Step - 1 test case Appendix B.11 Common Test Procedures -->
+				<log expr="Make sure fax machines are hooked to DUT and UE1."/>
+				<!-- Step - 2 test case Appendix B.11 Common Test Procedures -->
+				<start_capture>
+					<filter>
+						<var_expr>
+							<expr>host </expr>
+							<msg_ref type="platform">PCSCF1.IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">UE0.IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">UE1.IP</msg_ref>
+						</var_expr>
+					</filter>
+				</start_capture>
+				<!-- Step - 3 test case Appendix B.11 Common Test Procedures -->
+				<log expr="Press send on the DUT to transmit the fax."/>
+				<log step="4" requirements="REQ12614, REQ12615" 
+					promptUser="True" yesExpected="True" verify="True" 
+					expr="Verify that all pages of the fax are transmitted without any distortions."/>
+				<!-- Step - 4 test case Appendix B.11 Common Test Procedures -->
+				<stop_capture/>
+				<!-- Step - 5 test case Appendix B.11 Common Test Procedures -->
+				<log step="6" requirements="REQ13356, REQ12490, REQ12491, REQ11584, REQ14824, REQ12617, REQ12618, REQ12619, REQ12620, REQ13346" 
+					promptUser="True" yesExpected="True" verify="True" 
+					expr="Analyze the capture from both UEs. Is there redundant payload information within the packets collected?\nThe current data is before the resent data (redundant information).\n In addition there must be Voice Band Data in the General Purpose Media Descriptor attribute line.\n(Example m=audio 12345 RTP/AVP 0 101\na=gpmd: 0 vbd=yes\na=rtpmap: 101 RED/8000\na=fmpt: 101 0/0\n"/>
+				
+				<!-- Step - 1 test case Appendix B.11 Common Test Procedures -->
+				<log promptUser="True" expr="Make sure modems are hooked to the DUT and UE1."/>
+				<!-- Step - 2 test case Appendix B.11 Common Test Procedures -->
+				<start_capture>
+					<filter>
+						<var_expr>
+							<expr>host </expr>
+							<msg_ref type="platform">PCSCF1.IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">UE0.IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">UE1.IP</msg_ref>
+						</var_expr>
+					</filter>
+				</start_capture>
+				<!-- Step - 3 test case Appendix B.11 Common Test Procedures -->
+				<log expr="Press send on modems."/>
+				<log promptUser="True" yesExpected="True" verify="True" 
+					expr="Verify that all sent/received across the modem connection."/>
+				<!-- Step - 4 test case Appendix B.11 Common Test Procedures -->
+				<stop_capture/>
+				<!-- Step - 5 test case Appendix B.11 Common Test Procedures -->
+				<log step="6" requirements="REQ13356,REQ12490, REQ12491, REQ11584, REQ14824, REQ12617, REQ12618, REQ12619, REQ12620, REQ12625, REQ13346" 
+					promptUser="True" yesExpected="True" verify="True" 
+					expr="Analyze the capture from both UEs. Is there redundant payload information within the packets collected?\nThe current data is before the resent data (redundant information).\n In addition there must be Voice Band Data in the General Purpose Media Descriptor attribute line.\n(Example m=audio 12345 RTP/AVP 0 101\na=gpmd: 0 vbd=yes\na=rtpmap: 101 RED/8000\na=fmpt: 101 0/0\n"/>
+				
+				<!-- Step - 1 test case Appendix B.11 Common Test Procedures -->
+				<log expr="Make sure TDDs are hooked to the DUT and UE1."/>
+				<!-- Step - 2 test case Appendix B.11 Common Test Procedures -->
+				<start_capture>
+					<filter>
+						<var_expr>
+							<expr>host </expr>
+							<msg_ref type="platform">PCSCF1.IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">UE0.IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">UE1.IP</msg_ref>
+						</var_expr>
+					</filter>
+				</start_capture>
+				<!-- Step - 3 test case Appendix B.11 Common Test Procedures -->
+				<log expr="Press send characters between two devices."/>
+				<log promptUser="True" yesExpected="True" verify="True" 
+					expr="Verify that all of the text is sent/received across the TDD connection."/>
+				<!-- Step - 4 test case Appendix B.11 Common Test Procedures -->
+				<stop_capture/>
+				<!-- Step - 5 test case Appendix B.11 Common Test Procedures -->
+				<log step="6" group="Step 6" requirements="REQ13356,REQ12490, REQ12491, REQ11584, REQ14824, REQ12617, REQ12618, REQ12619, REQ12620, REQ12625, REQ13346" 
+					promptUser="True" yesExpected="True" verify="True" 
+					expr="Analyze the capture from both UEs. Is there redundant payload information within the packets collected?\nThe current data is before the resent data (redundant information).\n In addition there must be Voice Band Data in the General Purpose Media Descriptor attribute line.\n(Example m=audio 12345 RTP/AVP 0 101\na=gpmd: 0 vbd=yes\na=rtpmap: 101 red/8000\na=fmpt: 101 0/0\n"/>
+				<generate event="SucceedEvent"/>
+			</prelude>
+			<transition to="OnHook" event="SucceedEvent"/>
+		</state>
+	</add_to>
+</pc2xml>

@@ -1,0 +1,83 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+ Change History: (Author & Date)
+
+
+
+-->
+<!-- Document type and attributes. -->
+<pc2xml version="$Revision: 6076 $"
+        name="E-UE_PROV_1.1.2.10"
+        descrip="eUE fails provision when required sub-options are not provided in DHCP configuration."
+        number="E-UE_PROV_1.1.2.10">
+
+
+    <!-- Reset UE; start capture. -->
+    <template file="./templates/EUE_Prov_B_1_1_1.xml" name="MissingSubOpts"/>
+
+
+    <add_to fsm="MissingSubOpts">
+        <transition from="StartCapture_RebootWait" to="VerifyDHCP" event="TimerExpired"/>
+		
+        <!-- 3. At least four Solicit (Discover) attempts made by CM -->
+        <!-- 4. No DHCP Solicit issued by MTA (MAC Address). -->
+        <!-- 5. Ping IP address of CM - MUST still be operational. -->
+        <state ID="VerifyDHCP">
+            <prelude once="true">
+                <stop_capture/>
+				<parse_capture name="eUE_v6" >
+                    <parser_filter protocol="dhcpv6" clientMAC="DUT.MAC Address"/>
+                </parse_capture>
+                <parse_capture name="eCM_v4" >
+					<!--We are filtering for dhcpv6 for now as eCMv4 is not available in our test setting.  -->
+					<!--parser_filter  protocol="bootp"  clientMAC="DUT.CM MAC Address"/-->
+                    <parser_filter protocol="dhcpv6" clientMAC="DUT.CM MAC Address"/>
+                </parse_capture>
+
+                <verify step="3 4">
+                    <and>
+                        <notnull>
+							<!--We are filtering for dhcpv6 for now as eCMv4 is not available in our test setting.  -->
+							<!--capture_ref type="bootp" name="eCM_v4" msg_instance="4">Discover</capture_ref-->
+                            <capture_ref type="dhcpv6" name="eCM_v4" msg_instance="last">Solicit.num</capture_ref>
+                        </notnull>
+                        <null>
+                            <capture_ref type="dhcpv6" name="eUE_v6">Solicit.num</capture_ref>
+                        </null>
+                    </and>
+                </verify>
+
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>DOCS-CABLE-DEVICE-MIB::docsDevServerBootState.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.CM IP Address</msg_ref>
+                    </mod>
+					<mod modtype="replace" hdr="version">
+						<expr>2c</expr>
+					</mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="5">
+                    <contains>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>1</expr>
+                    </contains>
+                </verify>
+            </response>
+			<transition to="END" event="SNMPResp"/>
+			<transition to="END" event="SNMPRespFailure"/>
+        </state>
+    </add_to>
+</pc2xml>

@@ -1,0 +1,208 @@
+################################################################################
+#// Filename: PROV_5-38.test (PACT)
+#// Author:  Matthew Forbes
+#//           
+#//
+#//
+#// Creation Date: October 22, 2008
+#// Modified by:
+################################################################################
+#// Description:
+#//     TC1073 TEST CASE PROV 5.38 Provisioning of the AP REQ/REP Backoff and Retry
+#//        Parameters in DHCP Option 122, Sub-option 5
+#//
+#// Objective:
+#//     Test the ability of the E-MTA DUT to utilize the value in option 122, suboption 5 to
+#// reset the time values contained in the "pktcMtaDevProvUnsolicitedKeyMaxTimeout",
+#// ""pktcMtaDevProvUnsolicitedKeyNomTimeout", and "pktcMtaDevProvUnsolicitedKeyMaxRetries"MIB Objects.
+#// 
+#// 
+#//
+#// PacketCable DUT:
+#//     MTA
+#//
+#// Test Steps:
+#//     - Initial configuration
+#//     - Reset DUT
+#//     - Check Provisioning state
+#//     - Invoke SNMPv3 API and verify initial value for MIB Object
+#//     - Change policy in server to change value for option 122, sub-option 5
+#//     - Start sniffer
+#//     - Reset DUT
+#//     - Check Provisioning state
+#//     - Stop sniffer
+#//     - Invoke SNMPv3 API and query MIB object and validate value
+#//     - Restore default value for option 122, sub-option 5
+#//     - Delete MTA config file
+#//
+#// Notes:
+#//     - Requires provPrimitives.tcl & tftp_primitives.tcl.
+#//     - Requires the specific config file in $BASE_CFG_FILE_PATH in Provisioning Server.
+#//     - Requires parT.tcl parsing tool to parse data from capture file.
+################################################################################
+
+global SCRIPT_VERSION
+set SCRIPT_VERSION { # $Id: E-UE-PROV_1-1-2-11.test 7406 2010-07-20 17:17:37Z dthakore $ }
+
+###################### INITIAL CONFIGURATION OF DUT ########################
+
+
+DoStep "PROV_5-38_1-1" "Initial configuration" {
+    LogMsg "--- Initial PROV module ---"
+    Init_PROV
+    # ProvCreateConfig 291 $MTA_MAC
+    PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122
+    PROV_DEPLOY_DHCP
+} { PASS_STEP }
+
+
+################ Reset CM and MTA and Verify Provisioning ################
+
+DoStep "PROV_5-38_3-1" "Reset MTA" {
+    set val [SNMPvN_RESET $CM_IP]
+    LogMsg "Reset of CM and MTA has passed"
+} {
+    IsEqual $val 0
+}
+
+DoStep "PROV_5-38_3-2" "pktcMTADevProvisioningState Content Verification" {
+    # Wait for a minute to let CM/MTA starting to reboot
+    actionWait "Waiting for CM and MTA to reboot" 60
+    # Get the OID from the MTA and check it using our previously defined
+    set val [GetProvState 1 600]
+    LogMsg "MTA Provisioning State"
+    LogMsg "             - Expected : 1"
+    LogMsg "             - Received : $val"
+} {
+    IsEqual $val 1
+}
+
+######################### VERIFY ORIGINAL VALUE OF MIB OBJECT  ##########################
+
+DoStep "PROV_5-38_4-1_1" "pktcMtaDevProvUnsolicitedKeyMaxTimeout Content Verification" {
+    set val [SNMP_GET $oid_pktcMtaDevProvUnsolicitedKeyMaxTimeout $MTA_IP]
+    LogMsg "The value for the provisioning timer"
+    LogMsg "             - Expected : 600"
+    LogMsg "             - Received : $val"
+} {
+    IsEqual $val 600
+}
+
+######################### VERIFY ORIGINAL VALUE OF MIB OBJECT  ##########################
+
+DoStep "PROV_5-38_4-1_2" "pktcMtaDevProvUnsolicitedKeyNomTimeout Content Verification" {
+    set val [SNMP_GET $oid_pktcMtaDevProvUnsolicitedKeyNomTimeout $MTA_IP]
+    LogMsg "The value for the provisioning timer"
+    LogMsg "             - Expected : 3"
+    LogMsg "             - Received : $val"
+} {
+    IsEqual $val 3
+}
+######################### VERIFY ORIGINAL VALUE OF MIB OBJECT  ##########################
+
+DoStep "PROV_5-38_4-1_3" "pktcMtaDevProvUnsolicitedKeyMaxRetries Content Verification" {
+    set val [SNMP_GET $oid_pktcMtaDevProvUnsolicitedKeyMaxRetries $MTA_IP]
+    LogMsg "The value for the provisioning timer"
+    LogMsg "             - Expected : 8"
+    LogMsg "             - Received : $val"
+} {
+    IsEqual $val 8
+}
+
+
+##################### MODIFY VALUE FOR SUBOPTION IN MTA POLICY ##########################
+
+DoStep "PROV_5-38_5-1" "Modify value for option 122, suboption 5" {
+    LogMsg "--- Modify MTA Policy and Save ---"
+    # verify_signal "Modify value for option 122 sub-option 8 to 5 (MTATC613)"
+    PROV_MODIFY_DEVICE $MTA_MAC MTATC1073
+    PROV_DEPLOY_DHCP
+    LogMsg "--- Sub-option 8 has been modified ---"
+} {PASS_STEP}
+
+
+DoStep "PROV_5-38_6-1" "Start sniffer" {
+    LogMsg "--- Start sniffer ---"
+    Init_CONTROLLER_LAN
+    SetupCaptureControllerLan "host $MTA_IP || udp port 67 || host $CM_IP"
+    StartCaptureControllerLan
+} {PASS_STEP}
+
+################## RESET CM and MTA and VERIFY PROVISIONING ####################
+
+DoStep "PROV_5-38_7-1" "Reset MTA" {
+    set val [SNMPvN_RESET $CM_IP]
+    LogMsg "Reset of CM and MTA has passed"
+} {
+    IsEqual $val 0
+}
+
+DoStep "PROV_5-38_8-1" "pktcMTADevProvisioningState Content Verification" {
+    # Wait for a minute to let CM/MTA starting to reboot
+    actionWait "Waiting for CM and MTA to reboot" 60
+    # Get the OID from the MTA and check it using our previously defined
+    set val [GetProvState 1 600]
+    LogMsg "MTA Provisioning State"
+    LogMsg "             - Expected : 1"
+    LogMsg "             - Received : $val"
+} {
+    IsEqual $val 1
+}
+
+DoStep "PROV_5-38_8-2" "Stop sniffer" {
+    LogMsg "--- Stop sniffer ---"
+    StopCaptureControllerLan
+    SaveToFileControllerLan
+} { PASS_STEP }
+
+######################### VERIFY VALUE OF MIB OBJECT  ##########################
+
+DoStep "PROV_5-38_9-1_1" "pktcMtaDevProvUnsolicitedKeyMaxTimeout Content Verification" {
+    set val [SNMP_GET $oid_pktcMtaDevProvUnsolicitedKeyMaxTimeout $MTA_IP]
+    LogMsg "The value for the provisioning timer"
+    LogMsg "             - Expected : 20"
+    LogMsg "             - Received : $val"
+} {
+    IsEqual $val 20
+}
+
+######################### VERIFY VALUE OF MIB OBJECT  ##########################
+
+DoStep "PROV_5-38_9-1_2" "pktcMtaDevProvUnsolicitedKeyNomTimeout Content Verification" {
+    set val [SNMP_GET $oid_pktcMtaDevProvUnsolicitedKeyNomTimeout $MTA_IP]
+    LogMsg "The value for the provisioning timer"
+    LogMsg "             - Expected : 60"
+    LogMsg "             - Received : $val"
+} {
+    IsEqual $val 60
+}
+
+######################### VERIFY VALUE OF MIB OBJECT  ##########################
+
+DoStep "PROV_5-38_9-1_3" "pktcMtaDevProvUnsolicitedKeyMaxRetries Content Verification" {
+    set val [SNMP_GET $oid_pktcMtaDevProvUnsolicitedKeyMaxRetries $MTA_IP]
+    LogMsg "The value for the provisioning timer"
+    LogMsg "             - Expected : 5"
+    LogMsg "             - Received : $val"
+} {
+    IsEqual $val 5
+}
+
+##################### RESTORE VALUE FOR SUB-OPTION 8 IN MTA ##########################
+
+DoStep "PROV_5-38_10-1" "Restore value for option 122, sub-option 8" {
+    LogMsg "--- Modify MTA Policy and Save ---"
+    # verify_signal "Restore default value for option 122 sub-option 8 (MTAFORCW_122)"
+    PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122
+    PROV_DEPLOY_DHCP
+    LogMsg "--- Sub-option 5 has been modified ---"
+} {PASS_STEP}
+
+################################################################################
+# Cleanup
+################################################################################
+Cleanup
+return 0
+
+
+

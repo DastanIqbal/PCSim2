@@ -1,0 +1,289 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+ Change History: (Author & Date)
+	2011-11-15	Seung Lee - final versionfor	
+
+
+-->
+<pc2xml version="$Revision: 1 $" 
+	name="SIP-PBX 2.1.1.1" 
+	descrip="SIP-PBX Codec Support and Negotiation Capabilities" 
+	number="SIP-PBX 2.1.1.1">
+	
+	<template file="./templates/CallTermAtUETemp.xml" name="UE1"/>
+
+	<remove_from fsm="UE1">
+		<state ID="Register"/>
+		<state ID="Setup"/>
+		<state ID="Proceeding"/>
+		<state ID="Connected"/>
+		<state ID="OnHook"/>
+		<state ID="Alerting"/>
+	</remove_from>
+
+	<add_to fsm="UE1">
+	
+		<state ID="Register">
+			<prelude>
+				<start_capture>
+					<filter>
+						<var_expr>
+							<expr>host </expr>
+							<msg_ref type="platform">UE0.IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">UE0.IP2</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">PCSCF1.IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">UE1.IP</msg_ref>
+						</var_expr>
+					</filter>
+				</start_capture>
+			</prelude>
+			<transition to="Setup" event="Registered"/>
+		</state>
+		
+		<state ID="Setup">
+			<!-- Step 1 from the Default Message Flow Call-Term-at-UE(DUT) Sequence Diagram -
+              Test 18x response for reliability for possible Prack message- send Invite -->
+			<prelude>
+				<send protocol="sip" msgtype="Invite">
+					<mod modtype="replace" hdr="Request-Line" param="username">
+						<msg_ref type="platform">UE0.phone number 1</msg_ref>
+					</mod>
+					<mod modtype="delete" hdr="SDP"/>
+				</send>
+			</prelude>
+				<!-- Expected responses are 100, 180, 183 or 200 -->
+			<response>
+					<!-- Step 4 from the Default Message Flow Call-Term-at-UE(DUT) Sequence Diagram -
+               Test 18x response for reliability for possible Prack message -->
+				<if> 
+					<or>
+						<eq>
+							<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+							<expr>180</expr>
+						</eq>
+						<eq>
+							<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+							<expr>183</expr>
+						</eq>					
+					</or>
+					<then>
+						<verify step="2" requirements="REQ24268, REQ24269, REQ24273 ">
+							<dnc>
+								<msg_ref type="sip" msg_instance="last">18x-Invite.Content-Type.media-subtype</msg_ref>
+								<expr>sdp</expr>
+							</dnc>
+						</verify>
+					</then>
+				</if>
+
+				<if>
+					<contains>
+						<msg_ref type="sip" hdr_instance="any">18x-Invite.Require</msg_ref>
+						<expr>100rel</expr>
+					</contains>
+						<then>
+							<!--Reliablity required for test sending Prack message to peer.-->
+							<send protocol="sip" msgtype="Prack"/>
+						</then>
+				</if>
+			</response>
+				<!-- Transitions for Setup state -->
+			<transition to="Proceeding" event="100-INVITE"/>
+			<transition to="Alerting" event="180-INVITE"/>
+			<transition to="Alerting" event="183-INVITE"/>
+			<transition to="Connected" event="200-INVITE"/>
+		</state>
+		
+		<state ID="Proceeding">
+			<!-- Expected responses are 180, 183 or 200 -->
+			<response>
+				<!-- Step 4 from the Default Message Flow Call-Term-at-UE(DUT) Sequence Diagram-
+              Test 18x response for reliability for possible Prack message -->
+				<if> 
+					<or>
+						<eq>
+							<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+							<expr>180</expr>
+						</eq>
+						<eq>
+							<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+							<expr>183</expr>
+						</eq>					
+					</or>
+					<then>
+						<verify step="2" requirements="REQ24268, REQ24269, REQ24273">
+							<dnc>
+								<msg_ref type="sip" msg_instance="last">18x-Invite.Content-Type.media-subtype</msg_ref>
+								<expr>sdp</expr>
+							</dnc>
+						</verify>
+					</then>
+				</if>				
+				<if>
+					<contains>
+						<msg_ref type="sip" hdr_instance="any">18x-Invite.Require</msg_ref>
+						<expr>100rel</expr>
+					</contains>
+					<then>
+						<!--Reliablity required for test sending Prack message to peer.-->
+						<!-- Step 3 from the Default Message Flow Call-Term-at-UE(DUT) Sequence Diagram- send Prack -->
+						<send protocol="sip" msgtype="Prack"/>						
+					</then>
+				</if>
+			</response>
+				<!-- Transitions for Proceeding state -->
+			<transition to="Alerting" event="180-INVITE"/>
+			<transition to="Alerting" event="183-INVITE"/>
+			<transition to="Connected" event="200-INVITE"/>
+		</state>		
+
+		<state ID="Alerting" timer="12000">
+			<response>
+				<if> 
+					<or>
+						<eq>
+							<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+							<expr>180</expr>
+						</eq>
+						<eq>
+							<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+							<expr>183</expr>
+						</eq>					
+					</or>
+					
+					<then>
+						<verify step="2" requirements="REQ24268, REQ24269, REQ24273">
+							<dnc>
+								<msg_ref type="sip" msg_instance="last">18x-Invite.Content-Type.media-subtype</msg_ref>
+								<expr>sdp</expr>
+							</dnc>
+						</verify>
+					</then>
+				</if>
+				<if>
+					<eq>
+						<msg_ref type="event"/>
+						<expr>TimerExpired</expr>
+					</eq>
+					<then>
+						<!--Take DUT phone off hook-->
+						<send protocol="utility" msgtype="OffHook"/>
+					</then>
+				</if>
+					<!-- Expected responses are 180, 183, PRACK, UPDATE, or 200 -->
+					<!-- Step 6 from the Default Message Flow Call-Term-at-UE(DUT) Sequence Diagram - received UPDATE -->
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>UPDATE</expr>
+					</eq>
+					<then>
+							<!-- Step 7 from the Default Message Flow Call-Term-at-UE(DUT) Sequence Diagram- received UPDATE -->
+							<!--QoS required for test, sending a 200-OK to Update message to peer.-->
+						<send protocol="sip" msgtype="200-Update"/>
+					</then>
+						<!-- Step 8 from the Default Message Flow Call-Term-at-UE(DUT) Sequence Diagram - received 180 -->
+					<elseif>
+						<and>
+							<eq>
+								<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+								<expr>180</expr>
+							</eq>
+							<contains>
+								<msg_ref type="sip" hdr_instance="any">180-INVITE.Require</msg_ref>
+								<expr>100rel</expr>
+							</contains>
+						</and>
+						<then>
+							<!--Reliablity required for test, sending Prack message to peer.-->
+							<send protocol="sip" msgtype="Prack"/>
+						</then>
+					</elseif>
+				</if>
+			</response>
+			<!-- Transitions for Alerting state -->
+			<transition to="Alerting" event="200-PRACK"/>
+			<transition to="Alerting" event="UPDATE"/>
+			<transition to="Alerting" event="18x-INVITE"/>
+			<transition to="Answer" event="TimerExpired"/>
+			<transition to="Connected" event="200-INVITE"/>
+		</state>
+		
+		<state ID="Connected" timer="30000">
+			<prelude once="true">
+				<verify step="4" requirements="REQ24269, REQ24273">
+					<and>
+						<eq>
+							<msg_ref type="sip" msg_instance="last">200-Invite.Content-Type.media-subtype</msg_ref>
+							<expr>sdp</expr>
+						</eq>
+						<and>
+							<gt>
+								<msg_ref type="sip" msg_instance="last">200-Invite.Content-Length.value</msg_ref>
+								<expr>0</expr>
+							</gt>
+							<contains>
+								<msg_ref type="sip">200-INVITE.SDP</msg_ref>
+								<expr>rtpmap</expr>
+							</contains>
+						</and>
+					</and>
+				</verify>
+				
+				<var name="sessionversion">
+					<msg_ref type="sdp">Response.o.session-version</msg_ref>
+                </var>
+				<var name="ip">
+					<msg_ref type="platform">UE1.IP</msg_ref>
+                </var>
+				<var name="audioport">
+                    <msg_ref type="sdp">Response.audio.port</msg_ref>
+                </var>
+				<send protocol="sip" msgtype="ACK">
+					<mod modtype="add" hdr="SDP">
+						<var_expr>
+							<expr>v=0\r\no=- 0 </expr>
+							<var_ref name="sessionversion"/>
+                            <expr> IN IP4 </expr>
+							<var_ref name="ip"/>
+                            <expr>\r\ns=-\r\nc=IN IP4 </expr>
+							<var_ref name="ip"/>
+							<expr>\r\nt=0 0\r\nm=audio </expr>
+							<var_ref name="audioport"/>
+							<expr> RTP/AVP 0 101\r\na=rtpmap:0 PCMU/8000\r\na=rtpmap:101 telephone-event/8000\r\na=fmtp:101 0-16\r\na=silenceSupp:off - - - -\r\na=ptime:20\r\na=sendrecv</expr>
+						</var_expr>
+					</mod>
+				</send>
+			</prelude>
+
+			<transition to="Connected" event="OffHookComplete"/>
+			<transition to="Releasing" event="TimerExpired"/>
+		</state>
+		
+		<state ID="OnHook">
+			<prelude>
+				<!-- verify step="5" requirements="REQ ">
+				This step requires the verificatio of the 2-way voice path.
+				Need some way to find the voice path (rtp) with simulated UE1.
+				</verify-->
+				<send protocol="utility" msgtype="OnHook"/>
+			</prelude>
+			<postlude>
+				<stop_capture/>
+			</postlude>
+			<transition to="END" event="OnHookComplete"/>
+		</state> 
+	</add_to>
+</pc2xml>

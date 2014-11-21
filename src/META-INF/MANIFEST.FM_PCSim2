@@ -1,0 +1,12 @@
+Manifest-Version: 1.0
+Created-By:  1.0-beta (Cable Television Laboratories - PacketCable 2.0)
+Main-Class: com.cablelabs.sim.PCSim2
+Class-Path: ../lib/bns_common.jar ../lib/bns_diameter.jar ../lib/bns_logger.jar ../lib/bns_vpb.jar ../lib/bns_capture_interface.jar ../lib/bns_stun_protocol.jar ../lib/bns_utility_protocol.jar ../lib/bns_provgen.jar ../lib/log4j-1.2.15.jar  ../lib/poi-3.8-20120326.jar ../lib/poi-examples-3.8-20120326.jar ../lib/poi-examples-3.8-20120326.jar ../lib/poi-excelant-3.8-20120326.jar ../lib/poi-ooxml-3.8-20120326.jar ../lib/poi-ooxml-schemas-3.8-20120326.jar ../lib/poi-scratchpad-3.8-20120326.jar ../lib/commons-net-2.0.jar ../lib/jung/collections-generic-4.01.jar ../lib/jung/colt-1.2.0.jar ../lib/jung/concurrent-1.3.4.jar ../lib/jung/j3d-core-1.3.1.jar ../lib/jung/jung-3d-2.0.1.jar ../lib/jung/jung-3d-demos-2.0.1.jar ../lib/jung/jung-algorithms-2.0.1.jar ../lib/jung/jung-api-2.0.1.jar ../lib/jung/jung-graph-impl-2.0.1.jar ../lib/jung/jung-io-2.0.1.jar ../lib/jung/jung-jai-2.0.1.jar ../lib/jung/jung-jai-samples-2.0.1.jar ../lib/jung/jung-samples-2.0.1.jar ../lib/jung/jung-visualization-2.0.1.jar ../lib/jung/stax-api-1.0.1.jar ../lib/jung/vecmath-1.3.1.jar ../lib/jung/wstx-asl-3.2.6.jar
+ 
+Name: com/cablelabs/sim/
+Specification-Title: PCSim 2.0
+Specification-Version: 1.0.0-beta
+Specification-Vendor: Open Source 
+Implementation-Title: com.cablelabs.sim
+Implementation-Version: 8387
+Implementation-Vendor: Open Source

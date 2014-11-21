@@ -1,0 +1,97 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	PCPCII-104 - Add code to create a delay between the hook flash and the prompt for the
+		user to verify dial tone. (ghassler 2/5/2009)
+	PCPCII-139 : Update the Voicetronix modifiers to use the new values. (ghassler 07/10/2009)
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-UE 1.9.7.5" 
+	descrip=" No CH or CT or 3WC allowed during an emergency call" 
+	number="RST-UE 1.9.7.5" inspector="disable">
+	
+	<template file="./templates/CallOrigAtUETemp.xml" name="UE1"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Setup" sub="prelude"/>
+		<state ID="Connected"/>
+		<state ID="Releasing"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<NE targets="service:sos  911 urn:service:sos"/>
+		
+		<state ID="Setup" sub="prelude" once="true">
+			<!-- Step 1 test case SIP 1.9.7.5 - Initiate an emergency call session from 
+			the UE as per step 1 of [UE Originating Case Flow]..-->
+			<send protocol="utility" msgtype="DialDigits">
+				<mod modtype="add" hdr="number">
+					<expr>911</expr>
+				</mod>
+			</send>
+		</state>
+		
+		<state ID="Connected">
+			<prelude>
+				<!-- Step 2 of test case 1.9.7.5 - Press flash to hold the call..-->
+				<sleep time="5000"/>
+				<send protocol="utility" msgtype="HookFlash"/>
+			</prelude>
+			<transition to="VerifyNoRingTone" event="HookFlashComplete"/>
+		</state>
+		
+		<state ID="VerifyNoRingTone">
+			<prelude>
+				<!-- PCPCII-104 Add a sleep so that the user has time to perform a manual
+					hook flash if necessary. Also make the voiceExpected be a no response
+					by setting the value to no instead of the default yes. -->
+				<sleep time="5000"/>
+				<send protocol="utility" msgtype="VERIFYDIALTONE">
+					<mod modtype="replace" hdr="voiceExpected">
+						<expr>no</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="2" requirements="REQ14116, REQ14114, REQ14118">
+					<eq>
+						<msg_ref type="utility">message</msg_ref>
+						<expr>VERIFYDIALTONECOMPLETE</expr>
+					</eq>
+				</verify>
+			</response>
+			<transition to="VerifyReinvite" event="VERIFYDIALTONECOMPLETE"/>
+		</state>
+		
+		<state ID="VerifyReinvite" timer="10000">
+			<response>
+				<if>
+					<neq>
+						<msg_ref type="event"/>
+						<expr>TimerExpired</expr>
+					</neq>
+					<verify step="2" requirements="REQ14116, REQ14114, REQ14118">
+						<neq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>REINVITE</expr>
+						</neq>
+					</verify>
+				</if>
+			</response>
+			<transition to="END" event="TimerExpired"/>
+		</state>
+	</add_to>
+</pc2xml>

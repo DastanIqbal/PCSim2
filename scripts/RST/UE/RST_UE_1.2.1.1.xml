@@ -1,0 +1,68 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-UE 1.2.1.1" 
+	descrip="Presentation status “public" 
+	number="RST-UE 1.2.1.1" inspector="disable">
+	
+	<template file="./templates/CallOrigAtUETemp.xml" name="UE1"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Setup"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<state ID="Setup">
+			<prelude once="true">
+				<send protocol="utility" msgtype="DialDigits">
+					<mod modtype="add" hdr="number">
+						<msg_ref type="platform">UE1.phone number 1</msg_ref>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>INVITE</expr>
+					</eq>
+					<then>
+						<!-- If the current message that we received is an Invite, answer with
+			           a 100-trying -->
+						<verify step="1" requirements="REQ14550, REQ13516, REQ13517, REQ14369">
+							<contains>
+								<msg_ref type="sip">Invite.P-Preferred-Identity.addr-spec</msg_ref>
+								<msg_ref type="platform">UE0.pui</msg_ref>
+							</contains>
+						</verify>
+						<verify step="2" requirements="REQ14552">
+							<dnc>
+								<msg_ref type="sip">Invite.Privacy</msg_ref>
+								<expr>id</expr>
+							</dnc>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<transition to="Setup" event="DialDigitsComplete"/>
+			<transition to="END" event="INVITE"/>
+		</state>
+	</add_to>
+</pc2xml>

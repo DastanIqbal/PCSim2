@@ -1,0 +1,115 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	PCPCII-139 : Update the Voicetronix modifiers to use the new values. (ghassler 07/10/2009)
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-UE 1.2.3.1" 
+	descrip="Per Line Caller ID Presentation" 
+	number="RST-UE 1.2.3.1">
+	
+	<template file="./templates/CallOrigAtUETemp.xml" name="UE1"/>
+
+	<remove_from fsm="UE1">
+		<state ID="Setup"/>
+	</remove_from>
+
+	<add_to fsm="UE1">
+		<state ID="Setup">
+			<prelude once="true">
+				<send protocol="utility" msgtype="DialDigits">
+					<mod modtype="add" hdr="number">
+						<msg_ref type="platform">UE1.phone number 1</msg_ref>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>Invite</expr>
+					</eq>
+					<then>
+						<verify step="1" requirements="REQ14550, REQ13516, REQ13517, REQ14369">
+							<contains>
+								<msg_ref type="sip">Invite.P-Preferred-Identity.name-addr</msg_ref>
+								<msg_ref type="platform">UE0.pui</msg_ref>
+							</contains>
+						</verify>
+						<verify step="2" requirements="REQ14552">
+							<dnc>
+								<msg_ref type="sip">Invite.Privacy </msg_ref>
+								<expr>id</expr>
+							</dnc>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<transition to="Setup" event="DialDigitsComplete"/>
+			<transition to="EndTheCall" event="INVITE"/>
+		</state>
+		
+		<state ID="EndTheCall" ES="true">
+			<transition to="EndTheCall" event="DialDigitsComplete"/>
+			<transition to="OffHook1" event="SessionTerminated"/>
+		</state>
+		
+		<state ID="OffHook1">
+			<prelude>
+				<send protocol="utility" msgtype="OffHook"/>
+			</prelude>
+			<transition to="Setup1" event="OffHookComplete"/>
+		</state>
+		
+		<state ID="Setup1">
+			<prelude once="true">
+				<send protocol="utility" msgtype="DialDigits">
+					<mod modtype="replace" hdr="voiceport">
+						<msg_ref type="platform">Platform.voiceport2</msg_ref>
+					</mod>
+					<mod modtype="add" hdr="number">
+						<msg_ref type="platform">UE1.phone number 1</msg_ref>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>Invite</expr>
+					</eq>
+					<then>
+						<verify step="4" requirements="REQ13525, REQ14557, REQ13516, REQ13517, REQ14369">
+							<contains>
+								<msg_ref type="sip">Invite.P-Preferred-Identity.name-addr</msg_ref>
+								<msg_ref type="platform">UE0.pui2</msg_ref>
+							</contains>
+						</verify>
+						<verify step="4" requirements="REQ13525, REQ14557, REQ13516, REQ13517, REQ14369">
+							<contains>
+								<msg_ref type="sip">Invite.Privacy</msg_ref>
+								<expr>id</expr>
+							</contains>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<transition to="Setup1" event="DialDigitsComplete"/>
+			<transition to="END" event="INVITE"/>
+		</state>
+	</add_to>
+</pc2xml>

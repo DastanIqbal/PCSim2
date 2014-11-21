@@ -1,0 +1,209 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+ Change History: (Author & Date)
+	
+
+
+
+  --> 
+<pc2xml version="$Revision: 7085 $" name="HDV_RST_UE_3.1.17.1" descrip="Inbound Call on Multiline" number="HDV_RST_UE_3.1.17.1" inspector="disable">
+    <fsm name="UE1">
+        <models>
+            <session /> 
+        </models>
+    <NE sim_type="term" elements="UE1 PCSCF2 SCSCF1 PCSCF1" targets="UE1" /> 
+        <states initialstate="SendInvite1">
+	 
+	    <state ID="SendInvite1" timer="3000">
+		<prelude once="true">
+		    <sleep time="1000"/>
+		    <send protocol="sip" msgtype="INVITE">
+			<mod modtype="replace" hdr="Request-Line" param="Request-URI">
+			<var_expr>
+			<expr>sip:3035550000@</expr> 
+			<msg_ref type="platform">DUT.domain</msg_ref> 
+			</var_expr>
+			</mod>
+		    </send>
+		    <sleep time="1000" /> 
+		    <log promptUser="True" yesExpected="True" verify="True" step="1" requirements="REQ23578" expr="Verify the PP-1 rings." /> 
+		    <sleep time="500" /> 
+		    <log promptUser="True" yesExpected="True" verify="True" step="1" requirements="REQ23581" expr="Verify the PP-2 does not ring." /> 
+		    <sleep time="500" /> 
+		    <log expr="Take the line 1 of the DUT off hook." /> 
+		</prelude>
+	    <transition to="SendInvite1" event="180-INVITE" />
+	    <transition to="OffHook1" event="200-INVITE" />
+	    </state>
+		
+	    <state ID="OffHook1" timer="1500">
+                <prelude>
+                    <send protocol="sip" msgtype="ACK">
+		    <mod modtype="replace" hdr="Request-Line" param="Request-URI">
+		    <var_expr>
+		    <expr>sip:3035550000@</expr> 
+		    <msg_ref type="platform">DUT.domain</msg_ref> 
+		    </var_expr>
+		    </mod>
+		    </send>
+		    <sleep time="500" />
+                    <log promptUser="True" yesExpected="True" verify="True" step="2" requirements="REQ23581,REQ23578" expr="Verify a session is established on line 1." />
+                </prelude>
+	    <transition to="Next" event="TimerExpired" />
+	    </state>
+	    
+	    <state ID="Next">
+		<prelude>
+		    <generate event="SucceedEvent" fsm="UE2" /> 
+		</prelude>
+	    <transition to="Bye" event="Branch1Event" />
+	    </state>
+	    <state ID="Bye" >
+		<prelude>
+		    <log expr="Put the line 1 of the DUT on hook." />
+		    <send protocol="sip" msgtype="BYE"/>
+		</prelude>
+		<transition to="Offhook2" event="200-BYE" />
+		
+	    </state>
+	    
+	    <state ID="Offhook2" timer="3000">
+		<prelude once="true">
+		    <sleep time="3500" />
+                    <log promptUser="True" yesExpected="True" verify="True" step="7" requirements="REQ23578" expr="Verify a session of line 1 is terminated." />
+		    <sleep time="500" />
+                    <log promptUser="True" yesExpected="True" verify="True" step="7" requirements="REQ23581" expr="Verify a session of line 2 over the PP-2 is still on." />
+		</prelude>
+	    
+	    <transition to="VerifyDialTone2" event="TimerExpired" />
+	    </state>
+	    
+	    <state ID="VerifyDialTone2" timer="1500">
+		<prelude once="true">
+		    <log expr="Take the line 1 of the DUT off hook." />
+		    <sleep time="500"/>
+                    <send protocol="utility" msgtype="VerifyDialTone" /> 
+                </prelude>
+                <postlude once="true">
+                    <verify step="8" requirements="REQ23581,REQ23578">
+                        <eq>
+                        <msg_ref type="utility">message</msg_ref> 
+                        <expr>VerifyDialToneComplete</expr> 
+                        </eq>
+                        </verify>
+			
+			<log expr="Put the line 1 of the DUT on hook." />
+                </postlude>
+		
+            <transition to="End" event="VerifyDialToneComplete" />
+	    <!--transition to="VerifyDialTone2" event="200-BYE" /-->
+            </state>
+	    
+	    <state ID="End">
+		<prelude>
+		<generate event="Branch2Event" fsm="UE2" /> 
+		</prelude>
+	    </state>
+	</states>
+  </fsm>
+    
+    
+ <fsm name="UE2">
+        <models>
+            <session /> 
+        </models>
+            <NE sim_type="term" elements="UE2 PCSCF2 SCSCF1 PCSCF1" targets="UE2" /> 
+            <states initialstate="WaitSucceedEvent">
+                <state ID="WaitSucceedEvent">
+                <transition to="VerifyDialTone" event="SucceedEvent" /> 
+                </state>
+		 
+                <state ID="VerifyDialTone">
+                        <prelude>
+			    <log expr="Take the line 2 of the DUT off hook." />
+			    <sleep time="500"/>
+                                <send protocol="utility" msgtype="VerifyDialTone" /> 
+                        </prelude>
+                        <postlude once="true">
+                                <verify step="3" requirements="REQ23578,REQ23581">
+                                    <eq>
+                                    <msg_ref type="utility">message</msg_ref> 
+                                    <expr>VerifyDialToneComplete</expr> 
+                                    </eq>
+                                </verify>
+				<sleep time="500"/>
+				<log expr="Put the line 2 of the DUT on hook." />
+                        </postlude>
+                <transition to="Call2" event="VerifyDialToneComplete" /> 
+                </state>
+		
+		<state ID="Call2">
+		    <prelude once="true">
+			<send protocol="sip" msgtype="INVITE">
+			<mod modtype="replace" hdr="Request-Line" param="Request-URI">
+			<var_expr>
+			<expr>sip:3035551000@</expr> 
+			<msg_ref type="platform">DUT.domain</msg_ref> 
+			</var_expr>
+			 </mod>
+			</send>
+			<sleep time="3000" /> 
+			<log promptUser="True" yesExpected="True" verify="True" step="5" requirements="REQ23578" expr="Verify the PP-1 does not ring." /> 
+			<sleep time="500" /> 
+			<log promptUser="True" yesExpected="True" verify="True" step="5" requirements="REQ23581" expr="Verify the PP-1 does not hear any call waiting alert." /> 
+			<sleep time="500" /> 
+			<log promptUser="True" yesExpected="True" verify="True" step="4" requirements="REQ23582" expr="Verify the PP-2 rings." />
+			<sleep time="500" /> 
+			<log expr="Take the line 2 of the DUT off hook." />
+		    </prelude>
+		<transition to="Call2" event="180-INVITE" />
+		<transition to="OffHook2" event="200-INVITE" />
+		</state>
+		
+		<state ID="OffHook2" timer="1500">
+                    <prelude>
+                       <send protocol="sip" msgtype="ACK">
+		       <mod modtype="replace" hdr="Request-Line" param="Request-URI">
+			<var_expr>
+			<expr>sip:3035551000@</expr> 
+			<msg_ref type="platform">DUT.domain</msg_ref> 
+			</var_expr>
+			</mod>
+			</send>
+			<sleep time="500" />
+			<log promptUser="True" yesExpected="True" verify="True" step="6" requirements="REQ23581,REQ23578" expr="Verify a session is established on line 2." />
+                    </prelude>
+		<transition to="Next2" event="TimerExpired" />
+		</state>
+		
+		<state ID="Next2">
+		<prelude>
+		    <generate event="Branch1Event" fsm="UE1" /> 
+		</prelude>
+		<!--transition to="End2" event="BYE" /-->
+		<transition to="End2" event="Branch2Event" />
+		<!--transition to="End2" event="BYE" /-->	  
+		</state>
+		
+		<state ID="End2" timer="2000">
+		    <prelude>
+			<log expr="Put the line 2 of the DUT on hook." />
+			<sleep time="1000" /> 
+			<send protocol="sip" msgtype="BYE" /> 
+		    </prelude>
+		<transition to="END" event="200-BYE" />     
+		<transition to="END" event="SessionTerminated" /> 
+		</state>
+
+            </states>
+	</fsm>    
+</pc2xml>
+

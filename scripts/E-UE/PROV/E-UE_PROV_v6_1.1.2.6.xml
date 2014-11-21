@@ -1,0 +1,91 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+ Change History: (Author & Date)
+
+-->
+
+
+<!-- Document type and attributes. -->
+<pc2xml version="$Revision: 6076 $"
+        name="E-UE_PROV_1.1.2.6"
+        descrip="Behavior when Option 122, Sub-option 8 Timer value is configured."
+        number="E-UE_PROV_1.1.2.6">
+
+    <!-- UE reset. -->
+    <template file="./templates/EUE_Prov_B_1_1_1.xml" name="SubOption8"/>
+<!-- Needs to be reverted to SNMP IPv6 -->
+
+    <add_to fsm="SubOption8">
+        <transition from="StartCapture_RebootWait" to="VerifyProvState" event="TimerExpired"/>
+
+        <state ID="VerifyProvState">
+			<prelude once="true">
+				<send protocol="utility" msgtype="SNMPGet">
+					<mod modtype="add" hdr="oids">
+						<expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvisioningState.0</expr>
+					</mod>
+					<mod modtype="replace" hdr="version">
+						<expr>3</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="2">
+					<contains>
+						<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+						<expr>1</expr>
+					</contains>
+				</verify>
+			</response>
+            <transition to="RecordProvTimerVal" event="SNMPResp"/>
+        </state>
+
+        <!-- Query, record value of pktcMtaDevProvisioningTimer object. -->
+        <state ID="RecordProvTimerVal">
+            <prelude once="true">
+				<stop_capture/>
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvisioningTimer.0
+						</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP Address</msg_ref>
+                    </mod>
+                    <mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPResp</expr>
+                    </eq>
+                <then>
+					<verify>
+					<eq>
+						<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+						<expr>12</expr>
+					</eq>
+					</verify>
+                    <var name="provTimer">
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                    </var>
+                </then>
+                </if>
+            </response>
+            <transition to="END" event="SNMPResp"/>
+        </state>
+    </add_to>
+</pc2xml>

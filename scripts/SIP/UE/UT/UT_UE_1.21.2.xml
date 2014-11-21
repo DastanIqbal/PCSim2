@@ -1,0 +1,69 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+
+<pc2xml version="$Revision: 8188 $" name="UT_UE_1.21.2" descrip="This is a unit test script for the UE_1.21.2 test script." number="1">
+	<template file="$UT_PATH/CODEC/ut/UT_CODEC_1.1.10.xml"/>
+	<add_to fsm="UE0">
+		<states initialstate="DUTRegister"/>
+	</add_to>
+	<remove_from fsm="UE0">
+		<state ID="DUTPendingRegister"/>
+		<state ID="DUTConnected"/>
+		<state ID="DUTComplete"/>
+	</remove_from>
+	<add_to fsm="UE0">
+		<!-- CONNECTED State -->
+		<state ID="DUTConnected" timer="21000">
+			<prelude>
+				<send protocol="sip" msgtype="ACK" target="UE1" originator="DUT"/>
+			</prelude>
+			<postlude>
+				<send protocol="sip" msgtype="BYE" target="UE2" originator="DUT"/>
+			</postlude>
+			<transition to="Wait200Bye" event="TimerExpired"/>
+		</state>
+		<state ID="Wait200Bye">
+			<postlude>
+				<send protocol="sip" msgtype="PUBLISH" target="PCSCF1" originator="DUT"/>
+			</postlude>
+			<transition to="Wait200Publish" event="200-BYE"/>
+		</state>
+		<state ID="Wait200Publish">
+			<postlude>
+				<sleep time="10000"/>
+			</postlude>
+			<transition to="END" event="412-Publish"/>
+		</state>
+	</add_to>
+	<remove_from fsm="UE1">
+		<state ID="UE1Connected"/>
+		<state ID="UE1Bye200"/>
+	</remove_from>
+	<add_to fsm="UE1">
+		<!-- CONNECTED State -->
+		<state ID="UE1Connected">
+			<postlude>
+				<send protocol="sip" msgtype="200-BYE" target="DUT" originator="UE1"/>
+			</postlude>
+			<transition to="EndCall" event="BYE"/>
+		</state>
+		<state ID="EndCall" ES="true"/>
+	</add_to>
+</pc2xml>

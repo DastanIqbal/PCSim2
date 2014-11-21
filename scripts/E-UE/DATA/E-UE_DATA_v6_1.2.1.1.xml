@@ -1,0 +1,1166 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+ Change History: (Author & Date)
+-->
+<!-- Document type and attributes. -->
+<pc2xml version="$Revision: 6076 $"
+        name="E-UE_DATA_1.2.1.1"
+        descrip="eUE implements pktcEUEDevOpTable defined in CL-PKTC-EUE-DEV-MIB."
+        number="E-UE_DATA_1.2.1.1">
+
+
+    <!-- Reset UE; start capture. -->
+    <template file="./templates/EUE_Prov_B_1_1_1.xml" name="EUEDevOpTable"/>
+
+
+    <add_to fsm="EUEDevOpTable">
+        <transition from="StartCapture_RebootWait" to="EUEProvisions1" event="TimerExpired"/>
+
+        <!-- 12 If eUE supports IPv6, continue with Step 13. -->
+        <!-- 13 ReConfigure. 14 Reset. The E-UE DUT becomes operational. -->
+        <!-- 14 The E-UE DUT provisions successfully and becomes operational. -->
+        <state ID="EUEProvisions1">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvisioningState.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="14">
+                    <eq>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>1</expr>
+                    </eq>
+                </verify>
+            </response>
+            <transition to="VerifyMIBs1" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+		
+        <!-- 15 Using proper SNMPv3 manager repeat Steps 3 - 5 above. -->
+        <!-- 15-3 Perform SNMPv3 Get on pktcEUEDevProfileVersion object.
+                  The eUE returns a value of 1.0. -->
+        <state ID="VerifyMIBs1">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>CL-PKTC-EUE-DEV-MIB::pktcEUEDevProfileVersion.0</expr>
+                    </mod>
+                    <!-- <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP Address</msg_ref>
+                    </mod>
+                    <mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod> -->
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPResp</expr>
+                    </eq>
+                <then>
+                    <verify step="15-3">
+                        <eq>
+                            <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                            <expr>1.0</expr>
+                        </eq>
+                    </verify>
+                </then>
+                </if>
+            </response>
+            <transition to="SNMPSet1" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+        <!-- 15-4 Perform SNMPv3 Set on pktcEUEDevProfileVersion to different but syntactically correct value.
+                  The eUE rejects Set operation and returns a "NonWritable(17)" error. -->
+        <state ID="SNMPSet1" timer="10000">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPSet">
+                    <mod modtype="add" hdr="array">
+                        <var_expr>
+                            <expr>varBind 1 1 3 \r\n ][ , </expr>
+                            <expr>CL-PKTC-EUE-DEV-MIB::pktcEUEDevProfileVersion,STRING,2.0][\r\n</expr>
+                        </var_expr>
+                    </mod>
+                    <!-- <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod> -->
+                    <mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPResp</expr>
+                    </eq>
+                <then>
+                    <fail/>
+                </then>
+                </if>
+
+                <verify step="15-4">
+					<contains>
+                        <msg_ref type="utility">SNMPRespFailure.errorString</msg_ref>
+                        <expr>notWritable</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="MIBWalk1" event="SNMPResp"/>
+            <transition to="MIBWalk1" event="SNMPRespFailure"/>
+        </state>
+
+        <!-- 15-5 Perform SNMPv3 Walk on pktcEUEDevOpTable.
+                  The eUE processes operation successfully and returns
+                  following table of objects and values shown for each object:
+                  Note: There must be one index shown for each user. -->
+        <state ID="MIBWalk1">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPGetTable">
+                    <mod modtype="add" hdr="oids">
+                        <expr>CL-PKTC-EUE-DEV-MIB::pktcEUEDevOpTable</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPRespFailure</expr>
+                    </eq>
+                <then>
+                    <fail/>
+                </then>
+                </if>
+                <verify step="15-5">
+                    <and>
+                       <eq>
+                           <!-- pktcEUEDevOpDomain -->
+                           <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                           <expr>labrealm.com</expr>
+                       </eq>
+                    <and>
+                       <eq>
+                           <!-- pktcEUEDevOpSTUNAddrType -->
+                           <msg_ref type="utility" index="0 1 2">SNMPResp.varBind</msg_ref>
+                           <expr>0</expr>
+                       </eq>
+                    <and>
+                       <or>
+					   <contains>
+                           <!-- pktcEUEDevOpSTUNAddr -->
+                           <msg_ref type="utility" index="0 2 0">SNMPResp.varBind</msg_ref>
+                           <expr>""</expr>
+                       </contains>
+					   <eq>
+                           <!-- pktcEUEDevOpSTUNAddr -->
+                           <msg_ref type="utility" index="0 2 2">SNMPResp.varBind</msg_ref>
+                           <expr>ERROR</expr>
+                       </eq>
+					   </or>
+                    <and>
+                       <eq>
+                           <!-- pktcEUEDevOpSTUNAddrPort -->
+                           <msg_ref type="utility" index="0 3 2">SNMPResp.varBind</msg_ref>
+                           <expr>0</expr>
+                       </eq>
+                    <and>
+                       <eq>
+                           <!-- pktcEUEDevOpTURNAddrType -->
+                           <msg_ref type="utility" index="0 4 2">SNMPResp.varBind</msg_ref>
+                           <expr>0</expr>
+                       </eq>
+                    <and>
+                       <or>
+					   <contains>
+                           <!-- pktcEUEDevOpTURNAddr -->
+                           <msg_ref type="utility" index="0 5 0">SNMPResp.varBind</msg_ref>
+                           <expr>""</expr>
+                       </contains>
+					   <eq>
+                           <!-- pktcEUEDevOpTURNAddr -->
+                           <msg_ref type="utility" index="0 5 2">SNMPResp.varBind</msg_ref>
+                           <expr>ERROR</expr>
+                       </eq>
+					   </or>
+                    <and>
+                       <eq>
+                           <!-- pktcEUEDevOpTURNAddrPort -->
+                           <msg_ref type="utility" index="0 6 2">SNMPResp.varBind</msg_ref>
+                           <expr>0</expr>
+                       </eq>
+                    <and>
+                       <eq>
+                           <!-- pktcEUEDevOpTURNCredsType -->
+                           <msg_ref type="utility" index="0 7 2">SNMPResp.varBind</msg_ref>
+                           <expr>2</expr>
+                       </eq>
+                    <and>
+                       <or>
+					   <contains>
+                           <!-- pktcEUEDevOpTURNCreds -->
+                           <msg_ref type="utility" index="0 8 0">SNMPResp.varBind</msg_ref>
+                           <expr>""</expr>
+                       </contains>
+					   <eq>
+                           <!-- pktcEUEDevOpTURNCreds -->
+                           <msg_ref type="utility" index="0 8 2">SNMPResp.varBind</msg_ref>
+                           <expr>ERROR</expr>
+                       </eq>
+					   </or>
+                       <eq>
+                           <!-- pktcEUEDevOpRowStatus -->
+                           <msg_ref type="utility" index="0 9 2">SNMPResp.varBind</msg_ref>
+                           <expr>1</expr>
+                       </eq>
+                    </and>
+                    </and>
+                    </and>
+                    </and>
+                    </and>
+                    </and>
+                    </and>
+                    </and>
+                    </and>
+                </verify>
+            </response>
+            <!-- 16 Stop IP capture. -->
+            <postlude>
+                <stop_capture/>
+            </postlude>
+            <transition to="ReConfigure2" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+<!-- vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv -->
+<!-- ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ -->
+        <!-- 16 ReConfigure. -->
+        <!--  <state ID="ReConfigure2"
+               provFile="E-UE_PROV_v6_2.1.2.1_2.bin"
+               policyFile="MTAFORCW122_test"
+               nextState="Reset2"/>  -->
+
+		<state ID="ReConfigure2">
+			<prelude>
+				<log promptUser="true" expr="Section 2: Configure the device with Bin File: v6.C.1.2.10.bin and Policy: X_eUEv6, Save, Deploy DHCPv6 and click OK."/>
+				<generate event="Branch1Event"/>
+			</prelude>
+			<transition to="Reset2" event="Branch1Event"/>
+		</state>
+
+        <!-- 17a Reset. -->
+        <state ID="Reset2" timer="120000">
+            <prelude once="true">
+                <start_capture>
+                    <filter>
+                        <var_expr>
+							<expr>host </expr>
+							<msg_ref type="platform">DUT.IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.CM IP Address</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.DHCP Server IP</msg_ref>
+						</var_expr>
+                    </filter>
+                </start_capture>
+
+                <send protocol="utility" msgtype="SNMPSet">
+                    <mod modtype="add" hdr="array">
+                        <var_expr>
+                            <expr>varBind 1 1 3 \r\n ][ , </expr>
+                            <expr>DOCS-CABLE-DEVICE-MIB::docsDevResetNow.0,INTEGER,1][\r\n</expr>
+                        </var_expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.CM IP Address</msg_ref>
+                    </mod>
+                    <!-- Always use version 2c for a CM reset -->
+					<mod modtype="replace" hdr="version">
+						<expr>2c</expr>
+					</mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPRespFailure</expr>
+                    </eq>
+                    <then>
+                        <fail/>
+                    </then>
+                </if>
+                <if>
+                    <or>
+                        <eq>
+                            <msg_ref type="sip">REGISTER.Contact.expires</msg_ref>
+                            <expr>0</expr>
+                        </eq>
+                        <eq>
+                            <msg_ref type="sip">REGISTER.Expires.value</msg_ref>
+                            <expr>0</expr>
+                        </eq>
+                    </or>
+                    <then>
+                        <send protocol="sip" msgtype="200-REGISTER"/>
+                    </then>
+                </if>
+            </response>
+            <transition to="EUEProvisions2" event="TimerExpired"/>
+            <transition to="Reset2" event="SNMPResp"/>
+            <transition to="Reset2" event="REGISTER"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+        <!-- 17b E-UE DUT provisions successfully and becomes operational. -->
+        <state ID="EUEProvisions2">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvisioningState.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+		        </send>
+            </prelude>
+            <response>
+                <verify step="17">
+                    <eq>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>1</expr>
+                    </eq>
+                </verify>
+            </response>
+            <transition to="VerifyMIBs2" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+        <!-- 18 Using proper SNMPv3 manager repeat Steps 3-5 above. -->
+        <!-- 18-3 Perform SNMPv3 Get on pktcEUEDevProfileVersion object.
+                  The eUE returns a value of 1.0. -->
+        <state ID="VerifyMIBs2">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>CL-PKTC-EUE-DEV-MIB::pktcEUEDevProfileVersion.0</expr>
+                    </mod>
+                    <!-- <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP Address</msg_ref>
+                    </mod> -->
+                    <mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPResp</expr>
+                    </eq>
+                <then>
+                    <verify step="18-3">
+                        <eq>
+                            <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                            <expr>1.0</expr>
+                        </eq>
+                    </verify>
+                </then>
+                </if>
+            </response>
+            <transition to="SNMPSet2" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+        <!-- 18-4 Perform SNMPv3 Set on pktcEUEDevProfileVersion to different but syntactically correct value.
+                  The eUE rejects Set operation and returns a "NonWritable(17)" error. -->
+        <state ID="SNMPSet2" timer="10000">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPSet">
+                    <mod modtype="add" hdr="array">
+                        <var_expr>
+                            <expr>varBind 1 1 3 \r\n ][ , </expr>
+                            <expr>CL-PKTC-EUE-DEV-MIB::pktcEUEDevProfileVersion,STRING,2.0][\r\n</expr>
+                        </var_expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+                    <mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPResp</expr>
+                    </eq>
+                <then>
+                    <fail/>
+                </then>
+                </if>
+
+                <verify step="18-4">
+					<contains>
+                        <msg_ref type="utility">SNMPRespFailure.errorString</msg_ref>
+                        <expr>notWritable</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="MIBWalk2" event="SNMPResp"/>
+            <transition to="MIBWalk2" event="SNMPRespFailure"/>
+        </state>
+
+        <!-- 18-5 Perform SNMPv3 Walk on pktcEUEDevOpTable.
+                  The eUE processes operation successfully and returns
+                  following table of objects and values shown for each object:
+                  Note: There must be one index shown for each user. -->
+        <state ID="MIBWalk2">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPGetTable">
+                    <mod modtype="add" hdr="oids">
+                        <expr>CL-PKTC-EUE-DEV-MIB::pktcEUEDevOpTable</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPRespFailure</expr>
+                    </eq>
+                <then>
+                    <fail/>
+                </then>
+                </if>
+                <verify step="19">
+                    <and>
+                       <eq>
+                           <!-- pktcEUEDevOpDomain -->
+                           <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                           <expr>labrealm.com</expr>
+                       </eq>
+                    <and>
+                       <eq>
+                           <!-- pktcEUEDevOpSTUNAddrType -->
+                           <msg_ref type="utility" index="0 1 2">SNMPResp.varBind</msg_ref>
+                           <expr>2</expr>
+                       </eq>
+                    <and>
+					   <eq>
+                           <!-- pktcEUEDevOpSTUNAddr -->
+                           <msg_ref type="utility" index="0 2 2">SNMPResp.varBind</msg_ref>
+                           <expr>11 11 22 22 33 33 44 44 55 55 66 66 77 77 88 88</expr>
+						   <!--msg_ref type="platform">Platform.STUN IP Address</msg_ref-->
+                       </eq>
+                    <and>
+                       <eq>
+                           <!-- pktcEUEDevOpSTUNAddrPort -->
+                           <msg_ref type="utility" index="0 3 2">SNMPResp.varBind</msg_ref>
+                           <expr>5060</expr>
+                       </eq>
+                    <and>
+                       <eq>
+                           <!-- pktcEUEDevOpTURNAddrType -->
+                           <msg_ref type="utility" index="0 4 2">SNMPResp.varBind</msg_ref>
+                           <expr>2</expr>
+                       </eq>
+                    <and>
+					   <eq>
+                           <!-- pktcEUEDevOpTURNAddr -->
+                           <msg_ref type="utility" index="0 5 2">SNMPResp.varBind</msg_ref>
+                           <expr>11 11 22 22 33 33 44 44 55 55 66 66 77 77 88 88</expr>
+						   <!--msg_ref type="platform">Platform.TURN IP Address</msg_ref-->
+                       </eq>
+                    <and>
+                       <eq>
+                           <!-- pktcEUEDevOpTURNAddrPort -->
+                           <msg_ref type="utility" index="0 6 2">SNMPResp.varBind</msg_ref>
+                           <expr>5060</expr>
+                       </eq>
+                    <and>
+                       <eq>
+                           <!-- pktcEUEDevOpTURNCredsType -->
+                           <msg_ref type="utility" index="0 7 2">SNMPResp.varBind</msg_ref>
+                           <expr>2</expr>
+                       </eq>
+                    <and>
+                       <or>
+					   <contains>
+                           <!-- pktcEUEDevOpTURNCreds -->
+                           <msg_ref type="utility" index="0 8 0">SNMPResp.varBind</msg_ref>
+                           <expr>""</expr>
+                       </contains>
+					   <eq>
+                           <!-- pktcEUEDevOpTURNCreds -->
+                           <msg_ref type="utility" index="0 8 2">SNMPResp.varBind</msg_ref>
+                           <expr>ERROR</expr>
+                       </eq>
+					   </or>
+                       <eq>
+                           <!-- pktcEUEDevOpRowStatus -->
+                           <msg_ref type="utility" index="0 9 2">SNMPResp.varBind</msg_ref>
+                           <expr>1</expr>
+                       </eq>
+                    </and>
+                    </and>
+                    </and>
+                    </and>
+                    </and>
+                    </and>
+                    </and>
+                    </and>
+                    </and>
+                </verify>
+            </response>
+            <!-- 20 Stop IP capture. -->
+            <postlude>
+                <stop_capture/>
+            </postlude>
+            <transition to="ReConfigure3" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+<!-- vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv -->
+<!-- ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ -->
+
+        <!-- 20 ReConfigure. -->
+        <!-- <state ID="ReConfigure3"
+               provFile="E-UE_PROV_v6_2.1.2.1_2.bin"
+               policyFile="MTAFORCW122_test"
+               nextState="Reset3"/>  -->
+
+		<state ID="ReConfigure3">
+			<prelude>
+				<log promptUser="true" expr="Section 3: Configure the device with Bin File: v6.C.1.2.3_Hybrid.bin and Policy: X_eUEv6_Hybrid, Save, Deploy DHCPv6 and click OK."/>
+				<generate event="Branch1Event"/>
+			</prelude>
+			<transition to="Reset3" event="Branch1Event"/>
+		</state>
+
+        <!-- 21a Reset. -->
+        <state ID="Reset3" timer="120000">
+            <prelude once="true">
+                <start_capture>
+                    <filter>
+                        <var_expr>
+							<expr>host </expr>
+							<msg_ref type="platform">DUT.IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.CM IP Address</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.DHCP Server IP</msg_ref>
+						</var_expr>
+                    </filter>
+                </start_capture>
+
+                <send protocol="utility" msgtype="SNMPSet">
+                    <mod modtype="add" hdr="array">
+                        <var_expr>
+                            <expr>varBind 1 1 3 \r\n ][ , </expr>
+                            <expr>DOCS-CABLE-DEVICE-MIB::docsDevResetNow.0,INTEGER,1][\r\n</expr>
+                        </var_expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.CM IP Address</msg_ref>
+                    </mod>
+                    <!-- Always use version 2c for a CM reset -->
+					<mod modtype="replace" hdr="version">
+                        <expr>2c</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPRespFailure</expr>
+                    </eq>
+                    <then>
+                        <fail/>
+                    </then>
+                </if>
+                <if>
+                    <or>
+                        <eq>
+                            <msg_ref type="sip">REGISTER.Contact.expires</msg_ref>
+                            <expr>0</expr>
+                        </eq>
+                        <eq>
+                            <msg_ref type="sip">REGISTER.Expires.value</msg_ref>
+                            <expr>0</expr>
+                        </eq>
+                    </or>
+                    <then>
+                        <send protocol="sip" msgtype="200-REGISTER"/>
+                    </then>
+                </if>
+            </response>
+            <transition to="EUEProvisions3" event="TimerExpired"/>
+            <transition to="Reset3" event="SNMPResp"/>
+            <transition to="Reset3" event="REGISTER"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+        <!-- 21b E-UE DUT provisions successfully and becomes operational. -->
+        <state ID="EUEProvisions3">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvisioningState.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+					<!-- Always use version 2c for Hybrid mode -->
+					<mod modtype="replace" hdr="version">
+						<expr>2c</expr>
+					</mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="21">
+                    <eq>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>1</expr>
+                    </eq>
+                </verify>
+            </response>
+            <transition to="VerifyMIBs3" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+        <!-- 22 Using SNMP3 manager repeat Steps 15 - 19 above. -->
+        <!-- 22-15 Using proper SNMPv3 manager repeat Steps 3 - 5 above. -->
+        <!-- 22-3 Perform SNMPv3 Get on pktcEUEDevProfileVersion object.
+                  The eUE returns a value of 1.0. -->
+        <state ID="VerifyMIBs3">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>CL-PKTC-EUE-DEV-MIB::pktcEUEDevProfileVersion.0</expr>
+                    </mod>
+                    <!-- <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP Address</msg_ref>
+                    </mod> -->
+                    <!-- Always use version 2c for Hybrid mode -->
+					<mod modtype="replace" hdr="version">
+						<expr>2c</expr>
+					</mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPResp</expr>
+                    </eq>
+                <then>
+                    <verify step="22-3">
+                        <eq>
+                            <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                            <expr>1.0</expr>
+                        </eq>
+                    </verify>
+                </then>
+                </if>
+            </response>
+            <transition to="SNMPSet3" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+        <!-- 22-4 Perform SNMPv3 Set on pktcEUEDevProfileVersion to different but syntactically correct value.
+                  The eUE rejects Set operation and returns a "NonWritable(17)" error. -->
+        <state ID="SNMPSet3" timer="10000">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPSet">
+                    <mod modtype="add" hdr="array">
+                        <var_expr>
+                            <expr>varBind 1 1 3 \r\n ][ , </expr>
+                            <expr>CL-PKTC-EUE-DEV-MIB::pktcEUEDevProfileVersion,STRING,2.0][\r\n</expr>
+                        </var_expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+                    <!-- Always use version 2c for Hybrid mode -->
+					<mod modtype="replace" hdr="version">
+						<expr>2c</expr>
+					</mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPResp</expr>
+                    </eq>
+                <then>
+                    <fail/>
+                </then>
+                </if>
+
+                <verify step="22-4">
+					<contains>
+                        <msg_ref type="utility">SNMPRespFailure.errorString</msg_ref>
+                        <expr>notWritable</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="MIBWalk3" event="SNMPResp"/>
+            <transition to="MIBWalk3" event="SNMPRespFailure"/>
+        </state>
+
+        <!-- 22-5 Perform SNMPv3 Walk on pktcEUEDevOpTable.
+               The eUE processes operation successfully and returns
+               following table of objects and values shown for each object:
+               Note: There must be one index shown for each user. -->
+        <state ID="MIBWalk3">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPGetTable">
+                    <mod modtype="add" hdr="oids">
+                        <expr>CL-PKTC-EUE-DEV-MIB::pktcEUEDevOpTable</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="version">
+                        <expr>2c</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPRespFailure</expr>
+                    </eq>
+                <then>
+                    <fail/>
+                </then>
+                </if>
+                <verify step="22-5">
+					<and>
+                       <eq>
+                           <!-- pktcEUEDevOpDomain -->
+                           <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                           <expr>labrealm.com</expr>
+                       </eq>
+                    <and>
+                       <eq>
+                           <!-- pktcEUEDevOpSTUNAddrType -->
+                           <msg_ref type="utility" index="0 1 2">SNMPResp.varBind</msg_ref>
+                           <expr>0</expr>
+                       </eq>
+                    <and>
+                       <or>
+					   <contains>
+                           <!-- pktcEUEDevOpSTUNAddr -->
+                           <msg_ref type="utility" index="0 2 0">SNMPResp.varBind</msg_ref>
+                           <expr>""</expr>
+                       </contains>
+					   <eq>
+                           <!-- pktcEUEDevOpSTUNAddr -->
+                           <msg_ref type="utility" index="0 2 2">SNMPResp.varBind</msg_ref>
+                           <expr>ERROR</expr>
+                       </eq>
+					   </or>
+                    <and>
+                       <eq>
+                           <!-- pktcEUEDevOpSTUNAddrPort -->
+                           <msg_ref type="utility" index="0 3 2">SNMPResp.varBind</msg_ref>
+                           <expr>0</expr>
+                       </eq>
+                    <and>
+                       <eq>
+                           <!-- pktcEUEDevOpTURNAddrType -->
+                           <msg_ref type="utility" index="0 4 2">SNMPResp.varBind</msg_ref>
+                           <expr>0</expr>
+                       </eq>
+                    <and>
+                       <or>
+					   <contains>
+                           <!-- pktcEUEDevOpTURNAddr -->
+                           <msg_ref type="utility" index="0 5 0">SNMPResp.varBind</msg_ref>
+                           <expr>""</expr>
+                       </contains>
+					   <eq>
+                           <!-- pktcEUEDevOpTURNAddr -->
+                           <msg_ref type="utility" index="0 5 2">SNMPResp.varBind</msg_ref>
+                           <expr>ERROR</expr>
+                       </eq>
+					   </or>
+                    <and>
+                       <eq>
+                           <!-- pktcEUEDevOpTURNAddrPort -->
+                           <msg_ref type="utility" index="0 6 2">SNMPResp.varBind</msg_ref>
+                           <expr>0</expr>
+                       </eq>
+                    <and>
+                       <eq>
+                           <!-- pktcEUEDevOpTURNCredsType -->
+                           <msg_ref type="utility" index="0 7 2">SNMPResp.varBind</msg_ref>
+                           <expr>2</expr>
+                       </eq>
+                    <and>
+                       <or>
+					   <contains>
+                           <!-- pktcEUEDevOpTURNCreds -->
+                           <msg_ref type="utility" index="0 8 0">SNMPResp.varBind</msg_ref>
+                           <expr>""</expr>
+                       </contains>
+					   <eq>
+                           <!-- pktcEUEDevOpTURNCreds -->
+                           <msg_ref type="utility" index="0 8 2">SNMPResp.varBind</msg_ref>
+                           <expr>ERROR</expr>
+                       </eq>
+					   </or>
+                       <eq>
+                           <!-- pktcEUEDevOpRowStatus -->
+                           <msg_ref type="utility" index="0 9 2">SNMPResp.varBind</msg_ref>
+                           <expr>1</expr>
+                       </eq>
+                    </and>
+                    </and>
+                    </and>
+                    </and>
+                    </and>
+                    </and>
+                    </and>
+                    </and>
+                    </and>                </verify>
+            </response>
+            <!-- 16 Stop IP capture. -->
+            <postlude>
+                <stop_capture/>
+            </postlude>
+            <transition to="ReConfigure4" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+<!-- vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv -->
+<!-- ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ -->
+        <!-- 22-16 ReConfigure. -->
+        <!-- <state ID="ReConfigure4"
+               provFile="E-UE_PROV_v6_2.1.2.1_2.bin"
+               policyFile="MTAFORCW122_test"
+               nextState="Reset4"/>  -->
+
+		<state ID="ReConfigure4">
+			<prelude>
+				<log promptUser="true" expr="Section 4: Configure the device with Bin File: v6.C.1.2.10_Hybrid.bin and Policy: X_eUEv6_Hybrid, Save, Deploy DHCPv6 and click OK."/>
+				<generate event="Branch1Event"/>
+			</prelude>
+			<transition to="Reset4" event="Branch1Event"/>
+		</state>
+
+        <!-- 22-17a Reset. -->
+        <state ID="Reset4" timer="120000">
+            <prelude once="true">
+                <start_capture>
+                    <filter>
+                        <var_expr>
+							<expr>host </expr>
+							<msg_ref type="platform">DUT.IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.CM IP Address</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.DHCP Server IP</msg_ref>
+						</var_expr>
+                    </filter>
+                </start_capture>
+
+                <send protocol="utility" msgtype="SNMPSet">
+                    <mod modtype="add" hdr="array">
+                        <var_expr>
+                            <expr>varBind 1 1 3 \r\n ][ , </expr>
+                            <expr>DOCS-CABLE-DEVICE-MIB::docsDevResetNow.0,INTEGER,1][\r\n</expr>
+                        </var_expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.CM IP Address</msg_ref>
+                    </mod>
+                    <!-- Always use version 2c for a CM reset -->
+					<mod modtype="replace" hdr="version">
+                        <expr>2c</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPRespFailure</expr>
+                    </eq>
+                    <then>
+                        <fail/>
+                    </then>
+                </if>
+                <if>
+                    <or>
+                        <eq>
+                            <msg_ref type="sip">REGISTER.Contact.expires</msg_ref>
+                            <expr>0</expr>
+                        </eq>
+                        <eq>
+                            <msg_ref type="sip">REGISTER.Expires.value</msg_ref>
+                            <expr>0</expr>
+                        </eq>
+                    </or>
+                    <then>
+                        <send protocol="sip" msgtype="200-REGISTER"/>
+                    </then>
+                </if>
+            </response>
+            <transition to="EUEProvisions4" event="TimerExpired"/>
+            <transition to="Reset4" event="SNMPResp"/>
+            <transition to="Reset4" event="REGISTER"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+        <!-- 22-17b E-UE DUT provisions successfully and becomes operational. -->
+        <state ID="EUEProvisions4">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvisioningState.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+					<!-- Always use version 2c for Hybrid mode -->
+					<mod modtype="replace" hdr="version">
+						<expr>2c</expr>
+					</mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="22-17">
+                    <eq>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>1</expr>
+                    </eq>
+                </verify>
+            </response>
+            <transition to="VerifyMIBs4" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+        <!-- 22-18 Using proper SNMPv3 manager repeat Steps 3-5 above. -->
+        <!-- 22-3 Using proper SNMPv3 manager, perform SNMP Get on pktcEUEDevProfileVersion.
+                  The eUE returns a value of 1.0. -->
+        <state ID="VerifyMIBs4">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>CL-PKTC-EUE-DEV-MIB::pktcEUEDevProfileVersion.0</expr>
+                    </mod>
+                    <!-- <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP Address</msg_ref>
+                    </mod> -->
+                    <!-- Always use version 2c for Hybrid mode -->
+					<mod modtype="replace" hdr="version">
+						<expr>2c</expr>
+					</mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPResp</expr>
+                    </eq>
+                <then>
+                    <verify step="22-18(3)">
+                        <eq>
+                            <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                            <expr>1.0</expr>
+                        </eq>
+                    </verify>
+                </then>
+                </if>
+            </response>
+            <transition to="SNMPSet4" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+        <!-- 22-4 The eUE rejects Set operation and returns "NonWritable(17)" error. -->
+        <state ID="SNMPSet4" timer="10000">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPSet">
+                    <mod modtype="add" hdr="array">
+                        <var_expr>
+                            <expr>varBind 1 1 3 \r\n ][ , </expr>
+                            <expr>CL-PKTC-EUE-DEV-MIB::pktcEUEDevProfileVersion,STRING,2.0][\r\n</expr>
+                        </var_expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+                    <!-- Always use version 2c for Hybrid mode -->
+					<mod modtype="replace" hdr="version">
+						<expr>2c</expr>
+					</mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPResp</expr>
+                    </eq>
+                <then>
+                    <fail/>
+                </then>
+                </if>
+
+                <verify step="22-18(4)">
+					<contains>
+                        <msg_ref type="utility">SNMPRespFailure.errorString</msg_ref>
+                        <expr>notWritable</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="MIBWalk4" event="SNMPResp"/>
+            <transition to="MIBWalk4" event="SNMPRespFailure"/>
+        </state>
+
+        <!-- 22-5 Using proper SNMPv3 manager, perform SNMP Walk on pktcEUEDevOpTable.
+                  The eUE processes operation successfully and returns
+                  following table of objects and values shown for each object:
+                  Note: There must be one index shown for each user. -->
+        <state ID="MIBWalk4">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPGetTable">
+                    <mod modtype="add" hdr="oids">
+                        <expr>CL-PKTC-EUE-DEV-MIB::pktcEUEDevOpTable</expr>
+                    </mod>
+                    <!-- Always use version 2c for Hybrid mode -->
+					<mod modtype="replace" hdr="version">
+						<expr>2c</expr>
+					</mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPRespFailure</expr>
+                    </eq>
+                <then>
+                    <fail/>
+                </then>
+                </if>
+                <verify step="22-19">
+                    <and>
+                       <eq>
+                           <!-- pktcEUEDevOpDomain -->
+                           <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                           <expr>labrealm.com</expr>
+                       </eq>
+                    <and>
+                       <eq>
+                           <!-- pktcEUEDevOpSTUNAddrType -->
+                           <msg_ref type="utility" index="0 1 2">SNMPResp.varBind</msg_ref>
+                           <expr>2</expr>
+                       </eq>
+                    <and>
+					   <eq>
+                           <!-- pktcEUEDevOpSTUNAddr -->
+                           <msg_ref type="utility" index="0 2 2">SNMPResp.varBind</msg_ref>
+                           <expr>11 11 22 22 33 33 44 44 55 55 66 66 77 77 88 88</expr>
+						   <!--msg_ref type="platform">Platform.STUN IP Address</msg_ref-->
+                       </eq>
+                    <and>
+                       <eq>
+                           <!-- pktcEUEDevOpSTUNAddrPort -->
+                           <msg_ref type="utility" index="0 3 2">SNMPResp.varBind</msg_ref>
+                           <expr>5060</expr>
+                       </eq>
+                    <and>
+                       <eq>
+                           <!-- pktcEUEDevOpTURNAddrType -->
+                           <msg_ref type="utility" index="0 4 2">SNMPResp.varBind</msg_ref>
+                           <expr>2</expr>
+                       </eq>
+                    <and>
+					   <eq>
+                           <!-- pktcEUEDevOpTURNAddr -->
+                           <msg_ref type="utility" index="0 5 2">SNMPResp.varBind</msg_ref>
+                           <expr>11 11 22 22 33 33 44 44 55 55 66 66 77 77 88 88</expr>
+						   <!--msg_ref type="platform">Platform.TURN IP Address</msg_ref-->
+                       </eq>
+                    <and>
+                       <eq>
+                           <!-- pktcEUEDevOpTURNAddrPort -->
+                           <msg_ref type="utility" index="0 6 2">SNMPResp.varBind</msg_ref>
+                           <expr>5060</expr>
+                       </eq>
+                    <and>
+                       <eq>
+                           <!-- pktcEUEDevOpTURNCredsType -->
+                           <msg_ref type="utility" index="0 7 2">SNMPResp.varBind</msg_ref>
+                           <expr>2</expr>
+                       </eq>
+                    <and>
+                       <or>
+					   <contains>
+                           <!-- pktcEUEDevOpTURNCreds -->
+                           <msg_ref type="utility" index="0 8 0">SNMPResp.varBind</msg_ref>
+                           <expr>""</expr>
+                       </contains>
+					   <eq>
+                           <!-- pktcEUEDevOpTURNCreds -->
+                           <msg_ref type="utility" index="0 8 2">SNMPResp.varBind</msg_ref>
+                           <expr>ERROR</expr>
+                       </eq>
+					   </or>
+                       <eq>
+                           <!-- pktcEUEDevOpRowStatus -->
+                           <msg_ref type="utility" index="0 9 2">SNMPResp.varBind</msg_ref>
+                           <expr>1</expr>
+                       </eq>
+                    </and>
+                    </and>
+                    </and>
+                    </and>
+                    </and>
+                    </and>
+                    </and>
+                    </and>
+                    </and>
+                </verify>
+            </response>
+			<postlude>
+                <stop_capture/>
+            </postlude>
+			<transition to="END" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+    </add_to>
+</pc2xml>

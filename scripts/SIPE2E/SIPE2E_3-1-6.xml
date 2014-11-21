@@ -1,0 +1,581 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+-->
+
+<!-- First are the document type and the attributes for our document -->
+<pc2xml version="$Revision: 6675 $" 
+	name="SIPE2E 3.1.6" 
+	descrip="This test is used to testing the order testing when calling from (UE5) to (UE6) and then the reverse" 
+	number="1">
+	
+	<fsm name="UE5">
+		<models>
+			<session/>
+		</models>
+	
+		<NE sim_type="orig" elements="UE5" targets="UE5"/>
+	
+		<states initialstate="WaitUE6Register">
+			<state ID="WaitUE6Register">
+				<transition to="UE5Registering" event="Registered"/>
+			</state>
+			
+			<state ID="UE5Registering">
+				<prelude>
+					<send protocol="sip" msgtype="Register" target="PCSCF1"/>
+				</prelude>
+				<transition to="UE5Digest" event="401-Register"/>
+				<transition to="UE5Subscribe" event="200-Register"/>
+			</state>
+			
+			<state ID="UE5Digest">
+				<prelude>
+					<send protocol="sip" msgtype="Register" target="PCSCF1"/>
+				</prelude>
+				<transition to="UE5Subscribe" event="200-Register"/>
+			</state>
+			
+			<state ID="UE5Subscribe">
+				<prelude once="true">
+					<send protocol="sip" msgtype="SUBSCRIBE" subscribeType="reg" target="PCSCF1"/>
+				</prelude>
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>NOTIFY</expr>
+						</eq>
+						<then>
+							<send protocol="sip" msgtype="200-NOTIFY" target="PCSCF1"/>
+							<generate event="Registered" fsm="UE6"/>
+						</then>
+					</if>
+				</response>
+				<transition to="UE5Subscribe" event="200-SUBSCRIBE"/>
+				<transition to="UE5Setup" event="NOTIFY"/>
+			</state>
+					
+			<state ID="UE5Setup">
+				<prelude>
+					<send protocol="sip" msgtype="Invite" target="PCSCF1" destination="UE6"/>
+				</prelude>
+				<response>
+					<if>
+						<contains>
+							<msg_ref type="sip" msg_instance="last" hdr_instance="any">18x-Invite.Require</msg_ref>
+							<expr>100rel</expr>
+						</contains>
+						<then>
+							<send protocol="sip" msgtype="Prack" target="PCSCF1" destination="UE6"/>
+						</then>
+					</if>
+				</response>
+				<transition to="UE5Proceeding" event="100-INVITE"/>
+				<transition to="UE5Alerting" event="180-INVITE"/>
+				<transition to="UE5Alerting" event="183-INVITE"/>
+				<transition to="UE5Connected" event="200-INVITE"/>
+			</state>
+			
+			<state ID="UE5Proceeding">
+				<response>
+					<if>
+						<contains>
+							<msg_ref type="sip" msg_instance="last" hdr_instance="any">18x-Invite.Require</msg_ref>
+							<expr>100rel</expr>
+						</contains>
+						<then>
+							<send protocol="sip" msgtype="Prack" target="PCSCF1" destination="UE6"/>
+						</then>
+					</if>
+				</response>
+				<transition to="UE5Alerting" event="180-INVITE"/>
+				<transition to="UE5Alerting" event="183-INVITE"/>
+				<transition to="UE5Connected" event="200-INVITE"/>
+			</state>
+		
+			<state ID="UE5Alerting">
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>UPDATE</expr>
+						</eq>
+						<then>
+							<send protocol="sip" msgtype="200-Update" target="PCSCF1" destination="UE6"/>
+						</then>
+						<elseif>
+							<and>
+								<eq>
+									<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+									<expr>180</expr>
+								</eq>
+								<contains>
+									<msg_ref type="sip" hdr_instance="any">180-INVITE.Require</msg_ref>
+									<expr>100rel</expr>
+								</contains>
+							</and>
+							<then>
+								<send protocol="sip" msgtype="Prack" target="PCSCF1" destination="UE6"/>
+							</then>
+						</elseif>
+					</if>
+				</response>
+				<transition to="UE5Alerting" event="200-PRACK"/>
+				<transition to="UE5Alerting" event="UPDATE"/>
+				<transition to="UE5Alerting" event="18x-INVITE"/>
+				<transition to="UE5Connected" event="200-INVITE"/>
+			</state>
+		
+			<state ID="UE5Connected" timer="5000">
+				<prelude>
+					<send protocol="sip" msgtype="ACK" target="PCSCF1" destination="UE6"/>
+				</prelude>
+				<transition to="UE5Releasing" event="TimerExpired"/>
+			</state>
+			
+			<state ID="UE5Releasing">
+				<prelude>
+					<send protocol="sip" msgtype="Bye" target="PCSCF1" destination="UE6"/>
+				</prelude>
+				<transition to="Call1Complete" event="200-BYE"/>
+			</state>
+			
+			<state ID="Call1Complete" ES="true">
+				<transition to="UE6CallingSetup" event="SessionTerminated"/>
+			</state>
+			
+			<state ID="UE6CallingSetup">
+				<prelude>
+					<generate event="Branch1Event" fsm="UE6"/>
+				</prelude>
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>Invite</expr>
+						</eq>
+						<then>
+							<send protocol="sip" msgtype="100-INVITE" target="PCSCF1" destination="UE6"/>
+						</then>
+					</if>
+					<if>
+						<and>
+							<eq>
+								<msg_ref type="extensions">precondition</msg_ref>
+								<expr>require</expr>
+							</eq>
+							<or>
+								<contains>
+									<msg_ref type="sip" hdr_instance="any">Invite.Require</msg_ref>
+									<expr>precondition</expr>
+								</contains>
+								<contains>
+									<msg_ref type="sip" hdr_instance="any">Invite.Supported</msg_ref>
+									<expr>precondition</expr>
+								</contains>
+							</or>
+						</and>
+						<then>
+							<send protocol="sip" msgtype="183-Invite" target="PCSCF1" destination="UE6"/>
+						</then>
+						<elseif>
+							<eq>
+								<msg_ref type="sip">Request</msg_ref>
+								<expr>Invite</expr>
+							</eq>
+							<then>
+								<send protocol="sip" msgtype="180-Invite" target="PCSCF1" destination="UE6"/>
+							</then>
+						</elseif>
+					</if>
+				</response>
+				<transition to="UE6CallingAlerting" event="INVITE"/>
+			</state>
+			
+			<state ID="UE6CallingAlerting">
+				<response>
+					<if>
+						<and>
+							<eq>
+								<msg_ref type="sip">Request</msg_ref>
+								<expr>PRACK</expr>
+							</eq>
+							<contains>
+								<msg_ref type="sip" msg_instance="last" hdr_instance="any">18x-Invite.Require</msg_ref>
+								<expr>100rel</expr>
+							</contains>
+						</and>
+						<then>
+							<send protocol="sip" msgtype="200-PRACK" target="PCSCF1" destination="UE6"/>
+						</then>
+					</if>
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>UPDATE</expr>
+						</eq>
+						<then>
+							<send protocol="sip" msgtype="200-Update" target="PCSCF1" destination="UE6"/>
+						</then>
+					</if>
+					<!-- Test whether to send 180 -->
+					<if>
+						<and>
+							<contains>
+								<msg_ref type="sip" msg_instance="last">18x-Invite.Status-Line.status-code</msg_ref>
+								<expr>183</expr>
+							</contains>
+							<eq>
+								<msg_ref type="sdp">Request.qos-curr-remote.direction</msg_ref>
+								<msg_ref type="sdp">Request.qos-des-remote.direction</msg_ref>
+							</eq>
+						</and>
+						<then>
+							<send protocol="sip" msgtype="180-Invite" target="PCSCF1" destination="UE6"/>
+						</then>
+					</if>
+				</response>
+				<transition to="UE6CallingAlerting" event="PRACK"/>
+				<transition to="UE6CallingAlerting" event="UPDATE"/>
+				<transition to="UE6CallingAnswer" event="ALERTING_UAS"/>
+			</state>
+			
+			<state ID="UE6CallingAnswer" timer="6000">
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="event"/>
+							<expr>TimerExpired</expr>
+						</eq>
+						<then>
+							<send protocol="sip" msgtype="200-INVITE" target="PCSCF1" destination="UE6"/>
+						</then>
+					</if>
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>UPDATE</expr>
+						</eq>
+						<then>
+							<send protocol="sip" msgtype="200-Update" target="PCSCF1" destination="UE6"/>
+						</then>
+					</if>
+				</response>
+				<transition to="UE6CallingAnswer" event="UPDATE"/>
+				<transition to="UE6CallingAnswer" event="TimerExpired"/>
+				<transition to="UE6CallingConnected" event="ACK"/>
+			</state>
+			
+			<state ID="UE6CallingConnected" timer="5000">
+				<postlude>
+					<send protocol="sip" msgtype="BYE" target="PCSCF1" destination="UE6"/>
+				</postlude>
+				<transition to="UE5SentBye" event="TimerExpired"/>
+			</state>
+			
+			<state ID="UE5SentBye">
+				<transition to="END" event="200-BYE"/>
+			</state>
+		</states>
+	</fsm>
+	
+	<fsm name="UE6" sipStack="SIP Stack 2">
+		<models>
+			<session/>
+		</models>
+		<NE sim_type="term" elements="UE6" targets="UE6"/>
+		
+		<states initialstate="UE6Registering">
+		
+			<state ID="UE6Registering">
+				<prelude>
+					<log promptUser="true" expr="Configure the SF to preform ENUM Queries to the ENUM Server."/>
+					<start_capture/>
+					<sleep time="1000"/>
+					<send protocol="sip" msgtype="Register" target="PCSCF2"/>
+				</prelude>
+				<transition to="UE6Digest" event="401-Register"/>
+				<transition to="UE6Subscribe" event="200-Register"/>
+			</state>
+			
+			<state ID="UE6Digest">
+				<prelude>
+					<send protocol="sip" msgtype="Register" target="PCSCF2"/>
+				</prelude>
+				<transition to="UE6Subscribe" event="200-Register"/>
+			</state>
+			
+			<state ID="UE6Subscribe">
+				<prelude once="true">
+					<send protocol="sip" msgtype="SUBSCRIBE"  subscribeType="reg" target="PCSCF2"/>
+				</prelude>
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>NOTIFY</expr>
+						</eq>
+						<then>
+							<send protocol="sip" msgtype="200-NOTIFY" target="PCSCF2"/>
+							<generate event="Registered" fsm="UE6"/>
+						</then>
+					</if>
+				</response>
+				<transition to="UE6Subscribe" event="200-SUBSCRIBE"/>
+				<transition to="UE6Registered" event="NOTIFY"/>
+			</state>
+			
+			<state ID="UE6Registered">
+				<prelude>
+					<generate event="Registered" fsm="UE5"/>
+				</prelude>
+				<transition to="UE6Setup" event="Registered"/>
+			</state>
+			
+			<state ID="UE6Setup">
+				<response>
+					<!-- If the current message that we received is an Invite, answer with
+               a 100-trying -->
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>Invite</expr>
+						</eq>
+						<then>
+							<send protocol="sip" msgtype="100-INVITE" target="PCSCF2" destination="UE5"/>
+						</then>
+					</if>
+					<if>
+						<and>
+							<eq>
+								<msg_ref type="extensions">precondition</msg_ref>
+								<expr>require</expr>
+							</eq>
+							<or>
+								<contains>
+									<msg_ref type="sip" hdr_instance="any">Invite.Require</msg_ref>
+									<expr>precondition</expr>
+								</contains>
+								<contains>
+									<msg_ref type="sip" hdr_instance="any">Invite.Supported</msg_ref>
+									<expr>precondition</expr>
+								</contains>
+							</or>
+						</and>
+						<then>
+							<!--Sending 183-Invite with answer-->
+							<send protocol="sip" msgtype="183-Invite" target="PCSCF2" destination="UE5"/>
+						</then>
+						<elseif>
+							<eq>
+								<msg_ref type="sip">Request</msg_ref>
+								<expr>Invite</expr>
+							</eq>
+							<then>
+								<!--Sending 180-Invite with SS not supporting precondition.-->
+								<send protocol="sip" msgtype="180-Invite" target="PCSCF2" destination="UE5"/>
+							</then>
+						</elseif>
+					</if>
+				</response>
+				<transition to="UE6Alerting" event="INVITE"/>
+			</state>
+			
+			<state ID="UE6Alerting">
+				<response>
+					<if>
+						<and>
+							<eq>
+								<msg_ref type="sip">Request</msg_ref>
+								<expr>PRACK</expr>
+							</eq>
+							<contains>
+								<msg_ref type="sip" msg_instance="last" hdr_instance="any">18x-Invite.Require</msg_ref>
+								<expr>100rel</expr>
+							</contains>
+						</and>
+						<then>
+							<!--Reliablity required for test sending 200-Prack message to peer.-->
+							<send protocol="sip" msgtype="200-PRACK" target="PCSCF2" destination="UE5"/>
+						</then>
+					</if>
+					<!-- Now test for an UPDATE message -->
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>UPDATE</expr>
+						</eq>
+						<then>
+							<!--QoS required or supported sending 200-Update message to peer.-->
+							<send protocol="sip" msgtype="200-Update" target="PCSCF2" destination="UE5"/>
+						</then>
+					</if>
+					<!-- Test whether to send 180 -->
+					<if>
+						<and>
+							<contains>
+								<msg_ref type="sip" msg_instance="last">18x-Invite.Status-Line.status-code</msg_ref>
+								<expr>183</expr>
+							</contains>
+							<eq>
+								<msg_ref type="sdp">Request.qos-curr-remote.direction</msg_ref>
+								<msg_ref type="sdp">Request.qos-des-remote.direction</msg_ref>
+							</eq>
+						</and>
+						<then>
+							<!--Sending 180 for required preconditions.-->
+							<send protocol="sip" msgtype="180-Invite" target="PCSCF2" destination="UE5"/>
+						</then>
+					</if>
+				</response>
+				<transition to="UE6Alerting" event="PRACK"/>
+				<transition to="UE6Alerting" event="UPDATE"/>
+				<transition to="UE6Answer" event="ALERTING_UAS"/>
+			</state>
+			
+			<state ID="UE6Answer" timer="6000">
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="event"/>
+							<expr>TimerExpired</expr>
+						</eq>
+						<then>
+							<send protocol="sip" msgtype="200-INVITE" target="PCSCF2" destination="UE5"/>
+						</then>
+					</if>
+					<!-- Now test for an UPDATE message -->
+					<!-- Steps 6 and 7 in the Call-Orig-at_UE(DUT) Default Message Flow document. -->
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>UPDATE</expr>
+						</eq>
+						<then>
+							<!--QoS required or supported sending 200-Update message to peer.-->
+							<send protocol="sip" msgtype="200-Update" target="PCSCF2" destination="UE5"/>
+						</then>
+					</if>
+				</response>
+				<transition to="UE6Answer" event="UPDATE"/>
+				<transition to="UE6Answer" event="TimerExpired"/>
+				<transition to="UE6Connected" event="ACK"/>
+			</state>
+			
+			<state ID="UE6Connected">
+				<postlude>
+					<send protocol="sip" msgtype="200-BYE" target="PCSCF2" destination="UE5"/>
+				</postlude>
+				<transition to="UE6CallComplete" event="Bye"/>
+			</state>
+			
+			<state ID="UE6CallComplete" ES="true" offHookOK="true">
+				<transition to="WaitUE5" event="SessionTerminated"/>
+			</state>
+			
+			<state ID="WaitUE5">
+				<transition to="CallUE5" event="Branch1Event"/>
+			</state>
+			
+			<state ID="CallUE5">
+				<prelude>
+					<send protocol="sip" msgtype="Invite" target="PCSCF2" destination="UE5"/>
+				</prelude>
+				<response>
+					<if>
+						<contains>
+							<msg_ref type="sip" msg_instance="last" hdr_instance="any">18x-Invite.Require</msg_ref>
+							<expr>100rel</expr>
+						</contains>
+						<then>
+							<send protocol="sip" msgtype="Prack" target="PCSCF2" destination="UE5"/>
+						</then>
+					</if>
+				</response>
+				<!-- Transitions for Setup state -->
+				<transition to="CallUE5Proceeding" event="100-INVITE"/>
+				<transition to="CallUE5Alerting" event="180-INVITE"/>
+				<transition to="CallUE5Alerting" event="183-INVITE"/>
+				<transition to="CallUE5Connected" event="200-INVITE"/>
+			</state>
+			
+			<state ID="CallUE5Proceeding">
+				<response>
+					<if>
+						<contains>
+							<msg_ref type="sip" msg_instance="last" hdr_instance="any">18x-Invite.Require</msg_ref>
+							<expr>100rel</expr>
+						</contains>
+						<then>
+							<!--Reliablity required for test sending Prack message to peer.-->
+							<send protocol="sip" msgtype="Prack" target="PCSCF2" destination="UE5"/>
+						</then>
+					</if>
+				</response>
+				<transition to="CallUE5Alerting" event="180-INVITE"/>
+				<transition to="CallUE5Alerting" event="183-INVITE"/>
+				<transition to="CallUE5Connected" event="200-INVITE"/>
+			</state>
+		
+			<state ID="CallUE5Alerting">
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>UPDATE</expr>
+						</eq>
+						<then>
+							<send protocol="sip" msgtype="200-Update" target="PCSCF2" destination="UE5"/>
+						</then>
+						<elseif>
+							<and>
+								<eq>
+									<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+									<expr>180</expr>
+								</eq>
+								<contains>
+									<msg_ref type="sip" hdr_instance="any">180-INVITE.Require</msg_ref>
+									<expr>100rel</expr>
+								</contains>
+							</and>
+							<then>
+								<send protocol="sip" msgtype="Prack" target="PCSCF2" destination="UE5"/>
+							</then>
+						</elseif>
+					</if>
+				</response>
+				<transition to="CallUE5Alerting" event="200-PRACK"/>
+				<transition to="CallUE5Alerting" event="UPDATE"/>
+				<transition to="CallUE5Alerting" event="18x-INVITE"/>
+				<transition to="CallUE5Connected" event="200-INVITE"/>
+			</state>
+		
+			<state ID="CallUE5Connected">
+				<prelude>
+					<send protocol="sip" msgtype="ACK" target="PCSCF2" destination="UE5"/>
+				</prelude>
+				<postlude>
+					<send protocol="sip" msgtype="200-BYE" target="PCSCF2" destination="UE5"/>
+				</postlude>
+				<transition to="CallUE5Released" event="Bye"/>
+			</state>
+			
+			<state ID="CallUE5Released" ES="true" offHookOK="true"/>
+		</states>
+	</fsm>
+</pc2xml>

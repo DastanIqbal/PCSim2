@@ -1,0 +1,261 @@
+###############################################################################
+#// Filename: E-UE-PROV_1-1-3-2.test
+#// Author:   Matthew Forbes
+#//           
+#//
+#//
+#// Creation Date: August 02, 2004
+#// Modified by:
+################################################################################
+#// Description:
+#//     TC617 TEST CASE PROV 5.9 Verify DHCP Logic For Option 122 Sub-option 1
+#//     When Value is 255.255.255.255
+#//
+#// Objective:
+#//     To verify the correct MTA behavior when sub-option 1 contains 255.255.255.255
+#//     
+#//
+#// PacketCable DUT:
+#//     MTA
+#//
+#// Test Steps:
+#//     - Initial configuration
+#//     - Reset DUT
+#//     - Check Provisioning state
+#//     - Configure two DHCP servers in the same domain, one serving the CM, both
+#//       serving the MTA
+#//     - Change CM policy in DHCP1 so option 122,sub_option 1 is 255.255.255.255
+#//     - Change CM policy in DHCP2 to exclude the CM
+#//     - Modify CMTS configuration to add the IP helper address for the second
+#//       DHCP server
+#//     - Start sniffer
+#//     - Reset DUT
+#//     - Check Provisioning state
+#//     - Stop sniffer
+#//     - Invoke parsing tool and validate using Pass/Fail scripts
+#//     - Restore CM policies
+#//     - Restore CMTS configuration
+#//     - Delete MTA config file
+#//
+#// Notes:
+#//     - Requires provPrimitives .tcl & tftp_primitives.tcl.
+#//     - Requires the specific config file in $BASE_CFG_FILE_PATH in Provisioning Server.
+#//     - Requires parT.tcl parsing tool to parse data from capture file.
+##########################################################################################
+
+global SCRIPT_VERSION
+set SCRIPT_VERSION { # $Id: E-UE-PROV_1-1-3-2.test 7406 2010-07-20 17:17:37Z dthakore $ }
+set TFTP_SERVER2 10.32.0.72
+###################### INITIAL CONFIGURATION OF DUT ########################
+
+DoStep "E-UE-PROV_1-1-3-2_1-1" "Initial configuration" {
+    LogMsg "--- Initial PROV module ---"
+    Init_PROV
+    # ProvCreateConfig 291 $MTA_MAC
+} { PASS_STEP }
+
+
+################ CONFIGURE BOTH DHCP SERVERS AND THE CMTS #################
+
+DoStep "E-UE-PROV_1-1-3-2_3-1" "Modify CM Policies on both DHCP servers" {
+    LogMsg "--- Modify CM Policies on both DHCP servers ---"
+    # verify_signal "Change option 122, sub-option 1 to 255.255.255.255 in the CM policy for DHCP1(CMTC617)"
+    # ProvCreateConfig 291 $MTA_MAC
+    PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122 Device_Level_Secure.cfg
+    PROV_MODIFY_DEVICE $CM_MAC CMTC617
+    PROV_DEPLOY_DHCP
+    PACT_SWITCH_PROV_TO $PROV_DHCP2_IP
+    set TFTP_SERVER1 $TFTP_SERVER
+    set TFTP_SERVER $TFTP_SERVER2
+    # ProvCreateConfig 291 $MTA_MAC
+    PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122 Device_Level_Secure.cfg
+    PROV_DEPLOY_DHCP
+    PACT_SWITCH_PROV_BACK
+    set TFTP_SERVER $TFTP_SERVER1
+    verify_signal "Configure TWO - DHCP SERVERS(enter & include DUT on this server,$PROV_DHCP2_IP):
+    Modify CM policy for DHCP2 ($PROV_DHCP2_IP) to exclude the CM for the DUT
+    ($PROV_DHCP2_IP, list devices, then check box by $CM_MAC then click exclude & ok)"
+    PACT_SWITCH_PROV_TO $PROV_DHCP2_IP
+    PROV_DEPLOY_DHCP
+    PACT_SWITCH_PROV_BACK
+    LogMsg "--- CM Policy for DHCP1 & DHCP2 has been modified ---"
+    # verify_signal "Modify CM policy for DHCP2 to exclude the CM for the DUT (CMTSGROUPEXCLUDE)"
+    # LogMsg "--- CM Policy for DHCP2 has been modified ---"
+    LogMsg "--- Add IP Helper address to CMTS configuration for second DHCP server ---"
+    verify_signal "Modify CMTS configuration to add ip helper address for second DHCP server, $PROV_DHCP2_IP ."
+    LogMsg "--- CMTS configuration has been modified ---"
+} {PASS_STEP}
+
+################################# START SNIFFER ###############################
+
+DoStep "E-UE-PROV_1-1-3-2_3-2" "Start sniffer" {
+    LogMsg "--- Start sniffer ---"
+    Init_CONTROLLER_LAN
+    SetupCaptureControllerLan "host $PROV_DHCP1_IP || udp port 67 || host $PROV_DHCP2_IP"
+    StartCaptureControllerLan
+} {PASS_STEP}
+
+############### RESET DUT AND CAPTURE MTA AND DHCP IP ADDRESSES ################
+
+DoStep "E-UE-PROV_1-1-3-2_4-1" "Reset MTA" {
+    set val [SNMPvN_RESET $CM_IP]
+    LogMsg "Reset of CM and MTA has passed"
+} {
+    IsEqual $val 0
+}
+
+DoStep "E-UE-PROV_1-1-3-2_5-1" "Wait two minutes for provisioning to complete" {
+    actionWait "Wait two minutes for provisioning to complete" 120
+} {PASS_STEP}
+    
+################################## STOP SNIFFER ###############################
+
+DoStep "E-UE-PROV_1-1-3-2_5-2" "Stop sniffer" {
+    LogMsg "--- Stop sniffer ---"
+    StopCaptureControllerLan
+    SaveToFileControllerLan
+} { PASS_STEP }
+
+############################## INVOKE PARSING TOOL ############################
+
+DoStep "E-UE-PROV_1-1-3-2_6-1" "Analyze flow data" {
+    # Initial PARSER TOOL
+    Init_PART
+    
+    # Set up parser file
+    set PARSERFILE    $ETH_DEFAULT_TXT_FILE
+} { PASS_STEP }
+
+DoStep "E-UE-PROV_1-1-3-2_6-2" "Parse all data into database" {
+     # Parse data
+    set PARAMS_DHCP         "{DHCP {} {} {} {} {} {} {} {}}"
+    set PARAMS_SNMP         "{SNMP {} {} {} {} {} {} {} {}}"
+    set PARAMS_CM_SRC       "{{} {} {} {} $CM_IP {} {} {} {}}"
+    set PARAMS_CM_DST       "{{} {} {} {} {} {} {} $CM_IP {}}"
+    set msgID_CM            [ParseFile $PARSERFILE "$PARAMS_DHCP $PARAMS_SNMP $PARAMS_CM_SRC $PARAMS_CM_DST"]   
+    set PARAMS_MTA_SRC      "{{} {} {} {} $MTA_IP {} {} {} {}}"
+    set PARAMS_MTA_DST      "{{} {} {} {} {} {} {} $MTA_IP {}}"
+    set msgID_MTA           [ParseFile $PARSERFILE "$PARAMS_DHCP $PARAMS_SNMP $PARAMS_MTA_SRC $PARAMS_MTA_DST"]
+} {
+     if { $::PART_RETURN == 0 } {
+         PASS_STEP
+     } else {
+         FAIL_STEP "Cannot find data"
+     }
+}
+
+################### VERIFY SUB-OPTION VALUE AND DHCP REQUEST ##################
+    
+    # Verify DHCP OFFER, option 122, sub-option 1 is 255.255.255.255 
+DoStep "E-UE-PROV_1-1-3-2_6-3" "DHCP OFFER: OPTION 122 SUBOPTION 1: 255.255.255.255" {
+    LogMsg "Verify DHCP OFFER: OPTION 122 SUBOPTION 1: 255.255.255.255"
+    set CONTINUE_PAST_STEP_ERROR 1
+    # Find CM MAC with colons
+    set CM_MAC_COL [AddColMac $CM_MAC]
+} {
+    VerifyValue $msgID_CM "INANY DHCP OFFER OPTION122SUBOPTION1" "IS" "255.255.255.255.*" AND \
+           "OPTIONCLIENTHWADDRESS" "IS" "$CM_MAC_COL"
+ }
+
+DoStep "E-UE-PROV_1-1-3-2_7-1" "DHCP REQUEST: EXISTS" {
+    LogMsg "Verify DHCP REQUEST: EXISTS"
+    # Find MTA MAC with colons
+    set MTA_MAC_COL [AddColMac $MTA_MAC]
+} {
+    # Verify DHCP REQUEST exsists
+    VerifyValue $msgID_MTA "INANY DHCP REQUEST OPTION55" "EXISTS" ""  AND \
+            "OPTIONCLIENTHWADDRESS" "IS" "$MTA_MAC_COL"
+}
+
+#################### Verify CM and MTA ADDRESSES ARE DIFFERENT ############
+
+DoStep "E-UE-PROV_1-1-3-2_8-1" "Verify CM IP differs from MTA IP" {
+    LogMsg "Verify CM IP differs from MTA IP"
+    
+    # Get CM IP from TFTP
+    set cmIP [GetValue $msgID_CM  "INANY DHCP ACK OPTIONCLIENTIPADDRESS" AND \
+            "OPTIONCLIENTHWADDRESS" "IS" "$CM_MAC_COL"]
+    
+    # Get MTA IP from TFTP
+    set mtaIP [GetValue $msgID_MTA "INANY DHCP ACK OPTIONCLIENTIPADDRESS" AND \
+            "OPTIONCLIENTHWADDRESS" "IS" "$MTA_MAC_COL"]
+} {
+    if {$cmIP != $mtaIP} {
+        PASS_STEP
+    } else {
+        FAIL_STEP "CM IP is the same as MTA IP"
+    }
+}
+# }
+
+
+########################## VERIFY PROVISIONING STATE #########################
+# if {0} {
+# DoStep "E-UE-PROV_1-1-3-2_11-1" "pktcMTADevProvisioningState Content Verification" {
+    # set MTA_IP $mtaIP
+    # puts $MTA_IP
+    # # Get the OID from the MTA and check it using our previously defined
+    # set val [SNMP_GET $oid_pktcMtaDevProvState $MTA_IP]
+    # LogMsg "MTA Provisioning State"
+    # LogMsg "             - Expected : 1"
+    # LogMsg "             - Received : $val"
+# } {
+    # IsEqual $val 1
+# }
+
+# DoStep "E-UE-PROV_1-1-3-2_11-1" "SNMP INFORM MACID" {
+    # LogMsg "Verify SNMP INFORM MACID"
+# } {
+    # set mtaMac [string toupper [regsub -all {:} [AddColMac $MTA_MAC] { }] ]
+    # # Verify MTA MAC
+    # VerifyValue $msgID_MTA "INANY SNMP SNMP_INFORM SNMP_PROVSTATE" "IS" "1"
+# }
+
+###### RESTORE CM POLICIES FOR BOTH DHCP SERVERS AND CMTS CONFIGURATION #######
+
+DoStep "E-UE-PROV_1-1-3-2_12-1" "Restore CM policies in both DHCP servers" {
+    LogMsg "--- Restore CM policies in both DHCP servers ---"
+    # verify_signal "Restore CM policies in both DHCP servers (CMFORCW_122,original CMTSGROUP)"
+    PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122 Device_Level_Secure.cfg $MTA_IP
+    PROV_MODIFY_DEVICE $CM_MAC CMFORCW_122
+    PROV_DEPLOY_DHCP
+    verify_signal "Modify MTA policy for DHCP2 ($PROV_DHCP2_IP) to exclude the MTA for the DUT
+    ($PROV_DHCP2_IP, list devices, then check box by $MTA_MAC then click exclude & ok)"
+    PACT_SWITCH_PROV_TO $PROV_DHCP2_IP
+    PROV_DEPLOY_DHCP
+    PACT_SWITCH_PROV_BACK
+    LogMsg "--- CM policies in both DHCP servers have been restored ---"
+    LogMsg "--- Remove IP Helper address from CMTS configuration for second DHCP server ---"
+    verify_signal "Modify CMTS configuration to remove ip helper address for second DHCP server, $PROV_DHCP2_IP ."
+    LogMsg "--- CMTS configuration has been restored ---"
+} {PASS_STEP}
+
+############### RESET DUT AND CAPTURE MTA AND DHCP IP ADDRESSES ################
+
+DoStep "E-UE-PROV_1-1-3-2_12-2" "Reset MTA" {
+    set val [SNMPvN_RESET $CM_IP]
+    LogMsg "Reset of CM and MTA has passed"
+} {
+    IsEqual $val 0
+}
+
+DoStep "E-UE-PROV_1-1-3-2_12-3" "Wait a minute for provisioning to complete" {
+    actionWait "Wait a minute for provisioning to complete" 60
+} {PASS_STEP}
+
+DoStep "E-UE-PROV_1-1-3-2_12-4" "Remove static IP" {
+    PROV_MODIFY_DEVICE $MTA_MAC {} {} {""}
+    PROV_DEPLOY_DHCP
+} {PASS_STEP}
+
+#################################################################################
+# Cleanup
+#################################################################################
+set CONTINUE_PAST_STEP_ERROR 0
+#close $SNMP_SOCKET
+# source ./moduleSNMP/SNMPPrimitives.tcl ;#Restart SNMP with the main SNMP server
+Cleanup
+return 0
+
+
+

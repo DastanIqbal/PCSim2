@@ -1,0 +1,308 @@
+#//****************************************************************************
+#// Filename: E-UE-DATA_1-1-1-4.test
+#// Author:   Matthew Forbes
+#// Creation Date: 11/06/2008
+#// Modified by:
+#//
+#//
+#//
+#//****************************************************************************
+#// Description:
+#//     TC2736 TEST CASE E-UE-DATA 1.1.1.4 Ability of eUE to Support Battery Backup MIBs
+#//        (Scenario 3)
+#//
+#// Objective:
+#//     If the eUE supports battery backup, this test verifies the read-only and read-write functionality
+#//     for a subset of battery backup MIB objects. Additionally, this test checks functionality for specific
+#//     battery usage.
+#//
+#// PacketCable DUT:
+#//     EDVA
+#//
+#// Test Steps:
+#//     - Initial configuration
+#//     - Start sniffer
+#//     - Reset EDVA
+#//     - Check Provisioning state
+#//     - Check values MIB values
+#//     - Check read-write capablities
+#//     - Stop Sniffer
+#//
+#// Notes:
+#//     - Requires provPrimitives.tcl & tftp_primitives.tcl.
+#//     - Requires the specific config file in $BASE_CFG_FILE_PATH in Provisioning Server.
+#//****************************************************************************
+
+set SCRIPT_VERSION { # $Id: E-UE-DATA_1-1-1-4.test 7406 2010-07-20 17:17:37Z dthakore $ }
+global SCRIPT_VERSION
+
+#
+# Verify SNMPv3 API is loaded
+#
+if {!$SNMP_V3_API} {
+    DoStep "verify snmp" "verify snmp" {
+    } {
+        verify_signal "It seems as though you do not have a Provisioning server API application.\nThis test can not be executed without a API or sort of SNMPv3 Utility.\
+                to integrate your own SNMPv3 Utility, you must write your own code to inteface with that utility."
+    }
+}
+
+
+DoStep "E-UE-DATA_1-1-1-4_1-1" "Configure DUT" {
+    LogMsg "--- Configure DUT ---"
+    Init_PROV
+    PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122 Device_Level_Secure.cfg
+    PROV_DEPLOY_DHCP
+} {PASS_STEP}
+
+DoStep "E-UE-DATA_1-1-1-4_1-2" "Verify Battery" {
+    tk_messageBox -message "Please ensure a battery is installed in the EDVA and AC power is connected, then press OK"
+} {
+    PASS_STEP
+}
+
+################################# START SNIFFER ###############################
+
+DoStep "E-UE-DATA_1-1-1-4_1-3" "Start sniffer" {
+    LogMsg "--- Start sniffer ---"
+    Init_CONTROLLER_LAN
+    SetupCaptureControllerLan "host $MTA_IP || udp port 67 || host $CM_IP"
+    StartCaptureControllerLan
+} {PASS_STEP}
+
+################ RESET CM and MTA and VERIFY PROVISIONING STATE ################
+
+DoStep "E-UE-DATA_1-1-1-4_1-4" "Reset EDVA" {
+    set val [SNMPvN_RESET $CM_IP]
+    LogMsg "Reset of CM and DVA has passed"
+} {
+    IsEqual $val 0
+}
+DoStep "E-UE-DATA_1-1-1-4_1-5" "pktcMtaDevProvisioningState Content Verification" {
+    actionWait "Wait for MTA to reboot" 70
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMP_GET $oid_pktcMtaDevProvisioningState $MTA_IP 20]
+    LogMsg "The Value of EDVA Provisioning State is: $val"
+} {
+    IsEqual $val 1
+}
+
+#
+# Retrieve upsEstimatedMinutesRemaining MIB
+#
+DoStep "E-UE-DATA_1-1-1-4_2-1" "Verify upsEstimatedMinutesRemaining Content" {
+    set result [SNMPvN_GET .1.3.6.1.2.1.33.1.2.3.0 $CM_IP]
+    LogMsg "--- upsEstimatedMinutesRemaining value is: $result"
+} {
+    verify_signal "upsEstimatedMinutesRemaining value is: $result (should be a positive integer)"
+}
+
+#
+# Attempt SNMP Set, verify failure
+#
+DoStep "E-UE-DATA_1-1-1-4_3-1" "Attempt SNMP Set" {
+    set type  INTEGER
+    set newValue 4
+    set oid ".1.3.6.1.2.1.33.1.2.3.0"
+    LogMsg "Attempting SNMP set on CM   = $CM_IP" 49
+    LogMsg "                       Value = $newValue" 49
+    LogMsg "                       Type  = $type " 49
+    LogMsg "                       OID   = $oid" 49
+    set result [SNMPvN_SET $oid $type $newValue $CM_IP]
+} {
+    compare_value $result 2 ;# check MIB is not writable
+}
+
+#
+# Disonnect Power
+#
+DoStep "BB_MTA_1-1-8_4-1" "Disconnect AC Power" {
+    tk_messageBox -message "Please Disconnect AC Power and Press OK simultaneously"
+    set ac_off [clock seconds]
+    set result [SNMPvN_GET .1.3.6.1.2.1.33.1.2.3.0 $CM_IP]
+    set mRemaining_powerOff $result
+} {
+    #	compare_value $mRemaining_powerOff $mRemaining_powerOn ;# Verify value did not change directly after ac disconnect
+    PASS_STEP
+}
+
+#
+# Wait for N minutes, recheck MIB
+#
+DoStep "E-UE-DATA_1-1-1-4_5-1" "Wait for N, verify MIB value" {
+    set wait_time 5
+    set deviation 2
+    LogMsg "--- Waiting $wait_time Minutes until re-check of upsEstimatedTimeRemaining"
+    set wait_time_ms [expr $wait_time * 60000]
+    set cont 0
+    after $wait_time_ms {set cont 1}
+    vwait cont
+    set result [SNMPvN_GET .1.3.6.1.2.1.33.1.2.3.0 $CM_IP]
+    
+    set mRemaining_now $result
+    set mRemaining_elapsed [expr $mRemaining_powerOff - $mRemaining_now]
+    #set fail_val 0
+    #if {($mRemaining_elapsed < [expr $wait_time - $deviation]) || ($mRemaining_elapsed > [expr $wait_time + $deviation])} {
+    #	set fail_val 1
+    #	LogMsg "!! The difference in the upsEstimatedTimeRemaining MIB is outside the expected range.  Expected time difference is $wait_time \
+    #	(+- $deviation).  Actual time difference is $mRemaining_elapsed"
+    #}
+} {
+    #FAIL_PASS_STEP $fail_val
+    verify_signal "The Total time elapsed was $wait_time minues, the upsEstimatedTimeRemaining MIB has decreased by $mRemaining_elapsed\n\nIs this acceptable?"
+}
+
+
+#
+# Reconnect AC Power
+#
+DoStep "E-UE-DATA_1-1-1-4_6-1" "Reconnect AC Power" {
+    tk_messageBox -message "Please Reconnect AC Power and press OK"
+} {
+    PASS_STEP
+}
+
+#
+# Retrieve upsEstimatedChargeRemaining MIB
+#
+DoStep "E-UE-DATA_1-1-1-_7-1" "Verify upsEstimatedChargeRemaining Content" {
+    set result [SNMPvN_GET .1.3.6.1.2.1.33.1.2.4.0 $CM_IP]
+    LogMsg "--- upsEstimatedChargeRemaining value is: $result"
+    set cRemaining_powerOn $result
+} {
+    PASS_STEP
+}
+
+#
+#
+# Retrieve upsEstimatedMinutesRemaining MIB
+#
+DoStep "E-UE-DATA_1-1-1-4_8-1" "Verify upsEstimatedMinutesRemaining Content" {
+    set result [SNMPvN_GET .1.3.6.1.2.1.33.1.2.3.0 $CM_IP]
+    LogMsg "--- upsEstimatedMinutesRemaining value is: $result"
+    set mRemaining_powerOn $result
+} {
+    PASS_STEP
+}
+
+#
+# Attempt SNMP Set, verify failure
+#
+DoStep "E-UE-DATA_1-1-1_9-1" "Attempt SNMP Set" {
+    set type  INTEGER
+    set newValue 4
+    set oid ".1.3.6.1.2.1.33.1.2.4.0"
+    LogMsg "Attempting SNMP set on CM = $CM_IP" 49
+    LogMsg "                       Value = $newValue" 49
+    LogMsg "                       Type  = $type " 49
+    LogMsg "                       OID   = $oid" 49
+    set result [SNMPvN_SET $oid $type $newValue $CM_IP]
+} {
+    compare_value $result 2 ;# check MIB is not writable
+}
+
+#
+# Disonnect Power
+#
+DoStep "E-UE-DATA_1-1-1-4_10-1" "Disconnect AC Power" {
+    tk_messageBox -message "Please Disconnect AC Power and Press OK simultaneously"
+    set ac_off [clock seconds]
+} {
+    PASS_STEP
+}
+
+#
+# Wait for N minutes, recheck MIB
+#
+DoStep "E-UE-DATA_1-1-1-4_11-1" "Wait for N, verify MIB value" {
+    set wait_time 5
+    set deviation 2
+    LogMsg "--- Waiting $wait_time Minutes until re-check of upsEstimatedChargeRemaining"
+    set wait_time_ms [expr $wait_time * 60000]
+    set cont 0
+    after $wait_time_ms {set cont 1}
+    vwait cont
+    set result [SNMPvN_GET .1.3.6.1.2.1.33.1.2.4.0 $CM_IP]
+    set cRemaining_now $result
+    set fail_val 0
+    
+    if {$cRemaining_now >= $cRemaining_powerOn} {
+        set fail_val 1
+        LogMsg "!! After $wait_time minutes, the value of upsEstimatedChargeRemaining has not decreased"
+    }
+    
+    set cRemaining_expected [expr $cRemaining_powerOn - $wait_time / $mRemaining_powerOn] ;# Calculate expected value per CTP
+    
+    #if {($cRemaining_now < [expr $cRemaining_expected - $deviation]) || ($cRemaining_now > [expr $cRemaining_expected + $deviation])} {
+    #	set fail_val 1
+    #	LogMsg "!! upsEstimatedChargeRemaining is outside of the expected range.  Expected value is $cRemaining_expected (+-2).  Actual value is $cRemaining_now"
+    #}
+    
+} {
+    #FAIL_PASS_STEP $fail_val
+    verify_signal "The expected value of upsEstimatedChargeRemaining is $cRemaining_expected.  The actual value is $cRemaining_now\n\nIs this acceptable?"
+}
+
+
+DoStep "E-UE-DATA_1-1-1-4_13-1" "Attempt SNMP Set" {
+    set type  INTEGER
+    set newValue 1
+    set oid ".1.3.6.1.2.1.33.1.8.1.0"
+    LogMsg "Attempting SNMP set on CM = $CM_IP" 49
+    LogMsg "                       Value = $newValue" 49
+    LogMsg "                       Type  = $type " 49
+    LogMsg "                       OID   = $oid" 49
+    set result [SNMPvN_SET $oid $type $newValue $CM_IP]
+} {
+    compare_value $result 0 
+}
+
+DoStep "E-UE-DATA_1-1-1-4_13-2" "Attempt SNMP Set" {
+    set type  INTEGER
+    set newValue 0
+    set oid ".1.3.6.1.2.1.33.1.8.2.0"
+    LogMsg "Attempting SNMP set on CM = $CM_IP" 49
+    LogMsg "                       Value = $newValue" 49
+    LogMsg "                       Type  = $type " 49
+    LogMsg "                       OID   = $oid" 49
+    set result [SNMPvN_SET $oid $type $newValue $CM_IP]
+} {
+    compare_value $result 0 
+}
+
+
+DoStep "E-UE-DATA_1-1-1-4_14-1" "EDVA should be powered down." {
+    LogMsg "EDVA should be powered down." 49
+} {
+    verify_signal "EDVA should be powered down."
+}
+
+
+#
+# Reconnect AC Power
+#
+DoStep "E-UE-DATA_1-1-1-4_15-1" "Reconnect AC Power" {
+    tk_messageBox -message "Please Reconnect AC Power and press OK"
+} {
+    PASS_STEP
+}
+
+DoStep "E-UE-DATA_1-1-1-4_1-15-2" "pktcMtaDevProvisioningState Content Verification" {
+    actionWait "Wait for MTA to reboot" 60
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMP_GET $oid_pktcMtaDevProvisioningState $MTA_IP 20]
+    LogMsg "The Value of EDVA Provisioning State is: $val"
+} {
+    IsEqual $val 1
+}
+
+##################### STOP SNIFFER AND SAVE CAPTURE FILES #####################
+
+DoStep "E-UE-DATA_1-1-1-4_16-1" "Stop sniffer" {
+    LogMsg "--- Stop sniffer ---"
+    StopCaptureControllerLan
+    SaveToFileControllerLan
+} { PASS_STEP }
+
+
+Cleanup

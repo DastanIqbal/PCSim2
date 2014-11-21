@@ -1,0 +1,227 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	
+
+
+-->
+<pc2xml version="$Revision: 7085 $" 
+	name="RST-UE 3.1.2.5" 
+	descrip="Outbound Call without Called Party Number" 
+	number="RST-UE 3.1.2.5" >
+	
+	<fsm name="UE1">
+		<models>
+			<session/>
+		</models>
+		<NE sim_type="term" elements="UE1 PCSCF2 SCSCF1 PCSCF1" targets="UE1 "/>
+		
+		<states initialstate="Register">
+			<state ID="Register">
+				<postlude>
+					<sleep time="3000"/>
+				</postlude>
+				<transition to="OffHook" event="Registered"/>
+			</state>
+			<state ID="OffHook">
+				<prelude>
+					<log promptUser="True" yesExpected="True" expr="Start an On-Air sniffer between the PP and DVA."/>
+					<sleep time="300"/>
+					<send protocol="utility" msgtype="OffHook"/>
+				</prelude>
+								
+				<transition to="Setup" event="OffHookComplete"/>
+			</state>
+						
+			<state ID="Setup">
+				<prelude>
+					<log promptUser="True" yesExpected="True" verify="True" 
+						step="2" requirements="REQ23354" 
+						expr="verify the DVA replies with CC-SETUP-ACK and presents dial tone."/>
+					<sleep time="1000"/>
+					<send protocol="utility" msgtype="DialDigits"/>
+				</prelude>	
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>INVITE</expr>
+						</eq>
+						<then>
+							<send protocol="sip" msgtype="100-INVITE"/>
+						</then>
+					</if>
+					
+					<if>
+						<and>
+							<eq>
+								<msg_ref type="extensions">precondition</msg_ref>
+								<expr>require</expr>
+							</eq>
+							<or>
+								<contains>
+									<msg_ref type="sip" hdr_instance="any">Invite.Require</msg_ref>
+									<expr>precondition</expr>
+								</contains>
+								<contains>
+									<msg_ref type="sip" hdr_instance="any">Invite.Supported</msg_ref>
+									<expr>precondition</expr>
+								</contains>
+							</or>
+						</and>
+						<then>
+							<!--Sending 183-Invite with answer-->
+							<sleep time="200"/>
+							<send protocol="sip" msgtype="183-Invite"/>
+						</then>
+						<elseif>
+							<eq>
+								<msg_ref type="sip">Request</msg_ref>
+								<expr>Invite</expr>
+							</eq>
+							<then>
+								<!--Sending 180-Invite with SS not supporting precondition.-->
+								<sleep time="200"/>
+								<send protocol="sip" msgtype="180-Invite"/>
+								<sleep time="200"/>
+								<log promptUser="True" yesExpected="True" verify="True" 
+						step="4" requirements="REQ23357 REQ23358" 
+						expr="Verify DVA sends CC-Alerting message to the PP and audible ring back tone is heard."/>
+							</then>
+						</elseif>
+					</if>
+				</response>
+				<!-- Transitions for Setup state -->
+				<transition to="Alerting" event="INVITE"/>
+				<transition to="Setup" event="DialDigitsComplete"/>
+			</state>
+		
+			
+			<state ID="Alerting">
+				<response>
+					
+					<if>
+						<and>
+							<eq>
+								<msg_ref type="sip">Request</msg_ref>
+								<expr>PRACK</expr>
+							</eq>
+							<contains>
+								<msg_ref type="sip" msg_instance="last" hdr_instance="any">18x-Invite.Require</msg_ref>
+								<expr>100rel</expr>
+							</contains>
+						</and>
+						<then>
+							
+							<send protocol="sip" msgtype="200-PRACK"/>
+						</then>
+					</if>
+					
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>UPDATE</expr>
+						</eq>
+						<then>
+							<!--QoS required or supported sending 200-Update message to peer.-->
+							<send protocol="sip" msgtype="200-Update"/>
+						</then>
+					</if>
+					
+					<if>
+						<and>
+							<contains>
+								<msg_ref type="sip" msg_instance="last">18x-Invite.Status-Line.status-code</msg_ref>
+								<expr>183</expr>
+							</contains>
+							<eq>
+								<msg_ref type="sdp">Request.qos-curr-remote.direction</msg_ref>
+								<msg_ref type="sdp">Request.qos-des-remote.direction</msg_ref>
+							</eq>
+						</and>
+						<then>
+							<!--Sending 180 for required preconditions.-->
+							<send protocol="sip" msgtype="180-Invite"/>
+						</then>
+					</if>
+				</response>
+				<!-- Transitions for Alerting state -->
+				<transition to="Alerting" event="DialDigitsComplete"/>
+				<transition to="Alerting" event="PRACK"/>
+				<transition to="Alerting" event="UPDATE"/>
+				<transition to="Answer" event="ALERTING_UAS"/>
+			</state>
+			<!-- ANSWER State -->
+			<state ID="Answer" timer="15000">
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="event"/>
+							<expr>TimerExpired</expr>
+						</eq>
+						<then>
+							<!--Sending 200-Invite-->
+							<send protocol="sip" msgtype="200-INVITE"/>
+							<sleep time="300"/>
+							<log promptUser="True" yesExpected="True" verify="True" 
+						step="5" requirements="REQ23359" 
+						expr="Verify DVA sends CC-Connect message to the PP."/>
+						</then>
+					</if>
+					
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>UPDATE</expr>
+						</eq>
+						<then>
+							<!--QoS required or supported sending 200-Update message to peer.-->
+							<send protocol="sip" msgtype="200-Update"/>
+						</then>
+					</if>
+				</response>
+				
+				<transition to="Answer" event="UPDATE"/>
+				<transition to="Answer" event="TimerExpired"/>
+				<transition to="Connected" event="ACK"/>
+			</state>
+			<!-- CONNECTED State -->
+			<state ID="Connected" timer="20000">
+				<!-- Transitions for Connected state -->
+				<transition to="Releasing" event="TimerExpired"/>
+			</state>
+			
+			<state ID="Releasing">
+				<prelude>
+					<send protocol="sip" msgtype="BYE"/>
+					
+				</prelude>
+				
+				<transition to="OnHook" event="200-Bye"/>
+			</state>
+			<!-- OnHook State -->
+			<state ID="OnHook">
+				<prelude>
+					<log promptUser="True" yesExpected="True" verify="True" 
+						step="7" requirements="RREQ23363" 
+						expr="Verify DVA sends CC-Release message to PP."/>
+					<sleep time="3000"/>
+					<send protocol="utility" msgtype="OnHook"/>
+				</prelude>
+				
+				<transition to="END" event="OnHookComplete"/>
+			</state>
+			
+		</states>
+	</fsm>
+</pc2xml>

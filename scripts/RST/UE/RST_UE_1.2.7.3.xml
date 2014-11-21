@@ -1,0 +1,60 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	PCPCII-139 : Update the Voicetronix modifiers to use the new values. (ghassler 07/10/2009)
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-UE 1.2.7.3" 
+	descrip="Anonymous Call Rejection- Not Available" 
+	number="RST-UE 1.2.7.3">
+	
+	<template file="./templates/CallOrigAtUETemp.xml" name="UE1"/>
+
+	<add_to fsm="UE1">
+		<NE targets="*77"/>
+		
+		<transition from="OffHook" to="Dial" event="OffHookComplete"/>
+		
+		<state ID="Dial">
+			<prelude>
+				<!-- Step 1 of test case 1.2.7.3-->
+				<send protocol="utility" msgtype="DialDigits">
+					<mod modtype="add" hdr="number">
+						<expr>*77</expr>
+					</mod>
+				</send>
+			</prelude>
+			<transition to="DialTone" event="DialDigitsComplete"/>
+		</state>
+		
+		<state ID="DialTone">
+			<prelude>
+				<sleep time="10000"/>
+				<send protocol="utility" msgtype="VerifyDialTone"/>
+			</prelude>
+			<response>
+				<verify step="1" requirements="REQ13534">
+					<eq>
+						<msg_ref type="utility">Response</msg_ref>
+						<expr>VerifyDialToneComplete</expr>
+					</eq>
+				</verify>
+			</response>
+			<transition to="OnHook" event="VerifyDialToneComplete"/>
+		</state>
+	</add_to>
+</pc2xml>

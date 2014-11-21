@@ -1,0 +1,12 @@
+Manifest-Version: 1.0
+Created-By:  1.0-beta (Cable Television Laboratories - PacketCable 2.0)
+Main-Class: com.cablelabs.diagram.SDT
+Class-Path: ../lib/bns_logger.jar ../lib/log4j-1.2.15.jar  ../lib/commons-net-2.0.jar
+ 
+Name: com/cablelabs/sdt/
+Specification-Title: PacketCable 2.0
+Specification-Version: 1.0.0-beta
+Specification-Vendor: CableLabs
+Implementation-Title: com.cablelabs.sdt
+Implementation-Version: 8387${common.svn.revision}${common.svn.revision}
+Implementation-Vendor: Cablelabs

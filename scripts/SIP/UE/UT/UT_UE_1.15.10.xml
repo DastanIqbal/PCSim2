@@ -1,0 +1,73 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+
+<pc2xml version="$Revision: 8188 $" name="UT_UE_1.15.10" descrip="This is a unit test script for the UE_1.15.10 test script." number="1">
+	<template name="RegUE0" file="$UT_PATH/Templates/ut/RegSub_DUT.xml"/>
+	<template name="UE0" file="$UT_PATH/Templates/ut/Term_DUT.xml"/>
+	<remove_from fsm="RegUE0">
+		<state ID="RecvNotify"/>
+	</remove_from>
+	<add_to fsm="RegUE0">
+		<state ID="RecvNotify">
+			<postlude>
+				<send protocol="sip" msgtype="200-Notify" target="PCSCF1" originator="DUT"/>
+			</postlude>
+			<transition to="RecvNotify2" event="NOTIFY"/>
+		</state>
+		<state ID="RecvNotify2">
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="reginfo+xml">NOTIFY.registration.state</msg_ref>
+						<expr>terminated</expr>
+					</eq>
+					<then>
+						<generate event="RegistrationLost" fsm="UE0"/>
+						<send protocol="sip" msgtype="200-Notify" target="PCSCF1" originator="DUT"/>
+					</then>
+					<else>
+						<fail/>
+					</else>
+				</if>
+			</response>
+			<transition to="EndReg" event="NOTIFY"/>
+		</state>
+		<state ID="EndReg" ES="true">
+		</state>
+	</add_to>
+	<add_to fsm="UE0">
+		<state ID="WaitRegistration">
+			<transition to="Setup" event="RegistrationLost"/>
+		</state>
+		<states initialstate="WaitRegistration"/>
+	</add_to>
+	<remove_from fsm="UE0">
+		<state ID="Setup"/>
+	</remove_from>
+	<add_to fsm="UE0">
+		<state ID="Setup">
+			<postlude>
+				<send protocol="sip" msgtype="436-Invite" target="UE1" originator="DUT"/>
+			</postlude>
+			<!-- Transitions for Setup state -->
+			<transition to="END" event="INVITE"/>
+		</state>
+	</add_to>
+</pc2xml>

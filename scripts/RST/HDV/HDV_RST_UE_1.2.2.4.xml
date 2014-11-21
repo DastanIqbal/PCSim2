@@ -1,0 +1,46 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+ Change History: (Author & Date)
+
+
+
+  --> 
+<pc2xml version="$Revision: 6798 $" 
+	name="HDV-RST-UE 1.2.2.4" 
+	descrip="+Number in User Part of SIP URI in P-Asserted-Identity header"
+	number="1">
+  
+  	<template name="UE1" file="$SCRIPT_PATH/RST/UE/RST_UE_1.2.2.4.xml" /> 
+	
+	<remove_from fsm="UE1">
+		<state ID="Setup1"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<state ID="Setup1">
+			<prelude>
+				<send protocol="sip" msgtype="Invite">
+					<!-- Step 4 test case SIP 1.2.2.3-->
+					<mod modtype="replace" hdr="P-Asserted-Identity">
+						<expr>"Cullen Jennings" &lt;sip:bob@Biloxi.com&gt;</expr>
+					</mod>
+				</send>
+			</prelude>
+			<postlude>
+				<log promptUser="True" yesExpected="True" verify="True" 
+					step="5" requirements="REQ14460" 
+					expr="Verify the Caller ID display has Cullen Jennings in the name field?"/>
+			</postlude>
+			<transition to="END" event="xxx-INVITE"/>
+		</state>
+	</add_to>
+</pc2xml>

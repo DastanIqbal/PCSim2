@@ -1,0 +1,182 @@
+################################################################################
+#// Filename: E-UE-DATA_1-2-3-5.test (PACT)
+#// Author:   Matthew Forbes
+#//
+#//
+#//
+#// Creation Date: March 3, 2009
+#// Modified by:
+################################################################################
+#// Description:
+#//     TC2751 TEST CASE E-UE-DATA 1.2.3.5 - Ability of eUE to Implement the Realm Table
+#//	    
+#//
+#// Objective:
+#//     This test verifies the eUE ability to properly implement the pktcMtaDevRealmTable
+#//     defined in CL-PKTC-EUE-PROV-MGMT-MIB.
+#//
+#//
+#// PacketCable DUT:
+#//     EDVA
+#//
+#// Test Steps:
+#//     - Initial configuration
+#//     - Start sniffer
+#//     - Reset DUT
+#//     - Check Provisioning state
+#//     - Invoke SNMPv3 API and query MIB objects and validate values
+#//     - Stop sniffer
+#//     - Hybrid configuration
+#//     - Start sniffer
+#//     - Reset DUT
+#//     - Check Provisioning state
+#//     - Invoke SNMPv2 API and bulk query MIB objects and validate values
+#//     - Stop sniffer
+#//
+#//
+#// Notes:
+#//     - Requires provPrimitives.tcl
+#//
+#//
+################################################################################
+global SCRIPT_VERSION
+set SCRIPT_VERSION { # $Id: E-UE-DATA_1-2-3-5.test 7769 2011-01-25 18:13:14Z botte $ }
+
+set test_case E-UE-DATA_1-2-3-5-
+set step_num 1
+
+Init_PROV
+Init_PART
+
+DoStep ${test_case}${step_num} "Initial Configuration" {
+    LogMsg "--- Init PROV module ---"
+    # PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122 Secure_Flow_BasicCall_DigitMap.cfg
+    # PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122 Secure_Flow_BasicCall_DigitMap_CW69_RST_Baseline_MotoCW71.cfg
+    PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122 C.1.2.3.bin
+    PROV_DEPLOY_DHCP
+} {PASS_STEP}
+
+DoStep ${test_case}[incr step_num]_1 "Start sniffer" {
+    LogMsg "--- Start sniffer ---"
+    Init_CONTROLLER_LAN
+    SetupCaptureControllerLan "host $MTA_IP || udp port 67"
+    StartCaptureControllerLan
+} {PASS_STEP}
+
+DoStep ${test_case}${step_num}_2 "Reset CM/MTA" {
+    set val [SNMPvN_RESET $CM_IP]
+    LogMsg "--- Reset of CM and MTA has passed ---"
+} {
+    IsEqual $val 0
+}
+
+DoStep ${test_case}${step_num}_3 "pktcMTADevProvisioningState Content Verification" {
+    # Wait for a minute to let CM/MTA starting to reboot
+    actionWait "Wait for CM/MTA to reboot" 60
+    # Get the OID from the MTA and check it using our previously defined
+    set val [GetProvState 1 600]
+    LogMsg "MTA Provisioning State"
+    LogMsg "             - Expected : 1"
+    LogMsg "             - Received : $val"
+} {
+    IsEqual $val 1
+}
+
+DoStep ${test_case}[incr step_num]_1 "pktcMtaDevRealmAvailSlot Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMP_TABLE_GET $oid_pktcMtaDevRealmAvailSlot $MTA_IP 1]
+    LogMsg "The Value pktcMtaDevRealmAvailSlot is: $val"
+} {IsEqual $val 0}
+
+DoStep ${test_case}[incr step_num]_1 "pktcMtaDevRealmName Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMP_TABLE_GET $table_pktcMtaDevRealmEntry $MTA_IP 1]
+    LogMsg "The Value pktcMtaDevRealmName is: $val"
+} {IsEqual $val LABREALM.COM}
+
+DoStep ${test_case}${step_num}_2 "pktcMtaDevRealmPkinitGracePeriod Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMP_TABLE_GET $table_pktcMtaDevRealmEntry $MTA_IP 2]
+    LogMsg "The Value pktcMtaDevRealmPkinitGracePeriod  is: $val"
+} {IsEqual $val 15}
+
+DoStep ${test_case}${step_num}_3 "pktcMtaDevRealmTgsGracePeriod Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMP_TABLE_GET $table_pktcMtaDevRealmEntry $MTA_IP 3]
+    LogMsg "The Value pktcMtaDevRealmTgsGracePeriod is: $val"
+} {IsEqual $val 10}
+
+DoStep ${test_case}${step_num}_4 "pktcMtaDevRealmOrgName Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMP_TABLE_GET $table_pktcMtaDevRealmEntry $MTA_IP 4]
+    LogMsg "The Value pktcMtaDevRealmOrgName is: $val"
+} {IsEqual $val CableLabs}
+
+DoStep ${test_case}${step_num}_5 "pktcMtaDevRealmUnsolicitedKeyMaxTimeout Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMP_TABLE_GET $table_pktcMtaDevRealmEntry $MTA_IP 5]
+    LogMsg "The Value pktcMtaDevRealmUnsolicitedKeyMaxTimeoutis: $val"
+} {IsEqual $val 100}
+
+DoStep ${test_case}${step_num}_6 "pktcMtaDevRealmUnsolicitedKeyNomTimeout  Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMP_TABLE_GET $table_pktcMtaDevRealmEntry $MTA_IP 6]
+    LogMsg "The Value pktcMtaDevRealmUnsolicitedKeyNomTimeout  is: $val"
+} {IsEqual $val 3000}
+
+DoStep ${test_case}${step_num}_7 "pktcMtaDevRealmUnsolicitedKeyMaxRetries Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMP_TABLE_GET $table_pktcMtaDevRealmEntry $MTA_IP 7]
+    LogMsg "The Value pktcMtaDevRealmUnsolicitedKeyMaxRetries is: $val"
+} {IsEqual $val 5}
+
+DoStep ${test_case}${step_num}_8 "pktcMtaDevRealmStatus Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMP_TABLE_GET $table_pktcMtaDevRealmEntry $MTA_IP 8]
+    LogMsg "The Value pktcMtaDevRealmStatus is: $val"
+} {IsEqual $val -1}
+
+DoStep ${test_case}[incr step_num] "Stop Sniffer" {
+    LogMsg "--- Stop Sniffer ---"
+    StopCaptureControllerLan
+    SaveToFileControllerLan 
+} { PASS_STEP }
+
+
+DoStep ${test_case}[incr step_num] "Configure Provisioning Server" {
+    PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122 Device_Level_Secure.cfg
+    PROV_DEPLOY_DHCP
+} { PASS_STEP }
+
+
+############### Reset CM and MTA and Verify Provisioning ################
+
+DoStep ${test_case}[incr step_num] "Reset CM/MTA" {
+    set val [SNMPvN_RESET $CM_IP]
+    LogMsg "--- Reset of CM and MTA has passed ---"
+} {
+    IsEqual $val 0
+}
+
+DoStep ${test_case}[incr step_num] "pktcMTADevProvisioningState Content Verification" {
+    # Wait for a minute to let CM/MTA starting to reboot
+    actionWait "Wait for CM/MTA to reboot" 60
+    # Get the OID from the MTA and check it using our previously defined
+    set val [GetProvState 1 600]
+    LogMsg "MTA Provisioning State"
+    LogMsg "             - Expected : 1"
+    LogMsg "             - Received : $val"
+} {
+    IsEqual $val 1
+}
+
+
+################################################################################
+# Cleanup
+################################################################################
+set CONTINUE_PAST_STEP_ERROR 0
+Cleanup
+
+
+
+

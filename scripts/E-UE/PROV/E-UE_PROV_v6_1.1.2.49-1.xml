@@ -1,0 +1,138 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+ Change History: (Author & Date)
+-->
+<pc2xml version="$Revision: 7768 $"
+        name="EUE Prov 1.1.2.49-1"
+        descrip="eUE implements the provisioning timer and secondary address acquisition timer (SAAT)."
+        number="EUE Prov 1.1.2.49-1">
+
+    <template file="./templates/EUE_Prov_B_1_1_1.xml" name="Dualstack_Prov"/>
+    
+    <remove_from fsm="Dualstack_Prov">
+	<state ID="StartCapture_RebootWait"/>
+    </remove_from>
+	    
+    <add_to fsm="Dualstack_Prov">	
+	
+	<states initialstate="Message_1"/>
+	
+	<state ID="Message_1">
+		<prelude>
+			<log promptUser="true" expr="Make sure dual stack for the eDVA is enabled (pref=6) and eUE's IPv6 is set to block Advertise at provisioning server."/>
+			<generate event="Branch1Event"/>
+		</prelude>
+		<transition to="Reboot" event="Branch1Event"/>
+	</state>
+	
+	<state ID="StartCapture_RebootWait" timer="120000">
+		<prelude once="true" >
+			<start_capture>
+				<filter>
+					<var_expr>
+						<expr>host </expr>
+						<msg_ref type="platform">DUT.IP</msg_ref>
+						<expr> || host </expr>
+						<msg_ref type="platform">DUT.DHCP Server IP</msg_ref>
+						<expr> || host </expr>
+						<msg_ref type="platform">DUT.DNS Server IP</msg_ref>
+					</var_expr>
+				</filter>
+			</start_capture>
+		</prelude>
+		<transition to="checkCM" event="TimerExpired"/>
+	</state>
+	
+	<state ID="checkCM" >
+		<prelude once="true">
+			<!-- this is a check for DOCSIS 3.0 eCM. -->
+			<send protocol="utility" msgtype="SNMPGet">
+				<mod modtype="add" hdr="oids">
+					<expr>DOCS-IF3-MIB::docsIf3CmStatusValue.2</expr>
+				</mod>
+				<!-- check for DOCSIS 2.0 eCM. -->
+				<!--mod modtype="add" hdr="oids">
+					<expr>DOCS-CABLE-DEVICE-MIB::docsDevServerBootState.0</expr>
+				</mod-->
+				<mod modtype="replace" hdr="agentip">
+					<msg_ref type="platform">DUT.CM IP Address</msg_ref>
+				</mod>
+				<mod modtype="replace" hdr="version">
+					<expr>2c</expr>
+				</mod>
+			</send>
+		</prelude>
+		<response>
+			<verify step="2">
+			    <contains>
+				<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+				<expr>12</expr>
+			    </contains>
+			</verify>
+		</response>
+            <transition to="enableAdvertise" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+	</state>
+
+	<state ID="enableAdvertise" timer="120000">
+		<prelude>
+			<log promptUser="true" expr="Unblock Advertise message for IPv6 eUE at provisioning server and deploy immediately."/>
+		</prelude>
+		<transition to="checkProv" event="TimerExpired"/>
+	</state>
+	
+	<state ID="checkProv">
+		<prelude>
+			<stop_capture/>
+			<parse_capture name="eUE_dhcpv4">
+				<parser_filter protocol="bootp" clientMAC="DUT.MAC Address"/>
+			</parse_capture>
+			<parse_capture name="eUE_dhcpv6">
+				<parser_filter protocol="dhcpv6" clientMAC="DUT.MAC Address"/>
+			</parse_capture>
+			<parse_capture name="eUE_Syslog">
+				<parser_filter protocol="syslog" ip="DUT.IP"/>
+			</parse_capture>
+			
+			<verify step="3">
+				<lt>
+					<capture_ref type="bootp" name="eUE_dhcpv4" >ACK.num</capture_ref>
+					<capture_ref type="dhcpv6" name="eUE_dhcpv6" >Advertise.num</capture_ref>
+				</lt>
+			</verify>
+			
+		
+			<verify step="5">
+				<or>
+					<contains>
+						<capture_ref type="syslog" name="eUE_Syslog" msg_instance="last">syslog.msg.show</capture_ref>
+						<expr>Bad Parameter</expr>
+					</contains>
+					<contains>
+						<capture_ref type="syslog" name="eUE_Syslog" msg_instance="last">syslog.msg.show</capture_ref>
+						<expr>Fail</expr>
+					</contains>	
+				</or>
+			</verify>
+			
+			<verify step="6">
+				<notnull>
+					<capture_ref type="bootp" name="eUE_dhcpv4">Release.num</capture_ref>
+				</notnull>
+			</verify>
+			
+			<generate event="Branch1Event"/>
+		</prelude>
+		<transition to="END" event="Branch1Event"/>
+	</state>
+
+    </add_to>
+</pc2xml>

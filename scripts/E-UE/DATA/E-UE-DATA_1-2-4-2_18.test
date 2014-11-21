@@ -1,0 +1,424 @@
+#//********************************************************************
+#// Filename: E-UE-DATA_1-2-4-2_18.test
+#// Author: Matthew Forbes
+#// Creation Date: 11/10/2008
+#// Modified by:
+#//
+#//
+#//********************************************************************
+#// Description:
+#//    TC1614 Test Case E-UE-DATA_1-2-4-2_18 Functionality Verification of the MIB
+#//    table 'pktcDevEventDescrTable'
+#//
+#//
+#// Objective:
+#//    Verify that the MTA has entries for all required PacketCable events within
+#//    the MIB table 'pktcDevEventDescrTable'
+#//
+#// PacketCable DUT:
+#//    EDVA
+#//
+#// Test Steps:
+#//    - Initial configuration
+#//    - Start sniffer
+#//    - TFTP GET MTA config file
+#//    - TFTP PUT and SNMP RESET
+#//    - Check Provisioning state
+#//    - Perform mib check
+#//    - Stop sniffer
+#//    - Delete MTA config file
+#//    
+#//
+#// Notes:
+#//    - Requires the specific config file in $BASE_CFG_FILE_PATH in Provisioning Server.
+#//************************************************************************
+global SCRIPT_VERSION
+set SCRIPT_VERSION { # $Id: E-UE-DATA_1-2-4-2_18.test 7452 2010-08-06 15:25:48Z ghassler $ }
+
+set test_case E-UE-DATA_1-2-4-2_18-
+set step_num 1
+
+## Build TopLevel Window so user can select if MTA Device supports Powering Events storage
+set storage "NO"
+set waitvar 0
+toplevel .storages
+focus -force .storages
+label .storages.question -text "Please select whether MTA supports Battery Powering Events"
+radiobutton .storages.yes -text YES -variable storage -value YES
+radiobutton .storages.no -text NO -variable storage -value NO
+button .storages.ok -text "OK" -width 15 -command {destroy .storages ; set waitvar 1}
+grid .storages.question -sticky w -pady 5
+grid .storages.no -sticky w -pady 5
+grid .storages.yes -sticky w -pady 5
+grid .storages.ok -sticky we -pady 5
+vwait waitvar
+
+
+
+DoStep ${test_case}${step_num} "Choose chipset" {
+    LogMsg "--- Choose chipset ---"
+set choice [tk_messageBox -type yesno -default no -message "Is the MTA chipset TI?" -icon question]
+} {
+    PASS_STEP
+}
+
+if {$choice == no} {
+######################## For Broadcom Chipset use below ################################
+
+set pc_event_text [list "Waiting for DNS Resolution of Provisioning Realm Name" \
+        "Provisioning Realm Name unknown to the DNS Server" "Waiting for DNS resolution of MSO/Provisioning KDC FQDN" \
+        "MSO/Provisioning KDC FQDN unknown to the DNS Server" "Waiting for DNS resolution of Provisioning Server FQDN" \
+        "Provisioning Server FQDN unknown to the DNS Server" "Waiting For MSO/Provisioning KDC AS Reply" \
+        "MSO/Provisioning KDC did not accept AS Request" "Waiting For MSO/Provisioning KDC TGS Reply" \
+        "MSO/Provisioning KDC did not accept AS Request" "Waiting for Provisioning Server AP Reply" \
+        "Provisioning Server/SNMP Entity rejected the Provisioning AP Request" \
+        "SNMPv3 INFORM transmitted; Waiting for SNMPv3 GET and/or SNMPv3 SET messages" \
+        "SNMPv2c INFORM transmitted; Waiting for SNMPv2c GET and/or SNMPv2c SET messages" \
+        "Waiting For DNS Resolution of TFTP FQDN" "TFTP FQDN unknown to the DNS Server" "Waiting for TFTP Response" \
+        "Configuration File Error - Bad Authentication" \
+        "Configuration File Error - Bad Privacy" "Configuration File Error - Bad Format" \
+        "Configuration File Error - Missing Parameter" "Configuration File Error - Bad Parameter" "Configuration File Error - Bad Linkage" \
+        "Configuration File Error - Misc." \
+        "Provisioning Complete" "Provisioning Complete - Warnings" \
+        "Provisioning Complete - Fail" "Registration did not comply with SigSecurity configuration for user <user IMPU>" \
+        "Registration failed for user IMPU=<user IMPU>; IMPI=<user IMPI>; reason <reason>" \
+        "Certificate Bootstrapping Success" "Certificate Bootstrapping Failure" "Time unavailable from the ToD Server - Secure flow" \
+        "Time unavailable from the ToD Server - Basic or Hybrid flow." "New time has been retrieved from ToD server." \
+        "Certificate Bootstrapping XML instance does not comply with the supported XML Schema" \
+        "Certificate Bootstrapping XML instance document is compliant, but contains errors" \
+        "Warning Inconsistency in Table <X>." "Info Inconsistency in Table <X>."]
+
+######################## For TI Chipset use below ################################
+
+} else {
+
+################################################################################
+set pc_event_text [list "Waiting for DNS Resolution of Provisioning Realm Name" \
+        "Provisioning Realm Name unknown to the DNS Server" "Waiting for DNS resolution of MSO/Provisioning KDC FQDN" \
+        "MSO/Provisioning KDC FQDN unknown to the DNS Server" "Waiting for DNS resolution of Provisioning Server FQDN" \
+        "Provisioning Server FQDN unknown to the DNS Server" "Waiting For MSO/Provisioning KDC AS Reply" \
+        "MSO/Provisioning KDC did not accept AS Request" "Waiting For MSO/Provisioning KDC TGS Reply" \
+        "MSO/Provisioning KDC did not accept AS Request" "Waiting for Provisioning Server AP Reply" \
+        "Provisioning Server/SNMP Entity rejected the Provisioning AP Request" \
+        "SNMPv3 INFORM transmitted; Waiting for SNMPv3 GET and/or SNMPv3 SET messages" \
+        "SNMPv2c INFORM transmitted; Waiting for SNMPv2c GET and/or SNMPv2c SET messages" \
+        "Waiting For DNS Resolution of TFTP FQDN" "TFTP FQDN unknown to the DNS Server" "Waiting for TFTP Response" \
+        "Configuration File Error - Bad Authentication" \
+        "Configuration File Error - Bad Privacy" "Configuration File Error - Bad Format" \
+        "Configuration File Error - Missing Parameter" "Configuration File Error- Bad Parameter" "Configuration File Error- Bad Linkage" \
+        "Configuration File Error- Misc." \
+        "Provisioning Complete" "Provisioning Complete - Warnings" \
+        "Provisioning Complete - Fail" "Registration did not comply with SigSecurity configuration for user <user IMPU>" \
+        "Registration failed for user IMPU=<user IMPU>; IMPI=<user IMPI>; reason <reason>" \
+    "Certificate Bootstrapping Success" "Certificate Bootstrapping Failure" "Time unavailable from the ToD Server - Secure flow" \
+    "Time unavailable from the ToD Server - Basic or Hybrid flow." "New time has been retrieved from ToD server." \
+    "Certificate Bootstrapping XML instance does not comply with the supported XML Schema" \
+    "Certificate Bootstrapping XML instance document is compliant, but contains errors" \
+    "Warning Inconsistency in Table <X>." "Info Inconsistency in Table <X>."]
+    
+################################################################################
+}
+
+
+set pc_level [list 3 2 3 2 3 2 3 4 3 4 2 4 2 2 3 2 2 2 2 2 2 3 3 3 6 4 2 3 2 6 2 2 4 4 3 3 4 6]
+# set pc_report [list D0  D0  D0  D0  D0  D0  D0  C0  D0  C0  D0  C0  D0  D0  D0  D0  \
+    # D0  D0  D0  D0  D0  D0  D0  D0  C0  D0  D0  C0  D0  C0  C0  C0  D0 ]
+# set pc_report [list "D0 " "D0 " "D0 " "D0 " "D0 " "D0 " "D0 " "C0 " "D0 " "C0 " "D0 " "C0 " "D0 " "D0 " "D0 " "D0 " \
+        # "D0 " "D0 " "D0 " "D0 " "D0 " "D0 " "D0 " "D0 " "C0 " "C0 " "D0 " "D0 " \
+        # "D0 " "C0 " "D0 " "D0 " "C0 " "C0 " "D0 " "D0 " "C0 " "C0 "]
+        # set pc_report [list "D0 0 1 3 " "D0 0 1 3 " "D0 0 1 3 " "D0 0 1 3 " "D0 0 1 3 "  \
+                # "D0 0 1 3 " "D0 0 1 3 " "D0 0 1 3 " "D0 0 1 3 " "D0 0 1 3 " "D0 0 1 3 " "D0 0 1 3 " "D0 0 1 3 " "C0 0 1 " \
+        # "D0 0 1 3 " "C0 0 1 " "D0 0 1 3 " "D0 0 1 3 " "C0 0 1 " "C0 0 1 " "D0 0 1 3 " "D0 0 1 3 " "C0 0 1 " "C0 0 1 "]
+
+set pc_enterprise_number 4491
+set pc_facility_number 16
+
+set pc_power_event_text [list "On Battery" "AC Restored" "Battery Bad" "Battery Good" \
+    "Battery Missing" "Battery Present" "Depleted Battery" "Battery Charging"]  
+# set pc_power_event_repot [list C0 C0 C0 C0 C0 C0 C0 C0]
+set pc_power_event_repot [list "C0 " "C0 " "C0 " "C0 " "C0 " "C0 " "C0 " "C0 "]
+
+DoStep ${test_case}${step_num} "Initial Configuration" {
+    LogMsg "--- Init PROV module ---"
+    Init_PROV
+    #verify_signal "Turn off save to text file for Ethereal logs in TclSim setup"
+    # ProvCreateConfig 291 $MTA_MAC
+    PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122 Device_Level_Secure.cfg
+    PROV_DEPLOY_DHCP
+    
+} {PASS_STEP}
+
+
+################################################################################
+# DoStep ${test_case}[incr step_num] "Start sniffer" {    
+#     LogMsg "--- Start sniffer ---"  
+#     Init_CONTROLLER_LAN  
+#     SetupCaptureControllerLan
+#     StartCaptureControllerLan 
+# } {PASS_STEP}
+################################################################################
+
+DoStep ${test_case}[incr step_num] "SNMP RESET" {
+    SNMP_SET $oid_pktcMtaDevResetNow INTEGER 1 $MTA_IP
+    actionWait "Wait for MTA to reboot" 60
+} {PASS_STEP}
+
+
+DoStep ${test_case}[incr step_num] "pktcMtaDevProvisioningState Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMP_GET $oid_pktcMtaDevProvisioningState $MTA_IP 20]
+    LogMsg "The Value of MTA Provisioning State is: $val"
+} {IsEqual $val 1}
+
+
+DoStep ${test_case}[incr step_num] "Obtain pktcDevEventDescrTable entries" {     
+    set enterprise_list [SNMP_TABLE_GET $oid_pktcDevEventDescrEnterprise $MTA_IP LIST 20]
+    set facility_list   [SNMP_TABLE_GET $oid_pktcDevEventDescrFacility $MTA_IP LIST 20]
+    set level_list      [SNMP_TABLE_GET $oid_pktcDevEventDescrLevel $MTA_IP LIST 20]
+    set report_list     [SNMP_TABLE_GET $oid_pktcDevEventDescrReporting $MTA_IP LIST 20]
+    set text_list       [SNMP_TABLE_GET $oid_pktcDevEventDescrText $MTA_IP LIST 20]
+
+} {
+    if {[llength $enterprise_list] > 1 && [llength $facility_list] > 1 &&  [llength $level_list] > 1 \
+    && [llength $report_list] > 1 && [llength $text_list] > 1} {
+        PASS_STEP
+    } else  {
+        FAIL_STEP
+    }
+}
+
+DoStep ${test_case}[incr step_num] "Verify pktcDevEventDescrEnterprise entries" {
+    set command PASS_STEP  
+    foreach pctext $pc_event_text {
+        set search_index [lsearch $text_list $pctext]
+        if {[lindex $enterprise_list $search_index] != $pc_enterprise_number} {
+            LogMsg "ERROR: The pktcDevEventDescrEnterprise number [lindex $enterprise_list $search_index]\
+            != $pc_enterprise_number for event $pctext"
+            set command FAIL_STEP
+        }    
+    }   
+} {eval $command}
+
+DoStep ${test_case}[incr step_num] "Verify pktcDevEventDescrFacility entries" {
+    set command PASS_STEP  
+    foreach pctext $pc_event_text {
+        set search_index [lsearch $text_list $pctext]
+        if {[lindex $facility_list $search_index] != $pc_facility_number} {
+            LogMsg "ERROR: The pktcDevEventDescrFacility number [lindex $facility_list $search_index]\
+            != $pc_facility_number for event $pctext"
+            set command FAIL_STEP
+        }    
+    }   
+} {eval $command}
+
+DoStep ${test_case}[incr step_num] "Verify pktcDevEventDescrLevel entries" {
+    set command PASS_STEP 
+    set index_x 0 
+    foreach pctext $pc_event_text {    
+        set search_index [lsearch $text_list $pctext]
+        if {[lindex $level_list $search_index] != [lindex $pc_level $index_x]} {
+            LogMsg "ERROR: The pktcDevEventDescrLevel number [lindex $level_list $search_index]\
+            != [lindex $pc_level $index_x] for event $pctext"
+            set command FAIL_STEP
+        }
+        incr index_x    
+    }   
+} {eval $command}
+
+DoStep ${test_case}[incr step_num] "Verify pktcDevEventDescrReporting entries" {
+    # set command PASS_STEP 
+    # set index_x 0 
+    # foreach pctext $pc_event_text #{    
+        # set search_index [lsearch $text_list $pctext]        
+        # if {"[lindex $report_list $search_index]" != "[lindex $pc_report $index_x]"} {
+            # LogMsg "ERROR: The pktcDevEventDescrReporting number [lindex $report_list $search_index]\
+            # != [lindex $pc_report $index_x] for event $pctext"
+            # set command FAIL_STEP
+        # }
+        # incr index_x    
+    # }
+    LogMsg "Verify pktcDevEventDescrReporting entries"
+} {
+    set val [SNMP_GET $oid_pktcDevEventDescrReporting.4000950100.4491 $MTA_IP]
+    IsEqual $val "D0 0 1 3"
+    set val [SNMP_GET $oid_pktcDevEventDescrReporting.4000950101.4491 $MTA_IP]
+    IsEqual $val "D0 0 1 3"
+    set val [SNMP_GET $oid_pktcDevEventDescrReporting.4000950201.4491 $MTA_IP]
+    IsEqual $val "D0 0 1 3"
+    set val [SNMP_GET $oid_pktcDevEventDescrReporting.4000950202.4491 $MTA_IP]
+    IsEqual $val "D0 0 1 3"
+    set val [SNMP_GET $oid_pktcDevEventDescrReporting.4000950203.4491 $MTA_IP]
+    IsEqual $val "D0 0 1 3"
+    set val [SNMP_GET $oid_pktcDevEventDescrReporting.4000950300.4491 $MTA_IP]
+    IsEqual $val "D0 0 1 3"
+    set val [SNMP_GET $oid_pktcDevEventDescrReporting.4000950301.4491 $MTA_IP]
+    IsEqual $val "C0 0 1"
+    set val [SNMP_GET $oid_pktcDevEventDescrReporting.4000950400.4491 $MTA_IP]
+    IsEqual $val "D0 0 1 3"
+    set val [SNMP_GET $oid_pktcDevEventDescrReporting.4000950401.4491 $MTA_IP]
+    IsEqual $val "C0 0 1"
+    set val [SNMP_GET $oid_pktcDevEventDescrReporting.4000950500.4491 $MTA_IP]
+    IsEqual $val "D0 0 1 3"
+    set val [SNMP_GET $oid_pktcDevEventDescrReporting.4000950501.4491 $MTA_IP]
+    IsEqual $val "C0 0 1"
+    set val [SNMP_GET $oid_pktcDevEventDescrReporting.4000950600.4491 $MTA_IP]
+    IsEqual $val "D0 0 1 3"
+    set val [SNMP_GET $oid_pktcDevEventDescrReporting.4000950600.4491 $MTA_IP]
+    IsEqual $val "D0 0 1 3"
+    set val [SNMP_GET $oid_pktcDevEventDescrReporting.4000950601.4491 $MTA_IP]
+    IsEqual $val "D0 0 1 3"
+    set val [SNMP_GET $oid_pktcDevEventDescrReporting.4000950800.4491 $MTA_IP]
+    IsEqual $val "D0 0 1 3"
+    set val [SNMP_GET $oid_pktcDevEventDescrReporting.4000950801.4491 $MTA_IP]
+    IsEqual $val "D0 0 1 3"
+    set val [SNMP_GET $oid_pktcDevEventDescrReporting.4000950900.4491 $MTA_IP]
+    IsEqual $val "D0 0 1 3"
+    set val [SNMP_GET $oid_pktcDevEventDescrReporting.4000950901.4491 $MTA_IP]
+    IsEqual $val "D0 0 1 3"
+    set val [SNMP_GET $oid_pktcDevEventDescrReporting.4000950902.4491 $MTA_IP]
+    IsEqual $val "D0 0 1 3"
+    set val [SNMP_GET $oid_pktcDevEventDescrReporting.4000950903.4491 $MTA_IP]
+    IsEqual $val "D0 0 1 3"
+    set val [SNMP_GET $oid_pktcDevEventDescrReporting.4000950904.4491 $MTA_IP]
+    IsEqual $val "D0 0 1 3"
+    set val [SNMP_GET $oid_pktcDevEventDescrReporting.4000950905.4491 $MTA_IP]
+    IsEqual $val "D0 0 1 3"
+    set val [SNMP_GET $oid_pktcDevEventDescrReporting.4000950906.4491 $MTA_IP]
+    IsEqual $val "D0 0 1 3"
+    set val [SNMP_GET $oid_pktcDevEventDescrReporting.4000950907.4491 $MTA_IP]
+    IsEqual $val "D0 0 1 3"
+    set val [SNMP_GET $oid_pktcDevEventDescrReporting.4000951200.4491 $MTA_IP]
+    IsEqual $val "C0 0 1"
+    set val [SNMP_GET $oid_pktcDevEventDescrReporting.4000951201.4491 $MTA_IP]
+    IsEqual $val "D0 0 1 3"
+    set val [SNMP_GET $oid_pktcDevEventDescrReporting.4000951300.4491 $MTA_IP]
+    IsEqual $val "D0 0 1 3"
+    set val [SNMP_GET $oid_pktcDevEventDescrReporting.4000951301.4491 $MTA_IP]
+    IsEqual $val "C0 0 1"
+    set val [SNMP_GET $oid_pktcDevEventDescrReporting.4000951400.4491 $MTA_IP]
+    IsEqual $val "D0 0 1 3"
+    set val [SNMP_GET $oid_pktcDevEventDescrReporting.4000951401.4491 $MTA_IP]
+    IsEqual $val "C0 0 1"
+    set val [SNMP_GET $oid_pktcDevEventDescrReporting.4000951500.4491 $MTA_IP]
+    IsEqual $val "C0 0 1"
+    set val [SNMP_GET $oid_pktcDevEventDescrReporting.4000951501.4491 $MTA_IP]
+    IsEqual $val "C0 0 1"
+    set val [SNMP_GET $oid_pktcDevEventDescrReporting.4000951502.4491 $MTA_IP]
+    IsEqual $val "D0 0 1 3"
+    set val [SNMP_GET $oid_pktcDevEventDescrReporting.4000960000.4491 $MTA_IP]
+    IsEqual $val "D0 0 1 3"
+    set val [SNMP_GET $oid_pktcDevEventDescrReporting.4000960001.4491 $MTA_IP]
+    IsEqual $val "D0 0 1 3"
+    set val [SNMP_GET $oid_pktcDevEventDescrReporting.4000960002.4491 $MTA_IP]
+    IsEqual $val "C0 0 1"
+    set val [SNMP_GET $oid_pktcDevEventDescrReporting.4000960003.4491 $MTA_IP]
+    IsEqual $val "D0 0 1 3"
+    set val [SNMP_GET $oid_pktcDevEventDescrReporting.4000960004.4491 $MTA_IP]
+    IsEqual $val "D0 0 1 3"
+    set val [SNMP_GET $oid_pktcDevEventDescrReporting.4000960005.4491 $MTA_IP]
+    IsEqual $val "C0 0 1"
+    set val [SNMP_GET $oid_pktcDevEventDescrReporting.4000960006.4491 $MTA_IP]
+    IsEqual $val "C0 0 1"
+    set val [SNMP_GET $oid_pktcDevEventDescrReporting.4000960007.4491 $MTA_IP]
+    IsEqual $val "D0 0 1 3"
+    set val [SNMP_GET $oid_pktcDevEventDescrReporting.4000960008.4491 $MTA_IP]
+    IsEqual $val "D0 0 1 3"
+    set val [SNMP_GET $oid_pktcDevEventDescrReporting.4000960009.4491 $MTA_IP]
+    IsEqual $val "C0 0 1"
+    set val [SNMP_GET $oid_pktcDevEventDescrReporting.4000960010.4491 $MTA_IP]
+    IsEqual $val "C0 0 1"
+    }
+
+DoStep ${test_case}[incr step_num] "Verify pktcDevEventDescrText entries" {
+    set command PASS_STEP     
+    foreach pctext $pc_event_text {    
+        set search_index [lsearch $text_list $pctext]
+        if {$search_index == -1} {
+            LogMsg "ERROR: The pktcDevEventDescrText entry $pctext does not exist"
+            set command FAIL_STEP
+        }           
+    }   
+} {eval $command}
+
+
+if {$storage == "YES"} {
+    # Powering events supported, must check these...
+    DoStep ${test_case}[incr step_num] "Verify pktcDevEventDescrEnterprise entries" {
+    set command PASS_STEP  
+    foreach pctext $pc_power_event_text {
+        set search_index [lsearch $text_list $pctext]
+        if {[lindex $enterprise_list $search_index] != $pc_enterprise_number} {
+            LogMsg "ERROR: The pktcDevEventDescrEnterprise number [lindex $enterprise_list $search_index]\
+            != $pc_enterprise_number for event $pctext"
+            set command FAIL_STEP
+        }    
+    }   
+} {eval $command}
+
+DoStep ${test_case}[incr step_num] "Verify pktcDevEventDescrFacility entries" {
+    set command PASS_STEP  
+    foreach pctext $pc_power_event_text {
+        set search_index [lsearch $text_list $pctext]
+        if {[lindex $facility_list $search_index] != $pc_facility_number} {
+            LogMsg "ERROR: The pktcDevEventDescrFacility number [lindex $facility_list $search_index]\
+            != $pc_facility_number for event $pctext"
+            set command FAIL_STEP
+        }    
+    }   
+} {eval $command}
+
+DoStep ${test_case}[incr step_num] "Verify pktcDevEventDescrReporting entries" {
+    LogMsg "Verify pktcDevEventDescrReporting entries"
+    # set command PASS_STEP 
+    # set index_x 0 
+    # foreach pctext $pc_power_event_text #{    
+        # set search_index [lsearch $text_list $pctext]        
+        # if {"[lindex $report_list $search_index]" != "[lindex $pc_power_event_repot $index_x]"} {
+            # LogMsg "ERROR: The pktcDevEventDescrReporting number [lindex $report_list $search_index]\
+            # != [lindex $pc_power_event_repot $index_x] for event $pctext"
+            # set command FAIL_STEP
+        # }
+        # incr index_x    
+    # }   
+} {
+    # eval $command
+    set val [SNMP_GET $oid_pktcDevEventDescrReporting.4000850100.4491 $MTA_IP]
+    IsEqual $val "C0 0 1"
+    set val [SNMP_GET $oid_pktcDevEventDescrReporting.4000850200.4491 $MTA_IP]
+    IsEqual $val "C0 0 1"
+    set val [SNMP_GET $oid_pktcDevEventDescrReporting.4000850300.4491 $MTA_IP]
+    IsEqual $val "C0 0 1"
+    set val [SNMP_GET $oid_pktcDevEventDescrReporting.4000850400.4491 $MTA_IP]
+    IsEqual $val "C0 0 1"
+    set val [SNMP_GET $oid_pktcDevEventDescrReporting.4000850500.4491 $MTA_IP]
+    IsEqual $val "C0 0 1"
+    set val [SNMP_GET $oid_pktcDevEventDescrReporting.4000850600.4491 $MTA_IP]
+    IsEqual $val "C0 0 1"
+    set val [SNMP_GET $oid_pktcDevEventDescrReporting.4000850700.4491 $MTA_IP]
+    IsEqual $val "C0 0 1"
+    set val [SNMP_GET $oid_pktcDevEventDescrReporting.4000850800.4491 $MTA_IP]
+    IsEqual $val "C0 0 1"
+}
+
+DoStep ${test_case}[incr step_num] "Verify pktcDevEventDescrText entries" {
+    set command PASS_STEP     
+    foreach pctext $pc_power_event_text {    
+        set search_index [lsearch $text_list $pctext]
+        if {$search_index == -1} {
+            LogMsg "ERROR: The pktcDevEventDescrText entry $pctext does not exist"
+            set command FAIL_STEP
+        }           
+    }   
+} {eval $command}
+
+}
+################################################################################
+# DoStep ${test_case}[incr step_num] "Stop sniffer" {
+#     LogMsg "--- Stop sniffer ---"
+#     StopCaptureControllerLan
+#     SaveToFileControllerLan 
+# } {PASS_STEP}
+################################################################################
+
+
+Cleanup

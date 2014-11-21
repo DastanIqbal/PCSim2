@@ -1,0 +1,65 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+
+<pc2xml version="$Revision: 8188 $" name="UT_UE_1.1.3.1" descrip="This is a unit test script for the UE_1.4.1 test script." number="1">
+	<template name="UE0" file="$UT_PATH/Templates/ut/Orig_DUT.xml"/>
+	<remove_from fsm="UE0">
+		<state ID="Setup" sub="prelude"/>
+		<state ID="Connected"/>
+	</remove_from>
+	<add_to fsm="UE0">
+		<state ID="Setup" sub="prelude">
+			<sleep time="3000"/>
+			<send protocol="sip" msgtype="Invite" target="UE1" originator="DUT"/>
+		</state>
+		<!-- CONNECTED State -->
+		<state ID="Connected" timer="10000">
+			<prelude>
+				<send protocol="sip" msgtype="ACK" target="UE1" originator="DUT"/>
+			</prelude>
+			<postlude>
+				<send protocol="sip" msgtype="BYE" target="UE1" originator="DUT"/>
+			</postlude>
+			<transition to="Wait200Bye" event="TimerExpired"/>
+		</state>
+		<state ID="Wait200Bye">
+			<transition to="Dereg" event="200-BYE"/>
+		</state>
+		<state ID="Dereg">
+			<prelude>
+				<send protocol="sip" msgtype="REGISTER" target="PCSCF1" originator="DUT">
+					<mod modtype="replace" hdr="Contact" param="expires">
+						<expr>0</expr>
+					</mod>
+				</send>
+			</prelude>
+			<transition to="Unreg" event="200-Register"/>
+		</state>
+		<state ID="Unreg">
+			<postlude>
+				<send protocol="sip" msgtype="503-INVITE" target="PCSCF1" originator="DUT"/>
+			</postlude>
+			<transition to="WaitAck" event="INVITE"/>
+		</state>
+		<state ID="WaitAck">
+			<transition to="END" event="ACK"/>
+		</state>
+	</add_to>
+</pc2xml>

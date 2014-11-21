@@ -1,0 +1,146 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-UE 1.6.1.4" 
+	descrip="Keep DND subscription current" 
+	number="RST-UE 1.6.1.4" inspector="disable">
+	
+	<template file="./templates/UERegAndSubTemp.xml" name="Registrar"/>
+	
+	<remove_from fsm="Registrar">
+		<state ID="Registered"/>
+		<state ID="Notification"/>
+	</remove_from>
+	
+	<add_to fsm="Registrar">
+		<state ID="Registered">
+			<prelude once="true">
+				<var name="SubscribeFeature3">
+					<expr>false</expr>
+				</var>
+				<send protocol="sip" msgtype="200-Register"/>
+			</prelude>
+			<response>
+				<!--  Check if the SUBSCRIBE is for reg event -->
+				<if>
+					<and>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>SUBSCRIBE</expr>
+						</eq>
+						<eq>
+							<msg_ref type="sip">SUBSCRIBE.Event.event-type</msg_ref>
+							<expr>reg</expr>
+						</eq>
+					</and>
+					<then>
+						<verify step="2" requirements="REQ16723">
+							<eq>
+								<msg_ref type="sip">Request</msg_ref>
+								<expr>SUBSCRIBE</expr>
+							</eq>
+						</verify>
+						<send protocol="sip" msgtype="200-SUBSCRIBE"/>
+						<send protocol="sip" msgtype="NOTIFY"/>
+					</then>
+				</if>
+				<if>
+					<eq>
+						<msg_ref type="sip" bodyType="xml">SUBSCRIBE.Event.auid</msg_ref>
+						<expr>&quot;com.cablelabs.pkt.rst.featureset.3&quot;</expr>
+					</eq>
+					<then>
+						<verify step="2" requirements="REQ16723">
+							<eq>
+								<msg_ref type="sip" bodyType="xml">SUBSCRIBE.Event.auid</msg_ref>
+								<expr>&quot;com.cablelabs.pkt.rst.featureset.3&quot;</expr>
+							</eq>
+						</verify>
+						<assign name="SubscribeFeature3">
+							<expr>true</expr>
+						</assign>
+						<send protocol="sip" msgtype="200-SUBSCRIBE"/>
+						<send protocol="sip" msgtype="NOTIFY" subscribeType="ua-profile">
+							<mod modtype="delete" hdr="SetElement" hdr_instance="2" body=""/>
+							<mod modtype="delete" hdr="SetElement" hdr_instance="1" body=""/>
+							<mod modtype="delete" hdr="CFVForwardedCallCount" body=""/>
+							<mod modtype="delete" hdr="SCFForwardedCallCount" body=""/>
+						</send>
+					</then>
+				</if>
+				<if>
+					<and>
+						<eq>
+							<var_ref name="SubscribeFeature3"/>
+							<expr>true</expr>
+						</eq>
+						<eq>
+							<msg_ref type="sip">Response</msg_ref>
+							<expr>200-NOTIFY</expr>
+						</eq>
+					</and>
+					<then>
+						<generate event="Branch1Event"/>
+						<generate event="Branch3Event" fsm="UE1"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Registered" event="SUBSCRIBE"/>
+			<transition to="Registered" event="200-NOTIFY"/>
+			<transition to="ReduceSubscription" event="Branch1Event"/>
+		</state>
+		
+		<state ID="ReduceSubscription">
+			<prelude>
+				<sleep time="2000"/>
+				<send protocol="sip" msgtype="NOTIFY" subscribeType="ua-profile">
+					<mod modtype="delete" hdr="SetElement" hdr_instance="2" body=""/>
+					<mod modtype="delete" hdr="SetElement" hdr_instance="1" body=""/>
+					<mod modtype="delete" hdr="CFVForwardedCallCount" body=""/>
+					<mod modtype="delete" hdr="SCFForwardedCallCount" body=""/>
+					<mod modtype="delete" hdr="Contact" param="expires"/>
+					<mod modtype="replace" hdr="Expires">
+						<expr>300</expr>
+					</mod>
+				</send>
+			</prelude>
+			<transition to="Refresh" event="200-NOTIFY"/>
+		</state>
+		
+		<state ID="Refresh" timer="300000">
+			<response>
+				<verify step="3" requirements="REQ16723">
+					<and>
+						<neq>
+							<msg_ref type="event"/>
+							<expr>TimerExpired</expr>
+						</neq>
+						<eq>
+							<msg_ref type="sip" bodyType="xml">SUBSCRIBE.Event.auid</msg_ref>
+							<expr>&quot;com.cablelabs.pkt.rst.featureset.3&quot;</expr>
+						</eq>
+					</and>
+				</verify>
+			</response>
+			<transition to="END" event="SUBSCRIBE"/>
+			<transition to="END" event="TimerExpired"/>
+		</state>
+	</add_to>
+</pc2xml>

@@ -1,0 +1,112 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+
+<pc2xml version="$Revision: 8188 $" name="UT_RST_UE_1.1.3.1" descrip="Held Media: Controlling UE" number="1">
+	<template file="./templates/ut/Orig_DUT.xml" name="UT_RST_UE_1.1.3.1"/>
+	<remove_from fsm="UT_RST_UE_1.1.3.1">
+		<state ID="Connected"/>
+	</remove_from>
+	<add_to fsm="UT_RST_UE_1.1.3.1">
+		<state ID="Connected" timer="10000">
+			<prelude>
+				<send protocol="sip" msgtype="ACK" target="UE1" originator="DUT"/>
+				<sleep time="3000"/>
+				<send protocol="sip" msgtype="REINVITE" bodies="SDP" target="UE1" originator="DUT">
+					<mod modtype="replace" hdr="mode" param="value">
+						<expr>inactive</expr>
+					</mod>
+				</send>
+			</prelude>
+			<transition to="Hook1" event="1xx-INVITE"/>
+		</state>
+		<state ID="Hook1">
+			<postlude>
+				<send protocol="sip" msgtype="ACK" target="UE1" originator="DUT"/>
+			</postlude>
+			<transition to="HookFlash2" event="200-INVITE"/>
+		</state>
+		<state ID="HookFlash2">
+			<prelude>
+				<sleep time="5000"/>
+				<send protocol="sip" msgtype="REINVITE" bodies="SDP" target="UE1" originator="DUT">
+					<mod modtype="replace" hdr="mode" param="value">
+						<expr>sendrecv</expr>
+					</mod>
+				</send>
+			</prelude>
+			<transition to="Hook3" event="100-INVITE"/>
+		</state>
+		<state ID="Hook3">
+			<postlude>
+				<send protocol="sip" msgtype="ACK" target="UE1" originator="DUT"/>
+			</postlude>
+			<transition to="HookFlash4" event="200-INVITE"/>
+		</state>
+		<state ID="HookFlash4">
+			<prelude>
+				<sleep time="5000"/>
+				<send protocol="sip" msgtype="REINVITE" bodies="SDP" target="UE1" originator="DUT">
+					<mod modtype="replace" hdr="mode" param="value">
+						<expr>inactive</expr>
+					</mod>
+				</send>
+			</prelude>
+			<transition to="Hook4" event="1xx-INVITE"/>
+		</state>
+		<state ID="Hook4">
+			<postlude>
+				<send protocol="sip" msgtype="ACK" target="UE1" originator="DUT"/>
+			</postlude>
+			<transition to="HookFlash5" event="2xx-INVITE"/>
+		</state>
+		<state ID="HookFlash5">
+			<prelude>
+				<sleep time="5000"/>
+				<send protocol="sip" msgtype="REINVITE" bodies="SDP" target="UE1" originator="DUT">
+					<mod modtype="replace" hdr="mode" param="value">
+						<expr>sendrecv</expr>
+					</mod>
+					<mod modtype="add" hdr="Route">
+						<var_expr>
+							<msg_ref type="sip" hdr_instance="last">200-INVITE.Record-Route</msg_ref>
+							<expr>,</expr>
+							<msg_ref type="sip" hdr_instance="2">200-INVITE.Record-Route</msg_ref>
+							<expr>,</expr>
+							<msg_ref type="sip" hdr_instance="first">200-INVITE.Record-Route</msg_ref>
+						</var_expr>
+					</mod>
+				</send>
+			</prelude>
+			<transition to="Hook6" event="1xx-INVITE"/>
+		</state>
+		<state ID="Hook6">
+			<postlude>
+				<send protocol="sip" msgtype="ACK" target="UE1" originator="DUT"/>
+			</postlude>
+			<transition to="EndCall" event="2xx-INVITE"/>
+		</state>
+		<state ID="EndCall">
+			<postlude>
+				<send protocol="sip" msgtype="200-BYE" target="UE1" originator="DUT"/>
+			</postlude>
+			<transition to="END" event="BYE"/>
+		</state> 
+	</add_to>
+</pc2xml>

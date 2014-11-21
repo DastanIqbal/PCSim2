@@ -1,0 +1,162 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="SIP-UE 1.23.1" 
+	descrip=" REGISTER and SUBSCRIBE Message Details in IPv6 mode " 
+	number="SIP-UE 1.23.1" inspector="disable">
+	
+	<template file="./templates/UERegAndSubTemp.xml" name="Registrar"/>
+	
+	<remove_from fsm="Registrar">
+		<state ID="PendingRegistration"/>
+		<state ID="Registered"/>
+	</remove_from>
+	
+	<add_to fsm="Registrar">
+		<state ID="PendingRegistration">
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>REGISTER</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="401-REGISTER"/>
+						<verify step="3" requirements="REQ23424">
+							<eq>
+								<msg_ref type="sip">REGISTER.Via.sent-by</msg_ref>
+								<msg_ref type="platform">DUT.IP</msg_ref>
+							</eq>
+						</verify>
+						<verify step="3" requirements="REQ23424">
+							<contains>
+								<msg_ref type="sip">REGISTER.Route.addr_spec</msg_ref>
+								<msg_ref type="platform">DUT.IP</msg_ref>
+							</contains>
+						</verify>
+						<verify step="3" requirements="REQ23424">
+							<or>
+								<contains>
+									<msg_ref type="sip">REGISTER.To.addr-spec</msg_ref>
+									<msg_ref type="platform">DUT.IP</msg_ref>
+								</contains>
+								<contains>
+									<msg_ref type="sip">REGISTER.To.addr-spec</msg_ref>
+									<msg_ref type="platform">DUT.FQDN</msg_ref>
+								</contains>
+							</or>
+						</verify>
+						<verify step="3" requirements="REQ23424">
+							<or>
+								<contains>
+									<msg_ref type="sip">REGISTER.From.addr-spec</msg_ref>
+									<msg_ref type="platform">DUT.IP</msg_ref>
+								</contains>
+								<contains>
+									<msg_ref type="sip">REGISTER.From.addr-spec</msg_ref>
+									<msg_ref type="platform">DUT.FQDN</msg_ref>
+								</contains>
+							</or>
+						</verify>
+						<verify step="3" requirements="REQ23424">
+							<contains>
+								<msg_ref type="sip">REGISTER.Contact.addr-spec</msg_ref>
+								<msg_ref type="platform">DUT.IP</msg_ref>
+							</contains>
+						</verify>	
+					</then>
+				</if>
+			</response>
+			<transition to="Authorization" event="REGISTER"/>
+		</state>
+						
+		<state ID="Registered">
+			<prelude once="true">
+				<send protocol="sip" msgtype="200-REGISTER"/>
+			</prelude>
+			<response>
+				<if>
+					<and>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>SUBSCRIBE</expr>
+						</eq>
+						<contains>
+							<msg_ref type="sip">SUBSCRIBE.Event</msg_ref>
+							<expr>reg</expr>
+						</contains>
+					</and>
+					<then>
+						<send protocol="sip" msgtype="200-SUBSCRIBE"/>
+						<sleep time="100"/>
+						<send protocol="sip" msgtype="NOTIFY"/>
+						<verify step="3" requirements="REQ23424">
+							<eq>
+								<msg_ref type="sip">SUBSCRIBE.Via.sent-by</msg_ref>
+								<msg_ref type="platform">DUT.IP</msg_ref>
+							</eq>
+						</verify>
+						<verify step="3" requirements="REQ23424">
+							<contains>
+								<msg_ref type="sip">SUBSCRIBE.Route.addr_spec</msg_ref>
+								<msg_ref type="platform">DUT.IP</msg_ref>
+							</contains>
+						</verify>
+						<verify step="3" requirements="REQ23424">
+							<or>
+								<contains>
+									<msg_ref type="sip">SUBSCRIBE.To.addr-spec</msg_ref>
+									<msg_ref type="platform">DUT.IP</msg_ref>
+								</contains>
+								<contains>
+									<msg_ref type="sip">SUBSCRIBE.To.addr-spec</msg_ref>
+									<msg_ref type="platform">DUT.FQDN</msg_ref>
+								</contains>
+							</or>
+						</verify>
+						<verify step="3" requirements="REQ23424">
+							<or>
+								<contains>
+									<msg_ref type="sip">SUBSCRIBE.From.addr-spec</msg_ref>
+									<msg_ref type="platform">DUT.IP</msg_ref>
+								</contains>
+								<contains>
+									<msg_ref type="sip">SUBSCRIBE.From.addr-spec</msg_ref>
+									<msg_ref type="platform">DUT.FQDN</msg_ref>
+								</contains>
+							</or>
+						</verify>
+						<verify step="3" requirements="REQ23424">
+							<contains>
+								<msg_ref type="sip">SUBSCRIBE.Contact.addr-spec</msg_ref>
+								<msg_ref type="platform">DUT.IP</msg_ref>
+							</contains>
+						</verify>	
+					</then>
+				</if>
+			</response>
+			<!-- Transitions for Registered state -->
+			<transition to="Registered" event="REGISTER"/>
+			<transition to="Notification" event="SUBSCRIBE"/>
+		</state>
+		
+		<transition from="Notification" to="END" event="200-NOTIFY"/>
+	</add_to>
+</pc2xml>

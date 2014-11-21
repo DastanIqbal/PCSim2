@@ -1,0 +1,100 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+
+<pc2xml version="$Revision: 6076 $" name="UT_SEC_UE_1.1.4" descrip="This is a unit test for test script SEC_UE_1.1.4 " number="1">
+	<fsm name="UE0">
+		<models>
+			<register/>
+		</models>
+		<NE sim_type="term" elements="DUT" targets="UE0 DUT"/>
+		<states initialstate="Register">
+			<!-- REGISTER State -->
+			<state ID="Register">
+				<prelude>
+					<sleep time="5000"/>
+					<send protocol="sip" msgtype="Register" target="PCSCF1" originator="DUT" />
+				</prelude>
+				<transition to="Digest" event="401-Register"/>
+				<transition to="Subscribe" event="200-Register"/>
+			</state>
+			<state ID="Digest">
+				<prelude>
+					<send protocol="sip" msgtype="Register" target="PCSCF1" originator="DUT" />
+					<!--mod modtype="replace" hdr="Authorization" param="nc">
+						<expr>00000001</expr>
+					</mod>
+                                        </send--> 
+				</prelude>
+				<transition to="Subscribe" event="200-Register"/>
+			</state>
+			<!-- Subscribe State -->
+			<state ID="Subscribe">
+				<prelude>
+					<send protocol="sip" msgtype="Subscribe" target="PCSCF1" originator="DUT"/>
+				</prelude>
+				<transition to="RecvNotify" event="200-Subscribe"/>
+			</state>
+			<state ID="RecvNotify" timer="2000" send="once">
+				<prelude>
+					<send protocol="sip" msgtype="200-Notify" target="PCSCF1" originator="DUT"/>
+					<!--sleep time="1000"/>
+					<send protocol="sip" msgtype="200-Notify" target="PCSCF1" originator="DUT"/-->
+				</prelude>
+				<transition to="RecvNotify" event="Notify"/>
+				<transition to="Register2" event="TimerExpired"/>
+			</state>
+			<state ID="Register2">
+				<prelude>
+					<sleep time="5000"/>
+					<send protocol="sip" msgtype="Register" target="PCSCF1" originator="DUT" />
+				</prelude>
+				<transition to="Digest2" event="401-Register"/>
+				<transition to="END" event="200-Register"/>
+				<!--transition to="Subscribe" event="200-Register"/-->
+			</state>
+			<state ID="Digest2" timer="4000">
+				<prelude>
+					<send protocol="sip" msgtype="Register" target="PCSCF1" originator="DUT" />
+					<!--mod modtype="replace" hdr="Authorization" param="nonce">
+						<msg_ref type="sip" msg_instance="last">Register.Authorization.nonce</msg_ref> 
+
+            
+            </mod>
+					<mod modtype="replace" hdr="Authorization" param="response">
+						<msg_ref type="sip" msg_instance="last">Register.Authorization.response</msg_ref>
+					</mod>
+            </send-->
+
+				</prelude>
+				<transition to="END" event="200-Register"/>
+				<!--transition to="Digest3" event="503-Register"/-->
+				
+			</state>
+			<!--state ID="Digest3">
+- <prelude>
+  <send protocol="sip" msgtype="Register" target="PCSCF1" originator="DUT" /> 
+  </prelude>
+  <transition to="END" event="200-Register" /> 
+  </state-->
+
+			
+		</states>
+	</fsm>
+</pc2xml>

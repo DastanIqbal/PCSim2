@@ -1,0 +1,187 @@
+#//********************************************************************
+#// Filename: E-UE-DATA_1-2-4-2_19.test
+#// Author: Matthew Forbes
+#// Creation Date: 11/10/2008
+#// Modified by:
+#//
+#//
+#//********************************************************************
+#// Description:
+#//    TC1616 Test Case E-UE-DATA_1-2-4-2_19 Functionality Verification of the MIB
+#//    table 'pktcDevEvControl'
+#//
+#//
+#// Objective:
+#//    Verify that the MTA supports the functionality as defined by the Event
+#//    Control MIB Object 'pktcDevEvControl'
+#//
+#// PacketCable DUT:
+#//    EDVA
+#//
+#// Test Steps:
+#//    - Initial configuration
+#//    - Start sniffer
+#//    - TFTP GET MTA config file
+#//    - TFTP PUT and SNMP RESET
+#//    - Check Provisioning state
+#//    - Perform mib check
+#//    - Stop sniffer
+#//    - Delete MTA config file
+#//    
+#//
+#// Notes:
+#//    - Requires the specific config file in $BASE_CFG_FILE_PATH in Provisioning Server.
+#//************************************************************************
+global SCRIPT_VERSION
+set SCRIPT_VERSION { # $Id: E-UE-DATA_1-2-4-2_19.test 7406 2010-07-20 17:17:37Z dthakore $ }
+
+set test_case E-UE-DATA_1-2-4-2_19-
+set step_num 1
+
+DoStep ${test_case}${step_num} "Initial Configuration" {
+    LogMsg "--- Init PROV module ---"
+    Init_PROV
+
+    Init_CONTROLLER_LAN    
+
+    # Initial PARSER TOOL
+    Init_PART
+
+    # ProvCreateConfig 291 $MTA_MAC
+    PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122 Device_Level_Secure.cfg
+    PROV_DEPLOY_DHCP
+    
+} {PASS_STEP}
+
+
+DoStep ${test_case}[incr step_num] "Start sniffer" {
+    LogMsg "--- Start sniffer ---"    
+    SetupCaptureControllerLan "dst port 514"
+    StartCaptureControllerLan 
+} {PASS_STEP}
+
+DoStep ${test_case}[incr step_num] "SNMP RESET" {
+    SNMP_SET $oid_pktcMtaDevResetNow INTEGER 1 $MTA_IP
+    actionWait "Wait for MTA to reboot" 60
+} {PASS_STEP}
+
+DoStep ${test_case}[incr step_num] "pktcMtaDevProvisioningState Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMP_GET $oid_pktcMtaDevProvisioningState $MTA_IP 20]
+    LogMsg "The Value of MTA Provisioning State is: $val"
+} {IsEqual $val 1}
+
+DoStep ${test_case}[incr step_num] "Stop sniffer" {
+    LogMsg "--- Stop sniffer ---"
+    StopCaptureControllerLan
+    SaveToFileControllerLan 
+} {PASS_STEP}
+
+DoStep ${test_case}[incr step_num] "Parse all data into database" {
+    # Initial PARSER TOOL    
+    #set ::PART_SHOW_DB_WRITE 1
+    set PARSERFILE    $ETH_DEFAULT_TXT_FILE  
+
+    # Parse data
+    set PARAMS_DHCP         "{DHCP {} {} {} {} {} {} {} {}}"    
+    set PARAMS_MTA_SRC      "{{} {} {} {} $MTA_IP {} {} {} {}}"
+    set PARAMS_MTA_DST      "{{} {} {} {} {} {} {} $MTA_IP {}}"
+    set PARAMS_DHCP         "$PARAMS_DHCP $PARAMS_MTA_SRC $PARAMS_MTA_DST"
+    
+    set MTA_MAC_COL [AddColMac $MTA_MAC]
+
+    # Set up parser file     
+    set msgID_MTA [ParseFile $PARSERFILE $PARAMS_DHCP ]
+
+} { 
+    if { $::PART_RETURN == 0 } {
+        PASS_STEP
+    } else {
+        FAIL_STEP "Cannot find data"
+    }
+}
+
+DoStep ${test_case}[incr step_num] "Obtain SYSLOG Event Message" {
+    LogMsg "Event field in SYSLOG: Provisioning Complete"
+    set msg_event [GetValue $msgID_MTA "INANY SYSLOG SYSLOG_MSG SYSLOG_EVENT"]
+    set corr_id [lindex [split $msg_event >] 1]
+    set corr_id $corr_id>
+} {
+    VerifyValue $msgID_MTA "INANY SYSLOG SYSLOG_MSG SYSLOG_EVENT" "IS" "<4000951500>${corr_id}Provisioning Complete"
+}
+
+DoStep ${test_case}[incr step_num] "Obtain pktcDevEvLogTime LIST" {  
+    set val_list [SNMP_TABLE_GET $oid_pktcDevEvLogTime $MTA_IP LIST]
+    #LogMsg "--->>>>>>>>The pktcDevEvLogTime List at first point: $val_list"
+    set val_list_length [llength $val_list]
+    set max_val_time [lindex $val_list [expr $val_list_length -1]]
+    # set max_val_time [SnmpDateTimeConverter $max_val_time]   
+    #LogMsg "--->>>>>>>>The Highest Index Time in pktcDevEvLogTime = $max_val_time"
+} {
+    if {$max_val_time != ""} {
+            PASS_STEP
+    } else {
+            FAIL_STEP
+    }
+}
+
+# DoStep ${test_case}[incr step_num] "Set pktcDevEvControl 0x80" {
+    # set type OCTET-STRING
+    # set default_value "(HEX) -> 00" ;# resetEventLogTable(0) 
+    # set set_list {0x80}  
+# } {SnmpRWVerify ${oid_pktcDevEvControl} $MTA_IP $type $default_value $set_list 0 0}
+
+DoStep ${test_case}[incr step_num] "Set pktcDevEvControl 80" {
+    set val [SNMP_SET ${oid_pktcDevEvControl} BITS 00 $MTA_IP]
+} {IsEqual $val 0}
+
+DoStep ${test_case}[incr step_num] "Get pktcDevEvControl is 00" {
+    set val [SNMP_GET ${oid_pktcDevEvControl} $MTA_IP]
+} {IsEqual $val "00"}
+
+DoStep ${test_case}[incr step_num] "Obtain pktcDevEvLogTime LIST Again" { 
+    set command PASS_STEP 
+    set val_list [SNMP_TABLE_GET $oid_pktcDevEvLogTime $MTA_IP LIST]
+    #LogMsg "--->>>>>>>>The pktcDevEvLogTime List at second point: $val_list"
+    if {$val_list != ""} {        
+        set least_val_time [lindex $val_list 0]
+        # set least_val_time [SnmpDateTimeConverter $least_val_time]   
+        #LogMsg "--->>>>>>>>The Lowest Index Time in pktcDevEvLogTime = $least_val_time"
+    
+        # Convert everything to seconds to do easy comparison, ie. 2005-5-24,20:57:52.0
+        set year  [clock format [clock seconds] -format %Y -gmt true]    
+        set month [clock format [clock seconds] -format %h -gmt true]
+        set date  [clock format [clock seconds] -format %e -gmt true]
+        set max_time   [lindex [split [lindex [split $max_val_time ,] 1] .] 0]
+        set least_time [lindex [split [lindex [split $least_val_time ,] 1] .] 0]
+        set max_time_compare   [clock scan "$month $date $max_time $year" -base [clock seconds] -gmt true]    
+        set least_time_compare [clock scan "$month $date $least_time $year" -base [clock seconds] -gmt true]
+        if {$max_time_compare >= $least_time_compare} {
+            set command FAIL_STEP
+            LogMsg "ERROR: TimeStamps after Log Table Reset are found to conflict in total seconds; \n\
+            $max_time_compare vs. $least_time_compare"
+        }    
+    }
+} {eval $command}
+
+DoStep ${test_case}[incr step_num] "pktcDevEventDescrText.4000951500 Content Verification" {
+    set type STRING
+    set default_value "Provisioning Complete"
+    set set_list [list {Provisioning_Complete-Changed_Text}]
+} {SnmpRWVerify ${oid_pktcDevEventDescrText}.4000951500.4491 $MTA_IP $type $default_value $set_list 1}
+
+DoStep ${test_case}[incr step_num] "Set pktcDevEvControl 40" {
+    set type BITS   
+    set val [SNMP_SET ${oid_pktcDevEvControl} $type 01 $MTA_IP]    
+} {PASS_STEP}
+
+DoStep ${test_case}[incr step_num] "Get pktcDevEvControl is 00" {
+    set val [SNMP_GET ${oid_pktcDevEvControl} $MTA_IP]
+} {IsEqual $val "00"}
+
+DoStep ${test_case}[incr step_num] "pktcDevEventDescrText.4000951500 Content Verification Again" {
+    set val [SNMP_GET ${oid_pktcDevEventDescrText}.4000951500.4491 $MTA_IP]
+} {IsEqual $val "Provisioning Complete"} 
+
+
+Cleanup

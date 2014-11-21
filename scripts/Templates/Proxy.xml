@@ -1,0 +1,222 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	PCPCII-139 : Update the Voicetronix modifiers to use the new values. (ghassler 07/10/2009)
+	
+
+
+
+-->
+<!-- First are the document type and the attributes for our document -->
+<pc2xml version="$Revision: 8188 $" 
+	name="Proxy Template" 
+	descrip="Template for the Proxy Operations " 
+	number="1">
+
+	<!-- Next we define the each of state mahcines -->
+	<fsm name="Proxy template">
+		<models>
+			<session/>
+		</models>
+
+		<!-- Next we define all of the network elements and extension 
+     controls to be used in this test -->
+		<NE sim_type="term" elements="SCSCF1 PCSCF1" targets="SCSCF1 PCSCF1"/>
+		<!-- NOTE - The test platform is assumed to be performing 
+            the registrar between tests. The session model 
+						requests to be informed when the DUT registers
+						and the fsm will receive the Registered event	
+						once the DUT is registered -->
+
+		<!-- All of the states for the test -->
+		<states initialstate="Register">
+			<!-- REGISTER State -->
+			<state ID="Register">
+				<transition to="OffHook" event="Registered"/>
+			</state>
+			<!-- OFFHOOK State -->
+			<state ID="OffHook">
+				<prelude>
+					<send protocol="utility" msgtype="OffHook"/>
+				</prelude>
+				<transition to="Setup" event="OffHookComplete"/>
+			</state>
+			
+			<!-- SETUP State -->
+			<!-- The state machine will wait in the Setup state until it 
+				 receives an Invite from the originating UE or the fail timeout occurs. -->
+			<state ID="Setup">
+				<prelude once="true">
+					<send protocol="utility" msgtype="DialDigits">
+						<mod modtype="add" hdr="number">
+							<msg_ref type="platform">UE1.phone number 1</msg_ref>
+						</mod>
+					</send>
+				</prelude>
+				<response>
+					<if>
+						<or>
+							<eq>
+								<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE1.IP</msg_ref>
+							</eq>
+							<eq>
+								<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE1.IP</msg_ref>
+							</eq>
+						</or>
+						<then>
+							<proxy target="UE0"/>
+						</then>
+						<elseif>
+							<or>
+								<eq>
+									<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+									<msg_ref type="platform">UE0.IP</msg_ref>
+								</eq>
+								<eq>
+									<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+									<msg_ref type="platform">UE0.IP</msg_ref>
+								</eq>
+							</or>
+							<then>
+								<proxy target="UE1"/>
+							</then>
+						</elseif>
+					</if>
+				</response>
+				<transition to="Setup" event="DialDigitsComplete"/>
+				<transition to="Setup" event="INVITE"/>
+				<transition to="Alerting" event="CANCEL"/>
+				<transition to="Alerting" event="xxx-INVITE"/>
+				<transition to="Setup" event="OffHookComplete"/>
+			</state>
+			<!-- Alerting State -->
+			<!-- The state machine will wait in the Setup state until it 
+				 receives an Invite from the originating UE or the fail timeout occurs. -->
+			<state ID="Alerting" timer="6000">
+				<response>
+					<if>
+						<or>
+							<eq>
+								<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE1.IP</msg_ref>
+							</eq>
+							<eq>
+								<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE1.IP</msg_ref>
+							</eq>
+						</or>
+						<then>
+							<proxy target="UE0"/>
+						</then>
+						<elseif>
+							<or>
+								<eq>
+									<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+									<msg_ref type="platform">UE0.IP</msg_ref>
+								</eq>
+								<eq>
+									<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+									<msg_ref type="platform">UE0.IP</msg_ref>
+								</eq>
+							</or>
+							<then>
+								<proxy target="UE1"/>
+							</then>
+						</elseif>
+					</if>
+					<if>
+						<eq>
+							<msg_ref type="event"/>
+							<expr>TimerExpired</expr>
+						</eq>
+						<then>
+							<send protocol="utility" msgtype="OffHook">
+								<mod modtype="replace" hdr="voiceport">
+									<msg_ref type="platform">Platform.voiceport1</msg_ref>
+								</mod>
+							</send>
+						</then>
+					</if>
+				</response>
+				<transition to="Alerting" event="INVITE"/>
+				<transition to="Alerting" event="OPTIONS"/>
+				<transition to="Alerting" event="200-OPTIONS"/>
+				<transition to="Alerting" event="PRACK"/>
+				<transition to="Alerting" event="200-PRACK"/>
+				<transition to="Alerting" event="UPDATE"/>
+				<transition to="Alerting" event="200-UPDATE"/>
+				<transition to="Alerting" event="xxx-INVITE"/>
+				<transition to="Alerting" event="OffHookComplete"/>
+				<transition to="Connected" event="ACK"/>
+			</state>
+			<!-- CONNECTED State -->
+			<state ID="Connected" timer="10000">
+				<transition to="OnHook" event="TimerExpired"/>
+			</state>
+			<!-- OnHook State -->
+			<state ID="OnHook">
+				<prelude once="true">
+					<send protocol="utility" msgtype="OnHook"/>
+				</prelude>
+				<response>
+					<if>
+						<or>
+							<eq>
+								<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE1.IP</msg_ref>
+							</eq>
+							<eq>
+								<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE1.IP</msg_ref>
+							</eq>
+						</or>
+						<then>
+							<proxy target="UE0"/>
+						</then>
+						<elseif>
+							<or>
+								<eq>
+									<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+									<msg_ref type="platform">UE0.IP</msg_ref>
+								</eq>
+								<eq>
+									<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+									<msg_ref type="platform">UE0.IP</msg_ref>
+								</eq>
+							</or>
+							<then>
+								<proxy target="UE1"/>
+							</then>
+						</elseif>
+					</if>
+				</response>
+				<transition to="OnHook" event="OnHookComplete"/>
+				<transition to="OnHook" event="Bye"/>
+				<transition to="OnHookUE1" event="200-Bye"/>
+			</state>
+			<!-- OnHook State -->
+			<state ID="OnHookUE1">
+				<prelude>
+					<send protocol="utility" msgtype="OnHook">
+						<mod modtype="replace" hdr="voiceport">
+							<msg_ref type="platform">Platform.voiceport1</msg_ref>
+						</mod>
+					</send>
+				</prelude>
+				<transition to="END" event="OnHookComplete"/>
+			</state>
+		</states>
+	</fsm>
+</pc2xml>

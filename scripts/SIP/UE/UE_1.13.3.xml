@@ -1,0 +1,99 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	PCPCII-173 : Change the qos-curr-local value from sendrecv to none. Remove the two tests on the
+		current local and remote qos settings. (ghassler 1/26/2010)
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="SIP-UE 1.13.3" 
+	descrip="Receive INVITE with required resources at the originating UE NOT reserved yet" 
+	number="SIP-UE 1.13.3">
+	
+	<template file="./templates/CallTermAtUETemp.xml" name="UE1"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Setup"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<NE ext_require="100rel precondition"/>
+		
+		<state ID="Setup">
+			<prelude once="true">
+				<send protocol="sip" msgtype="Invite">
+					<mod modtype="replace" hdr="qos-curr-local" param="direction">
+						<expr>none</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<or>
+						<eq>
+							<msg_ref type="sip">Response</msg_ref>
+							<expr>183-INVITE</expr>
+						</eq>
+						<eq>
+							<msg_ref type="sip">Response</msg_ref>
+							<expr>180-INVITE</expr>
+						</eq>
+					</or>
+					<then>
+						<verify step="1" requirements="REQ17112, REQ17113, REQ17114, RFC1490" group="18x">
+							<or>
+								<eq>
+									<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+									<expr>180</expr>
+								</eq>
+								<eq>
+									<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+									<expr>183</expr>
+								</eq>
+							</or>
+						</verify>
+						<verify step="1" requirements="REQ17112, REQ17113, REQ17114, RFC1490" group="precondition">
+							<contains>
+								<msg_ref type="sip" hdr_instance="any">18x-INVITE.Require</msg_ref>
+								<expr>precondition</expr>
+							</contains>
+						</verify>
+						<verify step="1" requirements="REQ17112, REQ17113, REQ17114, RFC1490" group="100rel">
+							<contains>
+								<msg_ref type="sip" hdr_instance="any">18x-INVITE.Require</msg_ref>
+								<expr>100rel</expr>
+							</contains>
+						</verify>
+						<verify step="1" requirements="REQ17112, REQ17113, REQ17114, RFC1490">
+							<contains>
+								<msg_ref type="sip">18x-INVITE.SDP</msg_ref>
+								<expr>a=des:qos mandatory local sendrecv</expr>
+							</contains>
+						</verify>
+						<verify step="1" requirements="REQ17112, REQ17113, REQ17114, RFC1490">
+							<contains>
+								<msg_ref type="sip">18x-INVITE.SDP</msg_ref>
+								<expr>a=des:qos mandatory remote sendrecv</expr>
+							</contains>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<transition to="Setup" event="100-INVITE"/>
+			<transition to="END" event="18x-INVITE"/>
+		</state>
+	</add_to>
+</pc2xml>

@@ -1,0 +1,75 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+
+<!-- First are the document type and the attributes for our document -->
+<pc2xml version="$Revision: 8188 $" name="Basic Voice Call AS Template" descrip="This template is emulates a basic voice call AS." number="1">
+	<!-- Next we define the each of state mahcines -->
+	<fsm name="AS1" sipStack="SIP Stack 3">
+		<models>
+			<session/>
+		</models>
+		<!-- Next we define all of the network elements and extension 
+     controls to be used in this test -->
+		<NE sim_type="term" elements="AS1" targets="AS1"/>
+		<!-- All of the states for the test -->
+		<states initialstate="Setup">
+			<!-- SETUP State -->
+			<!-- The state machine will wait in the Setup state until it 
+				 receives an Invite from the originating UE or the fail timeout occurs. -->
+			<state ID="Setup">
+				<transition to="Provisional" event="INVITE"/>
+			</state>
+			<!-- Provisional Response State -->
+			<state ID="Provisional">
+				<prelude>
+					<proxy target="SCSCF0"/>
+				</prelude>
+				<transition to="Connected" event="ACK"/>
+				<transition to="Provisional" event="OPTIONS"/>
+				<transition to="Provisional" event="200-OPTIONS"/>
+				<transition to="Provisional" event="PRACK"/>
+				<transition to="Provisional" event="200-PRACK"/>
+				<transition to="Provisional" event="UPDATE"/>
+				<transition to="Provisional" event="200-UPDATE"/>
+				<transition to="Provisional" event="1xx-INVITE"/>
+				<transition to="Provisional" event="200-INVITE"/>
+			</state>
+			<!-- CONNECTED State -->
+			<state ID="Connected">
+				<prelude>
+					<proxy target="SCSCF0"/>
+				</prelude>
+				<transition to="Releasing" event="BYE"/>
+			</state>
+			<!-- RELEASING State -->
+			<state ID="Releasing">
+				<prelude>
+					<proxy target="SCSCF0"/>
+				</prelude>
+				<postlude>
+					<proxy target="SCSCF0"/>
+				</postlude>
+				<transition to="Released" event="200-BYE"/>
+			</state>
+			<!-- RELEASED State -->
+			<state ID="Released" ES="true"/>
+		</states>
+	</fsm>
+</pc2xml>

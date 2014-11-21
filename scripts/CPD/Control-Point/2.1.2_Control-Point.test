@@ -1,0 +1,57 @@
+###########################################################
+#   Author: Vikas Sarawat (CableLabs)
+#   Date :   06/22/07  
+#   DUT:     Control-Point
+#   Title   : TEST CASE CPD-Control Point 2.1.2 – CR-ID for a wild-card request
+#   Objective: Verify the CPD response message includes the actual value of the CR ID when request contains a CR ID = 0 (Wild Carded)
+#
+#
+#
+#
+##
+###########################################################
+
+
+#########Step number initialization###################
+set procNum 1
+set stepNum 0 ;# (next used +1)
+
+######Module information #################
+set mod cpd
+set cpd ::$mod\::
+set str "InitModule CPD"
+
+DoStep "Step $procNum.[set stepNum]" $str {
+    set isOk [set soc [ InitModule $mod ] ]; # Doc: InitModule CPD (Source-Module & Open Socket)
+    if { $soc != -1 } {
+        $soc.socRaw 1; # Set flag for SocRaw (enable IPv4 option Router Alert)
+    } ; # END if
+} { if {$isOk == -1 } {FAIL_STEP $str } else {PASS_STEP} }
+
+set str "configure the CR-ID =1"
+DoStep "Step $procNum.[set stepNum]" $str {
+      LogMsg "--- Configure the CR ID on the control Point as 1"
+} {PASS_STEP}
+
+
+
+set str "Build & Tx CPD Request Msg and receive the response"
+DoStep "Step $procNum.[incr stepNum]" $str {
+    set txData_Req [ $cpd\MsgNew Request ]; # Doc: Instantiate New Message 
+    
+    # Build 
+    set txData_ReqHex [ $cpd\MsgBuild $txData_Req ]
+    # change the CR ID to 0
+    set txData_ReqHex [string replace $txData_ReqHex 45 48 0000]
+    # Doc: Tx Message to DstIp, DstPort
+    set msgLen [ $cpd\MsgTx $txData_ReqHex $soc $::gCPD_REMOTE_IP $::gCPD_REMOTE_PORT ]
+
+    set rxData_Resp [ $cpd\MsgRx ]
+    set crIdRx [$cpd\MsgGetVal $rxData_Resp AppPayload crId ]
+   
+    
+} { if {$crIdRx != 1 } {FAIL_STEP $str } else {PASS_STEP} }
+
+
+Cleanup
+

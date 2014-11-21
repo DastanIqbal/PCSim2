@@ -1,0 +1,66 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="SIP-UE 1.10.1" 
+	descrip="Unknown URI Parameters are Ignored." 
+	number="SIP-UE 1.10.1">
+	
+	<template file="./templates/CallTermAtUETemp.xml" name="UE1"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Setup" sub="prelude"/>
+		<state ID="Connected" sub="response"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<state ID="Setup" sub="prelude">
+			<send protocol="sip" msgtype="Invite">
+				<!-- Step-1, Message Flow for test case 1.10.1 - Add a lrrr, 
+					tranpart=tcp, phuser=phone parameter to the request-uri  -->
+				<mod modtype="replace" hdr="Request-Line" param="Request-URI">
+					<var_expr>
+						<expr>sip:</expr>
+						<msg_ref type="platform">DUT.username</msg_ref>
+						<expr>@</expr>
+						<msg_ref type="platform">DUT.IP</msg_ref>
+						<expr>;lrrr;tranpart=tcp;phuser=phone</expr>
+					</var_expr>
+				</mod>
+			</send>
+		</state>
+		
+		<state ID="Connected" sub="response">
+			<if>
+				<eq>
+					<msg_ref type="event"/>
+					<expr>DIALOG_CONFIRMED_UAC</expr>
+				</eq>
+				<then>
+					<verify step="1" requirements="RFC1081">
+						<eq>
+							<msg_ref type="sip" msg_instance="last">Response</msg_ref>
+							<expr>200-INVITE</expr>
+						</eq>
+					</verify>
+				</then>
+			</if>
+		</state>
+	</add_to>
+</pc2xml>

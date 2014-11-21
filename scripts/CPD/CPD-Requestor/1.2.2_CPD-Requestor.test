@@ -1,0 +1,15 @@
+###########################################################
+#   Author: Vikas Sarawat (CableLabs)
+#   Date  :   06/22/07  
+#   DUT   :      CPD-Requestor
+#   Title : TEST CASE CPD-Requestor 1.2.2 – set and delete the keys manually
+#   Objective: Verify that the keys can be deleted and provisioned manually.
+#
+#
+##
+###########################################################
+
+LogMsg "Verify that the CPD-Requestor allows deletion of already existing keys and provision of the new ones."
+
+
+

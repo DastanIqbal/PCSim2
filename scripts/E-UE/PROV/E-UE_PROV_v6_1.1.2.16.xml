@@ -1,0 +1,156 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+ Change History: (Author & Date)
+-->
+<pc2xml version="$Revision: 7768 $"
+        name="EUE Prov 1.1.2.16"
+        descrip="eUE fails provision if required sub-options not provided in DHCP configuration."
+        number="EUE Prov 1.1.2.16">
+
+    <template file="./templates/EUE_Prov_B_1_1_1.xml" name="FailsProvision"/>
+
+    <add_to fsm="FailsProvision">
+        <transition from="StartCapture_RebootWait" to="Informs1" event="TimerExpired"/>
+
+        <state ID="Informs1">
+            <prelude once="true">
+				<sleep time="60000"/>
+                <stop_capture/>
+
+                <parse_capture name="eUE_v6">
+                    <parser_filter protocol="dhcpv6" clientMAC="DUT.MAC Address"/>
+                </parse_capture>
+                <parse_capture name="eUE_Prov">
+                    <parser_filter protocol="snmp" ip="DUT.IP"/>
+                </parse_capture>
+
+                <!-- Step 2. Wait for about 60 secs. 
+                             MTA does not send Enroll SNMP INFORM nor Status SNMP INFORM. -->
+                <!-- Step 3. Verify MTA only sends SOLICIT and does not send any REQUEST. -->
+                <verify step="2 3">
+                    <and>
+                        <null>
+                            <capture_ref type="snmp" name="eUE_Prov">Inform Request</capture_ref>
+                        </null>
+                    <and>
+                        <notnull>
+                            <capture_ref type="dhcpv6" name="eUE_v6">Solicit.num</capture_ref>
+                        </notnull>
+                        <null>
+                            <capture_ref type="dhcpv6" name="eUE_v6">Request.num</capture_ref>
+                        </null>
+                    </and>
+                    </and>
+                </verify>
+                <generate event="SucceedEvent"/>
+            </prelude>
+            <transition to="ConfigurePolicy2" event="SucceedEvent"/>
+        </state>
+
+		<state ID="ConfigurePolicy2">
+			<prelude>
+				<log promptUser="true" expr="Set the DUT to use a new policy, X_eUE_no_sub6 and depoly."/>
+				<generate event="Branch1Event"/>
+			</prelude>
+			<transition to="Reset" event="Branch1Event"/>
+		</state>
+
+
+        <state ID="Reset" timer="180000">
+            <prelude once="true">
+
+                <start_capture>
+					<filter>
+						<var_expr>
+							<expr>host </expr>
+							<msg_ref type="platform">DUT.IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.CM IP Address</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.DHCP Server IP</msg_ref>
+						</var_expr>
+					</filter>
+                </start_capture>
+                	<send protocol="utility" msgtype="SNMPSet">
+						<mod modtype="add" hdr="array">
+							<var_expr>
+								<expr>varBind 1 1 3 \r\n ][ , </expr>
+								<expr>DOCS-CABLE-DEVICE-MIB::docsDevResetNow.0,INTEGER,1][\r\n</expr>
+							</var_expr>
+						</mod>
+						<mod modtype="replace" hdr="agentip">
+							<msg_ref type="platform">DUT.CM IP Address</msg_ref>
+						</mod>
+						<!-- Always use version 2 for a CM reset -->
+						<mod modtype="replace" hdr="version">
+							<expr>2c</expr>
+						</mod>
+					</send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPRespFailure</expr>
+                    </eq>
+                    <then>
+                        <fail/>
+                    </then>
+                </if>
+                <if>
+                    <or>
+                        <eq>
+                            <msg_ref type="sip">REGISTER.Contact.expires</msg_ref>
+                            <expr>0</expr>
+                        </eq>
+                        <eq>
+                            <msg_ref type="sip">REGISTER.Expires.value</msg_ref>
+                            <expr>0</expr>
+                        </eq>
+                    </or>
+                    <then>
+                        <send protocol="sip" msgtype="200-REGISTER"/>
+                    </then>
+                </if>
+            </response>
+            <transition to="Informs2" event="TimerExpired"/>
+            <transition to="Reset" event="SNMPResp"/>
+            <transition to="Reset" event="REGISTER"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+
+        <state ID="Informs2">
+            <prelude once="true">
+                <stop_capture/>
+
+                <parse_capture name="eUE_v6_2">
+                    <parser_filter protocol="dhcpv6" clientMAC="DUT.MAC Address"/>
+                </parse_capture>
+
+
+                <!-- Step 6. Verify MTA only sends SOLICIT and does not send any REQUEST. -->
+                <verify step="6">
+                    <and>
+                        <notnull>
+                            <capture_ref type="dhcpv6" name="eUE_v6_2">Solicit.num</capture_ref>
+                        </notnull>
+                        <null>
+                            <capture_ref type="dhcpv6" name="eUE_v6_2">Request.num</capture_ref>
+                        </null>
+                    </and>
+                </verify>
+                <generate event="SucceedEvent"/>
+            </prelude>
+            <transition to="END" event="SucceedEvent"/>
+        </state>
+    </add_to>
+</pc2xml>

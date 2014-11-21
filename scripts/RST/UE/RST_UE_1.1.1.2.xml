@@ -1,0 +1,133 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	PCPCII-139 : Update the Voicetronix modifiers to use the new values. (ghassler 07/10/2009)
+	PCPCII-174 : Update the script to the D11 version of the ATP (ghassler 01/26/2010)
+	PCPCII-421 : Remove extraneous prompt to verify error tone. (ghassler 06/30/2010)
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-UE 1.1.1.2" 
+	descrip="Digit Map Package per IMPU" 
+	number="RST-UE 1.1.1.2">
+	
+	<fsm name="UE1">
+		<models>
+			<session/>
+		</models>
+		<NE sim_type="term" elements="UE1 PCSCF2 SCSCF1 PCSCF1" targets="UE1 18002222222 8002222222 "/>
+		
+		<states initialstate="Register">
+			<state ID="Register">
+				<transition to="OffHook" event="Registered"/>
+			</state>
+			
+			<state ID="OffHook">
+				<prelude>
+					<log promptUser="True" expr="Subscribe as the first user"/>
+					<send protocol="utility" msgtype="OffHook"/>
+				</prelude>
+				<transition to="Call" event="OffHookComplete"/>
+			</state>
+			
+			<state ID="Call">
+				<prelude once="true">
+					<send protocol="utility" msgtype="DialDigits">
+						<mod modtype="add" hdr="number">
+							<expr>8002222222</expr>
+						</mod>
+					</send>
+					<sleep time="3800"/>
+				</prelude>
+				<response>
+					<if>
+						<neq>
+							<msg_ref type="utility">Response</msg_ref>
+							<expr>DialDigitsComplete</expr>
+						</neq>
+						<then>
+							<verify step="1" requirements="REQ13404">
+								<eq>
+									<msg_ref type="sip">Invite.Request-Line.Request-URI</msg_ref>
+									<expr>tel:+18002222222</expr>
+								</eq>
+							</verify>
+						</then>
+					</if>
+				</response>
+				<transition to="Call" event="DialDigitsComplete"/>
+				<transition to="EndCall" event="Invite"/>
+			</state>
+			
+			<state ID="EndCall" ES="true">
+				<transition to="OffHook2" event="SessionTerminated"/>
+			</state>
+			
+			<!-- CALL 2 -->
+			<state ID="OffHook2">
+				<prelude>
+					<sleep time="1000"/>
+					<send protocol="utility" msgtype="OffHook">
+						<mod modtype="replace" hdr="voiceport">
+							<msg_ref type="platform">Platform.voiceport1</msg_ref>
+						</mod>
+					</send>
+				</prelude>
+				<transition to="Dial2" event="OffHookComplete"/>
+			</state>
+			
+			<state ID="Dial2">
+				<prelude>
+					<send protocol="utility" msgtype="DialDigits">
+						<mod modtype="add" hdr="number">
+							<expr>8002222222</expr>
+						</mod>
+						<mod modtype="replace" hdr="voiceport">
+							<msg_ref type="platform">Platform.voiceport1</msg_ref>
+						</mod>
+					</send>
+				</prelude>
+				<transition to="NoInvite" event="DialDigitsComplete"/>
+			</state>
+			
+			<state ID="NoInvite">
+				<prelude once="true">
+					<send protocol="utility" msgtype="VerifyReorder">
+						<mod modtype="replace" hdr="voiceport">
+							<msg_ref type="platform">Platform.voiceport1</msg_ref>
+						</mod>
+					</send>
+				</prelude>
+				<response>
+					<verify step="3" requirements="REQ13404">
+						<and>
+							<eq>
+								<msg_ref type="utility">Response</msg_ref>
+								<expr>VerifyReorderComplete</expr>
+							</eq>
+							<neq>
+								<msg_ref type="sip">Request</msg_ref>
+								<expr>INVITE</expr>
+							</neq>
+						</and>
+					</verify> 
+					
+				</response>
+				<transition to="END" event="VerifyReorderComplete"/>
+				<transition to="END" event="VerifyReorderError"/>
+				<transition to="END" event="INVITE"/>
+			</state>
+		</states>
+	</fsm>
+</pc2xml>

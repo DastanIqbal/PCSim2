@@ -1,0 +1,221 @@
+#//*****************************************************************************
+#// Filename: E-UE-PROV_1-1-2-30.test
+#// Author:   Satish Kumar, Texas Instruments Visiting Engineer
+#// Creation Date: Jun 21, 2005
+#// Modified by: Matthew Forbes 1/9/2006
+#//*****************************************************************************
+#// Description:
+#//     TC1606 TEST CASE PROV 5.80 MTA ability to return MTA-1 upon failure in  
+#//   the Provisioning Flow
+#//     
+#//
+#// Objective:
+#//     Test the MTA ability to return to MTA-1 when a step in the provisioning 
+#//  flow fails and this action is not a result of the provisioning timer expiration 
+#//
+#// PacketCable DUT:
+#//     MTA
+#//
+#// Test Steps:
+#//     - Initial Configuration: Cfg. 291.
+#//     - TFTP config file
+#//     - Start sniffer
+#//     - Reset DUT
+#//     - Check Provisioning state of MTA
+#//     - Clear the tickets, reset MTA
+#//     - Configure tftp  server not to reply for TFTP request, 122.8=30
+#//	    - Wait for 30 seconds to make sure that MTA loop back to DHCP after enrollment inform retry
+#//     - Stop sniffer
+#//     - Invoke parsing tool and validate for presence of enrollment inform and sequence 
+#//     - Delete MTA config file
+#//
+#// Notes:
+#//     - Requires provPrimitives.tcl & tftp_primitives.tcl.
+#//     - Requires the specific config file in $BASE_CFG_FILE_PATH in Provisioning Server.
+#//     - Requires parT.tcl parsing tool to parse data from capture file.
+#//*****************************************************************************
+global SCRIPT_VERSION
+set SCRIPT_VERSION { # $Id: E-UE-PROV_1-1-2-30.test 7406 2010-07-20 17:17:37Z dthakore $ }
+
+DoStep "E-UE-PROV_1-1-2-30_PreStep-1" "Initialize Test Platform" {
+    Init_PROV
+    Init_CONTROLLER_LAN
+    # Initial PARSER TOOL
+    Init_PART
+
+} { PASS_STEP }
+
+DoStep "E-UE-PROV_1-1-2-30_1-1" "Initial configuration" {
+    LogMsg "--- Initial configuration ---"
+    # ProvCreateConfig 291 $MTA_MAC
+    PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122 
+    PROV_DEPLOY_DHCP
+} { PASS_STEP }
+
+
+##############################################################################
+#         MTA RESET
+###############################################################################
+DoStep "E-UE-PROV_1-1-2-30_2-1" "Reset MTA" {
+    set val [SNMP_SET $oid_pktcMtaDevResetNow INTEGER 1 $MTA_IP]
+    LogMsg "Reset MTA has passed"
+} {
+    IsEqual $val 0
+}
+
+
+
+DoStep "E-UE-PROV_1-1-2-30_3-1" "pktcMTADevProvisioningState Content Verification" {
+    # Wait for a minute to let CM/MTA starting to reboot
+    actionWait "Wait for MTA to reboot" 30
+    # Get the OID from the MTA and check it using our previously defined
+    set val [GetProvState 1 600]
+    LogMsg "MTA Provisioning State"
+    LogMsg "             - Expected : 1"
+    LogMsg "             - Received : $val"
+} {
+    IsEqual $val 1
+}
+
+
+
+###############################################################################
+#############Configure SNMP entity and MTA DHCP 122.8=30 min
+DoStep "E-UE-PROV_1-1-2-30_6-1" "Configure Provisioning Server and TFTP server." {
+# verify_signal "Configure provisioning application TFTP server not to respond to MTA TFTP\n
+# request(Reports, click BOA report, click Stop on TFTP_$PROV_DHCP1_IP to disable TFTP server)."
+    PROV_STOP_BOA TFTP
+    PROV_MODIFY_DEVICE $MTA_MAC MTATC1605
+    PROV_DEPLOY_DHCP
+} {PASS_STEP}
+
+set msgStr "Start Sniffer"
+DoStep "E-UE-PROV_1-1-2-30_6-2" $msgStr {
+    LogMsg "--- $msgStr ---"
+    SetupCaptureControllerLan "host $MTA_IP || udp port 67 || host $MTA_IP"
+    StartCaptureControllerLan
+} {PASS_STEP}
+
+DoStep "E-UE-PROV_1-1-2-30_7-1" "Reset MTA" {
+    actionWait "Wait a few seconds for sniffer" 3
+    LogMsg "SNMP set: pktcMtaDevResetNow - 1"
+    SNMP_SET $oid_pktcMtaDevResetNow INTEGER 1 $MTA_IP
+} {PASS_STEP}
+
+#Wait 180 seconds(3 minutes)
+
+DoStep "E-UE-PROV_1-1-2-30_7-2" "Wait for Device to retry to provision" {
+    actionWait "Wait 3 mins for device to retry to provision" 180
+} {PASS_STEP}
+
+########################## Stop IP sniffer ##################################
+
+
+DoStep "E-UE-PROV_1-1-2-30_7-3" "Stop Sniffer" {
+    LogMsg "--- Stop Sniffer ---"
+    StopCaptureControllerLan
+    SaveToFileControllerLan
+} {PASS_STEP}
+
+########################## INVOKE PARSING TOOL ##################################
+
+DoStep "E-UE-PROV_1-1-2-30_8-1" "Analyze flow data" {
+
+    # Set up parser file
+    set PARSERFILE    $ETH_DEFAULT_TXT_FILE
+#    set ::PART_SHOW_DB_WRITE 1
+} { PASS_STEP }
+
+
+
+DoStep "E-UE-PROV_1-1-2-30_8-2" "Parse the database" {
+    
+    # Parse data
+    set PARAMS_DHCP         "{DHCP {} {} {} {} {} {} {} {}}"
+    set PARAMS_MTA_SRC      "{{} {} {} {} $MTA_IP {} {} {} {}}"
+    set PARAMS_MTA_DST      "{{} {} {} {} {} {} {} $MTA_IP {}}"
+    set msgID_MTA           [ParseFile $PARSERFILE "$PARAMS_DHCP $PARAMS_MTA_SRC $PARAMS_MTA_DST"]
+} { 
+    if { $::PART_RETURN == 0 } {
+        PASS_STEP
+    } else {
+        FAIL_STEP "Cannot find data"
+    }
+}
+
+######################### TFTP REQUEST MESSAGE##########################
+DoStep "E-UE-PROV_1-1-2-30_8-3" "TFTP REQUEST EXISTS" {
+    LogMsg "Verify TFTP REQUEST is sent to TFTP SERVER"
+} {
+    # Find MTA config file
+    # set MTA_CFG_FILE "[string toupper [regsub -all ":" $MTA_MAC ""] ].bin"
+    set MTA_CFG_FILE Device_Level_Secure.cfg
+    # Verify presence of additional inform
+    VerifyValue $msgID_MTA "INANY TFTP TFTP_READ_REQUEST TFTP_SOURCE_FILE" "IS" "$MTA_CFG_FILE"
+}
+
+DoStep "E-UE-PROV_1-1-2-30_9-1" "Verify there is no TFTP Response" {
+    LogMsg "Verify there is no TFTP Response"
+} {
+    # Verify TFTP DATA_PACKET
+    VerifyNotValue $msgID_MTA "INANY TFTP TFTP_DATA_PACKET TFTP_OPCODE" "EXISTS" ""
+}
+
+DoStep "E-UE-PROV_1-1-2-30_10-1" "MTA Sequence" {
+    LogMsg "Verify MTA Sequence"
+
+    # Set MTA SEQUENCE to check
+    set MTA_SEQUENCE "DHCP:DISCOVER,DHCP:OFFER,DHCP:REQUEST,DHCP:ACK,\
+                      DNS:DNS_QUERY_HOST,DNS:DNS_RESPONSE_HOST,\
+                      PKKM:PKKM_AP_REQ,PKKM:PKKM_AP_REP,\
+                      SNMP:SNMP_INFORM,SNMP:SNMP_SET,\
+                      TFTP:TFTP_READ_REQUEST,\
+                      DHCP:DISCOVER,DHCP:OFFER,DHCP:REQUEST,DHCP:ACK"
+    # Remove whitespace
+    regsub -all { } $MTA_SEQUENCE {} MTA_SEQUENCE
+} {
+    # Verify TOD Response
+    VerifyValue $msgID_MTA "SEQUENCE $MTA_SEQUENCE" "" ""
+}
+
+
+################################################################################
+# Cleanup
+################################################################################
+set CONTINUE_PAST_STEP_ERROR 0
+
+DoStep "E-UE-PROV_1-1-2-30_11-1" "Restore Provisioning Server and TFTP server." {
+    # verify_signal "Configure provisioning application TFTP server to respond to MTA TFTP\n
+    # request(Reports, click BOA report, click Start on TFTP_$PROV_DHCP1_IP to enable TFTP server)."
+    PROV_START_BOA TFTP
+    actionWait "Please wait 30 seconds for TFTP" 30
+    PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122
+    PROV_DEPLOY_DHCP
+} {PASS_STEP}
+
+##############################################################################
+#         MTA RESET
+##############################################################################
+
+DoStep "E-UE-PROV_1-1-2-30_12-1" "Reset MTA" {
+    set val [SNMP_SET $oid_pktcMtaDevResetNow INTEGER 1 $MTA_IP]
+    LogMsg "Reset MTA has passed"
+} {
+    IsEqual $val 0
+}
+
+
+DoStep "E-UE-PROV_1-1-2-30_12-2" "pktcMTADevProvisioningState Content Verification" {
+    # Wait for a minute to let CM/MTA starting to reboot
+    actionWait "Wait for MTA to reboot" 30
+    # Get the OID from the MTA and check it using our previously defined
+    set val [GetProvState 1 600]
+    LogMsg "MTA Provisioning State"
+    LogMsg "             - Expected : 1"
+    LogMsg "             - Received : $val"
+} {
+    IsEqual $val 1
+}
+
+
+Cleanup

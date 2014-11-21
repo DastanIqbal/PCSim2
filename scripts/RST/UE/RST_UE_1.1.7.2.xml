@@ -1,0 +1,184 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-UE 1.1.7.2" 
+	descrip=" UE Sends Answer to Early Media Offer" 
+	number="RST-UE 1.1.7.2" inspector="disable">
+
+	<template file="./templates/CallOrigAtUETemp.xml" name="UE1"/>
+
+	<remove_from fsm="UE1">
+		<state ID="Setup"/>
+		<state ID="Alerting"/>
+		<state ID="Connected"/>
+	</remove_from>
+
+	<add_to fsm="UE1">
+		<NE ext_require="100rel"/>
+		
+		<state ID="Setup">
+			<prelude once="true">
+				<send protocol="utility" msgtype="DialDigits">
+					<mod modtype="add" hdr="number">
+						<msg_ref type="platform">UE1.phone number 1</msg_ref>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<!-- If the current message that we received is an Invite, answer with
+              a 100-trying -->
+				<if>
+					<and>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>Invite</expr>
+						</eq>
+						<contains>
+							<msg_ref type="sip" hdr_instance="any">Invite.Supported</msg_ref>
+							<expr>early-session</expr>
+						</contains>
+					</and>
+					<then>
+						<send protocol="sip" msgtype="100-INVITE"/>
+						<!--Sending 183-Invite with answer-->
+						<sleep time="200"/>
+						<send protocol="sip" msgtype="183-Invite" bodies="multipart SDPAnswer SDPOffer">
+							<mod modtype="add" hdr="Require" param="option-tag">
+								<expr>early-session</expr>
+							</mod>
+						</send>
+					</then>
+				</if>
+			</response>
+			<transition to="Setup" event="DialDigitsComplete"/>
+			<transition to="Alerting" event="INVITE"/>
+		</state>
+		
+		<state ID="Alerting">
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>PRACK</expr>
+					</eq>
+					<then>
+						<verify step="3" requirements="REQ13499, RFC2496, RFC2497">
+							<contains>
+								<msg_ref type="sip" hdr_instance="any">PRACK.Content-Disposition.value</msg_ref>
+								<expr>early-session</expr>
+							</contains>
+						</verify>
+						<!--Reliability required for test sending 200-Prack message to peer.-->
+						<send protocol="sip" msgtype="200-PRACK">
+							<mod modtype="delete" hdr="SDP"/>
+						</send>
+						<start_stream name="vm" file="../config/tones/tone1.rtp" format="G711">
+							<to>
+								<ip>
+									<msg_ref type="sdp" msg_instance="last">PRACK.c.address</msg_ref>
+								</ip>
+								<port>
+									<msg_ref type="sdp" msg_instance="last">PRACK.audio.port</msg_ref>
+								</port>
+							</to>
+							<from>
+								<ip>
+									<msg_ref type="platform">Platform.STUN IP Address</msg_ref>
+								</ip>
+								<port>
+									<msg_ref type="platform">Platform.RTP Port1</msg_ref>
+								</port>
+							</from>
+						</start_stream>
+						<log promptUser="True" yesExpected="True" verify="True" 
+							step="3" requirements="REQ13499, RFC2496, RFC2497" 
+							expr="Verify that that audible tone1 can be heard on the DUT."/>
+					</then>
+				</if>
+				<!-- Now test for an UPDATE message -->
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>UPDATE</expr>
+					</eq>
+					<then>
+						<!--QoS required or supported sending 200-Update message to peer.-->
+						<send protocol="sip" msgtype="200-Update"/>
+					</then>
+				</if>
+				<!-- Test whether to send 180 -->
+				<if>
+					<and>
+						<contains>
+							<msg_ref type="sip" msg_instance="last">18x-Invite.Status-Line.status-code</msg_ref>
+							<expr>183</expr>
+						</contains>
+						<eq>
+							<msg_ref type="sdp">Request.qos-curr-remote.direction</msg_ref>
+							<msg_ref type="sdp">Request.qos-des-remote.direction</msg_ref>
+						</eq>
+					</and>
+					<then>
+						<!--Sending 180 for required preconditions.-->
+						<send protocol="sip" msgtype="180-Invite"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Alerting" event="DialDigitsComplete"/>
+			<transition to="Alerting" event="PRACK"/>
+			<transition to="Alerting" event="UPDATE"/>
+			<transition to="Answer" event="ALERTING_UAS"/>
+		</state>
+		
+		<state ID="Connected" timer="40000">
+			<prelude>
+				<stop_stream name="vm"/>
+				<log promptUser="True" yesExpected="True" verify="True" 
+					step="4" requirements="RFC2502" 
+					expr="Verify tone1 is no longer audible?"/>
+				<sleep time="10000"/>
+				<stop_stream name="vm"/>
+				<start_stream name="vm2" file="../config/tones/tone2.rtp" format="G711">
+					<to>
+						<ip>
+							<msg_ref type="sdp" msg_instance="last">INVITE.c.address</msg_ref>
+						</ip>
+						<port>
+							<msg_ref type="sdp" msg_instance="last">INVITE.audio.port</msg_ref>
+						</port>
+					</to>
+					<from>
+						<ip>
+							<msg_ref type="platform">Platform.STUN IP Address</msg_ref>
+						</ip>
+						<port>
+							<msg_ref type="platform">Platform.RTP Port2</msg_ref>
+						</port>
+					</from>
+				</start_stream>
+				<!--  Step-4 test case SIP 1.1.7.2 -Verify the tone2 is audible 
+					on the UE and that  tone1 is no longer audible -->
+				<log promptUser="True" yesExpected="True" verify="True" 
+					step="4" requirements="RFC2502" 
+					expr="Verify the tone2 is audible on the UE?"/>
+			</prelude>
+			<transition to="Releasing" event="TimerExpired"/>
+		</state>
+	</add_to>
+</pc2xml>

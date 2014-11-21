@@ -1,0 +1,77 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+-->
+<pc2xml version="$Revision: 7528 $" 
+	name="HDV-RST-UE 3.1.5.3" 
+	descrip="Newly Register PP when Incoming call is Initiated" 
+	number="HDV-RST-UE 3.1.5.3">
+	
+	<template file="./templates/CallTermAtUETemp.xml" name="UE1"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Setup"/>
+		<state ID="Proceeding"/>
+	</remove_from>
+	<add_to fsm="UE1">
+		<state ID="Setup">
+				<prelude once="true">
+					<log promptUser="true" expr="Start a packet capture to collect RTP and SIP messages. "/>
+					<sleep time="300"/>
+					<send protocol="sip" msgtype="Invite"/>
+				</prelude>
+				<response>
+				<if>
+						<contains>
+							<msg_ref type="sip" hdr_instance="any">18x-Invite.Require</msg_ref>
+							<expr>100rel</expr>
+						</contains>
+						<then>
+							<!--Reliablity required for test sending Prack message to peer.-->
+							<send protocol="sip" msgtype="Prack"/>
+						</then>
+					</if>
+				</response>
+				<!-- Transitions for Setup state -->
+				<transition to="Proceeding" event="100-INVITE"/>
+				<transition to="Alerting" event="180-INVITE"/>
+				<transition to="Alerting" event="183-INVITE"/>
+				<transition to="Connected" event="200-INVITE"/>
+			</state>
+				
+			<state ID="Proceeding">
+				<!-- Expected responses are 180, 183 or 200 -->
+				<response>
+					
+					<if>
+						<eq>
+							<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+							<expr>180</expr>
+						</eq>
+						<then>
+							<log promptUser="true" expr="Bring another PP within range of the FP. The new PP registers."/>
+							<sleep time="3000"/>
+							<log promptUser="True" yesExpected="True" verify="True" 
+						step="3" requirements="REQ23205" 
+						expr="Verify the PP starts presenting the alert. "/>
+						</then>
+					</if>	
+				</response>
+				<transition to="Alerting" event="18x-INVITE"/>
+				<transition to="Answer" event="TimerExpired"/>
+				<transition to="Connected" event="200-INVITE"/>
+			</state>	
+			
+		</add_to>
+</pc2xml>
+		
+			

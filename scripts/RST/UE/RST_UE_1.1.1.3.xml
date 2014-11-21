@@ -1,0 +1,170 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	PCPCII-139 : Update the Voicetronix modifiers to use the new values. (ghassler 07/10/2009)
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-UE 1.1.1.3" 
+	descrip="Stop Digit Collection After Dial String Match" 
+	number="RST-UE 1.1.1.3">
+	
+	<fsm name="UE1">
+		<models>
+			<session/>
+		</models>
+		
+		<NE sim_type="term" elements="UE1 PCSCF2 SCSCF1 PCSCF1" targets="UE1 3035519100 *63"/>
+		
+		<states initialstate="Register">
+			<state ID="Register">
+				<transition to="OffHook1" event="Registered"/>
+			</state>
+			
+			<state ID="OffHook1">
+				<prelude>
+					<send protocol="utility" msgtype="OffHook"/>
+				</prelude>
+				<transition to="Call1" event="OffHookComplete"/>
+			</state>
+			
+			<state ID="Call1">
+				<prelude once="true">
+					<!-- Step 1 test case SIP 1.1.1.3-->
+					<send protocol="utility" msgtype="DialDigits">
+						<mod modtype="add" hdr="number">
+							<expr>3035519100123</expr>
+						</mod>
+					</send>
+				</prelude>
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>INVITE</expr>
+						</eq>
+						<then>
+							<verify step="1" requirements="REQ13412">
+								<eq>
+									<msg_ref type="sip">Invite.Request-Line.user</msg_ref>
+									<expr>dialstring</expr>
+								</eq>
+							</verify>
+							<verify step="1" requirements="REQ13412">
+								<contains>
+									<msg_ref type="sip">Invite.Request-Line</msg_ref>
+									<expr>sip:</expr>
+								</contains>
+							</verify>
+							<verify step="1" requirements="REQ13412">
+								<eq>
+									<msg_ref type="sip">Invite.Request-Line.username</msg_ref>
+									<expr>3035519100</expr>
+								</eq>
+							</verify>
+							<verify step="1" requirements="REQ13412">
+								<eq>
+									<msg_ref type="sip">Invite.Request-Line.domain</msg_ref>
+									<msg_ref type="platform">UE0.domain</msg_ref>
+								</eq>
+							</verify>
+							<verify step="1" requirements="REQ13412">
+								<dnc>
+									<msg_ref type="sip">Invite.Request-Line.username</msg_ref>
+									<expr>123</expr>
+								</dnc>
+							</verify>
+						</then>
+					</if>
+				</response>
+				<transition to="Call1" event="DialDigitsComplete"/>
+				<transition to="EndCall2" event="Invite"/>
+			</state>
+			
+			<state ID="EndCall2" ES="true">
+				<!-- Give time for the DialDigitsComplete prompt to arrive when using VT before proceeding -->
+				<prelude>
+					<sleep time="3000"/>
+				</prelude>
+				<transition to="OffHook2" event="SessionTerminated"/>
+			</state>
+			
+			<!-- CALL NUMBER 2 -->
+			<state ID="OffHook2">
+				<prelude>
+					<!-- We provide 1 sec gap between OnHook and OffHook-->
+					<sleep time="1000"/>
+					<send protocol="utility" msgtype="OffHook"/>
+				</prelude>
+				<transition to="Call2" event="OffHookComplete"/>
+			</state>
+			
+			<!-- Call2 State -->
+			<state ID="Call2">
+				<prelude once="true">
+					<!-- Step 3 test case SIP 1.1.1.3-->
+					<send protocol="utility" msgtype="DialDigits">
+						<mod modtype="add" hdr="number">
+							<expr>*63123</expr>
+						</mod>
+					</send>
+				</prelude>
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>INVITE</expr>
+						</eq>
+						<then>
+							<verify step="3" requirements="REQ13412">
+								<eq>
+									<msg_ref type="sip">Invite.Request-Line.username</msg_ref>
+									<expr>*63</expr>
+								</eq>
+							</verify>
+							<verify step="3" requirements="REQ13412">
+								<contains>
+									<msg_ref type="sip">Invite.Request-Line</msg_ref>
+									<expr>sip:</expr>
+								</contains>
+							</verify>
+							<verify step="3" requirements="REQ13412">
+								<eq>
+									<msg_ref type="sip">Invite.Request-Line.domain</msg_ref>
+									<msg_ref type="platform">UE0.domain</msg_ref>
+								</eq>
+							</verify>
+							<verify step="3" requirements="REQ13412">
+								<eq>
+									<msg_ref type="sip">Invite.Request-Line.user</msg_ref>
+									<expr>dialstring</expr>
+								</eq>
+							</verify>
+							<verify step="3" requirements="REQ13412">
+								<dnc>
+									<msg_ref type="sip">Invite.Request-Line.username</msg_ref>
+									<expr>123</expr>
+								</dnc>
+							</verify>
+						</then>
+					</if>
+				</response>
+				<transition to="Call2" event="DialDigitsComplete"/>
+				<transition to="END" event="Invite"/>
+			</state>
+		</states>
+	</fsm>
+</pc2xml>

@@ -1,0 +1,417 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+ Change History: (Author & Date)
+	PCPCII-139 : Update the Voicetronix modifiers to use the new values. (ghassler 07/10/2009)
+	PCPCII-357 : Removed UE1OnHold due to the Voicetronix responses. (ghassler 07/06/2010)
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-UE 1.5.2.11" 
+	descrip="Per-Call CW Reset " 
+	number="RST-UE 1.5.2.11" inspector="disable">
+
+	<template file="./templates/CallOrigAtUETemp.xml" name="UE1"/>
+	<template file="./templates/CallTermAtUETemp.xml" name="UE2"/>
+
+	<remove_from fsm="UE1">
+		<state ID="Connected"/>
+		<state ID="Releasing"/>
+		<state ID="OnHook"/>
+	</remove_from>
+
+	<remove_from fsm="UE2">
+		<NE elements="UE1" targets="UE1"/>
+		<state ID="Setup"/>
+		<state ID="Proceeding"/>
+	</remove_from>
+
+	<add_to fsm="UE1">
+		<NE targets="*70"/>
+		<state ID="Connected">
+			<prelude>
+				<!-- Step 2 of test case 1.5.2.11  - Hook Flash on DUT.-->
+				<sleep time="3000"/>
+				<send protocol="utility" msgtype="HookFlash"/>
+			</prelude>
+			<transition to="UE1GoOnHold" event="HookFlashComplete"/>
+		</state>
+		
+		<state ID="UE1GoOnHold">
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>REINVITE</expr>
+					</eq>
+					<then>
+						<!-- HookFlash Step 2 and 3 -Sending 100-Invite and 200-Invite to Invite -->
+						<send protocol="sip" msgtype="100-INVITE"/>
+						<send protocol="sip" msgtype="200-INVITE"/>
+					</then>
+				</if>
+			</response>
+			<transition to="UE1GoOnHold" event="REINVITE"/>
+			<transition to="UE2GoOnHold" event="ACK"/>
+		</state>
+		
+		<state ID="UE2GoOnHold">
+			<!-- Step 3 test case SIP 1.5.2.11-->
+			<prelude once="true">
+				<send protocol="utility" msgtype="DialDigits">
+					<mod modtype="add" hdr="number">
+						<expr>*70</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<!-- Step 4 test case SIP 1.5.2.11-->
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>REINVITE</expr>
+					</eq>
+					<then>
+						<!-- HookFlash Step 2 and 3 -Sending 100-Invite and 200-Invite to Invite -->
+						<send protocol="sip" msgtype="100-INVITE"/>
+						<send protocol="sip" msgtype="200-INVITE"/>
+					</then>
+				</if>
+			</response>
+			<transition to="WaitState" event="ACK"/>
+			<transition to="UE2GoOnHold" event="DialDigitsComplete"/>
+			<transition to="UE2GoOnHold" event="REInvite"/>
+		</state>
+		
+		<state ID="WaitState">
+			<prelude once="true">
+				<generate event="SucceedEvent" fsm="UE2"/>
+			</prelude>
+			<transition to="OnHook" event="Branch1Event"/>
+			<transition to="WaitState" event="DialDigitsComplete"/>
+		</state>
+		
+		<state ID="OnHook">
+			<prelude>
+				<!-- Step 5 test case SIP 1.1.1.1-->
+				<send protocol="utility" msgtype="OnHook"/>
+			</prelude>
+			<transition to="WaitBYE" event="OnHookComplete"/>
+		</state>
+		
+		<state ID="WaitBYE">
+			<postlude>
+				<send protocol="sip" msgtype="200-BYE"/>
+			</postlude>
+			<transition to="EndSession" event="BYE"/>
+		</state>
+		
+		<state ID="EndSession" ES="true" OffHookOk="true">
+			<transition to="OffHook1" event="SessionTerminated"/>
+		</state>
+		
+		<state ID="OffHook1">
+			<prelude>
+				<send protocol="utility" msgtype="OffHook"/>
+			</prelude>
+			<transition to="Setup1" event="OffHookComplete"/>
+		</state>
+		
+		<state ID="Setup1">
+			<prelude once="true">
+				<send protocol="utility" msgtype="DialDigits">
+					<mod modtype="add" hdr="number">
+						<msg_ref type="platform">UE1.phone number 1</msg_ref>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>Invite</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="100-INVITE"/>
+					</then>
+				</if>
+				<!-- This set of tests determines whether to send 183 with Answer
+						 or a 180 to the INVITE -->
+				<if>
+					<and>
+						<eq>
+							<msg_ref type="extensions">precondition</msg_ref>
+							<expr>require</expr>
+						</eq>
+						<or>
+							<contains>
+								<msg_ref type="sip" hdr_instance="any">Invite.Require</msg_ref>
+								<expr>precondition</expr>
+							</contains>
+							<contains>
+								<msg_ref type="sip" hdr_instance="any">Invite.Supported</msg_ref>
+								<expr>precondition</expr>
+							</contains>
+						</or>
+					</and>
+					<then>
+						<!--Sending 183-Invite with answer-->
+						<sleep time="200"/>
+						<send protocol="sip" msgtype="183-Invite"/>
+					</then>
+					<elseif>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>Invite</expr>
+						</eq>
+						<then>
+							<!--Sending 180-Invite with SS not supporting precondition.-->
+							<sleep time="200"/>
+							<send protocol="sip" msgtype="180-Invite"/>
+						</then>
+					</elseif>
+				</if>
+			</response>
+			<transition to="Setup1" event="DialDigitsComplete"/>
+			<transition to="Alerting1" event="INVITE"/>
+		</state>
+		
+		<state ID="Alerting1">
+			<response>
+				<if>
+					<and>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>PRACK</expr>
+						</eq>
+						<contains>
+							<msg_ref type="sip" msg_instance="last" hdr_instance="any">18x-Invite.Require</msg_ref>
+							<expr>100rel</expr>
+						</contains>
+					</and>
+					<then>
+						<!--Reliability required for test sending 200-Prack message to peer.-->
+						<send protocol="sip" msgtype="200-PRACK"/>
+					</then>
+				</if>
+				<!-- Now test for an UPDATE message -->
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>UPDATE</expr>
+					</eq>
+					<then>
+						<!--QoS required or supported sending 200-Update message to peer.-->
+						<send protocol="sip" msgtype="200-Update"/>
+					</then>
+				</if>
+				<!-- Test whether to send 180 -->
+				<if>
+					<and>
+						<contains>
+							<msg_ref type="sip" msg_instance="last">18x-Invite.Status-Line.status-code</msg_ref>
+							<expr>183</expr>
+						</contains>
+						<eq>
+							<msg_ref type="sdp">Request.qos-curr-remote.direction</msg_ref>
+							<msg_ref type="sdp">Request.qos-des-remote.direction</msg_ref>
+						</eq>
+					</and>
+					<then>
+						<!--Sending 180 for required preconditions.-->
+						<send protocol="sip" msgtype="180-Invite"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Alerting1" event="DialDigitsComplete"/>
+			<transition to="Alerting1" event="PRACK"/>
+			<transition to="Alerting1" event="UPDATE"/>
+			<transition to="Answer1" event="ALERTING_UAS"/>
+		</state>
+		
+		<state ID="Answer1" timer="5000">
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="event"/>
+						<expr>TimerExpired</expr>
+					</eq>
+					<then>
+						<!--Sending 200-Invite-->
+						<send protocol="sip" msgtype="200-INVITE"/>
+					</then>
+				</if>
+				<!-- Now test for an UPDATE message -->
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>UPDATE</expr>
+					</eq>
+					<then>
+						<!--QoS required or supported sending 200-Update message to peer.-->
+						<send protocol="sip" msgtype="200-Update"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Answer1" event="UPDATE"/>
+			<transition to="Answer1" event="TimerExpired"/>
+			<transition to="Connected1" event="ACK"/>
+		</state>
+		
+		<state ID="Connected1">
+			<prelude>
+				<!-- Step 9 of test case 1.5.2.11  - Hook Flash on DUT.-->
+				<sleep time="5000"/>
+				<generate event="Branch2Event" fsm="UE2"/>
+			</prelude>
+			<transition to="END" event="Branch3Event"/>
+		</state>
+	</add_to>
+	
+	<add_to fsm="UE2">
+		<!-- UE2 is UE-C -->
+		<NE elements="UE2" targets="UE2"/>
+		<states initialstate="WaitSucceed"/>
+		<state ID="WaitSucceed">
+			<transition to="Setup" event="SucceedEvent"/>
+		</state>
+		
+		<state ID="Setup">
+			<prelude once="true">
+				<send protocol="sip" msgtype="Invite"/>
+			</prelude>
+			<transition to="Proceeding" event="100-INVITE"/>
+			<transition to="ACK" event="486-INVITE"/>
+		</state>
+		
+		<state ID="Proceeding">
+			<transition to="ACK" event="486-INVITE"/>
+			<transition to="Proceeding" event="18x-INVITE"/>
+		</state>
+		
+		<state ID="ACK">
+			<prelude>
+				<send protocol="sip" msgtype="ACK"/>
+				<generate event="SucceedEvent"/>
+			</prelude>
+			<postlude>
+				<generate event="Branch1Event" fsm="UE1"/>
+			</postlude>
+			<transition to="EndCall" event="SucceedEvent"/>
+		</state>
+		
+		<state ID="EndCall" ES="true" offHookOK="true">
+			<transition to="WaitToStartCall2" event="SessionTerminated"/>
+		</state>
+		
+		<state ID="WaitToStartCall2">
+			<transition to="Setup1" event="Branch2Event"/>
+		</state>
+		
+		<state ID="Setup1">
+			<prelude>
+				<send protocol="sip" msgtype="Invite"/>
+			</prelude>
+			<!-- Expected responses are 100, 180, 183 or 200 -->
+			<response>
+				<if>
+					<contains>
+						<msg_ref type="sip" msg_instance="last" hdr_instance="any">18x-Invite.Require</msg_ref>
+						<expr>100rel</expr>
+					</contains>
+					<then>
+						<!--Reliability required for test sending Prack message to peer.-->
+						<send protocol="sip" msgtype="Prack"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Proceeding1" event="100-INVITE"/>
+			<transition to="Alerting1" event="180-INVITE"/>
+			<transition to="Alerting1" event="183-INVITE"/>
+			<transition to="Verify" event="ALERTING_UAC"/>
+		</state>
+		
+		<state ID="Proceeding1">
+			<!-- Expected responses are 180, 183 or 200 -->
+			<response>
+				<if>
+					<contains>
+						<msg_ref type="sip" msg_instance="last" hdr_instance="any">18x-Invite.Require</msg_ref>
+						<expr>100rel</expr>
+					</contains>
+					<then>
+						<!--Reliability required for test sending Prack message to peer.-->
+						<send protocol="sip" msgtype="Prack"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Alerting1" event="180-INVITE"/>
+			<transition to="Alerting1" event="183-INVITE"/>
+			<transition to="Verify" event="ALERTING_UAC"/>
+		</state>
+		
+		<state ID="Alerting1">
+			<response>
+				<!-- Expected responses are 180, 183, PRACK, UPDATE, or 200 -->
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>UPDATE</expr>
+					</eq>
+					<then>
+						<!--QoS required for test, sending a 200-OK to Update message to peer.-->
+						<send protocol="sip" msgtype="200-Update"/>
+					</then>
+					<elseif>
+						<and>
+							<eq>
+								<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+								<expr>180</expr>
+							</eq>
+							<contains>
+								<msg_ref type="sip" hdr_instance="any">180-INVITE.Require</msg_ref>
+								<expr>100rel</expr>
+							</contains>
+						</and>
+						<then>
+							<!--Reliability required for test, sending Prack message to peer.-->
+							<send protocol="sip" msgtype="Prack"/>
+						</then>
+					</elseif>
+				</if>
+			</response>
+			<transition to="Alerting1" event="200-PRACK"/>
+			<transition to="Alerting1" event="UPDATE"/>
+			<transition to="Alerting1" event="18x-INVITE"/>
+			<transition to="Verify" event="ALERTING_UAC"/>
+		</state>
+		
+		<state ID="Verify">
+			<prelude>
+				<send protocol="utility" msgtype="VerifyCallWaitingTone"/>
+			</prelude>
+			<response>
+				<verify step="10" requirements="REQ16703">
+					<eq>
+						<msg_ref type="utility">Response</msg_ref>
+						<expr>VerifyCallWaitingToneComplete</expr>
+					</eq>
+				</verify>
+			</response>
+			<postlude>
+				<generate event="Branch3Event" fsm="UE1"/>
+			</postlude>
+			<transition to="END" event="VerifyCallWaitingToneComplete"/>
+		</state>
+	</add_to>
+</pc2xml>

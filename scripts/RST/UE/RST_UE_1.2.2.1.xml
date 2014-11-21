@@ -1,0 +1,42 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-UE 1.2.2.1" 
+	descrip="No P-Asserted-Identity header" 
+	number="RST-UE 1.2.2.1">
+	
+	<template file="./templates/CallTermAtUETemp.xml" name="UE1"/>
+	
+	<add_to fsm="UE1">
+		<transition from="Setup" to="DisplayVerify" event="ALERTING_UAC"/>
+		
+		<transition from="Proceeding" to="DisplayVerify" event="ALERTING_UAC"/>
+		
+		<transition from="Alerting" to="DisplayVerify" event="ALERTING_UAC"/>
+		<state ID="DisplayVerify">
+			<prelude>
+				<log promptUser="True" yesExpected="True" verify="True" 
+				step="1" requirements="REQ14455"
+				expr="Verify the UE transmits character P? in the number field,\nand nothing in the name field. This can be verified by looking at the caller-id Display\nthat it has a out-of-area/unavailable in the number field and nothing in the name field.\n"/>
+				<generate event="SucceedEvent"/>
+			</prelude>
+			<transition to="END" event="SucceedEvent"/>
+		</state>
+	</add_to>
+</pc2xml>

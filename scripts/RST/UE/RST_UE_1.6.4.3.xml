@@ -1,0 +1,104 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-UE 1.6.4.3" 
+	descrip="Error response NOTIFY with unknown Subscription " 
+	number="RST-UE 1.6.4.3" inspector="disable">
+	
+	<template file="./templates/UERegAndSubTemp.xml" name="Registrar"/>
+	
+	<remove_from fsm="Registrar">
+		<state ID="Registered"/>
+	</remove_from>
+	
+	<add_to fsm="Registrar">
+		<state ID="Registered">
+			<prelude once="true">
+				<var name="from">
+					<expr>0</expr>
+				</var>
+				<send protocol="sip" msgtype="200-Register"/>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">SUBSCRIBE.Event.event-type</msg_ref>
+						<expr>reg</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="200-SUBSCRIBE"/>
+						<send protocol="sip" msgtype="NOTIFY"/>
+					</then>
+				</if>
+				<if>
+					<eq>
+						<msg_ref type="sip">SUBSCRIBE.Event.event-type</msg_ref>
+						<expr>message-summary</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="200-SUBSCRIBE"/>
+						<send protocol="sip" msgtype="NOTIFY">
+							<mod modtype="replace" hdr="Event" param="event-type">
+								<expr>unknown</expr>
+							</mod>
+						</send>
+						<generate event="Branch1Event"/>
+						<assign name="from">
+							<msg_ref type="sip">SUBSCRIBE.From.tag</msg_ref>
+						</assign>
+					</then>
+				</if>
+			</response>
+			<transition to="Registered" event="SUBSCRIBE"/>
+			<transition to="Registered" event="200-NOTIFY"/>
+			<transition to="Wait200Notify" event="Branch1Event"/>
+		</state>
+		
+		<state ID="Wait200Notify">
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">xxx-NOTIFY.To.tag</msg_ref>
+						<var_ref name="from"/>
+					</eq>
+					<then>
+						<verify step="1" requirements="RFC1552, RFC1562">
+							<and>
+								<gte>
+									<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+									<expr>400</expr>
+								</gte>
+								<lte>
+									<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+									<expr>599</expr>
+								</lte>
+							</and>
+						</verify>
+						<generate event="SucceedEvent"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Wait200Notify" event="200-NOTIFY"/>
+			<transition to="Wait200Notify" event="4xx-NOTIFY"/>
+			<transition to="Wait200Notify" event="5xx-NOTIFY"/>
+			<transition to="END" event="SucceedEvent"/>
+		</state>
+	</add_to>
+</pc2xml>

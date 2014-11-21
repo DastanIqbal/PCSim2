@@ -1,0 +1,248 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	
+
+
+-->
+<pc2xml version="$Revision: 7085 $" 
+	name="HDV_RST_UE_3.1.11.3" 
+	descrip="DECT PP Ability to Display Text and Activation Status for Call Forwarding Variable" 
+	number="HDV_RST_UE_3.1.11.3" inspector="disable">
+	
+<fsm name="UE1">
+	<models>
+		<session /> 
+	</models>
+	<NE sim_type="term" elements="UE1 PCSCF2 SCSCF1 PCSCF1" targets="UE1 *723035550001 3035550000" /> 
+	<states initialstate="Register">
+		<state ID="Register">
+			<prelude>
+				<log promptUser="True" yesExpected="True" expr="Start a packet capture to collect RTP and SIP packets"/>
+			</prelude>
+			<postlude>
+				<sleep time="3000" /> 	
+			</postlude>
+		<transition to="VerifyTone1" event="Registered" /> 
+		</state>
+
+		
+		<state ID="VerifyTone1">
+			<prelude>
+				<send protocol="utility" msgtype="VerifyDialTone" />
+			</prelude>
+			<response>
+				<verify>
+				<eq>
+					<msg_ref type="utility">Response</msg_ref> 
+					<expr>VerifyDialToneComplete</expr> 
+				</eq>
+				</verify>
+			</response>
+		<transition to="OffHook2" event="VerifyDialToneError" /> 
+		<transition to="OffHook2" event="VerifyDialToneComplete" /> 
+		</state>
+			
+		<state ID="OffHook2" timer="2000">
+			<prelude once="true">
+				<log expr="Take the line 1 of the DUT off hook." /> 
+				<sleep time="500" /> 
+					<send protocol="utility" msgtype="DialDigits">
+					<mod modtype="add" hdr="number" before="true">
+					<expr>*723035550001</expr>
+					<!--msg_ref type="platform">UE0.phone number 2</msg_ref-->
+					<!--expr>*72</expr-->
+					</mod>
+					</send>
+				<sleep time="1000" /> 
+			</prelude>
+			<response>
+				<if>
+				<eq>
+				<msg_ref type="sip">Request</msg_ref> 
+				<expr>Invite</expr> 
+				</eq>
+				<then>
+					<send protocol="sip" msgtype="200-INVITE" /> 
+				</then>
+				</if>
+			</response>
+		<transition to="OffHook2" event="DialDigitsComplete" /> 
+		<transition to="OffHook2" event="INVITE" /> 
+		<transition to="EndTheCall" event="ACK" /> 
+		</state>
+		
+		<state ID="EndTheCall">
+			<prelude>
+				<sleep time="500" />
+				<log promptUser="True" yesExpected="True" verify="True" step="2" requirements="REQ23568" expr="CFV is enabled correctly." />
+				<log expr="Put the line 1 of the DUT on hook." />
+				<send protocol="sip" msgtype="BYE">
+					<mod modtype="replace" hdr="Request-Line" param="Request-URI">
+					<var_expr>
+					<expr>sip:*723035550001@</expr> 
+					<msg_ref type="platform">DUT.domain</msg_ref> 
+					<expr>;user=dialstring</expr> 
+					</var_expr>
+					</mod>
+				</send>
+			</prelude>
+		<transition to="OffHook3" event="SessionTerminated" /> 
+		<transition to="OffHook3" event="200-BYE" /> 
+		</state>
+			
+		<state ID="OffHook3" timer="2000">
+			<prelude once="true">
+				<log expr="Take the line 1 of the DUT off hook." />
+				<send protocol="utility" msgtype="VerifyDialTone" />
+			</prelude>					
+			<response>
+				<verify>
+				<eq>
+				<msg_ref type="utility">Response</msg_ref> 
+				<expr>VerifyDialToneComplete</expr> 
+				</eq>
+				</verify>
+				</response>
+		<transition to="CFVenabled" event="VerifyDialToneError" /> 
+		<transition to="CFVenabled" event="VerifyDialToneComplete" />
+		</state>
+		
+		<state ID="CFVenabled" timer="2000">
+			<prelude>
+			<sleep time="1000" /> 
+			<log promptUser="True" yesExpected="True" verify="True" step="4" requirements="REQ23568" expr="The display shows &quot; CALL FORWARDING ENABLED &quot;" />
+			<sleep time="500" />
+			<log expr="Put the line 1 of the DUT on hook." />
+			</prelude>
+		<transition to="SendInvite" event="TimerExpired" />
+		</state>
+		
+		<!--state ID="Nextstate" ES="true">
+	 
+			<prelude>
+				<generate event="SucceedEvent" fsm="UE2" /> 
+			</prelude>
+		</state>
+
+		</states>
+	</fsm>
+ 
+		 
+	<fsm name="UE2">
+		<models>
+			 <session /> 
+		</models>
+	<NE sim_type="orig" elements="UE2  PCSCF2 SCSCF2 PCSCF1" targets="UE2" /> 
+	<states initialstate="WaitSucceedEvent">
+		
+		<state ID="WaitSucceedEvent">
+		<transition to="SendInvite" event="SucceedEvent" /> 
+		</state-->
+		
+		<state ID="SendInvite">
+		<prelude>
+			<!--log expr="Take the line 1 of the DUT off hook." /-->
+			<send protocol="sip" msgtype="INVITE">
+				<mod modtype="replace" hdr="Request-Line" param="Request-URI">
+				<var_expr>
+				<expr>sip:3035550000@</expr> 
+				<msg_ref type="platform">DUT.domain</msg_ref> 
+				<expr>;user=dialstring</expr> 
+				</var_expr>
+				</mod>
+			</send>
+		</prelude>
+		<transition to="Nextstate2" event="181-INVITE" />
+		 </state>
+		 
+		 <state ID="Nextstate2" ES="true">
+
+		<prelude>
+			<generate event="SucceedEvent" fsm="UE2" />
+		</prelude>
+		 </state>
+		</states>
+	</fsm>
+		
+<fsm name="UE2">
+	<models>
+		<session /> 
+	</models>
+  <NE sim_type="orig" elements="UE3  PCSCF2 SCSCF2 PCSCF1" targets="UE2" /> 
+	<states initialstate="WaitSucceedEvent">
+		
+		<state ID="WaitSucceedEvent">
+		<transition to="SendInvite2" event="SucceedEvent" /> 
+		</state>
+		
+		<state ID="SendInvite2">
+			<prelude>
+				<send protocol="sip" msgtype="INVITE">
+					<mod modtype="replace" hdr="Request-Line" param="Request-URI">
+					<var_expr>
+					<expr>sip:3035550001@</expr> 
+					<msg_ref type="platform">DUT.domain</msg_ref> 
+					<expr>;user=dialstring</expr> 
+					</var_expr>
+					</mod>
+					</send>
+			</prelude>
+			<transition to="SendInvite2" event="DialDigitsComplete" />
+		<transition to="180ring" event="180-INVITE" />
+		</state>
+		
+		<state ID="180ring">
+			<prelude>
+				<log promptUser="True" yesExpected="True" verify="True" step="6" requirements="REQ23568" expr="The PP on line 2 rings" />
+				<sleep time="1000" />
+				<log promptUser="True" yesExpected="True" verify="True" step="7" requirements="REQ23568" expr="The PP for line 2 displays the text string &quot;TEST CALL &quot;" />
+				<sleep time="500" />
+				<log expr="Take the line 2 of the DUT off hook." />
+			</prelude>
+		<transition to="SendAck" event="200-INVITE" />
+		</state>
+		
+		<state ID="SendAck">
+			<prelude>
+				<send protocol="sip" msgtype="ACK">
+					<mod modtype="replace" hdr="Request-Line" param="Request-URI">
+					<var_expr>
+					<expr>sip:3035550001@</expr> 
+					<msg_ref type="platform">DUT.domain</msg_ref> 
+					<expr>;user=dialstring</expr> 
+					</var_expr>
+					</mod>
+				</send>
+				 <sleep time="1000" />
+				<log promptUser="True" yesExpected="True" verify="True" step="8" requirements="REQ23568" expr=" Verify two way voice path is established on Line 2 " />
+				
+				<log expr="Put the line 2 of the DUT on hook." />
+				
+				</prelude>
+				
+		<transition to="200Bye" event="BYE" />	
+		</state>
+		
+		<state ID="200Bye" timer="2000">
+
+			<prelude>
+				<send protocol="sip" msgtype="200-BYE"/>
+				<log promptUser="True" yesExpected="True" expr=" Stop IP capture and save log file "/>
+				<transition to="END" event="TimerExpired" />
+			</prelude>
+		</state>
+			 </states>
+				
+		</fsm>
+</pc2xml>

@@ -1,0 +1,33 @@
+README_Build_Instructions
+
+
+1. In src/META-INF/
+   edit MANIFEST.FM_PCSim2, MANIFEST.MF_PARSER, MANIFEST.MF_SDT
+   by replacing 
+       build version : Specification-Version: x.x.xx-xxxx (e.g., 0.1.18-beta)
+      
+   The build process will automatically update
+       repository number Implementation-Version: xxxx (e.g., 7242)
+
+2. Ensure the templates directory is under bin/
+
+3. If USING ANT to build then, in root directory, type 'ant'.
+
+
+4. Rename the setup zip file, for example PCSim2_Setup-7242.zip
+
+
+5. Install using setup executable and start PCSim2
+
+
+6. Run regression test of templates and confirm everything passed.
+
+   Note: You are using two instances of PCSim2, one is core, one is DUT.
+   Verify the configuration files for both.
+
+   Note: Scripts between CORE and DUT must be lined up in order.
+   (DUT is in directory 'ut').
+
+
+
+

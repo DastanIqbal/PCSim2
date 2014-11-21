@@ -1,0 +1,52 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+ Change History: (Author & Date)
+	PCPCII-139 : Update the Voicetronix modifiers to use the new values. (ghassler 07/10/2009)
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-UE 1.2.8.2" 
+	descrip="Caller-ID Per Call Delivery Blocking (CNDB) - Error" 
+	number="RST-UE 1.2.8.2" inspector="disable">
+	
+	<template file="./templates/CallOrigAtUETemp.xml" name="UE1"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Setup"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<NE targets="*67"/>
+		<state ID="Setup">
+			<prelude once="true">
+				<!-- Step 1 of test case 1.2.4.1-->
+				<send protocol="utility" msgtype="DialDigits">
+					<mod modtype="add" hdr="number">
+						<expr>*67</expr>
+					</mod>
+				</send>
+			</prelude>
+			<postlude once="true">
+				<!-- Step 2 -->
+				<log promptUser="True" yesExpected="True" verify="True" 
+					step="2" requirements="REQ23451, REQ23461" 
+					expr="Confirm that you hear an error tone or message?"/>
+				<generate event="SucceedEvent"/>
+			</postlude>
+			<transition to="END" event="DialDigitsComplete"/>
+			<transition to="END" event="DialDigitsError"/>
+		</state>
+	</add_to>
+</pc2xml>

@@ -1,0 +1,513 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	PCPCII-135 : UPdate the script to accommodate a de-register message during the reboot. (ghassler 06/24/2009)
+	PCPCII-139 : Update the Voicetronix modifiers to use the new values. (ghassler 07/10/2009)
+
+
+
+-->
+
+<pc2xml version="$Revision: 8188 $" 
+	name="NAT_UE_1.1.1" 
+	descrip="SIP signaling using the same IP and port" 
+	number="NAT_UE_1.1.1" inspector="disable">
+
+  <fsm name="Registrar">
+    <models>
+      <registrar />
+    </models>
+    <!-- Next we define all of the network elements-->
+    <NE sim_type="term" elements="SCSCF1 PCSCF1" targets="SCSCF1" />
+    <!-- All of the states for the test. References to "Step x" from the
+     Default Message Flow - UE Registration (DUT) Sequence Diagram -->
+    <states initialstate="Reboot">
+		<state ID="Reboot" timer="5000">
+			<!-- First we need to power cycle the UE to conduct the test -->
+			<prelude once="true">
+				<!--log expr="Power on (or reset) the UE. "/-->
+				<send protocol="utility" msgtype="SNMPSet">
+					<mod modtype="add" hdr="array">
+						<var_expr>
+								<expr>varBind 1 1 3 \r\n ][ , </expr>
+								<expr>PKTC-IETF-MTA-MIB::pktcMtaDevResetNow.0,INTEGER,1][\r\n</expr>
+						</var_expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="utility">Response</msg_ref>
+						<expr>SNMPRespFailure</expr>
+					</eq>
+					<then>
+						<fail/>
+					</then>
+				</if>
+				<if>
+					<or>
+						<eq>
+							<msg_ref type="sip">REGISTER.Contact.expires</msg_ref>
+							<expr>0</expr>
+						</eq>
+						<eq>
+							<msg_ref type="sip">REGISTER.Expires.value</msg_ref>
+							<expr>0</expr>
+						</eq>
+					</or>
+					<then>
+						<send protocol="sip" msgtype="200-REGISTER"/>
+					</then>
+				</if>
+			</response>
+			<!-- Transitions for PendingRegistration state -->
+			<transition to="Reboot" event="SNMPResp"/>
+			<transition to="PendingRegistration" event="TimerExpired"/>
+			<transition to="END" event="SNMPRespFailure"/>
+			<transition to="Reboot" event="REGISTER"/>
+		</state>
+      <!-- PENDINGREGISTRATION State -->
+      <state ID="PendingRegistration">
+        <!-- First we need to power cycle the UE to conduct the test -->
+        <!-- Step 1 from the Default Message Flow - UE Registration (DUT) Sequence Diagram- received REGISTER message-->
+        <response>
+          <if>
+            <eq>
+              <msg_ref type="sip">Request</msg_ref>
+              <expr>REGISTER</expr>
+            </eq>
+            <!-- Step-2 from the Default Message Flow - UE Registration (DUT) Sequence Diagram- send 401-REGISTER-->
+            <then>
+              <send protocol="sip" msgtype="401-REGISTER" />
+            </then>
+          </if>
+          <verify step="1" requirements="REQ19312" group="CompareReg">
+            <eq>
+              <msg_ref type="sip">Register.SourceAddress.IP</msg_ref>
+              <msg_ref type="platform">UE0.IP</msg_ref>
+            </eq>
+          </verify>
+          <verify step="1" requirements="REQ19312" group="CompareReg">
+            <eq>
+              <msg_ref type="sip">Register.SourceAddress.port</msg_ref>
+              <msg_ref type="platform">UE0.UDPPort</msg_ref>
+            </eq>
+          </verify>
+        </response>
+        <!-- Transitions for PendingRegistration state -->
+        <transition to="Authorization" event="REGISTER" />
+      </state>
+      <!--State changes from PENDINGREGISTRATION to AUTHORIZATION on 
+					receiving (Step-3) REGISTER message-->
+      <!-- Step-3 from the Default Message Flow - UE Registration (DUT) Sequence Diagram- received REGISTER message-->
+      <!-- AUTHORIZATION State -->
+      <state ID="Authorization">
+        <response>
+          <if>
+            <or>
+              <eq>
+                <msg_ref type="event" />
+                <expr>AuthenticateSucceed</expr>
+              </eq>
+              <eq>
+                <msg_ref type="event" />
+                <expr>AuthenticateFailed</expr>
+              </eq>
+            </or>
+            <then>
+              <!-- this is to prevent the AuthenticateFailed from being forwarded
+									to the next state on the AuthenticateSucceed -->
+            </then>
+            <elseif>
+              <and>
+                <eq>
+                  <msg_ref type="sip">Request</msg_ref>
+                  <expr>REGISTER</expr>
+                </eq>
+                <and>
+                  <contains>
+                    <msg_ref type="sip">REGISTER</msg_ref>
+                    <expr>Authorization</expr>
+                  </contains>
+                  <digest />
+                </and>
+              </and>
+              <then>
+                <generate event="AuthenticateSucceed" />
+              </then>
+              <else>
+                <generate event="AuthenticateFailed" />
+                <send protocol="sip" msgtype="503-Register" />
+              </else>
+            </elseif>
+          </if>
+          <verify step="1" requirements="REQ19312" group="CompareReg">
+            <or>
+              <neq>
+                <msg_ref type="sip">Request</msg_ref>
+                <expr>REGISTER</expr>
+              </neq>
+              <eq>
+                <msg_ref type="sip">Register.SourceAddress.IP</msg_ref>
+                <msg_ref type="platform">UE0.IP</msg_ref>
+              </eq>
+            </or>
+          </verify>
+          <verify step="1" requirements="REQ19312" group="CompareReg">
+            <or>
+              <neq>
+                <msg_ref type="sip">Request</msg_ref>
+                <expr>REGISTER</expr>
+              </neq>
+              <eq>
+                <msg_ref type="sip">Register.SourceAddress.port</msg_ref>
+                <msg_ref type="platform">UE0.UDPPort</msg_ref>
+              </eq>
+            </or>
+          </verify>
+        </response>
+        <!-- Transitions for Authorization state -->
+        <transition to="Registered" event="AuthenticateSucceed" />
+        <transition to="END" event="AuthenticateFailed" />
+        <transition to="Authorization" event="REGISTER" />
+      </state>
+      <!-- REGISTERED State -->
+      <state ID="Registered">
+        <!-- Step  4 from the Default Message Flow - 
+					UE Registration (DUT) Sequence Diagram - 
+					received REGISTER message-  
+					send 200-REGISTER upon AuthenticateSucceed event-->
+        <prelude>
+          <send protocol="sip" msgtype="200-Register" />
+        </prelude>
+        <response>
+          <if>
+            <and>
+              <eq>
+                <msg_ref type="sip">Request</msg_ref>
+                <expr>SUBSCRIBE</expr>
+              </eq>
+              <or>
+                <contains>
+                  <msg_ref type="sip">SUBSCRIBE.Event</msg_ref>
+                  <expr>reg</expr>
+                </contains>
+                <or>
+                  <contains>
+                    <msg_ref type="sip">SUBSCRIBE.Event</msg_ref>
+                    <expr>dialog</expr>
+                  </contains>
+                  <contains>
+                    <msg_ref type="sip">SUBSCRIBE.Event</msg_ref>
+                    <expr>message-summary</expr>
+                  </contains>
+                </or>
+              </or>
+            </and>
+            <then>
+              <send protocol="sip" msgtype="200-SUBSCRIBE" />
+              <sleep time="100" />
+              <send protocol="sip" msgtype="NOTIFY" />
+            </then>
+          </if>
+        </response>
+        <!-- Transitions for Registered state -->
+        <transition to="Registered" event="REGISTER" />
+        <transition to="Notification" event="SUBSCRIBE" />
+      </state>
+      <state ID="Notification">
+        <!-- Transitions for Notification state -->
+        <transition to="NotificationComplete" event="200-NOTIFY" />
+      </state>
+      <!-- Transitions for NotificationComplete state -->
+      <state ID="NotificationComplete" ES="true">
+        <postlude>
+          <generate event="Registered" fsm="UE1" />
+        </postlude>
+      </state>
+    </states>
+  </fsm>
+  <fsm name="UE1">
+    <models>
+      <session />
+    </models>
+    <NE sim_type="orig" elements="UE1 SCSCF1 PCSCF1" targets="UE1 SCSCF1 PCSCF1" />
+    <states initialstate="Register">
+      <!-- REGISTER State -->
+      <state ID="Register">
+        <transition to="OffHook" event="Registered" />
+      </state>
+      <!-- OFFHOOK State -->
+      <state ID="OffHook">
+        <prelude>
+          <send protocol="utility" msgtype="OffHook" />
+        </prelude>
+        <!-- Transitions for OffHook state -->
+        <transition to="Dial" event="OffHookComplete" />
+      </state>
+      <!-- DIAL State -->
+      <state ID="Dial">
+        <prelude>
+          <send protocol="utility" msgtype="DialDigits">
+            <mod modtype="add" hdr="number">
+              <msg_ref type="platform">UE1.phone number 1</msg_ref>
+            </mod>
+          </send>
+        </prelude>
+        <!-- Transitions for Dial state -->
+        <transition to="Setup" event="DialDigitsComplete" />
+      </state>
+      <!-- SETUP State -->
+      <!-- The state machine will wait in the Setup state until it 
+				 receives an Invite from the originating UE or the fail timeout occurs. -->
+      <!-- Step 1 of the Call-Orig-at_UE(DUT) Default Message Flow document. -->
+      <state ID="Setup">
+        <response>
+          <!-- If the current message that we received is an Invite, answer with
+               a 100-trying -->
+          <!-- Step 2 in the Call-Orig-at_UE(DUT) Default Message Flow document. -->
+          <if>
+            <eq>
+              <msg_ref type="sip">Request</msg_ref>
+              <expr>Invite</expr>
+            </eq>
+            <then>
+              <send protocol="sip" msgtype="100-INVITE" />
+            </then>
+          </if>
+          <!-- This set of tests determines whether to send 183 with Answer
+						 or a 180 to the INVITE -->
+          <!-- Step 3 in the Call-Orig-at_UE(DUT) Default Message Flow document. -->
+          <if>
+            <and>
+              <eq>
+                <msg_ref type="extensions">precondition</msg_ref>
+                <expr>require</expr>
+              </eq>
+              <or>
+                <contains>
+                  <msg_ref type="sip" hdr_instance="any">Invite.Require</msg_ref>
+                  <expr>precondition</expr>
+                </contains>
+                <contains>
+                  <msg_ref type="sip" hdr_instance="any">Invite.Supported</msg_ref>
+                  <expr>precondition</expr>
+                </contains>
+              </or>
+            </and>
+            <then>
+              <!--Sending 183-Invite with answer-->
+              <sleep time="200" />
+              <send protocol="sip" msgtype="183-Invite" />
+            </then>
+            <elseif>
+              <eq>
+                <msg_ref type="sip">Request</msg_ref>
+                <expr>Invite</expr>
+              </eq>
+              <then>
+                <!--Sending 180-Invite with SS not supporting precondition.-->
+                <sleep time="200" />
+                <send protocol="sip" msgtype="180-Invite" />
+              </then>
+            </elseif>
+          </if>
+          <verify step="2" requirements="REQ19312" group="CompareOrg">
+            <eq>
+              <msg_ref type="sip">INVITE.SourceAddress.IP</msg_ref>
+              <msg_ref type="platform">UE0.IP</msg_ref>
+            </eq>
+          </verify>
+          <verify step="2" requirements="REQ19312" group="CompareOrg">
+            <eq>
+              <msg_ref type="sip">INVITE.SourceAddress.port</msg_ref>
+              <msg_ref type="platform">UE0.UDPPort</msg_ref>
+            </eq>
+          </verify>
+        </response>
+        <!-- Transitions for Setup state -->
+        <transition to="Alerting" event="INVITE" />
+      </state>
+      <!-- ALERTING State -->
+      <!-- NOTE: This is were all of the optional message processing before the 
+           session is complete will occur during an originate test call. -->
+      <state ID="Alerting">
+        <response>
+          <!-- Now test to see if the incoming message is a PRACK message because
+							 the system is using reliability -->
+          <!-- Steps 4 and 5 in the Call-Orig-at_UE(DUT) Default Message Flow document. -->
+          <!-- test for need to answer second PRACK -->
+          <!-- Steps 9 and 10 in the Call-Orig-at_UE(DUT) Default Message Flow document. -->
+          <!-- This is same as for steps 4 and 5 -->
+          <if>
+            <and>
+              <eq>
+                <msg_ref type="sip">Request</msg_ref>
+                <expr>PRACK</expr>
+              </eq>
+              <contains>
+                <msg_ref type="sip" msg_instance="last" hdr_instance="any">18x-Invite.Require</msg_ref>
+                <expr>100rel</expr>
+              </contains>
+            </and>
+            <then>
+              <!--Reliablity required for test sending 200-Prack message to peer.-->
+              <send protocol="sip" msgtype="200-PRACK" />
+            </then>
+          </if>
+          <!-- Now test for an UPDATE message -->
+          <!-- Steps 6 and 7 in the Call-Orig-at_UE(DUT) Default Message Flow document. -->
+          <if>
+            <eq>
+              <msg_ref type="sip">Request</msg_ref>
+              <expr>UPDATE</expr>
+            </eq>
+            <then>
+              <!--QoS required or supported sending 200-Update message to peer.-->
+              <send protocol="sip" msgtype="200-Update" />
+            </then>
+          </if>
+          <!-- Test whether to send 180 -->
+          <!-- Step 8 in the Call-Orig-at_UE(DUT) Default Message Flow document. -->
+          <if>
+            <and>
+              <contains>
+                <msg_ref type="sip" msg_instance="last">18x-Invite.Status-Line.status-code</msg_ref>
+                <expr>183</expr>
+              </contains>
+              <eq>
+                <msg_ref type="sdp">Request.qos-curr-remote.direction</msg_ref>
+                <msg_ref type="sdp">Request.qos-des-remote.direction</msg_ref>
+              </eq>
+            </and>
+            <then>
+              <!--Sending 180 for required preconditions.-->
+              <send protocol="sip" msgtype="180-Invite" />
+            </then>
+          </if>
+          <if>
+            <or>
+              <eq>
+                <msg_ref type="sip">Request</msg_ref>
+                <expr>PRACK</expr>
+              </eq>
+              <eq>
+                <msg_ref type="sip">Request</msg_ref>
+                <expr>UPDATE</expr>
+              </eq>
+            </or>
+            <then>
+              <verify step="2" requirements="REQ19312" group="CompareOrg">
+                <eq>
+                  <msg_ref type="sip">Request.SourceAddress.port</msg_ref>
+                  <msg_ref type="platform">UE0.UDPPort</msg_ref>
+                </eq>
+              </verify>
+              <verify step="2" requirements="REQ19312" group="CompareOrg">
+                <eq>
+                  <msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+                  <msg_ref type="platform">UE0.IP</msg_ref>
+                </eq>
+              </verify>
+            </then>
+          </if>
+        </response>
+        <!-- Transitions for Alerting state -->
+        <transition to="Alerting" event="PRACK" />
+        <transition to="Alerting" event="UPDATE" />
+        <transition to="Answer" event="ALERTING_UAS" />
+      </state>
+      <!-- ANSWER State -->
+      <state ID="Answer" timer="15000">
+        <response>
+          <if>
+            <eq>
+              <msg_ref type="event" />
+              <expr>TimerExpired</expr>
+            </eq>
+            <then>
+              <!--Sending 200-Invite-->
+              <send protocol="sip" msgtype="200-INVITE" />
+            </then>
+          </if>
+          <!-- Now test for an UPDATE message -->
+          <!-- Steps 6 and 7 in the Call-Orig-at_UE(DUT) Default Message Flow document. -->
+          <if>
+            <eq>
+              <msg_ref type="sip">Request</msg_ref>
+              <expr>UPDATE</expr>
+            </eq>
+            <then>
+              <!--QoS required or supported sending 200-Update message to peer.-->
+              <send protocol="sip" msgtype="200-Update" />
+            </then>
+          </if>
+          <if>
+            <or>
+              <eq>
+                <msg_ref type="sip">Request</msg_ref>
+                <expr>ACK</expr>
+              </eq>
+              <eq>
+                <msg_ref type="sip">Request</msg_ref>
+                <expr>UPDATE</expr>
+              </eq>
+            </or>
+            <then>
+              <!--QoS required or supported sending 200-Update message to peer.-->
+              <verify step="2" requirements="REQ19312" group="CompareOrg">
+                <eq>
+                  <msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+                  <msg_ref type="platform">UE0.IP</msg_ref>
+                </eq>
+              </verify>
+              <verify step="2" requirements="REQ19312" group="CompareOrg">
+                <eq>
+                  <msg_ref type="sip">Request.SourceAddress.port</msg_ref>
+                  <msg_ref type="platform">UE0.UDPPort</msg_ref>
+                </eq>
+              </verify>
+            </then>
+          </if>
+        </response>
+        <!-- Transitions for Answer state -->
+        <transition to="Answer" event="UPDATE" />
+        <transition to="Answer" event="TimerExpired" />
+        <transition to="Connected" event="ACK" />
+      </state>
+      <!-- CONNECTED State -->
+      <state ID="Connected" timer="20000">
+        <!-- Transitions for Connected state -->
+        <transition to="Releasing" event="TimerExpired" />
+      </state>
+      <!-- RELEASING State -->
+      <state ID="Releasing">
+        <prelude>
+          <!--Sending BYE to peer to terminate call.-->
+          <send protocol="sip" msgtype="BYE" />
+        </prelude>
+        <!-- Transitions for Releasing state -->
+        <transition to="OnHook" event="200-Bye" />
+      </state>
+      <!-- OnHook State -->
+      <state ID="OnHook">
+        <prelude>
+          <send protocol="utility" msgtype="OnHook" />
+        </prelude>
+        <!-- Transitions for OnHook state -->
+        <transition to="END" event="OnHookComplete" />
+      </state>
+    </states>
+  </fsm>
+</pc2xml>

@@ -1,0 +1,93 @@
+#//********************************************************************
+#// Filename: E-UE-DATA_1-2-4-2_1.test
+#// Author: Matthew Forbes
+#// Creation Date: 11/10/2008
+#// Modified by:
+#//
+#//
+#//********************************************************************
+#// Description:
+#//    TC1613 Test Case E-UE-DATA_1-2-4-2_1 Functionality Verification of the MIB
+#//    object 'pktcDevEvDescrId'
+#//
+#//
+#// Objective:
+#//    To verify the functionailty of the 'not-accessible MIB object':
+#//    pktcDevEvDescrId.
+#//
+#// PacketCable DUT:
+#//    EDVA
+#//
+#// Test Steps:
+#//    - Initial configuration
+#//    - Start sniffer
+#//    - TFTP GET MTA config file
+#//    - TFTP PUT and SNMP RESET
+#//    - Check Provisioning state
+#//    - Perform mib check
+#//    - Stop sniffer
+#//    - Delete MTA config file
+#//    
+#//
+#// Notes:
+#//    - Requires the specific config file in $BASE_CFG_FILE_PATH in Provisioning Server.
+#//************************************************************************
+global SCRIPT_VERSION
+set SCRIPT_VERSION { # $Id: E-UE-DATA_1-2-4-2_17.test 7406 2010-07-20 17:17:37Z dthakore $ }
+
+set test_case E-UE-DATA_1-2-4-2_1-
+set step_num 1
+
+DoStep ${test_case}${step_num} "Initial Configuration" {
+    LogMsg "--- Init PROV module ---"
+    Init_PROV
+
+    Init_CONTROLLER_LAN    
+    # ProvCreateConfig 291 $MTA_MAC
+    PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122 Device_Level_Secure.cfg
+    PROV_DEPLOY_DHCP
+    
+} {PASS_STEP}
+
+DoStep ${test_case}[incr step_num] "Start sniffer" {
+    LogMsg "--- Start sniffer ---"    
+    SetupCaptureControllerLan "udp port 67 || dst port 514 || $MTA_IP"
+    StartCaptureControllerLan 
+} {PASS_STEP}
+
+DoStep ${test_case}[incr step_num] "SNMP RESET" {
+    SNMP_SET $oid_pktcMtaDevResetNow INTEGER 1 $MTA_IP
+    actionWait "Wait for MTA to reboot" 60
+} {PASS_STEP}
+
+DoStep ${test_case}[incr step_num] "pktcMtaDevProvisioningState Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMP_GET $oid_pktcMtaDevProvisioningState $MTA_IP 20]
+    LogMsg "The Value of MTA Provisioning State is: $val"
+} {IsEqual $val 1}
+
+
+DoStep ${test_case}[incr step_num] "Verify accessibility of pktcDevEventDescrId" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMP_GET ${oid_pktcDevEventDescrId}.4000951500.4491 $MTA_IP]
+    set results [regexp ".*Reason: noAccess.*" $val]
+    # set results [regexp ".*Such Object.*" $val]
+} {
+    IsEqual $results 1
+    # IsEqual $val "Access Denied"
+}
+
+
+DoStep ${test_case}[incr step_num] "pktcDevEventDescrID.4000951500 Not Writeable Verification" {
+    set type Unsigned32    
+    set val [SNMP_SET ${oid_pktcDevEventDescrId}.4000951500.4491 $type "4000951500" $MTA_IP]
+} {IsEqual $val 2}
+
+
+DoStep ${test_case}[incr step_num] "Stop sniffer" {
+    LogMsg "--- Stop sniffer ---"
+    StopCaptureControllerLan
+    SaveToFileControllerLan 
+} {PASS_STEP}
+
+Cleanup

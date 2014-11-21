@@ -1,0 +1,169 @@
+###########################################################
+#   Author: Vikas Sarawat (CableLabs)
+#   Date :   06/22/07  
+#   DUT:     Control-Point
+#   Title   : TEST CASE CPD-Control Point 2.1.1 – CPD Response Message Details
+#   Objective:Verify the CPD response message is fomatted correctly and contains the correct values.
+#
+#
+#
+#
+##
+###########################################################
+
+
+#########Step number initialization###################
+set procNum 1
+set stepNum 0 ;# (next used +1)
+
+######Module information #################
+set mod cpd
+set cpd ::$mod\::
+set str "InitModule CPD"
+
+DoStep "Step $procNum.[set stepNum]" $str {
+    set isOk [set soc [ InitModule $mod ] ]; # Doc: InitModule CPD (Source-Module & Open Socket)
+    if { $soc != -1 } {
+        $soc.socRaw 1; # Set flag for SocRaw (enable IPv4 option Router Alert)
+    } ; # END if
+} { if {$isOk == -1 } {FAIL_STEP $str } else {PASS_STEP} }
+
+
+set str "Build & Tx CPD Request Msg and receive the response"
+DoStep "Step $procNum.[incr stepNum]" $str {
+    set txData_Req [ $cpd\MsgNew Request ]; # Doc: Instantiate New Message 
+    
+    # Build 
+    set txData_ReqHex [ $cpd\MsgBuild $txData_Req ]
+    # Doc: Build & Tx Message to DstIp, DstPort
+    set msgLen [ $cpd\MsgTx $txData_ReqHex $soc $::gCPD_REMOTE_IP $::gCPD_REMOTE_PORT ]
+
+    set rxData_Resp [ $cpd\MsgRx ]
+    
+} { if {$rxData_Resp == -1 } {FAIL_STEP $str } else {PASS_STEP} }
+
+set str "Verify CPD Response for Flags"
+DoStep "Step $procNum.[incr stepNum]" $str {
+        #HOP-BY-HOP(0x01) = 0 #BUILD-ROUTE(0x02) = 0
+	#TEARDOWN(0X04) = 0 #BIDIRECTIONAL(0x20) = 0
+        set isOk 1
+        set flags [$cpd\MsgGetVal $rxData_Resp Hdr flags ]
+        if {[expr $flags & 0x0001] == 1} { 
+           LogMsg "!!HOP-BY-HOP is set in the response"; set isOk -1
+        } else {
+           LogMsg "HOP-BY-HOP is NOT set in the response"
+        }
+        if {[expr $flags & 0x0002] == 2} { 
+           LogMsg "!!BUILD-ROUTE is set in the response"; set isOk -1
+        } else {
+           LogMsg "BUILD-ROUTE is NOT set in the response"
+        }
+        if {[expr $flags & 0x0004] == 4} { 
+           LogMsg "!!TEARDOWN is set in the response"; set isOk -1
+        } else {
+           LogMsg "TEARDOWN is NOT set in the response"
+        }
+        if {[expr $flags & 0x0020] == 32} { 
+           LogMsg "!!BIDIRECTIONAL is set in the response"; set isOk -1
+        } else {
+           LogMsg "BIDIRECTIONAL is NOT set in the response"
+        }
+    
+} { if {$isOk == -1 } {FAIL_STEP $str } else {PASS_STEP} }
+
+set str "Verify CPD response"
+DoStep "Step $procNum.[incr stepNum]" $str {
+        #CR TYPE = CR TYPE# CR ID = CR ID
+        #Flow-ID = Flow ID# Transaction ID = Transaction ID
+        set isOk 1
+        set crTypeTx [ $cpd\MsgGetVal $txData_Req AppPayload crType]
+        set crIdTx [ $cpd\MsgGetVal $txData_Req AppPayload crId]
+        set flowIdTx [ $cpd\MsgGetVal $txData_Req hdr flowId]
+        set transactionIdTx [ $cpd\MsgGetVal $txData_Req AppPayload transactionId]
+
+        set crTypeRx [ $cpd\MsgGetVal $rxData_Resp AppPayload crType]
+        set crIdRx [ $cpd\MsgGetVal $rxData_Resp AppPayload crId]
+        set flowIdRx [ $cpd\MsgGetVal $rxData_Resp hdr flowId]
+        set transactionIdRx [ $cpd\MsgGetVal $rxData_Resp AppPayload transactionId]
+
+        if {$crTypeTx != $crTypeRx} { 
+           LogMsg "!!crTypeTx != crTypeRx"; set isOk -1
+        } else {
+           LogMsg "crTypeTx == crTypeRx";
+        }
+        if {$crIdTx != $crIdRx} { 
+           LogMsg "!!crIdTx != crIdRx"; set isOk -1
+        } else {
+           LogMsg "crIdTx == crIdRx";
+        }
+        if {$flowIdTx != $flowIdRx} { 
+           LogMsg "!!flowIdTx != flowIdRx"; set isOk -1
+        } else {
+           LogMsg "flowIdTx == flowIdRx";
+        }
+        if {$transactionIdTx != $transactionIdRx} { 
+           LogMsg "!!transactionIdTx != transactionIdRx"; set isOk -1
+        } else {
+           LogMsg "transactionIdTx == transactionIdRx";
+        }
+    
+} { if {$isOk == -1 } {FAIL_STEP $str } else {PASS_STEP} }
+
+set str "Verify CPD response"
+DoStep "Step $procNum.[incr stepNum]" $str {
+        # flags bits 2-7 are not set
+        set isOk 1
+        set flags [$cpd\MsgGetVal $rxData_Resp AppPayload flags ]
+
+        if {[expr $flags & 0xFC] >= 1} { 
+           LogMsg "!!AppPayLoad flags bits 2-7 are set is set in the response"; set isOk -1
+        } else {
+           LogMsg "AppPayLoad flags bits 2-7 are NOT set is set in the response"
+        }
+
+} { if {$isOk == -1 } {FAIL_STEP $str } else {PASS_STEP} }
+
+set str "Verify CPD response"
+DoStep "Step $procNum.[incr stepNum]" $str {
+        #If the control point support DQOS over COPS the 0X01 MAY be set
+        #If the control point support PacketCable Multimedia the 0X02 MUST be set 
+        #If the control point support Li TAP-MIB with SNMPv3 the 0X04 MAY be set
+        #Other flag bits are not used and MUST be set to 0.
+        set isOk 1
+        set protocolSupport [$cpd\MsgGetVal $rxData_Resp AppPayload protocolSupport]
+
+        if {[expr $protocolSupport & 0x02] != 2} { 
+           LogMsg "!!PacketCable Multimedia is not supported in response"; set isOk -1
+        } else {
+           LogMsg "PacketCable Multimedia is supported in response"
+        }
+        if {[expr $protocolSupport & 0x01] != 1} { 
+           LogMsg "WARNING: DQOS over COPS is not supported in response"; # this is not an error
+        } else {
+           LogMsg "DQOS over COPS is supported in response"
+        }
+        if {[expr $protocolSupport & 0x04] != 4} { 
+           LogMsg "WARNING: Li TAP-MIB is not supported in response"; # this is not an error
+        } else {
+           LogMsg "Li TAP-MIB is supported in response"
+        }
+        if {[expr $protocolSupport & 0xf8] >= 1} { 
+           LogMsg "!!Other flag bits are not set to 0";set isOk -1
+        } else {
+           LogMsg "Other flag bits are set to 0"
+        }
+
+
+} { if {$isOk == -1 } {FAIL_STEP $str } else {PASS_STEP} }
+
+set str "Verify CPD response"
+DoStep "Step $procNum.[incr stepNum]" $str {
+        #The CPD Response MUST responds contains either the IPV4 or IPV6 IP address
+        set isOk 1
+        set isOk [$cpd\MsgGetVal $rxData_Resp AppPayload controlPointIpAddress0]
+} { if {$isOk == -1 } {FAIL_STEP $str } else {PASS_STEP} }
+
+Cleanup
+
+
+

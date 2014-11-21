@@ -1,0 +1,266 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+ Change History: (Author & Date)
+	PCPCII-98 : The script has been updated to only transition to the NoSplash state in the Registrar
+		FSM once the 200-Notify associated to the ua-profile subscription arrives. (ghassler 1/5/09)
+	PCPCII-131 : Add new requirement numbers for steps 5 & 6. (ghassler 06/11/2009)
+	PCPCII-135 : UPdate the script to accommodate a de-register message during the reboot. (ghassler 06/24/2009)
+	PCPCII-139 : Update the Voicetronix modifiers to use the new values. (ghassler 07/10/2009)	
+	PCPCII-256 : Include quotes for testing the auid paramter of the Event header (ghassler 04/22/2010)
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-UE 1.3.1.3" 
+	descrip="Ringsplash and special dial-tone when new call forwarded" 
+	number="RST-UE 1.3.1.3">
+	
+	<template file="./templates/UERegAndSubTemp.xml" name="Registrar"/>
+	<template file="./templates/CallOrigAtUETemp.xml" name="UE1"/>
+	
+	<remove_from fsm="Registrar">
+		<state ID="Registered"/>
+		<state ID="Notification"/>
+	</remove_from>
+	
+	<add_to fsm="Registrar">
+		<state ID="Registered">
+			<prelude once="true">
+				<var name="SubscribeFeature1">
+					<expr>false</expr>
+				</var>
+				<send protocol="sip" msgtype="200-Register"/>
+			</prelude>
+			<response>
+				<!--  Check if the SUBSCRIBE is for reg event -->
+				<if>
+					<and>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>SUBSCRIBE</expr>
+						</eq>
+						<eq>
+							<msg_ref type="sip">SUBSCRIBE.Event.event-type</msg_ref>
+							<expr>reg</expr>
+						</eq>
+					</and>
+					<then>
+						<send protocol="sip" msgtype="200-SUBSCRIBE"/>
+						<send protocol="sip" msgtype="NOTIFY"/>
+					</then>
+				</if>
+				<if>
+					<eq>
+						<msg_ref type="sip" bodyType="xml">SUBSCRIBE.Event.auid</msg_ref>
+						<expr>&quot;com.cablelabs.pkt.rst.featureset.1&quot;</expr>
+					</eq>
+					<then>
+						<assign name="SubscribeFeature1">
+							<msg_ref type="sip">Subscribe.From.tag</msg_ref>
+						</assign>
+						<send protocol="sip" msgtype="200-SUBSCRIBE"/>
+						<send protocol="sip" msgtype="NOTIFY" subscribeType="ua-profile">
+							<mod modtype="delete" hdr="SetElement" hdr_instance="3" body="xml"/>
+							<mod modtype="replace" hdr="SCFForwardedCallCount" body="xml" xml_value="true">
+								<expr>0</expr>
+							</mod>
+							<mod modtype="replace" hdr="CFVForwardedCallCount" body="xml" xml_value="true">
+								<expr>0</expr>
+							</mod>
+						</send>
+					</then>
+				</if>
+				<if>
+					<eq>
+						<var_ref name="SubscribeFeature1"/>
+						<msg_ref type="sip">200-NOTIFY.To.tag</msg_ref>
+					</eq>
+					<then>
+						<generate event="Branch1Event"/>
+						<generate event="Branch1Event" fsm="UE1"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Registered" event="SUBSCRIBE"/>
+			<transition to="Registered" event="200-NOTIFY"/>
+			<transition to="ReceiveBranch2Event" event="Branch1Event"/>
+		</state>
+		
+		<state ID="ReceiveBranch2Event">
+			<transition to="SendCFVReset" event="Branch2Event"/>
+		</state>
+		
+		<state ID="SendCFVReset">
+			<prelude>
+				<send protocol="sip" msgtype="NOTIFY" subscribeType="ua-profile" origReq="SUBSCRIBE" orig_instance="last">
+					<mod modtype="delete" hdr="SetElement" hdr_instance="3" body="xml"/>
+					<mod modtype="replace" hdr="SCFForwardedCallCount" body="xml" xml_value="true">
+						<expr>0</expr>
+					</mod>
+					<mod modtype="replace" hdr="CFVForwardedCallCount" body="xml" xml_value="true">
+						<expr>0</expr>
+					</mod>
+				</send>
+			</prelude>
+			<transition to="CallForward1" event="200-NOTIFY"/>
+		</state>
+		
+		<state ID="CallForward1">
+			<prelude>
+				<sleep time="5000"/>
+				<send protocol="sip" msgtype="NOTIFY" subscribeType="ua-profile">
+					<mod modtype="delete" hdr="SetElement" hdr_instance="3" body="xml"/>
+					<mod modtype="replace" hdr="SCFForwardedCallCount" body="xml" xml_value="true">
+						<expr>0</expr>
+					</mod>
+					<mod modtype="replace" hdr="CFVForwardedCallCount" body="xml" xml_value="true">
+						<expr>1</expr>
+					</mod>
+				</send>
+				<log step="5" requirements="REQ13619, REQ23130, REQ23131" 
+					promptUser="True" verify="True" 
+					expr="Verify that a ringsplash is heard at the UE?"/>
+			</prelude>
+			<transition to="CallForward2" event="200-NOTIFY"/>
+		</state>
+		<state ID="CallForward2">
+			<prelude>
+				<sleep time="3000"/>
+				<send protocol="sip" msgtype="NOTIFY" subscribeType="ua-profile">
+					<mod modtype="delete" hdr="SetElement" hdr_instance="3" body="xml"/>
+					<mod modtype="replace" hdr="SCFForwardedCallCount" body="xml" xml_value="true">
+						<expr>0</expr>
+					</mod>
+					<mod modtype="replace" hdr="CFVForwardedCallCount" body="xml" xml_value="true">
+						<expr>2</expr>
+					</mod>
+				</send>
+				<log step="6" requirements="REQ13619, REQ23130, REQ23131" 
+					promptUser="True" verify="True" 
+					expr="Verify that a ringsplash is heard at the UE?"/>
+			</prelude>
+			<transition to="CallForward3" event="200-NOTIFY"/>
+		</state>
+		
+		<state ID="CallForward3">
+			<prelude>
+				<sleep time="3000"/>
+				<send protocol="sip" msgtype="NOTIFY" subscribeType="ua-profile">
+					<mod modtype="delete" hdr="SetElement" hdr_instance="3" body="xml"/>
+					<mod modtype="replace" hdr="SCFForwardedCallCount" body="xml" xml_value="true">
+						<expr>0</expr>
+					</mod>
+					<mod modtype="replace" hdr="CFVForwardedCallCount" body="xml" xml_value="true">
+						<expr>2</expr>
+					</mod>
+				</send>
+			</prelude>
+			<postlude>
+				<log step="7" requirements="REQ13619" 
+					promptUser="True" verify="True" 
+					expr="Verify that a ringsplash is NOT heard at the UE?"/>
+			</postlude>
+			<transition to="OffHook2" event="200-NOTIFY"/>
+		</state>
+		
+		<state ID="OffHook2">
+			<prelude>
+				<sleep time="5000"/>
+				<send protocol="utility" msgtype="OffHook"/>
+			</prelude>
+			<postlude>
+				<log step="8" requirements="REQ13616" 
+					promptUser="True" verify="True" 
+					expr="Verify that the special conditions dial tone is played on the receiver?"/>
+			</postlude>
+			<transition to="OnHook2" event="OffHookComplete"/>
+		</state>
+		
+		<state ID="OnHook2">
+			<prelude>
+				<sleep time="5000"/>
+				<send protocol="utility" msgtype="OnHook"/>
+				<sleep time="5000"/>
+			</prelude>
+			<transition to="END" event="OnHookComplete"/>
+		</state>
+	</add_to>
+	
+	<remove_from fsm="UE1">
+		<state ID="OffHook"/>
+		<state ID="Setup" sub="prelude"/>
+		<state ID="Connected"/>
+		<state ID="OnHook"/>
+		<state ID="Releasing"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<states initialstate="WaitUASubscribe"/>
+		
+		<NE targets="*72.7205552000"/>
+		
+		<state ID="WaitUASubscribe">
+			<transition to="OffHook" event="Branch1Event"/>
+		</state>
+		
+		<state ID="OffHook">
+			<prelude>
+				<send protocol="utility" msgtype="OffHook"/>
+			</prelude>
+			<transition to="Dial" event="OffHookComplete"/>
+		</state>
+		
+		<state ID="Dial">
+			<prelude>
+				<send protocol="utility" msgtype="DialDigits">
+					<mod modtype="add" hdr="number">
+						<expr>*72</expr>
+					</mod>
+				</send>
+			</prelude>
+			<transition to="Setup" event="DialDigitsComplete"/>
+		</state>
+		
+		<state ID="Setup" sub="prelude" once="true">
+			<send protocol="utility" msgtype="DialDigits">
+				<mod modtype="add" hdr="number">
+					<expr>7205552000</expr>
+				</mod>
+			</send>
+		</state>
+		
+		<state ID="Connected" timer="3000">
+			<transition to="OnHook" event="TimerExpired"/>
+		</state>
+		
+		<state ID="OnHook">
+			<prelude>
+				<send protocol="utility" msgtype="OnHook"/>
+			</prelude>
+			<transition to="Releasing" event="OnHookComplete"/>
+		</state>
+		
+		<state ID="Releasing">
+			<postlude>
+				<!--Sending BYE to peer to terminate call.-->
+				<send protocol="sip" msgtype="200-BYE"/>
+			</postlude>
+			<transition to="EndCall1" event="BYE"/>
+		</state>
+		
+		<state ID="EndCall1" ES="true">
+			<prelude>
+				<generate event="Branch2Event" fsm="Registrar"/>
+			</prelude>
+		</state>
+	</add_to>
+</pc2xml>

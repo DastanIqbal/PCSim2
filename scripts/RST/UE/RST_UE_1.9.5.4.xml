@@ -1,0 +1,126 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-UE 1.9.5.4" 
+	descrip="Standard ringtone playback during operator ringback with inaccessible ringtone " 
+	number="RST-UE 1.9.5.4" inspector="disable">
+	
+	<template file="./templates/CallOrigAtUETemp.xml" name="UE1"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Setup" sub="prelude"/>
+		<state ID="Connected"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<NE targets="service:sos"/>
+		
+		<state ID="Setup" sub="prelude" once="true">
+			<!-- Step 1 test case SIP 1.9.5.4 - Initiate an emergency call session from the DUT.-->
+			<send protocol="utility" msgtype="DialDigits">
+				<mod modtype="add" hdr="number">
+					<expr>911</expr>
+				</mod>
+			</send>
+		</state>
+		
+		<state ID="Connected" timer="10000">
+			<transition to="GoOnHold" event="TimerExpired"/>
+		</state>
+		
+		<state ID="GoOnHold">
+			<prelude once="true">
+				<!-- Step 2 test case SIP 1.9.5.4 - Place the UE on network hold by putting
+				 the phone on-hook. This will initiate the network hold timer.-->
+				<send protocol="utility" msgtype="OnHook"/>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>REINVITE</expr>
+					</eq>
+					<then>
+						<!-- HookFlash Step 2 and 3 -Sending 100-Invite and 200-Invite to Invite -->
+						<send protocol="sip" msgtype="100-INVITE"/>
+						<send protocol="sip" msgtype="200-INVITE"/>
+					</then>
+				</if>
+			</response>
+			<transition to="GoOnHold" event="OnHookComplete"/>
+			<transition to="OnHold" event="ACK"/>
+			<transition to="GoOnHold" event="REINVITE"/>
+		</state>
+		
+		<state ID="OnHold">
+			<prelude once="true">
+				<!-- Step 3 test case SIP 1.9.5.4 - Initiate Ringback from the PSAP(SS) as 
+					per steps 5-6 [UE Hook Flash Case Flow] and the network sends the -->
+				<send protocol="sip" msgtype="REINVITE">
+					<mod modtype="add" hdr="Alert-Info">
+						<expr>&lt;file:///PacketCableRST/rg&gt;</expr>
+					</mod>
+					<mod modtype="add" hdr="Priority" param="value">
+						<expr>emergency</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<gt>
+						<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+						<expr>100</expr>
+					</gt>
+					<then>
+						<log step="3" requirements="REQ14089" 
+						promptUser="true" yesExpected="True" verify="True" 
+						expr="Verify that the UE accepts the RE-INVITE and using the same\n
+							standard ringtone rings the phone at the user side."/>
+						<!-- Step 3 test case SIP 1.9.5.4-->
+						<generate event="SucceedEvent"/>
+					</then>
+				</if>
+			</response>
+			<transition to="OnHold" event="100-INVITE"/>
+			<transition to="OnHold" event="18x-INVITE"/>
+			<transition to="Verify" event="SucceedEvent"/>
+		</state>
+		
+		<state ID="Verify" timer="55000">
+			<prelude once="true">
+				<send protocol="utility" msgtype="OffHook"/>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+						<expr>200</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="ACK"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Verify" event="200-Invite"/>
+			<transition to="Verify" event="OffHookComplete"/>
+			<transition to="END" event="TimerExpired"/>
+		</state>
+	</add_to>
+</pc2xml>

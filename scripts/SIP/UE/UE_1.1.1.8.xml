@@ -1,0 +1,295 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	PCPCIIATP-175 : Change the response from 408 to 404 for the Retry-After operation. (ghassler 08/09/2010)
+	PCPCIIATP-191 : Update the script to the changes specified in the issue. (ghassler 09/17/2010)
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="SIP-UE 1.1.1.8" 
+	descrip="New Registration after Failure" 
+	number="SIP-UE 1.1.1.8">
+	
+	<template file="./templates/UERegTemp.xml" name="Registrar"/>
+	<configure name="No Response Timeout" value="1000000"/>
+		
+	<remove_from fsm="Registrar">
+		<state ID="PendingRegistration"/>
+		<state ID="Authorization"/>
+		<state ID="Registered"/>
+	</remove_from>
+	
+	<add_to fsm="Registrar">
+		<state ID="PendingRegistration">
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>REGISTER</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="404-REGISTER">
+							<!-- Step-2, Message Flow for test case SIP 1.1.1.8 -->
+							<mod modtype="replace" hdr="Retry-After">
+								<expr>20</expr>
+							</mod>	
+						</send>
+					</then>
+				</if>
+			</response>
+			<transition to="NoRegister20" event="REGISTER"/>
+		</state>
+		
+		<state ID="NoRegister20" timer="19500">
+			<response>
+				<verify step="2" requirements="REQ23642">
+					<and>
+						<neq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>REGISTER</expr>
+						</neq>
+						<eq>
+							<msg_ref type="event"/>
+							<expr>TimerExpired</expr>
+						</eq>
+					</and>
+				</verify>
+			</response>
+			<transition to="END" event="REGISTER"/>
+			<transition to="NewRegister" event="TimerExpired"/>
+		</state>
+		
+		<state ID="NewRegister" timer="1500">
+			<response>
+				<verify step="2" requirements="REQ23642">
+					<and>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>REGISTER</expr>
+						</eq>
+						<neq>
+							<msg_ref type="event"/>
+							<expr>TimerExpired</expr>
+						</neq>
+					</and>
+					<then>
+						<send protocol="sip" msgtype="404-REGISTER">
+							<!-- Step-3, Message Flow for test case SIP 1.1.1.8 -->
+							<mod modtype="delete" hdr="Retry-After"/>
+						</send>
+					</then>
+				</verify>
+			</response>
+			<transition to="Retry5minRegister" event="REGISTER"/>
+			<transition to="END" event="TimerExpired"/>
+		</state>
+		
+		
+		<state ID="Retry5minRegister" timer="301500">
+			<response>
+				<verify step="3" requirements="REQ23642">
+					<and>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>REGISTER</expr>
+						</eq>
+						<neq>
+							<msg_ref type="event"/>
+							<expr>TimerExpired</expr>
+						</neq>
+					</and>
+					<then>
+						<!-- Step-5, Message Flow for test case SIP 1.1.1.8 -->
+						<send protocol="sip" msgtype="404-REGISTER"/>
+					</then>
+				</verify>
+			</response>
+			<transition to="Retry5minRegister2" event="REGISTER"/>
+			<transition to="END" event="TimerExpired"/>
+		</state>
+		
+		<state ID="Retry5minRegister2" timer="301500">
+			<response>
+				<verify step="4" requirements="REQ23642">
+					<and>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>REGISTER</expr>
+						</eq>
+						<neq>
+							<msg_ref type="event"/>
+							<expr>TimerExpired</expr>
+						</neq>
+					</and>
+					<then>
+						<!-- Step-5, Message Flow for test case SIP 1.1.1.8 -->
+						<send protocol="sip" msgtype="404-REGISTER"/>
+					</then>
+				</verify>
+			</response>
+			<transition to="NoRegister120" event="REGISTER"/>
+			<transition to="END" event="TimerExpired"/>
+		</state>
+		
+		<state ID="NoRegister120" timer="119500">
+			<response>
+				<verify step="5" requirements="REQ19889, REQ23645, REQ23648">
+					<and>
+						<neq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>REGISTER</expr>
+						</neq>
+						<eq>
+							<msg_ref type="event"/>
+							<expr>TimerExpired</expr>
+						</eq>
+					</and>
+				</verify>
+			</response>
+			<transition to="Retry5Register" event="TimerExpired"/>
+		</state>	
+		
+		<state ID="Retry5Register" timer="121500">
+			<response>
+				<verify step="5" requirements="REQ19889, REQ23645, REQ23648">
+					<and>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>REGISTER</expr>
+						</eq>
+						<neq>
+							<msg_ref type="event"/>
+							<expr>TimerExpired</expr>
+						</neq>
+					</and>
+					<then>
+						<!-- Step-6, Message Flow for test case SIP 1.1.1.8 -->
+						<send protocol="sip" msgtype="404-REGISTER"/>
+					</then>
+				</verify>
+			</response>
+			<transition to="NoRegister240" event="REGISTER"/>
+			<transition to="END" event="TimerExpired"/>
+		</state>
+		
+		<state ID="NoRegister240" timer="239500">
+			<response>
+				<verify step="6" requirements="REQ23645, REQ23646">
+					<and>
+						<neq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>REGISTER</expr>
+						</neq>
+						<eq>
+							<msg_ref type="event"/>
+							<expr>TimerExpired</expr>
+						</eq>
+					</and>
+				</verify>
+			</response>
+			<transition to="Retry240Register" event="TimerExpired"/>
+		</state>	
+		
+		
+		<state ID="Retry240Register" timer="241500">
+			<response>
+				<verify step="6" requirements="REQ23645, REQ23646">
+					<and>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>REGISTER</expr>
+						</eq>
+						<neq>
+							<msg_ref type="event"/>
+							<expr>TimerExpired</expr>
+						</neq>
+					</and>
+					<then>
+						<!-- Step-7, Message Flow for test case SIP 1.1.1.8 -->
+						<send protocol="sip" msgtype="404-REGISTER"/>
+					</then>
+				</verify>
+			</response>
+			<transition to="NoRegister480" event="REGISTER"/>
+			<transition to="END" event="TimerExpired"/>
+		</state>
+		
+		<state ID="NoRegister480" timer="479500">
+			<response>
+				<verify step="7" requirements="REQ23645, REQ23646">
+					<and>
+						<neq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>REGISTER</expr>
+						</neq>
+						<eq>
+							<msg_ref type="event"/>
+							<expr>TimerExpired</expr>
+						</eq>
+					</and>
+				</verify>
+			</response>
+			<transition to="Retry480Register" event="TimerExpired"/>
+		</state>	
+		
+		
+		<state ID="Retry480Register" timer="481500">
+			<response>
+				<verify step="7" requirements="REQ23645, REQ23646">
+					<and>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>REGISTER</expr>
+						</eq>
+						<neq>
+							<msg_ref type="event"/>
+							<expr>TimerExpired</expr>
+						</neq>
+					</and>
+					<then>
+						<!-- Step-8, Message Flow for test case SIP 1.1.1.8 -->
+						<send protocol="sip" msgtype="404-REGISTER"/>
+					</then>
+				</verify>
+			</response>
+			<transition to="OffHook" event="REGISTER"/>
+			<transition to="END" event="TimerExpired"/>
+		</state>
+		
+		<state ID="OffHook">
+			<prelude once="true">
+				<send protocol="utility" msgtype="OffHook"/>
+			</prelude>
+			<response>
+				<if>	
+					<neq>
+						<msg_ref type="utility">Response</msg_ref>
+						<expr>OffHookComplete</expr>
+					</neq>
+					<then>
+						<verify step="8" requirements="REQ23644">
+							<eq>
+								<msg_ref type="sip">Request</msg_ref>
+								<expr>REGISTER</expr>
+							</eq>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<transition to="OffHook" event="OffHookComplete"/>
+			<transition to="END" event="REGISTER"/>
+		</state>
+	</add_to>
+</pc2xml>

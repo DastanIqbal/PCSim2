@@ -1,0 +1,122 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="SECURITY 1.4.4" 
+	descrip="UE deletes the TLS session upon receipt of De-Registration notification" 
+	number="SECURITY 1.4.4">
+	
+	<template file="./templates/UERegAndSubTemp.xml" name="Registrar"/>
+	
+	<remove_from fsm="Registrar">
+		<state ID="PendingRegistration"/>
+		<state ID="Registered"/>
+		<state ID="NotificationComplete"/>
+		<state ID="Notification"/>
+	</remove_from>
+	
+	<add_to fsm="Registrar">
+		<state ID="PendingRegistration">
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>REGISTER</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="401-REGISTER">
+							<mod modtype="replace" hdr="Security-Server">
+								<expr> tls; q=0.1</expr>
+							</mod>
+							<mod modtype="add" hdr="Require">
+								<expr>sec-agree</expr>
+							</mod>
+							<mod modtype="add" hdr="Proxy-Require">
+								<expr>sec-agree</expr>
+							</mod>
+						</send>
+					</then>
+				</if>
+			</response>
+			<transition to="Authorization" event="REGISTER"/>
+		</state>
+		
+		<state ID="Registered">
+			<prelude>
+				<send protocol="sip" msgtype="200-Register"/>
+			</prelude>
+			<response>
+				<if>
+					<and>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>SUBSCRIBE</expr>
+						</eq>
+						<contains>
+							<msg_ref type="sip">SUBSCRIBE.Event</msg_ref>
+							<expr>reg</expr>
+						</contains>
+					</and>
+					<then>
+						<send protocol="sip" msgtype="200-SUBSCRIBE"/>
+						<sleep time="100"/>
+						<send protocol="sip" msgtype="NOTIFY">
+							<mod modtype="replace" hdr="Event" param="event-type" body="reginfo+xml">
+								<expr>reg</expr>
+							</mod>
+							<mod modtype="replace" hdr="reginfo" param="state" body="reginfo+xml">
+								<expr>full</expr>
+							</mod>
+							<mod modtype="replace" hdr="registration" param="state" body="reginfo+xml">
+								<expr>terminated</expr>
+							</mod>
+							<mod modtype="replace" hdr="contact" param="state" body="reginfo+xml">
+								<expr>terminated</expr>
+							</mod>
+							<mod modtype="replace" hdr="contact" param="event" body="reginfo+xml">
+								<expr>rejected</expr>
+							</mod>
+							<mod modtype="replace" hdr="subscription" param="state" body="reginfo+xml">
+								<expr>terminated</expr>
+							</mod>
+						</send>
+					</then>
+				</if>
+			</response>
+			<transition to="Registered" event="REGISTER"/>
+			<transition to="Notification" event="SUBSCRIBE"/>
+			<transition to="END" event="FailEvent"/>
+		</state>
+		
+		<state ID="Notification">
+			<response>
+				<verify step="6" requirements="REQ17021, REQ17022, REQ17026,REQ17028, REQ17029">
+					<eq>
+						<msg_ref type="sip">Response</msg_ref>
+						<expr>200-REGISTER</expr>
+					</eq>
+				</verify>
+			</response>
+			<transition to="NotificationComplete" event="200-NOTIFY"/>
+		</state>
+		
+		<state ID="NotificationComplete" timer="10000">
+			<transition to="END" event="TimerExpired"/>
+		</state>
+	</add_to>
+</pc2xml>

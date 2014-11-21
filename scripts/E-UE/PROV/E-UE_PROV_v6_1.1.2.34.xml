@@ -1,0 +1,79 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+Change History: (Author & Date)
+
+
+-->
+<!-- Document type and attributes. -->
+<pc2xml version="$Revision: 6076 $"
+        name="E-UE_PROV_1.1.2.34"
+        descrip="eUE uses secondary DNS server when no response from primary DNS server."
+        number="E-UE_PROV_1.1.2.34">
+
+    <!-- Reset UE; start capture. -->
+    <template file="./templates/EUE_Prov_B_1_1_1.xml" name="SecondaryDNS"/>
+
+    <add_to fsm="SecondaryDNS">
+        <transition from="StartCapture_RebootWait" to="EUE_Provisioned" event="TimerExpired"/>
+
+        <!-- E/MTA DUT reports provisioning pass code (1) to provisioning service (SNMP Entity). -->
+        <state ID="EUE_Provisioned" timer="1000">
+            <prelude once="true">
+                <stop_capture/>
+
+                <parse_capture name="eUE_Prov" file="X_eUEv6/1-1-2-34.pcap">
+                    <parser_filter protocol="dns" ip="DUT.IP"/>
+                </parse_capture>
+
+                <!--send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>DOCS-CABLE-DEVICE-MIB::docsDevServerBootState.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">UE0.IP</msg_ref>
+                    </mod>
+                </send-->
+            </prelude>
+            <response>
+                <!--verify step="2">
+                    <contains>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>1</expr>
+                    </contains>
+                </verify-->
+            </response>
+            <!--transition to="RequestToSet" event="SNMPResp"/-->
+			<transition to="RequestToSet" event="TimerExpired"/>
+        </state>
+
+        <!-- eUE uses the secondary DNS server for DNS resolution. -->
+        <!-- Several DNS requests for primary DNS server are sent, followed by request to secondary DNS. -->
+        <state ID="RequestToSet" timer="1000">
+            <prelude>
+                <verify step="7">
+                    <and>
+                        <eq>
+                            <!-- 'Several' == 4. -->
+                            <capture_ref type="dns" name="eUE_Prov" msg_instance="last">Query.ipv6.dst_host.show</capture_ref>
+                            <msg_ref type="platform">DUT.DNS Server IP</msg_ref>
+                        </eq>
+                        <neq>
+                            <capture_ref type="dns" name="eUE_Prov" msg_instance="first">Query.ipv6.dst_host.show</capture_ref>
+                            <msg_ref type="platform">DUT.DNS Server IP</msg_ref>
+                        </neq>
+                    </and>
+                </verify>
+            </prelude>
+			<transition to="END" event="TimerExpired"/>
+        </state>
+    </add_to>
+</pc2xml>

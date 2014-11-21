@@ -1,0 +1,171 @@
+################################################################################
+#// Filename: E-UE-PROV_2-1-3-1.test
+#// Author:   Matthew Forbes
+#// Creation Date: 03-Nov-2008
+#// Modified:  
+################################################################################
+#// Description:
+#//     TC2838 TEST CASE E-UE-PROV 2.1.3.1 Ability of eUE to send SNMP Notifications
+#//     When TLV 38 Sub-types 1,2, and 3 are Configured
+#//     
+#// Objective:
+#//     To verify that the eUE will send the final SNMP inform/trap in to BOTH the
+#//     SNMP entity specified in DHCP Option 122 Sub-option 3 AND the SNMP notification
+#//     receivers specified in TLV 38.1, TLV 38.2, and TLV 38.3 in the eUE configuration file.
+#//
+#// PacketCable DUT:
+#//     EDVA
+#//
+#// Test Steps:
+#//     - Initial configuration
+#//     - Configure Provisioning server
+#//     - Start sniffer
+#//     - Reset DUT
+#//     - Check Provisioning state
+#//     - Stop sniffer
+#//     - Verify inform messages for different targets
+#//
+#// Notes:
+#//     - Requires provPrimitives.tcl & tftp_primitives.tcl.
+#//     - Requires the specific config file in $BASE_CFG_FILE_PATH in Provisioning Server.
+#//     - Requires parT.tcl parsing tool to parse data from capture file.                
+#//
+################################################################################
+
+global SCRIPT_VERSION
+set SCRIPT_VERSION { # $Id: E-UE-PROV_2-1-3-1.test 7456 2010-08-06 15:30:06Z ghassler $ }
+
+################################################################################
+
+
+DoStep "E-UE-PROV_2-1-3-1_1-1" "Initial configuration" {
+    LogMsg "--- Initial PROV module ---"
+    Init_PROV
+} { PASS_STEP }
+
+
+DoStep "E-UE-PROV_2-1-3-1_3-1" "Configure Provisioning Server" {
+    # No sending message
+   PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122 cfg-2838.bin
+   PROV_DEPLOY_DHCP
+} { PASS_STEP }
+
+DoStep "E-UE-PROV_2-1-3-1_3-2" "Start sniffer" {
+    LogMsg "--- Start sniffer ---"
+    Init_CONTROLLER_LAN
+    SetupCaptureControllerLan "host $MTA_IP || udp port 67 || host $CM_IP"
+    StartCaptureControllerLan
+} {PASS_STEP}
+
+################ Reset CM and MTA and Verify Provisioning ################
+
+DoStep "E-UE-PROV_2-1-3-1_4-1" "Reset CM/MTA" {
+    set val [SNMPvN_RESET $CM_IP ]
+    LogMsg "Reset of CM and MTA has passed"
+} {
+    IsEqual $val 0
+}
+
+DoStep "E-UE-PROV_2-1-3-1_5-1" "pktcMTADevProvisioningState Content Verification" {
+    # Wait for a minute to let CM/MTA starting to reboot
+    actionWait "Wait for CM/MTA to reboot" 120
+    # Get the OID from the MTA and check it using our previously defined
+    set val [GetProvState 1 600]
+    LogMsg "MTA Provisioning State" 49
+    LogMsg "             - Expected : 1" 49
+    LogMsg "             - Received : $val" 49
+} {
+    IsEqual $val 1
+}
+
+DoStep "E-UE-PROV_2-1-3-1_5-2" "Stop sniffer" {
+    LogMsg "--- Stop sniffer ---"
+    StopCaptureControllerLan
+    SaveToFileControllerLan
+} { PASS_STEP }
+
+
+########################## INVOKE PARSING TOOL ##################################
+
+DoStep "E-UE-PROV_2-1-3-1_5-3" "Analyze flow data" {
+    # Initial PARSER TOOL
+    Init_PART
+
+    # Set up parser file
+    set PARSERFILE    $ETH_DEFAULT_TXT_FILE
+} { PASS_STEP }
+
+DoStep "E-UE-PROV_2-1-3-1_5-4" "Parse SNMP data into database" {
+    
+    # Parse data
+
+    set PARAMS_MTA_SRC      "{{} {} {} {} $MTA_IP {} {} {} {}}"
+    set PARAMS_MTA_DST      "{{} {} {} {} {} {} {} $MTA_IP {}}"
+    set msgID_MTA           [ParseFile $PARSERFILE "$PARAMS_MTA_SRC $PARAMS_MTA_DST"]
+} { 
+    if { $::PART_RETURN == 0 } {
+        PASS_STEP
+    } else {
+        FAIL_STEP "Cannot find data"
+    }
+}
+
+#####################Defining variable defaults##################
+# set snmp_entityIP $PROV_DHCP1_IP
+# These values may change based on the config file
+# set SNMP_IP1 10.32.0.12
+# set SNMP_IP2 10.32.0.20
+###################Presence of additional SNMP notifications###################
+## IP1 is SNMP INFORM
+## IP2 is SNMP INFORM
+## IP3 is SNMP TRAP
+
+######################### VERIFY SNMP INFORM  MESSAGES ##########################
+######################### FINAL SNMP INFORM  MESSAGE to SNMPENTITY ##########################
+DoStep "E-UE-PROV_2-1-3-1_6-1" "SNMP INFORM  EXISTS for 122.3" {
+    LogMsg "Verify SNMP INFORM SYSDESCR EXISTS for 122.3"
+} {
+    # Verify presence of additional inform
+    VerifyValue $msgID_MTA "INANY SNMP SNMP_INFORM HEADERDSTIP" "IS" "$PROV_SNMP_IP"
+}
+
+######################### NOTIFICATION SNMP INFORM  MESSAGE to TLV38-IP1##########################
+DoStep "E-UE-PROV_2-1-3-1_6-2" "SNMP INFORM  EXISTS for FIRST TLV38.1 series PORT1" {
+    LogMsg "Verify SNMP INFORM uses TLV38.1 entry PORT1"
+} {
+    # Verify presence of additional inform
+    VerifyValue $msgID_MTA "INANY SNMP SNMP_INFORM HEADERDSTPORT" "IS" "162" AND \
+            "HEADERDSTIP" "IS" "$PROV_SNMP_IP"
+    # VerifyValue $msgID_MTA "INANY SNMP SNMP_INFORM HEADERDSTPORT" "IS" "162" AND \
+            # "SNMP_PROVSTATE" "IS" "1"
+}
+######################### NOTIFICATION SNMP INFORM  MESSAGE to TLV38-IP2##########################
+#The SNMP message sent to port other than 162 will be decoded as UDP packet by Ethereal for some devices
+################################################################################
+
+DoStep "E-UE-PROV_2-1-3-1_7-1" "SNMP INFORM  EXISTS for SECOND TLV38.2 series PORT2" {
+    LogMsg "Verify SNMP INFORM uses TLV38.1 entry PORT2"
+} {
+    # Verify presence of additional inform
+    VerifyValue $msgID_MTA "INANY SNMP SNMP_INFORM HEADERDSTPORT" "IS" "5000" AND \
+            "HEADERDSTIP" "IS" "$PROV_SNMP2_IP"
+            # PASS_STEP
+    # VerifyValue $msgID_MTA "INANY SNMP SNMP_INFORM HEADERDSTPORT" "IS" "5000" AND \
+            # "SNMP_PROVSTATE" "IS" "1"
+}
+######################### NOTIFICATION SNMP TRAP  MESSAGE to TLV38-IP3##########################
+DoStep "E-UE-PROV_2-1-3-1_8-1" "SNMP TRAP EXISTS for THIRD TLV38.3 series IP1" {
+    LogMsg "Verify SNMP TRAP sent to TLV38.3 IP1"
+} {
+    # Verify presence of additional inform
+    VerifyValue $msgID_MTA "INANY SNMP SNMP_TRAP HEADERDSTIP" "IS" "$PROV_SNMP_IP" AND \
+            "HEADERDSTPORT" "IS" "162"
+    # VerifyValue $msgID_MTA "INANY SNMP SNMP_TRAP HEADERDSTIP" "IS" "$SNMP_IP1" AND \
+            # "SNMP_PROVSTATE" "IS" "1"                   
+}
+################################################################################
+# Cleanup
+################################################################################
+
+Cleanup
+return 0

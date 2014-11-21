@@ -1,0 +1,403 @@
+<!--
+	1. set JAVA_HOME, ANT_HOME appropriate values, and 
+		include JAVA_HOME/bin and ANT_HOME/bin in path
+	4. And goto the project directory (where build.xml file exists) and run
+
+		. to build everything
+			ant
+
+		. to build bns_common.jar, bns_utility_protocol.jar bns_logger.jar bns_capture_interface.jar
+			ant utils
+
+		. to build bns_stun_protocol.jar
+			ant stun
+        
+        . to build bns_provgen.jar
+            ant provgen
+
+		. to build pcsim2 jar only, installer/exe would not be built
+			ant pcsim2 
+-->
+<project name="PCSim2" default="build" basedir=".">
+
+	<target name="init_props">
+		<property name="src_dir" value="${basedir}/src"/>
+		<property name="lib_src_dir" value="${basedir}/src/libs"/>
+		<property name="classes_dir" value="${basedir}/classes"/>
+		<property name="lib_dir" value="${basedir}/lib"/>
+		<property name="images_dir" value="${basedir}/src/images"/>
+		<property name="mf_dir" value="${basedir}/src/META-INF"/>
+		<property name="build_dir" value="${basedir}/build"/>
+		<property name="bin_dir" value="${basedir}/bin"/>
+		<property name="config_dir" value="${basedir}/config"/>
+		<property name="docs_dir" value="${basedir}/docs"/>
+		<property name="logs_dir" value="${basedir}/logs"/>
+		
+		<property name="parser_mf" value="${mf_dir}/MANIFEST.MF_PARSER"/>
+		<property name="pcsim2_mf" value="${mf_dir}/MANIFEST.FM_PCSim2"/>
+        <property name="sdt_mf" value="${mf_dir}/MANIFEST.FM_SDT"/>
+        <property name="provgen_mf" value="${lib_dir}/provgen/META-INF/MANIFEST.FM_ProvGen"/>
+		<property name="pcsim2_js" value="${basedir}/pcsim_exe.jsmooth"/>
+		<property name="izpack_install_xml" value="${build_dir}/pc_sim2_install.xml"/>
+		<property name="installer_jar_name" value="PCSim2_installer-1.0-beta_1.jar"/>
+		<property name="main_install_jar" value="${build_dir}/${installer_jar_name}"/>
+
+
+		<property name="parser_jar" value="${bin_dir}/pc2_parser-0.1.jar"/>
+		<property name="main_jar" value="${bin_dir}/PC_Sim2-1.0-beta_1.jar"/>
+		<property name="common_jar" value="${lib_dir}/bns_common.jar"/>
+		<property name="stun_jar" value="${lib_dir}/bns_stun_protocol.jar"/>
+		<property name="utility_jar" value="${lib_dir}/bns_utility_protocol.jar"/>
+		<property name="logger_jar" value="${lib_dir}/bns_logger.jar"/>
+		<property name="capture_jar" value="${lib_dir}/bns_capture_interface.jar"/>
+		<property name="diameter_jar" value="${lib_dir}/bns_diameter.jar"/>
+        <property name="provgen_jar" value="${lib_dir}/bns_provgen.jar"/>
+        <property name="sdt_jar" value="${bin_dir}/SDT-1.0-beta_1.jar"/>
+
+		<property name="dist_dir" value="${basedir}/dist"/>
+		<property name="dist_pcsim2_js" value="${dist_dir}/pcsim_exe.jsmooth"/>
+		<property name="dist_izpack_install_xml" value="${dist_dir}/build/pc_sim2_install.xml"/>
+		<property name="dist_izpack_install_xml_linux" value="${dist_dir}/build/pc_sim2_install_linux.xml"/>
+		<property name="dist_main_install_jar" value="${dist_dir}/build/${installer_jar_name}"/>
+		<property name="dist_install_pcsim2_sk_sh" value="${dist_dir}/build/install_pcsim2_sk.sh"/>
+        
+		<property name="jshome" value="${basedir}/external/js0.9.9-7"/>
+		<property name="jsant_jar" value="${jshome}/lib/jsmoothgen-ant.jar"/>
+		<property name="izant_jar" value="${basedir}/external/standalone-compiler.jar"/>
+
+        <property name="setup_exe_name" value="PCSim2_Setup.exe" />
+		<property name="setup_exe" value="${basedir}/${setup_exe_name}"/>
+		<property name="setup_bin" value="${basedir}/PCSim2_Setup.bin"/>
+		<property name="dist_setup_exe" value="${dist_dir}/PCSim2_Setup.exe"/>
+		<property name="dist_setup_bin" value="${dist_dir}/build/PCSim2_Setup.bin"/>
+
+		<property name="debug" value="yes"/>
+		<property name="optimize" value="no"/>
+		<property name="deprecation" value="yes"/>
+	</target>
+
+	
+
+	
+	<target name="init" depends="init_props">
+		<echo message="You are building on '${os.name}' using Java version '${ant.java.version}'"/>
+		<condition property="oswin" value="true">
+			<os family="windows"/>
+
+		</condition>
+		<condition property="oslinux" value="true">
+			<os family="unix"/>
+		</condition>
+		<echo message="Is windows? ${oswin}"/>
+		<echo message="Is linux? ${oslinux}"/>
+
+		
+
+		<property file="${basedir}/src/META-INF/revision.properties"/>
+
+		<echo message="Revision found: ${common.svn.revision}"/>
+
+		
+
+        <replaceregexp file="${pcsim2_mf}" 
+
+			match="Implementation-Version: [0-9]*"
+
+		    replace="Implementation-Version: ${common.svn.revision}"/>
+
+		
+
+		<replaceregexp file="${parser_mf}" 
+
+					match="Implementation-Version: [0-9]*"
+
+				    replace="Implementation-Version: ${common.svn.revision}"/>
+                    
+        <replaceregexp file="${sdt_mf}" 
+					match="Implementation-Version: [0-9]*"
+				    replace="Implementation-Version: ${common.svn.revision}"/>
+                    
+        <replaceregexp file="${provgen_mf}" 
+					match="Implementation-Version: [0-9]*"
+				    replace="Implementation-Version: ${common.svn.revision}"/>
+
+		
+
+		<exec executable="svn.exe" osfamily="windows">
+
+			<arg value="update"/>
+
+			<arg value="${basedir}/bin/templates"/>
+
+		</exec>
+
+		
+
+		<path id="PCSim2_classpath">
+			<pathelement location="${classes}"/>
+			<fileset dir="${lib_dir}">
+				<include name="*.jar"/>
+			</fileset>
+            <fileset dir="${lib_dir}/jung">
+				<include name="*.jar"/>
+			</fileset>
+		</path>
+		<mkdir dir="${classes_dir}"/>
+		<mkdir dir="${dist_dir}/build"/>
+		<mkdir dir="${dist_dir}/bin"/>
+		<mkdir dir="${dist_dir}/config"/>
+		<mkdir dir="${dist_dir}/docs"/>
+		<mkdir dir="${dist_dir}/lib"/>
+		<mkdir dir="${dist_dir}/logs"/>
+		<mkdir dir="${dist_dir}/src"/>
+		<mkdir dir="${dist_dir}/src/images"/>
+	</target>
+
+	<target name="clean" depends="init_props">
+		<!--this is in the repo so keep it <delete file="${main_jar}"/>-->
+		<delete file="${main_install_jar}"/>
+		<!--this is in the repo so keep it <delete file="${parser_jar}"/>-->
+		<delete file="${setup_exe}"/>
+        <delete file="${setup_exe}.zip"/>
+		<delete file="${setup_bin}"/>
+		<delete dir="${classes_dir}"/>
+		<delete dir="${dist_dir}"/>
+	</target>
+
+
+	<target name="stun" depends="init,compile_stun,jar_stun"/>
+	<target name="compile_stun" depends="init">
+        <javac srcdir="${lib_src_dir}" destdir="${classes_dir}"
+            debug="${debug}" optimize="${optimize}"
+            deprecation="${deprecation}">
+        	<include name="stun/**/*.java"/>
+            <classpath refid="PCSim2_classpath"/>
+        </javac>
+	</target>
+	<target name="jar_stun" depends="init,compile_stun">
+		<jar destfile="${stun_jar}" compress="yes">
+			<fileset dir="${classes_dir}">
+				<include name="com/cablelabs/stun/**/*.class"/>
+			</fileset>
+		</jar>
+	</target>
+
+	<target name="utils" depends="init,compile_utils,jar_utils,sdt"/>
+	<target name="compile_utils" depends="init">
+        <javac srcdir="${lib_src_dir}" destdir="${classes_dir}"
+            debug="${debug}" optimize="${optimize}"
+            deprecation="${deprecation}">
+            <include name="capture/**/*.java"/>
+        	<include name="common/**/*.java"/>
+        	<include name="logger/com/cablelabs/**/*.java"/>
+        	<include name="utility/**/*.java"/>
+            <classpath refid="PCSim2_classpath"/>
+        </javac>
+	</target>
+	<target name="jar_utils" depends="init,compile_utils">
+		<jar destfile="${common_jar}" compress="yes">
+		            <fileset dir="${classes_dir}">
+		                <include name="com/cablelabs/common/**/*.class"/>
+		            </fileset>
+		</jar>
+		<jar destfile="${logger_jar}">
+		            <fileset dir="${classes_dir}">
+		                <include name="com/cablelabs/log/**/*.class"/>
+		            </fileset>
+		</jar>
+		<jar destfile="${capture_jar}">
+		            <fileset dir="${classes_dir}">
+		                <include name="com/cablelabs/capture/**/*.class"/>
+		            </fileset>
+		</jar>
+		<jar destfile="${utility_jar}">
+            <fileset dir="${classes_dir}">
+                <include name="com/cablelabs/utility/**/*.class"/>
+            </fileset>
+        </jar>
+	</target>
+    
+    <target name="provgen" depends="init,compile_provgen,jar_provgen"/>
+	<target name="compile_provgen" depends="init">
+        <javac srcdir="${lib_src_dir}" destdir="${classes_dir}"
+            debug="${debug}" optimize="${optimize}"
+            deprecation="${deprecation}">
+            <include name="provgen/**/*.java"/>
+            <classpath refid="PCSim2_classpath"/>
+        </javac>
+	</target>
+	<target name="jar_provgen" depends="init,compile_utils">
+		<jar destfile="${provgen_jar}" compress="yes">
+            <fileset dir="${classes_dir}">
+                <include name="com/cablelabs/provgen/**/*.class"/>
+            </fileset>
+		</jar>
+	</target>
+
+    <target name="sdt" depends="init,compile_sdt,jar_sdt"/>
+	<target name="compile_sdt" depends="init">
+        <javac srcdir="${lib_src_dir}" destdir="${classes_dir}"
+            debug="${debug}" optimize="${optimize}"
+            deprecation="${deprecation}">
+            <include name="seqdiagram/com/cablelabs/diagram/**/*.java"/>
+            <classpath refid="PCSim2_classpath"/>
+        </javac>
+	</target>
+	<target name="jar_sdt" depends="init,compile_sdt">
+        <jar destfile="${sdt_jar}" manifest="${sdt_mf}" compress="yes">
+            <fileset dir="${classes_dir}">
+                <include name="com/cablelabs/diagram/**/*.class"/>
+            </fileset>
+        </jar>
+	</target>
+
+	<target name="pcsim2i" depends="pcsim2">
+		<copy todir="C:\PCSim2\bin" file="${main_jar}"/>
+	</target>
+	<target name="pcsim2" depends="init,compile_pcs,jar_pcs,jar_parser, sdt"/>
+	<target name="compile_pcs" depends="init">
+        <javac srcdir="${src_dir}" destdir="${classes_dir}"
+            debug="${debug}" optimize="${optimize}"
+            deprecation="${deprecation}">
+            <include name="com/cablelabs/**/*.java"/>
+            <include name="gov/**/*.java"/>
+            <include name="javax/**/*.java"/>
+            <classpath refid="PCSim2_classpath"/>
+        </javac>
+		<copy todir="${classes_dir}">
+			<fileset dir="${src_dir}">
+				<include name="images/**/*"/>
+				<include name="com/cablelabs/gui/images/**/*"/>
+			</fileset>
+		</copy>
+	</target>
+	<target name="jar_pcs" depends="init,compile_pcs">
+		<jar destfile="${main_jar}" manifest="${pcsim2_mf}" compress="yes">
+            <fileset dir="${classes_dir}">
+                <include name="images/**/*"/>
+                <include name="com/cablelabs/fsm/**/*.class"/>
+                <include name="com/cablelabs/gui/**/*.class"/>
+                <include name="com/cablelabs/gui/images/**/*"/>
+                <include name="com/cablelabs/models/**/*.class"/>
+                <include name="com/cablelabs/parser/**/*.class"/>
+                <include name="com/cablelabs/sim/**/*.class"/>
+                <include name="com/cablelabs/sip/**/*.class"/>
+                <include name="com/cablelabs/tools/**/*.class"/>
+
+                <include name="gov/nist/core/**/*.class"/>
+                <include name="gov/nist/javax/**/*.class"/>
+                <include name="javax/sdp/**/*.class"/>
+                <include name="javax/sip/**/*.class"/>
+            </fileset>
+        </jar>
+		<copy file="${main_jar}" tofile="${main_install_jar}"/>
+	</target>
+	<target name="jar_parser" depends="init,compile_pcs">
+		<jar destfile="${parser_jar}" manifest="${parser_mf}" compress="yes">
+            <fileset dir="${classes_dir}">
+                <include name="com/cablelabs/fsm/**/*.class"/>
+                <include name="com/cablelabs/gui/scripts/**/*.class"/>
+                <include name="com/cablelabs/parser/**/*.class"/>
+                <include name="com/cablelabs/tools/**/*.class"/>
+            </fileset>
+        </jar>
+	</target>
+
+	<target name="testsvn" depends="init_props">
+		<taskdef name="svn" classname="org.tigris.subversion.svnant.SvnTask">
+			<classpath>
+				<fileset dir="${basedir}/external/svn">
+					<include name="*.jar"/>
+				</fileset>
+			</classpath>
+		</taskdef>	
+		<svn javahl="true">
+				<export srcUrl="https://devzone.cablelabs.com/svn/pc/PC-2.0/development/CL/Templates" destPath="workingcopy" />
+		</svn> 
+		
+	</target>
+
+
+	<target name="package_pcs" depends="init,pcsim2,prep_dist,pkg_win,pkg_linux"/>
+	<target name="prep_dist" depends="init,pcsim2">
+		<copy file="${pcsim2_js}" todir="${dist_dir}"/>
+		<copy todir="${dist_dir}/build">
+			<fileset dir="${build_dir}">
+				<include name="**/*"/>
+			</fileset>
+		</copy>
+		<copy todir="${dist_dir}/bin">
+			<fileset dir="${bin_dir}">
+				<include name="**/*"/>
+			</fileset>
+		</copy>
+		<copy todir="${dist_dir}/config">
+			<fileset dir="${config_dir}">
+				<include name="**/*"/>
+			</fileset>
+		</copy>
+		<copy todir="${dist_dir}/docs">
+			<fileset dir="${docs_dir}">
+				<include name="**/*"/>
+			</fileset>
+		</copy>
+		<copy todir="${dist_dir}/lib">
+			<fileset dir="${lib_dir}">
+				<include name="**/*.jar"/>
+			</fileset>
+		</copy>
+		<copy todir="${dist_dir}/logs">
+			<fileset dir="${logs_dir}">
+				<include name="**/*"/>
+			</fileset>
+		</copy>
+		<copy todir="${dist_dir}/src/images">
+			<fileset dir="${images_dir}">
+				<include name="**/*"/>
+			</fileset>
+		</copy>
+		<chmod dir="${dist_dir}/build" 
+			perm="ugo+rx,u+w,go-w" includes="**/*.sh"/>
+		<chmod dir="${dist_dir}/bin" 
+			perm="ugo+rx,u+w,go-w" includes="**/*.sh"/>
+	</target>
+
+	<target name="pkg_win" depends="init,pcsim2,prep_dist" if="oswin">
+		<taskdef name="jsmoothgen" 
+			classpath="${jsant_jar}"
+			classname="net.charabia.jsmoothgen.ant.JSmoothGen"/>
+		<taskdef name="izpack" 
+			classpath="${izant_jar}"
+			classname="com.izforge.izpack.ant.IzPackTask"/>
+
+		<izpack input="${dist_izpack_install_xml}" output="${dist_main_install_jar}" basedir="${dist_dir}/build"/>
+		<jsmoothgen project="${dist_pcsim2_js}" skeletonroot="${jshome}/skeletons"/>
+        <copy file="${dist_setup_exe}" todir="${basedir}" />
+        <zip destfile="${setup_exe}.zip" basedir="${basedir}" includes="${setup_exe_name}" />
+        
+
+	</target>
+
+	<target name="pkg_linux" depends="init,pcsim2,prep_dist" if="oslinux">
+		<taskdef name="izpack" 
+			classpath="${izant_jar}"
+			classname="com.izforge.izpack.ant.IzPackTask"/>
+
+		<izpack input="${dist_izpack_install_xml_linux}" 
+			output="${dist_main_install_jar}" basedir="${dist_dir}/build"/>
+
+		<echo message="Building linux self-extracting bin file"/>
+		<replace file="${dist_install_pcsim2_sk_sh}" 
+			token="IZPACK_JAR_FILE_NAME" value="${installer_jar_name}"/>
+		<chmod file="${dist_install_pcsim2_sk_sh}" perm="ugo+rx,u+w,go-w" />
+		<exec executable="${dist_install_pcsim2_sk_sh}">
+			<arg value="self-install"/>
+		</exec>
+		<copy file="${dist_setup_bin}" todir="${basedir}" />
+		<chmod file="${setup_bin}" perm="ugo+rx,u+w,go-w" />
+
+	</target>
+
+	<target name="build" depends="init,pcsim2,package_pcs"/>
+
+</project>

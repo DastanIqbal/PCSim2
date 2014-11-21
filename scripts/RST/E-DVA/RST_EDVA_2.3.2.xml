@@ -1,0 +1,106 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	PCPCII-139 : Update the Voicetronix modifiers to use the new values. (ghassler 07/10/2009)
+
+
+
+
+-->
+
+<!-- First are the document type and the attributes for our document -->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-EDVA 2.3.2" 
+	descrip="DTMF Digit Collection" 
+	number="RST-EDVA 2.3.2">
+  <template file="./templates/CallOrigAtUETemp.xml" name="UE1" />
+ 
+  <remove_from fsm="UE1">
+      <state ID="Setup" />
+  </remove_from>
+
+  <add_to fsm="UE1">
+   
+    <state ID="Setup">
+      <prelude once="true">
+        <log expr="Execute Step 1 of UE originating case by dialing DTMF digits according to the provisioned sample digit map." />
+        <send protocol="utility" msgtype="DialDigits">
+          <mod modtype="add" hdr="number">
+            <msg_ref type="platform">UE1.phone number 1</msg_ref>
+          </mod>
+        </send>
+      </prelude>
+      <response>
+        <!-- If the current message that we received is an Invite, answer with
+               a 100-trying -->
+        <!-- Step 2 in the Call-Orig-at_UE(DUT) Default Message Flow document. -->
+        <if>
+          <eq>
+            <msg_ref type="sip">Request</msg_ref>
+            <expr>Invite</expr>
+          </eq>
+          <then>
+            <send protocol="sip" msgtype="100-INVITE" />
+             <verify step="1" requirements="REQ14605, REQ14606">
+		          <eq>
+		            <msg_ref type="sip">INVITE.Request-Line.username</msg_ref>
+		            <msg_ref type="platform">UE1.phone number 1</msg_ref>
+		          </eq>
+		        </verify>
+          </then>
+        </if>
+        <!-- This set of tests determines whether to send 183 with Answer
+						 or a 180 to the INVITE -->
+        <!-- Step 3 in the Call-Orig-at_UE(DUT) Default Message Flow document. -->
+        <if>
+          <and>
+            <eq>
+              <msg_ref type="extensions">precondition</msg_ref>
+              <expr>require</expr>
+            </eq>
+            <or>
+              <contains>
+                <msg_ref type="sip" hdr_instance="any">Invite.Require</msg_ref>
+                <expr>precondition</expr>
+              </contains>
+              <contains>
+                <msg_ref type="sip" hdr_instance="any">Invite.Supported</msg_ref>
+                <expr>precondition</expr>
+              </contains>
+            </or>
+          </and>
+          <then>
+            <!--Sending 183-Invite with answer-->
+            <sleep time="200" />
+            <send protocol="sip" msgtype="183-Invite" />
+          </then>
+          <elseif>
+            <eq>
+              <msg_ref type="sip">Request</msg_ref>
+              <expr>Invite</expr>
+            </eq>
+            <then>
+              <!--Sending 180-Invite with SS not supporting precondition.-->
+              <sleep time="200" />
+              <send protocol="sip" msgtype="180-Invite" />
+            </then>
+          </elseif>
+        </if>
+      </response>
+     
+      <!-- Transitions for Setup state -->
+       <transition to="Setup" event="DialDigitsComplete" />
+       <transition to="Alerting" event="INVITE" />
+    </state>
+  </add_to>
+</pc2xml>

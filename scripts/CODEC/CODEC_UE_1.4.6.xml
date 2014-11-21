@@ -1,0 +1,157 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="CODEC-MEDIA_1.4.6" 
+	descrip="UE Terminating-Negotiation Adherence" 
+	number="CODEC-MEDIA_1.4.6">
+	
+	<template file="./templates/CallTermAtUETemp.xml" name="UE1"/>
+
+	<remove_from fsm="UE1">
+		<state ID="Connected"/>
+	</remove_from>
+
+	<add_to fsm="UE1">
+		<state ID="Connected" timer="30000">
+			<prelude once="true">
+				<send protocol="sip" msgtype="ACK"/>
+			</prelude>
+			<response>
+				<if>
+					<and>
+						<eq>
+							<msg_ref type="event"/>
+							<expr>DIALOG_CONFIRMED_UAC</expr>
+						</eq>
+						<contains>
+							<msg_ref type="sip" msg_instance="last">18x-Invite.SDP</msg_ref>
+							<expr>m=audio</expr>
+						</contains>
+					</and>
+					<then>
+						<var name="answer">
+							<msg_ref type="sip" msg_instance="last">18x-Invite.SDP</msg_ref>
+						</var>
+					</then>
+					<elseif>
+						<and>
+							<eq>
+								<msg_ref type="event"/>
+								<expr>DIALOG_CONFIRMED_UAC</expr>
+							</eq>
+							<contains>
+								<msg_ref type="sip" msg_instance="last">200-UPDATE.SDP</msg_ref>
+								<expr>m=audio</expr>
+							</contains>
+						</and>
+						<then>
+							<var name="answer">
+								<msg_ref type="sip" msg_instance="last">200-UPDATE.SDP</msg_ref>
+							</var>
+						</then>
+					</elseif>
+					<elseif>
+						<and>
+							<eq>
+								<msg_ref type="event"/>
+								<expr>DIALOG_CONFIRMED_UAC</expr>
+							</eq>
+							<contains>
+								<msg_ref type="sip" msg_instance="last">200-Invite.SDP</msg_ref>
+								<expr>m=audio</expr>
+							</contains>
+						</and>
+						<then>
+							<var name="answer">
+								<msg_ref type="sip" msg_instance="last">200-INVITE.SDP</msg_ref>
+							</var>
+						</then>
+					</elseif>
+				</if>
+				<if>
+					<eq>
+						<msg_ref type="event"/>
+						<expr>DIALOG_CONFIRMED_UAC</expr>
+					</eq>
+					<then>
+						<!--  STEPS 1 -->
+						<verify step="1" requirements="RFC2287">
+							<and>
+								<eq>
+									<msg_ref type="sdp" msg_instance="first">INVITE.t.start</msg_ref>
+									<var_ref name="answer" protocol="sdp" hdr="t" param="start"/>
+								</eq>
+								<eq>
+									<msg_ref type="sdp" msg_instance="first">INVITE.t.stop</msg_ref>
+									<var_ref name="answer" protocol="sdp" hdr="t" param="stop"/>
+								</eq>
+							</and>
+						</verify>
+						<var name="ip">
+							<var_ref name="answer" protocol="sdp" hdr="c" param="address"/>
+						</var>
+						<!-- STEP 2 -->
+						<log promptUser="true" verify="true" yesExpected="false" step="2" requirements="RFC2292"
+								expr="Does the IP address $ip fall into the 224.0.0.0 to 239.255.255.255 range of addresses\nor does it end with a x.y.255.255 address?"/>
+												
+						<!--  STEPS 3 -->
+						<verify step="3" requirements="RFC2293">
+							<or>
+								<and>
+									<eq>
+										<msg_ref type="sip" msg_instance="first">INVITE.Content-Type.media-type</msg_ref>
+										<msg_ref type="sip" msg_instance="last">18x-INVITE.Content-Type.media-type</msg_ref>
+									</eq>
+									<eq>
+										<msg_ref type="sip" msg_instance="first">INVITE.Content-Type.media-subtype</msg_ref>
+										<msg_ref type="sip" msg_instance="last">18x-INVITE.Content-Type.media-subtype</msg_ref>
+									</eq>
+								</and>
+								<or>
+									<and>
+										<eq>
+											<msg_ref type="sip" msg_instance="first">INVITE.Content-Type.media-type</msg_ref>
+											<msg_ref type="sip" msg_instance="last">200-UPDATE.Content-Type.media-type</msg_ref>
+										</eq>
+										<eq>
+											<msg_ref type="sip" msg_instance="first">INVITE.Content-Type.media-subtype</msg_ref>
+											<msg_ref type="sip" msg_instance="last">200-UPDATE.Content-Type.media-subtype</msg_ref>
+										</eq>
+									</and>
+									<and>
+										<eq>
+											<msg_ref type="sip" msg_instance="first">INVITE.Content-Type.media-type</msg_ref>
+											<msg_ref type="sip" msg_instance="last">200-INVITE.Content-Type.media-type</msg_ref>
+										</eq>
+										<eq>
+											<msg_ref type="sip" msg_instance="first">INVITE.Content-Type.media-subtype</msg_ref>
+											<msg_ref type="sip" msg_instance="last">200-INVITE.Content-Type.media-subtype</msg_ref>
+										</eq>
+									</and>
+								</or>
+							</or>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<transition to="Connected" event="OffHookComplete"/>
+			<transition to="Releasing" event="TimerExpired"/>
+		</state>
+	</add_to>
+</pc2xml>

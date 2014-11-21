@@ -1,0 +1,132 @@
+#//****************************************************************************
+#// Filename: E-UE-DATA_1-2-5-5.test
+#// Author:   Matthew Forbes
+#// Creation Date: 11/13/2008
+#// Modified by:
+#//
+#//
+#//
+#//****************************************************************************
+#// Description:
+#//     TC2739 TEST CASE E-UE-DATA 1.2.5.5 Ability of eUE to Support USM User Cloning
+#//       
+#//
+#// Objective:
+#//     This test verifies the eUE supports ability to create a new user by cloning from an existing in the
+#//     USM User Table. The procedure documented in RFC 2574 us used to accomplish this using SNMPv3.
+#//     
+#//
+#// PacketCable DUT:
+#//     EDVA
+#//
+#// Test Steps:
+#//     - Initial configuration
+#//     - Start sniffer
+#//     - Reset EDVA
+#//     - Check Provisioning state
+#//     - Check values MIB values
+#//     - Check read-write capablities
+#//     - Stop Sniffer
+#//
+#// Notes:
+#//     - Requires provPrimitives.tcl & tftp_primitives.tcl.
+#//     - Requires the specific config file in $BASE_CFG_FILE_PATH in Provisioning Server.
+#//****************************************************************************
+
+set SCRIPT_VERSION { # $Id: E-UE-DATA_1-2-5-5.test 7406 2010-07-20 17:17:37Z dthakore $ }
+global SCRIPT_VERSION
+
+DoStep "E-UE-DATA_1-2-5-5_1-1" "Configure DUT" {
+    LogMsg "--- Configure DUT ---"
+    Init_PROV
+    PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122 Device_Level_Secure.cfg
+    PROV_SNMP_PRIV_PROTO DES
+    PROV_DEPLOY_DHCP
+} {PASS_STEP}
+
+################################# START SNIFFER ###############################
+
+DoStep "E-UE-DATA_1-2-5-5_1-3" "Start sniffer" {
+    LogMsg "--- Start sniffer ---"
+    Init_CONTROLLER_LAN
+    SetupCaptureControllerLan "host $MTA_IP || udp port 67 || host $CM_IP"
+    StartCaptureControllerLan
+} {PASS_STEP}
+
+################ RESET CM and MTA and VERIFY PROVISIONING STATE ################
+
+DoStep "E-UE-DATA_1-2-5-5_2-1" "Reset EDVA" {
+    set val [SNMPvN_RESET $CM_IP]
+    LogMsg "Reset of CM and DVA has passed"
+} {
+    IsEqual $val 0
+}
+DoStep "E-UE-DATA_1-2-5-5_2-2" "pktcMtaDevProvisioningState Content Verification" {
+    actionWait "Wait for EDVA to reboot" 60
+    # Get the OID from the EDVA and check it using our previously defined
+    set val [SNMP_GET $oid_pktcMtaDevProvisioningState $MTA_IP 20]
+    LogMsg "The Value of EDVA Provisioning State is: $val"
+} {
+    IsEqual $val 1
+}
+
+
+DoStep  "E-UE-DATA_1-2-5-5_3_thru_20" "Clone User" {
+    LogMsg "** User Cloning **"
+    LogMsg "\t** Step-1/5 GET usmUserSpinLock.0 and Save Value in sValue"
+    LogMsg "\t** Step 2/5 SET usmUserSpinLock.0=sValue, usmUserCloneFrom=templateUser, usmUserStatus=createAndWait"
+    LogMsg "\t** Step 3/5 SET usmUserPrivProtocol=usmNoPrivProtocol"
+    LogMsg "\t** Step 4/5 SET usmUserAuthProtocol=usmNoAuthProtocol"
+    LogMsg "\t** Step 5/5 SET usmUserStatus=active"
+    
+    ## Use API that has script built in
+} {
+
+    # Once you have completed this, check the usmUserTable and verify that the user MAC address you created is in the list.
+    #
+    # UsmUserTable=.1.3.6.1.6.3.15.1.2.2
+    #
+    #
+    #
+    # Note: This functionality requires a SNMPv3 API that has a 'script' for cloning users that uses the command 'clonenewuser'"
+    set val [SNMP_CLONE MTA-Prov-01:23:45:67:89:10 $MTA_IP]
+    IsEqual $val 0
+    LogMsg "---Does the new user exist in the table?---"
+    set val [SNMP_TABLE_GET .1.3.6.1.6.3.15.1.2.2 $MTA_IP all]
+    set val [regexp MTA-Prov-01:23:45:67:89:10 $val]
+    IsEqual $val 1
+}
+
+
+DoStep "E-UE-DATA_1-2-5-5_21-1" "Stop and Save Capture" {
+    LogMsg "--- Stopping Sniffer ---" 49
+    StopCaptureControllerLan
+    SaveToFileControllerLan "STEP-10"
+} {
+    PASS_STEP
+}
+
+DoStep "E-UE-DATA_1-2-5-5_21-2" "Configure DUT" {
+    LogMsg "--- Configure DUT ---"
+    PROV_SNMP_PRIV_PROTO NULL
+    PROV_DEPLOY_DHCP
+} {PASS_STEP}
+
+################ RESET CM and MTA and VERIFY PROVISIONING STATE ################
+
+DoStep "E-UE-DATA_1-2-5-5_22-1" "Reset EDVA" {
+    set val [SNMPvN_RESET $CM_IP]
+    LogMsg "Reset of CM and DVA has passed"
+} {
+    IsEqual $val 0
+}
+DoStep "E-UE-DATA_1-2-5-5_22-2" "pktcMtaDevProvisioningState Content Verification" {
+    actionWait "Wait for EDVA to reboot" 60
+    # Get the OID from the EDVA and check it using our previously defined
+    set val [SNMP_GET $oid_pktcMtaDevProvisioningState $MTA_IP 20]
+    LogMsg "The Value of EDVA Provisioning State is: $val"
+} {
+    IsEqual $val 1
+}
+
+Cleanup

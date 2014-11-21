@@ -1,0 +1,1732 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+ Change History: (Author & Date)
+
+-->
+
+<pc2xml version="$Revision: 8188 $" name="RST_E-UE_PROV 3.1.3.1"
+		descrip="Ability of RST eUE to Provision With a Compliant Configuration File"
+		number="RST_E-UE_PROV 3.1.3.1">
+
+	<!-- Next we define the each of state machines -->
+	<template file="./templates/EUE_Prov_B_1_1_1.xml" name="RebootCM"/>
+
+	<add_to fsm="RebootCM">
+		<transition from="StartCapture_RebootWait" to="VerifyProvision" event="TimerExpired"/>
+		
+		<state ID="VerifyProvision">
+			<prelude>
+				<send protocol="utility" msgtype="SNMPGet">
+					<mod modtype="add" hdr="oids">
+						<expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvisioningState.0</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="2">
+					<eq>
+						<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+						<expr>1</expr>
+					</eq>
+				</verify>
+			</response>
+			<transition to="GetProfileVersion" event="SNMPResp"/>
+			<transition to="GetProfileVersion" event="SNMPRespFailure"/>
+		</state>
+		
+		<state ID="GetProfileVersion">
+			<prelude>
+				<send protocol="utility" msgtype="SNMPGet">
+					<mod modtype="add" hdr="oids">
+						<expr>CL-PKTC-EUE-RST-MIB::pktcEUERSTProfileVersion.9</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="3">
+					<!-- Test for pktcEUERSTProfileVersion  -->
+					<eq>
+						<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+						<expr>1.0</expr>
+					</eq>
+				</verify>
+			</response>
+			<transition to="SetProfileVersion" event="SNMPResp"/>
+			<transition to="SetProfileVersion" event="SNMPRespFailure"/>
+		</state>
+		
+		<state ID="SetProfileVersion">
+			<prelude>
+				<send protocol="utility" msgtype="SNMPSet">
+					<mod modtype="add" hdr="array">
+						<var_expr>
+							<expr>varBind 1 1 3 \r\n ][ , </expr>
+							<expr>CL-PKTC-EUE-RST-MIB::pktcEUERSTProfileVersion.9,INTEGER,2.0][\r\n</expr>
+						</var_expr>
+					</mod>
+					<mod modtype="replace" hdr="version">
+						<expr>3</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="4">
+					<!-- Test for pktcEUERSTProfileVersion  -->
+					<eq>
+						<msg_ref type="utility" index="0 0 2">SNMPRespFailure.varBind</msg_ref>
+						<expr>17</expr>
+					</eq>
+				</verify>
+			</response>
+			<transition to="GetProfileFeatTable" event="SNMPResp"/>
+			<transition to="GetProfileFeatTable" event="SNMPRespFailure"/>
+		</state>
+		
+		<state ID="GetProfileFeatTable">
+		<prelude>
+				<send protocol="utility" msgtype="SNMPGetTable">
+					<mod modtype="add" hdr="oids">
+						<expr>CL-PKTC-EUE-RST-MIB::pktcEUERSTAppProfileToFeatTable</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="5">
+					<and>
+						<!--  Test for pktcEUERSTAppFeatID  -->
+						<eq>
+							<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+							<expr>2</expr>
+						</eq>
+					<and>
+						<!--  Test for pktcEUERSTAppFeatID  -->
+						<eq>
+							<msg_ref type="utility" index="1 0 2">SNMPResp.varBind</msg_ref>
+							<expr>3</expr>
+						</eq>
+					<and>
+						<!--  Test for pktcEUERSTAppFeatID  -->
+						<eq>
+							<msg_ref type="utility" index="2 0 2">SNMPResp.varBind</msg_ref>
+							<expr>32</expr>
+						</eq>
+					<and>
+						<!--  Test for pktcEUERSTAppFeatID  -->
+						<eq>
+							<msg_ref type="utility" index="3 0 2">SNMPResp.varBind</msg_ref>
+							<expr>100</expr>
+						</eq>
+					<and>
+						<!--  Test for pktcEUERSTAppFeatID  -->
+						<eq>
+							<msg_ref type="utility" index="4 0 2">SNMPResp.varBind</msg_ref>
+							<expr>200</expr>
+						</eq>
+					<and>
+						<!-- Test for pktcEUERSTAppFeatIndexRef  -->
+						<eq>
+							<msg_ref type="utility" index="0 1 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					<and>
+						<!-- Test for pktcEUERSTAppFeatIndexRef  -->
+						<eq>
+							<msg_ref type="utility" index="1 1 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					<and>
+						<!-- Test for pktcEUERSTAppFeatIndexRef  -->
+						<eq>
+							<msg_ref type="utility" index="2 1 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					<and>
+						<!-- Test for pktcEUERSTAppFeatIndexRef  -->
+						<eq>
+							<msg_ref type="utility" index="3 1 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					<and>
+						<!-- Test for pktcEUERSTAppFeatIndexRef  -->
+						<eq>
+							<msg_ref type="utility" index="4 1 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					<and>
+						<!-- Test for pktcEUERSTAppAdminStat  -->
+						<eq>
+							<msg_ref type="utility" index="0 2 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					<and>
+						<!-- Test for pktcEUERSTAppAdminStat  -->
+						<eq>
+							<msg_ref type="utility" index="1 2 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					<and>
+						<!-- Test for pktcEUERSTAppAdminStat  -->
+						<eq>
+							<msg_ref type="utility" index="2 2 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					<and>
+						<!-- Test for pktcEUERSTAppAdminStat  -->
+						<eq>
+							<msg_ref type="utility" index="3 2 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					<and>
+						<!-- Test for pktcEUERSTAppAdminStat  -->
+						<eq>
+							<msg_ref type="utility" index="4 2 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					<and>
+						<!-- Test for pktcEUERSTAppAdminStatInfo  -->
+						<notnull>
+							<msg_ref type="utility" index="0 3 2">SNMPResp.varBind</msg_ref>
+						</notnull>
+					<and>
+						<!-- Test for pktcEUERSTAppAdminStatInfo  -->
+						<notnull>
+							<msg_ref type="utility" index="1 3 2">SNMPResp.varBind</msg_ref>
+						</notnull>
+					<and>
+						<!-- Test for pktcEUERSTAppAdminStatInfo  -->
+						<notnull>
+							<msg_ref type="utility" index="2 3 2">SNMPResp.varBind</msg_ref>
+						</notnull>
+					<and>
+						<!-- Test for pktcEUERSTAppAdminStatInfo  -->
+						<notnull>
+							<msg_ref type="utility" index="3 3 2">SNMPResp.varBind</msg_ref>
+						</notnull>
+					<and>
+						<!-- Test for pktcEUERSTAppAdminStatInfo  -->
+						<notnull>
+							<msg_ref type="utility" index="4 3 2">SNMPResp.varBind</msg_ref>
+						</notnull>
+					<and>
+						<!-- Test for pktcEUERSTAppOperStat  -->
+						<eq>
+							<msg_ref type="utility" index="0 4 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					<and>
+						<!-- Test for pktcEUERSTAppOperStat  -->
+						<eq>
+							<msg_ref type="utility" index="1 4 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					<and>
+						<!-- Test for pktcEUERSTAppOperStat  -->
+						<eq>
+							<msg_ref type="utility" index="2 4 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					<and>
+						<!-- Test for pktcEUERSTAppOperStat  -->
+						<eq>
+							<msg_ref type="utility" index="3 4 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					<and>
+						<!-- Test for pktcEUERSTAppOperStat  -->
+						<eq>
+							<msg_ref type="utility" index="4 4 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					<and>
+						<!--  Test for pktcEUERSTAppOperStatInfo  -->
+						<notnull>
+							<msg_ref type="utility" index="0 5 2">SNMPResp.varBind</msg_ref>
+						</notnull>
+					<and>
+						<!--  Test for pktcEUERSTAppOperStatInfo  -->
+						<notnull>
+							<msg_ref type="utility" index="1 5 2">SNMPResp.varBind</msg_ref>
+						</notnull>
+					<and>
+						<!--  Test for pktcEUERSTAppOperStatInfo  -->
+						<notnull>
+							<msg_ref type="utility" index="2 5 2">SNMPResp.varBind</msg_ref>
+						</notnull>
+					<and>
+						<!--  Test for pktcEUERSTAppOperStatInfo  -->
+						<notnull>
+							<msg_ref type="utility" index="3 5 2">SNMPResp.varBind</msg_ref>
+						</notnull>
+					<and>
+						<!--  Test for pktcEUERSTAppOperStatInfo  -->
+						<notnull>
+							<msg_ref type="utility" index="4 5 2">SNMPResp.varBind</msg_ref>
+						</notnull>
+					<and>
+						<!-- Test for pktcEUERSTAppStatus  -->
+						<eq>
+							<msg_ref type="utility" index="0 6 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					<and>
+						<!-- Test for pktcEUERSTAppStatus  -->
+						<eq>
+							<msg_ref type="utility" index="1 6 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					<and>
+						<!-- Test for pktcEUERSTAppStatus  -->
+						<eq>
+							<msg_ref type="utility" index="2 6 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					<and>
+						<!-- Test for pktcEUERSTAppStatus  -->
+						<eq>
+							<msg_ref type="utility" index="3 6 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					    <!-- Test for pktcEUERSTAppStatus  -->
+						<eq>
+							<msg_ref type="utility" index="4 6 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+				</verify>
+			</response>
+			<transition to="SetFeatID" event="SNMPResp"/>
+			<transition to="SetFeatID" event="SNMPRespFailure"/>
+		</state>
+		
+		<state ID="SetFeatID">
+			<prelude>
+				<send protocol="utility" msgtype="SNMPSet">
+					<mod modtype="add" hdr="array">
+						<var_expr>
+							<expr>varBind 1 1 3 \r\n ][ , </expr>
+							<expr>CL-PKTC-EUE-RST-MIB::pktcEUERSTAppFeatID.9,INTEGER,3][\r\n</expr>
+						</var_expr>
+					</mod>
+					<mod modtype="replace" hdr="version">
+						<expr>3</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="6">
+					<!-- Test pktcEUERSTAppFeatID  is not writable -->
+					<eq>
+						<msg_ref type="utility" index="0 0 2">SNMPRespFailure.varBind</msg_ref>
+						<expr>2</expr>
+					</eq>
+				</verify>
+			</response>
+			<transition to="SetFeatIndexRef" event="SNMPResp"/>
+			<transition to="SetFeatIndexRef" event="SNMPRespFailure"/>
+		</state>
+		
+		<state ID="SetFeatIndexRef">
+			<prelude>
+				<send protocol="utility" msgtype="SNMPSet">
+					<mod modtype="add" hdr="array">
+						<var_expr>
+							<expr>varBind 1 1 3 \r\n ][ , </expr>
+							<expr>CL-PKTC-EUE-RST-MIB::pktcEUERSTAppFeatIndexRef.9,UNSIGNED32,2][\r\n</expr>
+						</var_expr>
+					</mod>
+					<mod modtype="replace" hdr="version">
+						<expr>3</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="7">
+					<!-- Test pktcEUERSTAppFeatIndexRef is not writable -->
+					<eq>
+						<msg_ref type="utility" index="0 0 2">SNMPRespFailure.varBind</msg_ref>
+						<expr>2</expr>
+					</eq>
+				</verify>
+			</response>
+			<postlude>
+				<stop_capture/>
+			</postlude>
+			<transition to="EDVAIPv4Hybrid" event="SNMPResp"/>
+			<transition to="EDVAIPv4Hybrid" event="SNMPRespFailure"/>
+		</state>
+		
+		<state ID="EDVAIPv4Hybrid" provFile="MAC_H.bin" 
+				policyFile="3basic.cfg" nextState="Reboot2"/>
+				
+		<state ID="Reboot2" timer="10000">
+			<prelude once="true">
+				<start_capture>
+					<filter>
+						<var_expr>
+							<expr>host </expr>
+							<msg_ref type="platform">DUT.IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.CM IP Address</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.DHCP Gateway IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.DHCP CM Gateway IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.KDC IP Address</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.TFTP Server IP</msg_ref>
+						</var_expr>
+					</filter>
+				</start_capture>
+				<send protocol="utility" msgtype="SNMPSet">
+					<mod modtype="add" hdr="array">
+						<var_expr>
+								<expr>varBind 1 1 3 \r\n ][ , </expr>
+								<expr>DOCS-CABLE-DEVICE-MIB::docsDevResetNow.0,INTEGER,1][\r\n</expr>
+						</var_expr>
+					</mod>
+					<mod modtype="replace" hdr="agentip">
+						<msg_ref type="platform">DUT.CM IP Address</msg_ref>
+					</mod>
+					<!-- Always use version 2 for a CM reset -->
+					<mod modtype="replace" hdr="version">
+						<expr>2c</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="utility">Response</msg_ref>
+						<expr>SNMPRespFailure</expr>
+					</eq>
+					<then>
+						<fail/>
+					</then>
+				</if>
+				<if>
+					<or>
+						<eq>
+							<msg_ref type="sip">REGISTER.Contact.expires</msg_ref>
+							<expr>0</expr>
+						</eq>
+						<eq>
+							<msg_ref type="sip">REGISTER.Expires.value</msg_ref>
+							<expr>0</expr>
+						</eq>
+					</or>
+					<then>
+						<send protocol="sip" msgtype="200-REGISTER"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Reboot2" event="SNMPResp"/>
+			<transition to="Register2" event="TimerExpired"/>
+			<transition to="END" event="SNMPRespFailure"/>
+			<transition to="Reboot2" event="REGISTER"/>
+		</state>
+		
+		<state ID="Register2">
+			<transition to="Provisioned2" event="Registered"/>
+		</state>
+		
+		<state ID="Provisioned2">	
+			<prelude>
+				<send protocol="utility" msgtype="SNMPGet">
+					<mod modtype="add" hdr="oids">
+						<expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvisioningState.0</expr>
+					</mod>
+					<mod modtype="replace" hdr="version">
+						<expr>3</expr>
+					</mod>
+				</send>
+			</prelude>
+			<transition to="GetProfileVersion2" event="SNMPResp"/>
+			<transition to="GetProfileVersion2" event="SNMPRespFailure"/>
+		</state>
+		
+		<state ID="GetProfileVersion2">
+			<prelude>
+				<send protocol="utility" msgtype="SNMPGet">
+					<mod modtype="add" hdr="oids">
+						<expr>CL-PKTC-EUE-RST-MIB::pktcEUERSTProfileVersion.9</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="10-3">
+					<!-- Test for pktcEUERSTProfileVersion  -->
+					<eq>
+						<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+						<expr>1.0</expr>
+					</eq>
+				</verify>
+			</response>
+			<transition to="SetProfileVersion2" event="SNMPResp"/>
+			<transition to="SetProfileVersion2" event="SNMPRespFailure"/>
+		</state>
+		
+		<state ID="SetProfileVersion2">
+			<prelude>
+				<send protocol="utility" msgtype="SNMPSet">
+					<mod modtype="add" hdr="array">
+						<var_expr>
+							<expr>varBind 1 1 3 \r\n ][ , </expr>
+							<expr>CL-PKTC-EUE-RST-MIB::pktcEUERSTProfileVersion.9,INTEGER,2][\r\n</expr>
+						</var_expr>
+					</mod>
+					<mod modtype="replace" hdr="version">
+						<expr>3</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="10-4">
+					<!-- Test for pktcEUERSTProfileVersion  -->
+					<eq>
+						<msg_ref type="utility" index="0 0 2">SNMPRespFailure.varBind</msg_ref>
+						<expr>17</expr>
+					</eq>
+				</verify>
+			</response>
+			<transition to="GetProfileFeatTable2" event="SNMPResp"/>
+			<transition to="GetProfileFeatTable2" event="SNMPRespFailure"/>
+		</state>
+		
+		<state ID="GetProfileFeatTable2">
+		<prelude>
+				<send protocol="utility" msgtype="SNMPGetTable">
+					<mod modtype="add" hdr="oids">
+						<expr>CL-PKTC-EUE-RST-MIB::pktcEUERSTAppProfileToFeatTable</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="10-5">
+					<and>
+						<!--  Test for pktcEUERSTAppFeatID  -->
+						<eq>
+							<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+							<expr>2</expr>
+						</eq>
+					<and>
+						<!--  Test for pktcEUERSTAppFeatID  -->
+						<eq>
+							<msg_ref type="utility" index="1 0 2">SNMPResp.varBind</msg_ref>
+							<expr>3</expr>
+						</eq>
+					<and>
+						<!--  Test for pktcEUERSTAppFeatID  -->
+						<eq>
+							<msg_ref type="utility" index="2 0 2">SNMPResp.varBind</msg_ref>
+							<expr>32</expr>
+						</eq>
+					<and>
+						<!--  Test for pktcEUERSTAppFeatID  -->
+						<eq>
+							<msg_ref type="utility" index="3 0 2">SNMPResp.varBind</msg_ref>
+							<expr>100</expr>
+						</eq>
+					<and>
+						<!--  Test for pktcEUERSTAppFeatID  -->
+						<eq>
+							<msg_ref type="utility" index="4 0 2">SNMPResp.varBind</msg_ref>
+							<expr>200</expr>
+						</eq>
+					<and>
+						<!-- Test for pktcEUERSTAppFeatIndexRef  -->
+						<eq>
+							<msg_ref type="utility" index="0 1 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					<and>
+						<!-- Test for pktcEUERSTAppFeatIndexRef  -->
+						<eq>
+							<msg_ref type="utility" index="1 1 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					<and>
+						<!-- Test for pktcEUERSTAppFeatIndexRef  -->
+						<eq>
+							<msg_ref type="utility" index="2 1 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					<and>
+						<!-- Test for pktcEUERSTAppFeatIndexRef  -->
+						<eq>
+							<msg_ref type="utility" index="3 1 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					<and>
+						<!-- Test for pktcEUERSTAppFeatIndexRef  -->
+						<eq>
+							<msg_ref type="utility" index="4 1 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					<and>
+						<!-- Test for pktcEUERSTAppAdminStat  -->
+						<eq>
+							<msg_ref type="utility" index="0 2 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					<and>
+						<!-- Test for pktcEUERSTAppAdminStat  -->
+						<eq>
+							<msg_ref type="utility" index="1 2 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					<and>
+						<!-- Test for pktcEUERSTAppAdminStat  -->
+						<eq>
+							<msg_ref type="utility" index="2 2 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					<and>
+						<!-- Test for pktcEUERSTAppAdminStat  -->
+						<eq>
+							<msg_ref type="utility" index="3 2 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					<and>
+						<!-- Test for pktcEUERSTAppAdminStat  -->
+						<eq>
+							<msg_ref type="utility" index="4 2 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					<and>
+						<!-- Test for pktcEUERSTAppAdminStatInfo  -->
+						<notnull>
+							<msg_ref type="utility" index="0 3 2">SNMPResp.varBind</msg_ref>
+						</notnull>
+					<and>
+						<!-- Test for pktcEUERSTAppAdminStatInfo  -->
+						<notnull>
+							<msg_ref type="utility" index="1 3 2">SNMPResp.varBind</msg_ref>
+						</notnull>
+					<and>
+						<!-- Test for pktcEUERSTAppAdminStatInfo  -->
+						<notnull>
+							<msg_ref type="utility" index="2 3 2">SNMPResp.varBind</msg_ref>
+						</notnull>
+					<and>
+						<!-- Test for pktcEUERSTAppAdminStatInfo  -->
+						<notnull>
+							<msg_ref type="utility" index="3 3 2">SNMPResp.varBind</msg_ref>
+						</notnull>
+					<and>
+						<!-- Test for pktcEUERSTAppAdminStatInfo  -->
+						<notnull>
+							<msg_ref type="utility" index="4 3 2">SNMPResp.varBind</msg_ref>
+						</notnull>
+					<and>
+						<!-- Test for pktcEUERSTAppOperStat  -->
+						<eq>
+							<msg_ref type="utility" index="0 4 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					<and>
+						<!-- Test for pktcEUERSTAppOperStat  -->
+						<eq>
+							<msg_ref type="utility" index="1 4 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					<and>
+						<!-- Test for pktcEUERSTAppOperStat  -->
+						<eq>
+							<msg_ref type="utility" index="2 4 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					<and>
+						<!-- Test for pktcEUERSTAppOperStat  -->
+						<eq>
+							<msg_ref type="utility" index="3 4 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					<and>
+						<!-- Test for pktcEUERSTAppOperStat  -->
+						<eq>
+							<msg_ref type="utility" index="4 4 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					<and>
+						<!--  Test for pktcEUERSTAppOperStatInfo  -->
+						<notnull>
+							<msg_ref type="utility" index="0 5 2">SNMPResp.varBind</msg_ref>
+						</notnull>
+					<and>
+						<!--  Test for pktcEUERSTAppOperStatInfo  -->
+						<notnull>
+							<msg_ref type="utility" index="1 5 2">SNMPResp.varBind</msg_ref>
+						</notnull>
+					<and>
+						<!--  Test for pktcEUERSTAppOperStatInfo  -->
+						<notnull>
+							<msg_ref type="utility" index="2 5 2">SNMPResp.varBind</msg_ref>
+						</notnull>
+					<and>
+						<!--  Test for pktcEUERSTAppOperStatInfo  -->
+						<notnull>
+							<msg_ref type="utility" index="3 5 2">SNMPResp.varBind</msg_ref>
+						</notnull>
+					<and>
+						<!--  Test for pktcEUERSTAppOperStatInfo  -->
+						<notnull>
+							<msg_ref type="utility" index="4 5 2">SNMPResp.varBind</msg_ref>
+						</notnull>
+					<and>
+						<!-- Test for pktcEUERSTAppStatus  -->
+						<eq>
+							<msg_ref type="utility" index="0 6 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					<and>
+						<!-- Test for pktcEUERSTAppStatus  -->
+						<eq>
+							<msg_ref type="utility" index="1 6 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					<and>
+						<!-- Test for pktcEUERSTAppStatus  -->
+						<eq>
+							<msg_ref type="utility" index="2 6 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					<and>
+						<!-- Test for pktcEUERSTAppStatus  -->
+						<eq>
+							<msg_ref type="utility" index="3 6 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					    <!-- Test for pktcEUERSTAppStatus  -->
+						<eq>
+							<msg_ref type="utility" index="4 6 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+				</verify>
+			</response>
+			<transition to="SetFeatID2" event="SNMPResp"/>
+			<transition to="SetFeatID2" event="SNMPRespFailure"/>
+		</state>
+		
+		<state ID="SetFeatID2">
+			<prelude>
+				<send protocol="utility" msgtype="SNMPSet">
+					<mod modtype="add" hdr="array">
+						<var_expr>
+							<expr>varBind 1 1 3 \r\n ][ , </expr>
+							<expr>CL-PKTC-EUE-RST-MIB::pktcEUERSTAppFeatID.9,INTEGER,3][\r\n</expr>
+						</var_expr>
+					</mod>
+					<mod modtype="replace" hdr="version">
+						<expr>3</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="10-6">
+					<!-- Test pktcEUERSTAppFeatID  is not writable -->
+					<eq>
+						<msg_ref type="utility" index="0 0 2">SNMPRespFailure.varBind</msg_ref>
+						<expr>2</expr>
+					</eq>
+				</verify>
+			</response>
+			<transition to="SetFeatIndexRef2" event="SNMPResp"/>
+			<transition to="SetFeatIndexRef2" event="SNMPRespFailure"/>
+		</state>
+		
+		<state ID="SetFeatIndexRef2">
+			<prelude>
+				<send protocol="utility" msgtype="SNMPSet">
+					<mod modtype="add" hdr="array">
+						<var_expr>
+							<expr>varBind 1 1 3 \r\n ][ , </expr>
+							c<expr>CL-PKTC-EUE-RST-MIB::pktcEUERSTAppFeatIndexRef.9,UNSIGNED32,2][\r\n</expr>
+						</var_expr>
+					</mod>
+					<mod modtype="replace" hdr="version">
+						<expr>3</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="10-7">
+					<!-- Test pktcEUERSTAppFeatIndexRef is not writable -->
+					<eq>
+						<msg_ref type="utility" index="0 0 2">SNMPRespFailure.varBind</msg_ref>
+						<expr>2</expr>
+					</eq>
+				</verify>
+			</response>
+			<postlude>
+				<stop_capture/>
+			</postlude>
+			<transition to="EDVAIPv6Secure" event="SNMPResp"/>
+			<transition to="EDVAIPv6Secure" event="SNMPRespFailure"/>
+		</state>
+		
+		<state ID="EDVAIPv6Secure" provFile="MAC_S.bin" 
+				policyFile="3basic.cfg" nextState="Reboot3"/>
+				
+		<state ID="Reboot3" timer="10000">
+			<prelude once="true">
+				<start_capture>
+					<filter>
+						<var_expr>
+							<expr>host </expr>
+							<msg_ref type="platform">DUT.IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.CM IP Address</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.DHCP Gateway IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.DHCP CM Gateway IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.KDC IP Address</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.TFTP Server IP</msg_ref>
+						</var_expr>
+					</filter>
+				</start_capture>
+				<send protocol="utility" msgtype="SNMPSet">
+					<mod modtype="add" hdr="array">
+						<var_expr>
+								<expr>varBind 1 1 3 \r\n ][ , </expr>
+								<expr>DOCS-CABLE-DEVICE-MIB::docsDevResetNow.0,INTEGER,1][\r\n</expr>
+						</var_expr>
+					</mod>
+					<mod modtype="replace" hdr="agentip">
+						<msg_ref type="platform">DUT.CM IP Address</msg_ref>
+					</mod>
+					<!-- Always use version 2 for a CM reset -->
+					<mod modtype="replace" hdr="version">
+						<expr>2c</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="utility">Response</msg_ref>
+						<expr>SNMPRespFailure</expr>
+					</eq>
+					<then>
+						<fail/>
+					</then>
+				</if>
+				<if>
+					<or>
+						<eq>
+							<msg_ref type="sip">REGISTER.Contact.expires</msg_ref>
+							<expr>0</expr>
+						</eq>
+						<eq>
+							<msg_ref type="sip">REGISTER.Expires.value</msg_ref>
+							<expr>0</expr>
+						</eq>
+					</or>
+					<then>
+						<send protocol="sip" msgtype="200-REGISTER"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Reboot3" event="SNMPResp"/>
+			<transition to="Register3" event="TimerExpired"/>
+			<transition to="END" event="SNMPRespFailure"/>
+			<transition to="Reboot3" event="REGISTER"/>
+		</state>
+		
+		<state ID="Register3">
+			<transition to="Provisioned3" event="Registered"/>
+		</state>
+		
+		<state ID="Provisioned3">	
+			<prelude>
+				<send protocol="utility" msgtype="SNMPGet">
+					<mod modtype="add" hdr="oids">
+						<expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvisioningState.0</expr>
+					</mod>
+					<mod modtype="replace" hdr="version">
+						<expr>3</expr>
+					</mod>
+				</send>
+			</prelude>
+			<transition to="GetProfileVersion3" event="SNMPResp"/>
+			<transition to="GetProfileVersion3" event="SNMPRespFailure"/>
+		</state>
+		
+		<state ID="GetProfileVersion3">
+			<prelude>
+				<send protocol="utility" msgtype="SNMPGet">
+					<mod modtype="add" hdr="oids">
+						<expr>CL-PKTC-EUE-RST-MIB::pktcEUERSTProfileVersion.9</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="13-3">
+					<!-- Test for pktcEUERSTProfileVersion  -->
+					<eq>
+						<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+						<expr>1.0</expr>
+					</eq>
+				</verify>
+			</response>
+			<transition to="SetProfileVersion3" event="SNMPResp"/>
+			<transition to="SetProfileVersion3" event="SNMPRespFailure"/>
+		</state>
+		
+		<state ID="SetProfileVersion3">
+			<prelude>
+				<send protocol="utility" msgtype="SNMPSet">
+					<mod modtype="add" hdr="array">
+						<var_expr>
+							<expr>varBind 1 1 3 \r\n ][ , </expr>
+							<expr>CL-PKTC-EUE-RST-MIB::pktcEUERSTProfileVersion.9,INTEGER,2][\r\n</expr>
+						</var_expr>
+					</mod>
+					<mod modtype="replace" hdr="version">
+						<expr>3</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="13-4">
+					<!-- Test for pktcEUERSTProfileVersion  -->
+					<eq>
+						<msg_ref type="utility" index="0 0 2">SNMPRespFailure.varBind</msg_ref>
+						<expr>17</expr>
+					</eq>
+				</verify>
+			</response>
+			<transition to="GetProfileFeatTable3" event="SNMPResp"/>
+			<transition to="GetProfileFeatTable3" event="SNMPRespFailure"/>
+		</state>
+		
+		<state ID="GetProfileFeatTable3">
+		<prelude>
+				<send protocol="utility" msgtype="SNMPGetTable">
+					<mod modtype="add" hdr="oids">
+						<expr>CL-PKTC-EUE-RST-MIB::pktcEUERSTAppProfileToFeatTable</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="13-5">
+					<and>
+						<!--  Test for pktcEUERSTAppFeatID  -->
+						<eq>
+							<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+							<expr>2</expr>
+						</eq>
+					<and>
+						<!--  Test for pktcEUERSTAppFeatID  -->
+						<eq>
+							<msg_ref type="utility" index="1 0 2">SNMPResp.varBind</msg_ref>
+							<expr>3</expr>
+						</eq>
+					<and>
+						<!--  Test for pktcEUERSTAppFeatID  -->
+						<eq>
+							<msg_ref type="utility" index="2 0 2">SNMPResp.varBind</msg_ref>
+							<expr>32</expr>
+						</eq>
+					<and>
+						<!--  Test for pktcEUERSTAppFeatID  -->
+						<eq>
+							<msg_ref type="utility" index="3 0 2">SNMPResp.varBind</msg_ref>
+							<expr>100</expr>
+						</eq>
+					<and>
+						<!--  Test for pktcEUERSTAppFeatID  -->
+						<eq>
+							<msg_ref type="utility" index="4 0 2">SNMPResp.varBind</msg_ref>
+							<expr>200</expr>
+						</eq>
+					<and>
+						<!-- Test for pktcEUERSTAppFeatIndexRef  -->
+						<eq>
+							<msg_ref type="utility" index="0 1 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					<and>
+						<!-- Test for pktcEUERSTAppFeatIndexRef  -->
+						<eq>
+							<msg_ref type="utility" index="1 1 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					<and>
+						<!-- Test for pktcEUERSTAppFeatIndexRef  -->
+						<eq>
+							<msg_ref type="utility" index="2 1 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					<and>
+						<!-- Test for pktcEUERSTAppFeatIndexRef  -->
+						<eq>
+							<msg_ref type="utility" index="3 1 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					<and>
+						<!-- Test for pktcEUERSTAppFeatIndexRef  -->
+						<eq>
+							<msg_ref type="utility" index="4 1 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					<and>
+						<!-- Test for pktcEUERSTAppAdminStat  -->
+						<eq>
+							<msg_ref type="utility" index="0 2 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					<and>
+						<!-- Test for pktcEUERSTAppAdminStat  -->
+						<eq>
+							<msg_ref type="utility" index="1 2 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					<and>
+						<!-- Test for pktcEUERSTAppAdminStat  -->
+						<eq>
+							<msg_ref type="utility" index="2 2 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					<and>
+						<!-- Test for pktcEUERSTAppAdminStat  -->
+						<eq>
+							<msg_ref type="utility" index="3 2 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					<and>
+						<!-- Test for pktcEUERSTAppAdminStat  -->
+						<eq>
+							<msg_ref type="utility" index="4 2 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					<and>
+						<!-- Test for pktcEUERSTAppAdminStatInfo  -->
+						<notnull>
+							<msg_ref type="utility" index="0 3 2">SNMPResp.varBind</msg_ref>
+						</notnull>
+					<and>
+						<!-- Test for pktcEUERSTAppAdminStatInfo  -->
+						<notnull>
+							<msg_ref type="utility" index="1 3 2">SNMPResp.varBind</msg_ref>
+						</notnull>
+					<and>
+						<!-- Test for pktcEUERSTAppAdminStatInfo  -->
+						<notnull>
+							<msg_ref type="utility" index="2 3 2">SNMPResp.varBind</msg_ref>
+						</notnull>
+					<and>
+						<!-- Test for pktcEUERSTAppAdminStatInfo  -->
+						<notnull>
+							<msg_ref type="utility" index="3 3 2">SNMPResp.varBind</msg_ref>
+						</notnull>
+					<and>
+						<!-- Test for pktcEUERSTAppAdminStatInfo  -->
+						<notnull>
+							<msg_ref type="utility" index="4 3 2">SNMPResp.varBind</msg_ref>
+						</notnull>
+					<and>
+						<!-- Test for pktcEUERSTAppOperStat  -->
+						<eq>
+							<msg_ref type="utility" index="0 4 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					<and>
+						<!-- Test for pktcEUERSTAppOperStat  -->
+						<eq>
+							<msg_ref type="utility" index="1 4 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					<and>
+						<!-- Test for pktcEUERSTAppOperStat  -->
+						<eq>
+							<msg_ref type="utility" index="2 4 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					<and>
+						<!-- Test for pktcEUERSTAppOperStat  -->
+						<eq>
+							<msg_ref type="utility" index="3 4 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					<and>
+						<!-- Test for pktcEUERSTAppOperStat  -->
+						<eq>
+							<msg_ref type="utility" index="4 4 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					<and>
+						<!--  Test for pktcEUERSTAppOperStatInfo  -->
+						<notnull>
+							<msg_ref type="utility" index="0 5 2">SNMPResp.varBind</msg_ref>
+						</notnull>
+					<and>
+						<!--  Test for pktcEUERSTAppOperStatInfo  -->
+						<notnull>
+							<msg_ref type="utility" index="1 5 2">SNMPResp.varBind</msg_ref>
+						</notnull>
+					<and>
+						<!--  Test for pktcEUERSTAppOperStatInfo  -->
+						<notnull>
+							<msg_ref type="utility" index="2 5 2">SNMPResp.varBind</msg_ref>
+						</notnull>
+					<and>
+						<!--  Test for pktcEUERSTAppOperStatInfo  -->
+						<notnull>
+							<msg_ref type="utility" index="3 5 2">SNMPResp.varBind</msg_ref>
+						</notnull>
+					<and>
+						<!--  Test for pktcEUERSTAppOperStatInfo  -->
+						<notnull>
+							<msg_ref type="utility" index="4 5 2">SNMPResp.varBind</msg_ref>
+						</notnull>
+					<and>
+						<!-- Test for pktcEUERSTAppStatus  -->
+						<eq>
+							<msg_ref type="utility" index="0 6 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					<and>
+						<!-- Test for pktcEUERSTAppStatus  -->
+						<eq>
+							<msg_ref type="utility" index="1 6 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					<and>
+						<!-- Test for pktcEUERSTAppStatus  -->
+						<eq>
+							<msg_ref type="utility" index="2 6 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					<and>
+						<!-- Test for pktcEUERSTAppStatus  -->
+						<eq>
+							<msg_ref type="utility" index="3 6 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					    <!-- Test for pktcEUERSTAppStatus  -->
+						<eq>
+							<msg_ref type="utility" index="4 6 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+				</verify>
+			</response>
+			<transition to="SetFeatID3" event="SNMPResp"/>
+			<transition to="SetFeatID3" event="SNMPRespFailure"/>
+		</state>
+		
+		<state ID="SetFeatID3">
+			<prelude>
+				<send protocol="utility" msgtype="SNMPSet">
+					<mod modtype="add" hdr="array">
+						<var_expr>
+							<expr>varBind 1 1 3 \r\n ][ , </expr>
+							<expr>CL-PKTC-EUE-RST-MIB::pktcEUERSTAppFeatID.9,INTEGER,3][\r\n</expr>
+						</var_expr>
+					</mod>
+					<mod modtype="replace" hdr="version">
+						<expr>3</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="13-6">
+					<!-- Test pktcEUERSTAppFeatID  is not writable -->
+					<eq>
+						<msg_ref type="utility" index="0 0 2">SNMPRespFailure.varBind</msg_ref>
+						<expr>2</expr>
+					</eq>
+				</verify>
+			</response>
+			<transition to="SetFeatIndexRef3" event="SNMPResp"/>
+			<transition to="SetFeatIndexRef3" event="SNMPRespFailure"/>
+		</state>
+		
+		<state ID="SetFeatIndexRef3">
+			<prelude>
+				<send protocol="utility" msgtype="SNMPSet">
+					<mod modtype="add" hdr="array">
+						<var_expr>
+							<expr>varBind 1 1 3 \r\n ][ , </expr>
+							<expr>CL-PKTC-EUE-RST-MIB::pktcEUERSTAppFeatIndexRef.9,UNSIGNED32,2][\r\n</expr>
+						</var_expr>
+					</mod>
+					<mod modtype="replace" hdr="version">
+						<expr>3</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="13-7">
+					<!-- Test pktcEUERSTAppFeatIndexRef is not writable -->
+					<eq>
+						<msg_ref type="utility" index="0 0 2">SNMPRespFailure.varBind</msg_ref>
+						<expr>2</expr>
+					</eq>
+				</verify>
+			</response>
+			<postlude>
+				<stop_capture/>
+			</postlude>
+			<transition to="EDVAIPv6Hybrid" event="SNMPResp"/>
+			<transition to="EDVAIPv6Hybrid" event="SNMPRespFailure"/>
+		</state>
+		
+		<state ID="EDVAIPv6Hybrid" provFile="MAC_H.bin" 
+				policyFile="3basic.cfg" nextState="Reboot4"/>
+				
+		<state ID="Reboot4" timer="10000">
+			<prelude once="true">
+				<start_capture>
+					<filter>
+						<var_expr>
+							<expr>host </expr>
+							<msg_ref type="platform">DUT.IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.CM IP Address</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.DHCP Gateway IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.DHCP CM Gateway IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.KDC IP Address</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.TFTP Server IP</msg_ref>
+						</var_expr>
+					</filter>
+				</start_capture>
+				<send protocol="utility" msgtype="SNMPSet">
+					<mod modtype="add" hdr="array">
+						<var_expr>
+								<expr>varBind 1 1 3 \r\n ][ , </expr>
+								<expr>DOCS-CABLE-DEVICE-MIB::docsDevResetNow.0,INTEGER,1][\r\n</expr>
+						</var_expr>
+					</mod>
+					<mod modtype="replace" hdr="agentip">
+						<msg_ref type="platform">DUT.CM IP Address</msg_ref>
+					</mod>
+					<!-- Always use version 2 for a CM reset -->
+					<mod modtype="replace" hdr="version">
+						<expr>2c</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="utility">Response</msg_ref>
+						<expr>SNMPRespFailure</expr>
+					</eq>
+					<then>
+						<fail/>
+					</then>
+				</if>
+				<if>
+					<or>
+						<eq>
+							<msg_ref type="sip">REGISTER.Contact.expires</msg_ref>
+							<expr>0</expr>
+						</eq>
+						<eq>
+							<msg_ref type="sip">REGISTER.Expires.value</msg_ref>
+							<expr>0</expr>
+						</eq>
+					</or>
+					<then>
+						<send protocol="sip" msgtype="200-REGISTER"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Reboot4" event="SNMPResp"/>
+			<transition to="Register4" event="TimerExpired"/>
+			<transition to="END" event="SNMPRespFailure"/>
+			<transition to="Reboot4" event="REGISTER"/>
+		</state>
+		
+		<state ID="Register4">
+			<transition to="Provisioned4" event="Registered"/>
+		</state>
+		
+		<state ID="Provisioned4">	
+			<prelude>
+				<send protocol="utility" msgtype="SNMPGet">
+					<mod modtype="add" hdr="oids">
+						<expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvisioningState.0</expr>
+					</mod>
+					<mod modtype="replace" hdr="version">
+						<expr>3</expr>
+					</mod>
+				</send>
+			</prelude>
+			<transition to="GetProfileVersion4" event="SNMPResp"/>
+			<transition to="GetProfileVersion4" event="SNMPRespFailure"/>
+		</state>
+		
+		<state ID="GetProfileVersion4">
+			<prelude>
+				<send protocol="utility" msgtype="SNMPGet">
+					<mod modtype="add" hdr="oids">
+						<expr>CL-PKTC-EUE-RST-MIB::pktcEUERSTProfileVersion.9</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="16-3">
+					<!-- Test for pktcEUERSTProfileVersion  -->
+					<eq>
+						<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+						<expr>1.0</expr>
+					</eq>
+				</verify>
+			</response>
+			<transition to="SetProfileVersion4" event="SNMPResp"/>
+			<transition to="SetProfileVersion4" event="SNMPRespFailure"/>
+		</state>
+		
+		<state ID="SetProfileVersion4">
+			<prelude>
+				<send protocol="utility" msgtype="SNMPSet">
+					<mod modtype="add" hdr="array">
+						<var_expr>
+							<expr>varBind 1 1 3 \r\n ][ , </expr>
+							<expr>CL-PKTC-EUE-RST-MIB::pktcEUERSTProfileVersion.9,INTEGER,2][\r\n</expr>
+						</var_expr>
+					</mod>
+					<mod modtype="replace" hdr="version">
+						<expr>3</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="16-4">
+					<!-- Test for pktcEUERSTProfileVersion  -->
+					<eq>
+						<msg_ref type="utility" index="0 0 2">SNMPRespFailure.varBind</msg_ref>
+						<expr>17</expr>
+					</eq>
+				</verify>
+			</response>
+			<transition to="GetProfileFeatTable4" event="SNMPResp"/>
+			<transition to="GetProfileFeatTable4" event="SNMPRespFailure"/>
+		</state>
+		
+		<state ID="GetProfileFeatTable4">
+		<prelude>
+				<send protocol="utility" msgtype="SNMPGetTable">
+					<mod modtype="add" hdr="oids">
+						<expr>CL-PKTC-EUE-RST-MIB::pktcEUERSTAppProfileToFeatTable</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="16-5">
+					<and>
+						<!--  Test for pktcEUERSTAppFeatID  -->
+						<eq>
+							<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+							<expr>2</expr>
+						</eq>
+					<and>
+						<!--  Test for pktcEUERSTAppFeatID  -->
+						<eq>
+							<msg_ref type="utility" index="1 0 2">SNMPResp.varBind</msg_ref>
+							<expr>3</expr>
+						</eq>
+					<and>
+						<!--  Test for pktcEUERSTAppFeatID  -->
+						<eq>
+							<msg_ref type="utility" index="2 0 2">SNMPResp.varBind</msg_ref>
+							<expr>32</expr>
+						</eq>
+					<and>
+						<!--  Test for pktcEUERSTAppFeatID  -->
+						<eq>
+							<msg_ref type="utility" index="3 0 2">SNMPResp.varBind</msg_ref>
+							<expr>100</expr>
+						</eq>
+					<and>
+						<!--  Test for pktcEUERSTAppFeatID  -->
+						<eq>
+							<msg_ref type="utility" index="4 0 2">SNMPResp.varBind</msg_ref>
+							<expr>200</expr>
+						</eq>
+					<and>
+						<!-- Test for pktcEUERSTAppFeatIndexRef  -->
+						<eq>
+							<msg_ref type="utility" index="0 1 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					<and>
+						<!-- Test for pktcEUERSTAppFeatIndexRef  -->
+						<eq>
+							<msg_ref type="utility" index="1 1 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					<and>
+						<!-- Test for pktcEUERSTAppFeatIndexRef  -->
+						<eq>
+							<msg_ref type="utility" index="2 1 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					<and>
+						<!-- Test for pktcEUERSTAppFeatIndexRef  -->
+						<eq>
+							<msg_ref type="utility" index="3 1 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					<and>
+						<!-- Test for pktcEUERSTAppFeatIndexRef  -->
+						<eq>
+							<msg_ref type="utility" index="4 1 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					<and>
+						<!-- Test for pktcEUERSTAppAdminStat  -->
+						<eq>
+							<msg_ref type="utility" index="0 2 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					<and>
+						<!-- Test for pktcEUERSTAppAdminStat  -->
+						<eq>
+							<msg_ref type="utility" index="1 2 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					<and>
+						<!-- Test for pktcEUERSTAppAdminStat  -->
+						<eq>
+							<msg_ref type="utility" index="2 2 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					<and>
+						<!-- Test for pktcEUERSTAppAdminStat  -->
+						<eq>
+							<msg_ref type="utility" index="3 2 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					<and>
+						<!-- Test for pktcEUERSTAppAdminStat  -->
+						<eq>
+							<msg_ref type="utility" index="4 2 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					<and>
+						<!-- Test for pktcEUERSTAppAdminStatInfo  -->
+						<notnull>
+							<msg_ref type="utility" index="0 3 2">SNMPResp.varBind</msg_ref>
+						</notnull>
+					<and>
+						<!-- Test for pktcEUERSTAppAdminStatInfo  -->
+						<notnull>
+							<msg_ref type="utility" index="1 3 2">SNMPResp.varBind</msg_ref>
+						</notnull>
+					<and>
+						<!-- Test for pktcEUERSTAppAdminStatInfo  -->
+						<notnull>
+							<msg_ref type="utility" index="2 3 2">SNMPResp.varBind</msg_ref>
+						</notnull>
+					<and>
+						<!-- Test for pktcEUERSTAppAdminStatInfo  -->
+						<notnull>
+							<msg_ref type="utility" index="3 3 2">SNMPResp.varBind</msg_ref>
+						</notnull>
+					<and>
+						<!-- Test for pktcEUERSTAppAdminStatInfo  -->
+						<notnull>
+							<msg_ref type="utility" index="4 3 2">SNMPResp.varBind</msg_ref>
+						</notnull>
+					<and>
+						<!-- Test for pktcEUERSTAppOperStat  -->
+						<eq>
+							<msg_ref type="utility" index="0 4 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					<and>
+						<!-- Test for pktcEUERSTAppOperStat  -->
+						<eq>
+							<msg_ref type="utility" index="1 4 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					<and>
+						<!-- Test for pktcEUERSTAppOperStat  -->
+						<eq>
+							<msg_ref type="utility" index="2 4 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					<and>
+						<!-- Test for pktcEUERSTAppOperStat  -->
+						<eq>
+							<msg_ref type="utility" index="3 4 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					<and>
+						<!-- Test for pktcEUERSTAppOperStat  -->
+						<eq>
+							<msg_ref type="utility" index="4 4 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					<and>
+						<!--  Test for pktcEUERSTAppOperStatInfo  -->
+						<notnull>
+							<msg_ref type="utility" index="0 5 2">SNMPResp.varBind</msg_ref>
+						</notnull>
+					<and>
+						<!--  Test for pktcEUERSTAppOperStatInfo  -->
+						<notnull>
+							<msg_ref type="utility" index="1 5 2">SNMPResp.varBind</msg_ref>
+						</notnull>
+					<and>
+						<!--  Test for pktcEUERSTAppOperStatInfo  -->
+						<notnull>
+							<msg_ref type="utility" index="2 5 2">SNMPResp.varBind</msg_ref>
+						</notnull>
+					<and>
+						<!--  Test for pktcEUERSTAppOperStatInfo  -->
+						<notnull>
+							<msg_ref type="utility" index="3 5 2">SNMPResp.varBind</msg_ref>
+						</notnull>
+					<and>
+						<!--  Test for pktcEUERSTAppOperStatInfo  -->
+						<notnull>
+							<msg_ref type="utility" index="4 5 2">SNMPResp.varBind</msg_ref>
+						</notnull>
+					<and>
+						<!-- Test for pktcEUERSTAppStatus  -->
+						<eq>
+							<msg_ref type="utility" index="0 6 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					<and>
+						<!-- Test for pktcEUERSTAppStatus  -->
+						<eq>
+							<msg_ref type="utility" index="1 6 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					<and>
+						<!-- Test for pktcEUERSTAppStatus  -->
+						<eq>
+							<msg_ref type="utility" index="2 6 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					<and>
+						<!-- Test for pktcEUERSTAppStatus  -->
+						<eq>
+							<msg_ref type="utility" index="3 6 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					    <!-- Test for pktcEUERSTAppStatus  -->
+						<eq>
+							<msg_ref type="utility" index="4 6 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+				</verify>
+			</response>
+			<transition to="SetFeatID4" event="SNMPResp"/>
+			<transition to="SetFeatID4" event="SNMPRespFailure"/>
+		</state>
+		
+		<state ID="SetFeatID4">
+			<prelude>
+				<send protocol="utility" msgtype="SNMPSet">
+					<mod modtype="add" hdr="array">
+						<var_expr>
+							<expr>varBind 1 1 3 \r\n ][ , </expr>
+							<expr>CL-PKTC-EUE-RST-MIB::pktcEUERSTAppFeatID.9,INTEGER,3][\r\n</expr>
+						</var_expr>
+					</mod>
+					<mod modtype="replace" hdr="version">
+						<expr>3</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="16-6">
+					<!-- Test pktcEUERSTAppFeatID  is not writable -->
+					<eq>
+						<msg_ref type="utility" index="0 0 2">SNMPRespFailure.varBind</msg_ref>
+						<expr>2</expr>
+					</eq>
+				</verify>
+			</response>
+			<transition to="SetFeatIndexRef4" event="SNMPResp"/>
+			<transition to="SetFeatIndexRef4" event="SNMPRespFailure"/>
+		</state>
+		
+		<state ID="SetFeatIndexRef4">
+			<prelude>
+				<send protocol="utility" msgtype="SNMPSet">
+					<mod modtype="add" hdr="array">
+						<var_expr>
+							<expr>varBind 1 1 3 \r\n ][ , </expr>
+							<expr>CL-PKTC-EUE-RST-MIB::pktcEUERSTAppFeatIndexRef.9,UNSIGNED32,2][\r\n</expr>
+						</var_expr>
+					</mod>
+					<mod modtype="replace" hdr="version">
+						<expr>3</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="16-7">
+					<!-- Test pktcEUERSTAppFeatIndexRef is not writable -->
+					<eq>
+						<msg_ref type="utility" index="0 0 2">SNMPRespFailure.varBind</msg_ref>
+						<expr>2</expr>
+					</eq>
+				</verify>
+			</response>
+			<postlude>
+				<stop_capture/>
+			</postlude>
+			<transition to="END" event="SNMPResp"/>
+			<transition to="END" event="SNMPRespFailure"/>
+		</state>
+	</add_to>
+</pc2xml>

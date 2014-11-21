@@ -1,0 +1,382 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+ Change History: (Author & Date)
+-->
+<pc2xml version="$Revision: 7768 $"
+        name="EUE Prov 1.1.2.21"
+        descrip="eUE invalidates provisioning server ticket stored in NVRAM when KDC
+                 is unavailable and device is subsequently rebooted."
+        number="EUE Prov 1.1.2.21">
+
+    <template file="./templates/EUE_Prov_B_1_1_1.xml" name="MultipleIP"/>
+
+    <add_to fsm="MultipleIP">
+        <transition from="StartCapture_RebootWait" to="EDVAProvisions" event="TimerExpired"/>
+
+        <!-- E/MTA DUT reports provisioning pass code (1) to provisioning service (SNMP Entity). -->
+        <state ID="EDVAProvisions">
+            <prelude once="true">
+                <stop_capture/>
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvisioningState.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">UE0.IP</msg_ref>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="5">
+                    <contains>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>1</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="ReConfigure" event="SNMPResp"/>
+        </state>
+
+        <!-- Configure the MSO KDC to not send AS-REP in response to AS-REQ from MTA.>
+        <state ID="ReConfigure"
+               provFile="E-UE_PROV_v6_2.1.2.1_2.bin"
+               policyFile="MTAFORCW122_test"
+               nextState="Reset2"/-->
+
+		<state ID="ReConfigure">
+			<prelude>
+				<log promptUser="true" expr="Set the DUT to use a new policy, X_eUEv6_wrongKDC and depoly."/>
+				<generate event="Branch1Event"/>
+			</prelude>
+			<transition to="ClearTicket" event="Branch1Event"/>
+		</state>
+			   
+        <!-- Using SNMPv3, set the pktcMtaDevResetKrbTickets to 0xC0. -->
+        <!-- SNMPv3 Browser reports success of SNMP SET operation. -->
+		<!-- STEP 7 -->
+        <state ID="ClearTicket">
+            <prelude>
+                <send protocol="utility" msgtype="SNMPSet">
+                    <mod modtype="add" hdr="array">
+                        <var_expr>
+                            <expr>varBind 1 1 3 \r\n ][ , </expr>
+                            <expr>PKTC-IETF-MTA-MIB::pktcMtaDevResetKrbTickets.0,BITS,1][\r\n</expr>
+                        </var_expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+                    <mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="7">
+                    <contains>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>1</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="ResetTicketResult" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+        <!-- SNMPGet on pktcMtaDevResetKrbTickets returns C0. -->
+		<!-- Step 8 -->
+        <state ID="ResetTicketResult">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <!--expr>ESAFE_MIB::esafeProvisioningStatusProgress.0</expr-->
+                        <expr>PKTC-IETF-MTA-MIB::pktcMtaDevResetKrbTickets.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+						<msg_ref type="platform">DUT.IP</msg_ref>
+                        <!--msg_ref type="platform">DUT.CM IP Address</msg_ref-->
+                    </mod>
+                    <mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="8">
+                    <contains>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>1</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="Reset2" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+        <!-- Reset the UE DUT (not the CM) and bring it to an operational state. -->
+		<!-- Step 9 -->
+        <state ID="Reset2" timer="180000">
+            <prelude once="true">
+                <start_capture>
+                    <filter>
+			<var_expr>
+				<expr>host </expr>
+				<msg_ref type="platform">DUT.IP</msg_ref>
+				<expr> || host </expr>
+				<msg_ref type="platform">DUT.DHCP Server IP</msg_ref>
+			</var_expr>
+                    </filter>
+                </start_capture>
+
+                <send protocol="utility" msgtype="SNMPSet">
+                    <mod modtype="add" hdr="array">
+                        <var_expr>
+                            <expr>varBind 1 1 3 \r\n ][ , </expr>
+                            <expr>PKTC-IETF-MTA-MIB::pktcMtaDevResetNow.0,INTEGER,1][\r\n</expr>
+                        </var_expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP Address</msg_ref>
+                    </mod>
+                    <mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPRespFailure</expr>
+                    </eq>
+                    <then>
+                        <fail/>
+                    </then>
+                </if>
+                <if>
+                    <or>
+                        <eq>
+                            <msg_ref type="sip">REGISTER.Contact.expires</msg_ref>
+                            <expr>0</expr>
+                        </eq>
+                        <eq>
+                            <msg_ref type="sip">REGISTER.Expires.value</msg_ref>
+                            <expr>0</expr>
+                        </eq>
+                    </or>
+                    <then>
+                        <send protocol="sip" msgtype="200-REGISTER"/>
+                    </then>
+                </if>
+            </response>
+            <transition to="VerifyMessaging" event="TimerExpired"/>
+            <transition to="Reset2" event="SNMPResp"/>
+            <transition to="Reset2" event="REGISTER"/>
+            <!-- Step 9 MTA resets properly, otherwise SNMPRespFailure. -->
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+        <!-- E/MTA DUT reports provisioning pass code (1) to provisioning service (SNMP Entity). -->
+        <!--state ID="EDVAProvisions2">
+            <prelude once="true">
+                <stop_capture/>
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvisioningState.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">UE0.IP</msg_ref>
+                    </mod>
+	                <mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="15">
+                    <contains>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>1</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="VerifyMessaging" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state-->
+
+        <state ID="VerifyMessaging">
+            <prelude once="true">
+                <stop_capture/>
+	
+                <parse_capture name="eUE_v6">
+                    <parser_filter protocol="dhcpv6" clientMAC="DUT.MAC Address"/>
+                </parse_capture>
+		<parse_capture name="eUE_KERB">
+                    <parser_filter protocol="kerberos" ip="DUT.IP"/>
+                </parse_capture>
+
+                <!-- MTA sends AS Request to the KDC. -->
+                <verify step="10">
+			<and>
+				<eq>
+					<capture_ref type="kerberos" name="eUE_KERB">AS-REQ.ipv6.src_host.show</capture_ref>
+					<msg_ref type="platform">DUT.IP</msg_ref>
+				</eq>
+				<neq>
+					<capture_ref type="kerberos" name="eUE_KERB">AS-REQ.ipv6.dst_host.show</capture_ref>
+					<msg_ref type="platform">DUT.KDC IP Address</msg_ref>
+				</neq>
+			</and>
+                </verify>
+
+                <!-- 11 KDC does not send AS Reply and does not issue new ticket to MTA. -->
+                <!--verify step="11">
+                    <null>
+                        <capture_ref type="pktc" name="eUE_PKTC">AP-REP</capture_ref>
+                    </null>
+                </verify-->
+
+                <!-- MTA begins sending broadcast Discovers. -->
+                <verify step="12">
+                    <notnull>
+                        <capture_ref type="dhcpv6" name="eUE_v6">Solicit.num</capture_ref>
+                    </notnull>
+                </verify>
+                <generate event="SucceedEvent"/>
+            </prelude>
+            <transition to="ReConfigure2" event="SucceedEvent"/>
+        </state>
+
+        <!-- Step 14. Configure the MSO KDC to send AS-REP in response to AS-REQ from MTA -->
+        <!--state ID="ReConfigure2"
+               provFile="E-UE_PROV_v6_2.1.2.1_2.bin"
+               policyFile="MTAFORCW122_test"
+               nextState="Reset3"/-->
+			   
+	<state ID="ReConfigure2">
+		<prelude>
+			<log promptUser="true" expr="Set the DUT to use a new policy, X_eUEv6 and depoly. Manually reboot eDVA and click OK immediately."/>
+			<generate event="Branch1Event"/>
+		</prelude>
+		<transition to="Reset3" event="Branch1Event"/>
+	</state>
+
+        <!-- Reset the UE DUT and bring it to an operational state. -->
+        <state ID="Reset3" timer="180000">
+            <prelude once="true">
+                <start_capture>
+                    <filter>
+                        <var_expr>
+                            <expr>host </expr>
+                            <msg_ref type="platform">DUT.IP</msg_ref>
+                        </var_expr>
+                    </filter>
+                </start_capture>
+
+                <!--send protocol="utility" msgtype="SNMPSet">
+                    <mod modtype="add" hdr="array">
+                        <var_expr>
+                            <expr>varBind 1 1 3 \r\n ][ , </expr>
+                            <expr>PKTC-IETF-MTA-MIB::pktcMtaDevResetNow.0,INTEGER,1][\r\n</expr>
+                        </var_expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP Address</msg_ref>
+                    </mod>
+                    <mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send-->
+            </prelude>
+            <response>
+                <!--if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPRespFailure</expr>
+                    </eq>
+                    <then>
+                        <fail/>
+                    </then>
+                </if>
+                <if>
+                    <or>
+                        <eq>
+                            <msg_ref type="sip">REGISTER.Contact.expires</msg_ref>
+                            <expr>0</expr>
+                        </eq>
+                        <eq>
+                            <msg_ref type="sip">REGISTER.Expires.value</msg_ref>
+                            <expr>0</expr>
+                        </eq>
+                    </or>
+                    <then>
+                        <send protocol="sip" msgtype="200-REGISTER"/>
+                    </then>
+                </if-->
+            </response>
+            <transition to="EDVAProvisions3" event="TimerExpired"/>
+            <!--transition to="Reset2" event="SNMPResp"/-->
+            <!--transition to="Reset2" event="REGISTER"/-->
+            <!-- Step 9 MTA resets properly, otherwise SNMPRespFailure. -->
+            <!--transition to="END" event="SNMPRespFailure"/-->
+        </state>
+
+        <!-- E/MTA DUT reports provisioning pass code (1) to provisioning service (SNMP Entity). -->
+        <state ID="EDVAProvisions3">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvisioningState.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">UE0.IP</msg_ref>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="15">
+                    <contains>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>1</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="VerifyMessaging2" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+        <state ID="VerifyMessaging2">
+            <prelude once="true">
+                <stop_capture/>
+		<parse_capture name="eUE_KERB2nd">
+                    <parser_filter protocol="kerberos" ip="DUT.IP"/>
+                </parse_capture>
+
+                <!-- MTA sent an AS(TGS) request to MSO KDC. --> 
+                <!-- The first byte of the UDP payload must be 6A (6C for TGS). --> 
+                <verify step="16">
+                	<and>
+				<eq>
+					<capture_ref type="kerberos" name="eUE_KERB2nd">AS-REQ.ipv6.src_host.show</capture_ref>
+					<msg_ref type="platform">DUT.IP</msg_ref>
+				</eq>
+				<eq>
+					<capture_ref type="kerberos" name="eUE_KERB2nd">AS-REQ.ipv6.dst_host.show</capture_ref>
+					<msg_ref type="platform">DUT.KDC IP Address</msg_ref>
+				</eq>
+			</and>
+                </verify>
+		<generate event="SucceedEvent"/>
+            </prelude>
+		<transition to="END" event="SucceedEvent"/>
+        </state>
+    </add_to>
+</pc2xml>

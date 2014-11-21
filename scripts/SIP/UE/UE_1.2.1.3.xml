@@ -1,0 +1,85 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="SIP-UE 1.2.1.3" 
+	descrip="Undefined header field and value in message" 
+	number="SIP-UE 1.2.1.3">
+	
+	<template file="./templates/CallTermAtUETemp.xml" name="UE1"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Setup" sub="prelude"/>
+		<state ID="Connected"/>
+		<state ID="Answer"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<state ID="Setup" sub="prelude">
+			<send protocol="sip" msgtype="Invite">
+				<!-- Step 1 of test case 1.2.1.3- insert the header and value-Cable: Lab. -->
+				<mod modtype="add" hdr="Cable" param="value">
+					<expr>Lab</expr>
+				</mod>
+			</send>
+		</state>
+		<state ID="Answer">
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>UPDATE</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="200-Update"/>
+					</then>
+				</if>
+				<if>
+					<eq>
+						<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+						<expr>200</expr>
+					</eq>
+					<then>
+						<verify step="1" requirements="RFC346">
+							<eq>
+								<msg_ref type="sip">Response</msg_ref>
+								<expr>200-INVITE</expr>
+							</eq>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<transition to="Answer" event="UPDATE"/>
+			<transition to="Answer" event="200-PRACK"/>
+			<transition to="Answer" event="18x-INVITE"/>
+			<transition to="Answer" event="OffHookComplete"/>
+			<transition to="Connected" event="200-INVITE"/>
+		</state>
+			
+		<state ID="Connected" timer="30000">
+			<prelude once="true">
+				<send protocol="sip" msgtype="ACK"/>
+				<!-- Step 1 of test case 1.2.1.3- verify that session is establised. -->
+				<log expr="Session is established"/>
+			</prelude>
+			<transition to="Connected" event="OffHookComplete"/>
+			<transition to="Releasing" event="TimerExpired"/>
+		</state>
+	</add_to>
+</pc2xml>

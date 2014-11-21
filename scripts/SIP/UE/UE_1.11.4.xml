@@ -1,0 +1,81 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="SIP-UE 1.11.4" 
+	descrip="UAS - PRACK that does not match unacknowledged Reliable Provisional Response" 
+	number="SIP-UE 1.11.4">
+	
+	<template file="./templates/CallTermAtUETemp.xml" name="UE1"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Setup"/>
+		<state ID="Proceeding"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<NE ext_require="100rel"/>
+		<state ID="Setup">
+			<prelude>
+				<send protocol="sip" msgtype="Invite"/>
+			</prelude>
+			<transition to="Proceeding" event="100-INVITE"/>
+			<transition to="SendPrack" event="18x-INVITE"/>
+		</state>
+		<state ID="Proceeding">
+			<transition to="SendPrack" event="18x-INVITE"/>
+		</state>
+		
+		<state ID="SendPrack">
+			<prelude once="true">
+				<!--Reliability required for test sending Prack message to peer.-->
+				<send protocol="sip" msgtype="Prack">
+					<!-- Step  3 from test case 1.11.4 - Send a PRACK request by executing step 4 -->
+					<mod modtype="replace" hdr="To" param="tag">
+						<expr>11111</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Response</msg_ref>
+						<expr>481-PRACK</expr>
+					</eq>
+					<then>
+						<verify step="4" requirements="RFC10">
+							<eq>
+								<msg_ref type="sip">481-PRACK.CSeq.method</msg_ref>
+								<expr>PRACK</expr>
+							</eq>
+						</verify>
+						<verify step="4" requirements="RFC10">
+							<eq>
+								<msg_ref type="sip">481-PRACK.Status-Line.status-code</msg_ref>
+								<expr>481</expr>
+							</eq>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<transition to="END" event="xxx-PRACK"/>
+			<transition to="SendPrack" event="xxx-INVITE"/>
+		</state>
+	</add_to>
+</pc2xml>

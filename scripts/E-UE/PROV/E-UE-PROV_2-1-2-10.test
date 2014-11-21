@@ -1,0 +1,124 @@
+#//****************************************************************************
+#// Filename: E-UE-PROV_2-1-2-10.test
+#// Author:   Matthew Forbes
+#// Creation Date: 11/03/2008
+#// Modified by:
+#//
+#//
+#//
+#//****************************************************************************
+#// Description:
+#//     TC3254 TEST CASE E-UE-PROV 2.1.2.10 Ability of eUE to Interpret Missing
+#// Configuration of DevRealmName
+#//
+#// Objective:
+#//     Test the ability of the eUE DUT to detect the absence of the pktcMtaDevRealmName 
+#//     object in the configuration file and populate the pktcMtaDevErrorOids Table.
+#//
+#// PacketCable DUT:
+#//     EDVA
+#//
+#// Test Steps:
+#//     - Initial configuration
+#//     - Start sniffer
+#//     - Reset EDVA
+#//     - Check Provisioning state, Pass With Warnings
+#//     - Check values in table, pktcMtaDevErrorOids Table
+#//     - Stop Sniffer
+#//
+#// Notes:
+#//     - Requires provPrimitives.tcl & tftp_primitives.tcl.
+#//     - Requires the specific config file in $BASE_CFG_FILE_PATH in Provisioning Server.
+#//****************************************************************************
+global SCRIPT_VERSION
+set SCRIPT_VERSION { # $Id: E-UE-PROV_2-1-2-10.test 7406 2010-07-20 17:17:37Z dthakore $ }
+
+DoStep "PRESTEP_E-UE-PROV_2-1-2-10_1" "Initial configuration" {
+    LogMsg "--- Initial PROV module ---"
+    Init_PROV
+    PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122 Device_Level_Secure.cfg
+    PROV_DEPLOY_DHCP
+} {PASS_STEP}
+
+
+DoStep "PRESTEP_E-UE-PROV_2-1-2-10_2-1" "Start sniffer" {
+    LogMsg "--- Start sniffer ---"
+    Init_CONTROLLER_LAN
+    SetupCaptureControllerLan "host $MTA_IP"
+    StartCaptureControllerLan
+} {PASS_STEP}
+
+
+DoStep "E-UE-PROV_2-1-2-10_2-2" "SNMP RESET" {
+    SNMP_SET $oid_pktcMtaDevResetNow INTEGER 1 $MTA_IP
+    actionWait "Wait for MTA to reboot" 60
+} {PASS_STEP}
+
+DoStep "E-UE-PROV_2-1-2-10_2-3" "pktcMtaDevProvisioningState Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMP_GET $oid_pktcMtaDevProvisioningState $MTA_IP 20]
+    LogMsg "The Value of MTA Provisioning State is: $val"
+} {
+    IsEqual $val 1
+}
+
+DoStep "PRESTEP_E-UE-PROV_2-1-2-10_1" "Initial configuration" {
+    PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122 cfg-3254.bin
+    PROV_DEPLOY_DHCP
+} {PASS_STEP}
+
+DoStep "E-UE-PROV_2-1-2-10_2-2" "SNMP RESET" {
+    SNMP_SET $oid_pktcMtaDevResetNow INTEGER 1 $MTA_IP
+    actionWait "Wait for MTA to reboot" 60
+} {PASS_STEP}
+
+DoStep "E-UE-PROV_2-1-2-10_2-3" "pktcMtaDevProvisioningState Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMP_GET $oid_pktcMtaDevProvisioningState $MTA_IP 20]
+    LogMsg "The Value of MTA Provisioning State is: $val"
+} {
+    IsEqual $val 3
+}
+
+DoStep "E-UE-PROV_2-1-2-10_5-1" "Check SNMP table pktcEUEUsrIMPITable" {
+    set val [SNMP_TABLE_GET $table_pktcMtaDevErrorOidsEntry $MTA_IP 3]
+} {
+    # IsEqual $val "MTA cfg file does not contain pktcMtaDevRealmName that matches DHCP opt-122.6 . Expecting "
+    # IsEqual $val "MTA cfg file does not contain pktcMtaDevRealmName that matches DHCP opt 122.6"
+        if { ( $val == "MTA cfg file does not contain pktcMtaDevRealmName that matches DHCP opt-122.6 . Expecting " ) ||
+            ($val == "MTA cfg file does not contain pktcMtaDevRealmName that matches DHCP opt 122.6" ) } {
+            return 0
+        } else {
+            LogMsg "Fail: Expected value is MTA cfg file does not contain pktcMtaDevRealmName that matches DHCP opt-122.6 . Expecting
+            or MTA cfg file does not contain pktcMtaDevRealmName that matches DHCP opt 122.6 but receive $val" 49
+            return 1
+        }
+}
+
+
+DoStep "E-UE-PROV_2-1-2-10_POSTSTEP" "Stop sniffer" {
+    LogMsg "--- Stop sniffer ---"
+    StopCaptureControllerLan
+    SaveToFileControllerLan
+} {PASS_STEP}
+
+DoStep "POSTEPE-UE-PROV_2-1-2-10_POSTEP" "Restore configuration" {
+    PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122 Device_Level_Secure.cfg
+    PROV_DEPLOY_DHCP
+} {PASS_STEP}
+
+DoStep "E-UE-PROV_2-1-2-10_POSTEP" "SNMP RESET" {
+    SNMP_SET $oid_pktcMtaDevResetNow INTEGER 1 $MTA_IP
+    actionWait "Wait for MTA to reboot" 30
+} {PASS_STEP}
+
+
+DoStep "E-UE-PROV_2-1-2-10_POSTEP" "pktcMtaDevProvisioningState Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMP_GET $oid_pktcMtaDevProvisioningState $MTA_IP 20]
+    LogMsg "The Value of MTA Provisioning State is: $val"
+} {
+    IsEqual $val 1
+}
+
+Cleanup

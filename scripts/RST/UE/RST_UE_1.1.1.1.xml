@@ -1,0 +1,837 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	PCPCII-131 - Update script for the CW69 ECN changes. (ghassler 6/11/2009)
+	PCPCII-139 : Update the Voicetronix modifiers to use the new values. (ghassler 07/10/2009)
+	PCPCIIAPPSATP-125 : Update the expected results for step 25 to test for 1303... instead of 303... (ghassler 04/30/2010)
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-UE 1.1.1.1" 
+	descrip="Digit Map Rules and Error Responses" 
+	number="RST-UE 1.1.1.1" inspector="disable">
+	
+	<fsm name="UE1">
+		<models>
+			<session/>
+		</models>
+		<NE sim_type="term" elements="UE1 PCSCF2 SCSCF1 PCSCF1" 
+		targets="UE1 0 00 service:sos 711 912226262626 8002222222 8001222222 018002234567 018002222222 2226262626 9002333333 3036619100 3036619110 8001234567"/>
+		
+		<states initialstate="Register">
+			<state ID="Register">
+				<postlude>
+					<sleep time="3000"/>
+				</postlude>
+				<transition to="OffHook1" event="Registered"/>
+			</state>
+			
+			<!-- CALL NUMBER 1 -->
+			<state ID="OffHook1">
+				<prelude>
+					<!-- Step 1 test case SIP 1.1.1.1-->
+					<send protocol="utility" msgtype="OffHook"/>
+					<sleep time="15800"/>
+					<log promptUser="True" yesExpected="True" verify="True" 
+						step="1" requirements="REQ13403, REQ14364" 
+						expr="Verify that there is an error signal."/>
+				</prelude>
+				<transition to="OnHook1" event="OffHookComplete"/>
+			</state>
+			
+			<state ID="OnHook1">
+				<prelude>
+					<!-- Step 2 test case SIP 1.1.1.1-->
+					<send protocol="utility" msgtype="OnHook"/>
+				</prelude>
+				<transition to="OffHook2" event="OnHookComplete"/>
+			</state>
+			
+			<!-- CALL NUMBER 2 -->
+			<state ID="OffHook2">
+				<prelude>
+					<!-- We provide 1 sec gap between OnHook and OffHook-->
+					<sleep time="1000"/>
+					<send protocol="utility" msgtype="OffHook"/>
+				</prelude>
+				<transition to="Call2" event="OffHookComplete"/>
+			</state>
+			
+			<state ID="Call2">
+				<prelude once="true">
+					<send protocol="utility" msgtype="DialDigits">
+						<mod modtype="add" hdr="number">
+							<expr>0</expr>
+						</mod>
+					</send>
+					<!-- Step 3 test case SIP 1.1.1.1- S timer -->
+					<sleep time="3800"/>
+				</prelude>
+				<!-- Step 3 test case SIP 1.1.1.1-->
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>INVITE</expr>
+						</eq>
+						<then>
+							<verify step="3" requirements="REQ13403, REQ14364">
+								<eq>
+									<msg_ref type="sip">Invite.Request-Line.username</msg_ref>
+									<expr>0</expr>
+								</eq>
+							</verify>
+							<verify step="3" requirements="REQ13403, REQ14364">
+								<eq>
+									<msg_ref type="sip">Invite.Request-Line.domain</msg_ref>
+									<msg_ref type="platform">UE0.domain</msg_ref>
+								</eq>
+							</verify>
+							<verify step="3" requirements="REQ13403, REQ14364">
+								<eq>
+									<msg_ref type="sip">Invite.Request-Line.user</msg_ref>
+									<expr>dialstring</expr>
+								</eq>
+							</verify>
+						</then>
+					</if>
+				</response>
+				<transition to="Call2" event="DialDigitsComplete"/>
+				<transition to="EndCall2" event="Invite"/>
+			</state>
+			
+			<state ID="EndCall2" ES="true">
+				<transition to="OffHook3" event="SessionTerminated"/>
+			</state>
+			
+			<!-- CALL NUMBER 3 -->
+			<state ID="OffHook3">
+				<prelude>
+					<!-- We provide 1 sec gap between OnHook and OffHook-->
+					<sleep time="1000"/>
+					<send protocol="utility" msgtype="OffHook"/>
+				</prelude>
+				<transition to="Call3" event="OffHookComplete"/>
+			</state>
+			
+			<!-- CALL3 State -->
+			<state ID="Call3">
+				<prelude once="true">
+					<!-- Step 5 test case SIP 1.1.1.1-->
+					<send protocol="utility" msgtype="DialDigits">
+						<mod modtype="add" hdr="number">
+							<expr>0#</expr>
+						</mod>
+					</send>
+				</prelude>
+				<!-- Step 5 test case SIP 1.1.1.1-->
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>INVITE</expr>
+						</eq>
+						<then>
+							<verify step="5" requirements="REQ13403, REQ14364">
+								<eq>
+									<msg_ref type="sip">Invite.Request-Line.username</msg_ref>
+									<expr>0</expr>
+								</eq>
+							</verify>
+							<verify step="5" requirements="REQ13403, REQ14364">
+								<eq>
+									<msg_ref type="sip">Invite.Request-Line.domain</msg_ref>
+									<msg_ref type="platform">UE0.domain</msg_ref>
+								</eq>
+							</verify>
+							<verify step="5" requirements="REQ13403, REQ14364">
+								<eq>
+									<msg_ref type="sip">Invite.Request-Line.user</msg_ref>
+									<expr>dialstring</expr>
+								</eq>
+							</verify>
+						</then>
+					</if>
+				</response>
+				<transition to="Call3" event="DialDigitsComplete"/>
+				<transition to="EndCall3" event="Invite"/>
+			</state>
+			
+			<state ID="EndCall3" ES="true">
+				<transition to="OffHook4" event="SessionTerminated"/>
+			</state>
+			
+			<!-- CALL NUMBER 4 -->
+			<state ID="OffHook4">
+				<prelude>
+					<!-- Step 7 test case SIP 1.1.1.1-->
+					<sleep time="1000"/>
+					<send protocol="utility" msgtype="OffHook"/>
+				</prelude>
+				<transition to="Call4" event="OffHookComplete"/>
+			</state>
+			
+			<state ID="Call4">
+				<prelude once="true">
+					<!-- Step 7 test case SIP 1.1.1.1-->
+					<send protocol="utility" msgtype="DialDigits">
+						<mod modtype="add" hdr="number">
+							<expr>00</expr>
+						</mod>
+					</send>
+				</prelude>
+				<!-- Step 7 test case SIP 1.1.1.1-->
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>INVITE</expr>
+						</eq>
+						<then>
+							<verify step="7" requirements="REQ13403, REQ14364">
+								<eq>
+									<msg_ref type="sip">Invite.Request-Line.username</msg_ref>
+									<expr>00</expr>
+								</eq>
+							</verify>
+							<verify step="7" requirements="REQ13403, REQ14364">
+								<eq>
+									<msg_ref type="sip">Invite.Request-Line.domain</msg_ref>
+									<msg_ref type="platform">UE0.domain</msg_ref>
+								</eq>
+							</verify>
+							<verify step="7" requirements="REQ13403, REQ14364">
+								<eq>
+									<msg_ref type="sip">Invite.Request-Line.user</msg_ref>
+									<expr>dialstring</expr>
+								</eq>
+							</verify>
+						</then>
+					</if>
+				</response>
+				<transition to="Call4" event="DialDigitsComplete"/>
+				<transition to="EndCall4" event="Invite"/>
+			</state>
+			
+			<state ID="EndCall4" ES="true">
+				<transition to="OffHook5" event="SessionTerminated"/>
+			</state>
+			
+			<!-- CALL NUMBER 5 -->
+			<state ID="OffHook5">
+				<prelude>
+					<!-- Step 9 test case SIP 1.1.1.1-->
+					<!-- We provide 1 sec gap between OnHook and OffHook-->
+					<sleep time="1000"/>
+					<send protocol="utility" msgtype="OffHook"/>
+				</prelude>
+				<transition to="Call5" event="OffHookComplete"/>
+			</state>
+			
+			<!-- Call5 State -->
+			<state ID="Call5">
+				<prelude once="true">
+					<!-- Step 9 test case SIP 1.1.1.1-->
+					<send protocol="utility" msgtype="DialDigits">
+						<mod modtype="add" hdr="number">
+							<expr>911</expr>
+						</mod>
+					</send>
+				</prelude>
+				<!-- Step 9 test case SIP 1.1.1.1-->
+				<response>
+					<if>
+						<contains>
+							<msg_ref type="sip">Invite.Transport</msg_ref>
+							<expr>TCP</expr>
+						</contains>
+						<then>
+							<send protocol="sip" msgtype="200-INVITE" transportProtocol="TCP"/>
+							<verify step="9" requirements="REQ13403, REQ14364" group="urn">
+								<eq>
+									<msg_ref type="sip">Invite.Request-Line.Request-URI</msg_ref>
+									<expr>urn:service:sos</expr>
+								</eq>
+							</verify>
+						</then>
+						<elseif>
+							<contains>
+								<msg_ref type="sip">Invite.Transport</msg_ref>
+								<expr>UDP</expr>
+							</contains>
+							<then>
+								<send protocol="sip" msgtype="200-INVITE" transportProtocol="UDP"/>
+								<verify step="9" requirements="REQ13403, REQ14364" group="urn">
+									<eq>
+										<msg_ref type="sip">Invite.Request-Line.Request-URI</msg_ref>
+										<expr>urn:service:sos</expr>
+									</eq>
+								</verify>
+							</then>
+						</elseif>
+					</if>
+				</response>
+				<transition to="Call5" event="DialDigitsComplete"/>
+				<transition to="EndCall5" event="Invite"/>
+			</state>
+			
+			<state ID="EndCall5" ES="true">
+				<transition to="OffHook6" event="SessionTerminated"/>
+			</state>
+			
+			<!-- CALL NUMBER 6 -->
+			<state ID="OffHook6">
+				<prelude>
+					<!-- Step 11 test case SIP 1.1.1.1-->
+					<!-- We provide 1 sec gap between OnHook and OffHook-->
+					<sleep time="1000"/>
+					<send protocol="utility" msgtype="OffHook"/>
+				</prelude>
+				<transition to="Call6" event="OffHookComplete"/>
+			</state>
+			
+			<!-- Call6 State -->
+			<state ID="Call6">
+				<prelude once="true">
+					<!-- Step 11 test case SIP 1.1.1.1-->
+					<send protocol="utility" msgtype="DialDigits">
+						<mod modtype="add" hdr="number">
+							<expr>711</expr>
+						</mod>
+					</send>
+				</prelude>
+				<!-- Step 11 test case SIP 1.1.1.1-->
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>INVITE</expr>
+						</eq>
+						<then>
+							<verify step="11" requirements="REQ13403, REQ14364">
+								<eq>
+									<msg_ref type="sip">Invite.Request-Line.username</msg_ref>
+									<expr>711</expr>
+								</eq>
+							</verify>
+							<verify step="11" requirements="REQ13403, REQ14364">
+								<eq>
+									<msg_ref type="sip">Invite.Request-Line.domain</msg_ref>
+									<msg_ref type="platform">UE0.domain</msg_ref>
+								</eq>
+							</verify>
+							<verify step="11" requirements="REQ13403, REQ14364">
+								<eq>
+									<msg_ref type="sip">Invite.Request-Line.user</msg_ref>
+									<expr>dialstring</expr>
+								</eq>
+							</verify>
+						</then>
+					</if>
+				</response>
+				<transition to="Call6" event="DialDigitsComplete"/>
+				<transition to="EndCall6" event="Invite"/>
+			</state>
+			
+			<state ID="EndCall6" ES="true">
+				<transition to="OffHook7" event="SessionTerminated"/>
+			</state>
+			
+			<!-- CALL NUMBER 7 -->
+			<state ID="OffHook7">
+				<prelude>
+					<!-- Step 13 test case SIP 1.1.1.1-->
+					<!-- We provide 1 sec gap between OnHook and OffHook-->
+					<sleep time="1000"/>
+					<send protocol="utility" msgtype="OffHook"/>
+				</prelude>
+				<transition to="Call7" event="OffHookComplete"/>
+			</state>
+			
+			<!-- Call7 State -->
+			<state ID="Call7">
+				<prelude once="true">
+					<!-- Step 13 test case SIP 1.1.1.1-->
+					<send protocol="utility" msgtype="DialDigits">
+						<mod modtype="add" hdr="number">
+							<expr>8002222222</expr>
+						</mod>
+					</send>
+				</prelude>
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>INVITE</expr>
+						</eq>
+						<then>
+							<verify step="13" requirements="REQ13403, REQ14364">
+								<eq>
+									<msg_ref type="sip">Invite.Request-Line.Request-URI</msg_ref>
+									<expr>tel:+18002222222</expr>
+								</eq>
+							</verify>
+						</then>
+					</if>
+				</response>
+				<transition to="Call7" event="DialDigitsComplete"/>
+				<transition to="EndCall7" event="Invite"/>
+			</state>
+			
+			<state ID="EndCall7" ES="true">
+				<transition to="OffHook8" event="SessionTerminated"/>
+			</state>
+			
+			<!-- CALL NUMBER 8 -->
+			<state ID="OffHook8">
+				<prelude>
+					<!-- Step 15 test case SIP 1.1.1.1-->
+					<!-- We provide 1 sec gap between OnHook and OffHook-->
+					<sleep time="1000"/>
+					<send protocol="utility" msgtype="OffHook"/>
+				</prelude>
+				<transition to="Call8" event="OffHookComplete"/>
+			</state>
+			
+			<!-- Call8 State -->
+			<state ID="Call8">
+				<prelude once="true">
+					<!-- Step 15 test case SIP 1.1.1.1-->
+					<send protocol="utility" msgtype="DialDigits">
+						<mod modtype="add" hdr="number">
+							<expr>6619100</expr>
+						</mod>
+					</send>
+				</prelude>
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>INVITE</expr>
+						</eq>
+						<then>
+							<verify step="15" requirements="REQ13403, REQ14364">
+								<eq>
+									<msg_ref type="sip">Invite.Request-Line.Request-URI</msg_ref>
+									<expr>tel:+13036619100</expr>
+								</eq>
+							</verify>
+						</then>
+					</if>
+				</response>
+				<transition to="Call8" event="DialDigitsComplete"/>
+				<transition to="EndCall8" event="Invite"/>
+			</state>
+			
+			<state ID="EndCall8" ES="true">
+				<transition to="OffHook9" event="SessionTerminated"/>
+			</state>
+			
+			<!-- CALL NUMBER 9 -->
+			<state ID="OffHook9">
+				<prelude>
+					<!-- Step 17 test case SIP 1.1.1.1-->
+					<!-- We provide 1 sec gap between OnHook and OffHook-->
+					<sleep time="1000"/>
+					<send protocol="utility" msgtype="OffHook"/>
+				</prelude>
+				<transition to="Call9" event="OffHookComplete"/>
+			</state>
+			
+			<!-- Call9 State -->
+			<state ID="Call9">
+				<prelude once="true">
+					<!-- Step 17 test case SIP 1.1.1.1-->
+					<send protocol="utility" msgtype="DialDigits">
+						<mod modtype="add" hdr="number">
+							<expr>3036619100</expr>
+						</mod>
+					</send>
+				</prelude>
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>INVITE</expr>
+						</eq>
+						<then>
+							<verify step="17" requirements="REQ13403, REQ14364">
+								<eq>
+									<msg_ref type="sip">Invite.Request-Line.Request-URI</msg_ref>
+									<expr>tel:+13036619100</expr>
+								</eq>
+							</verify>
+						</then>
+					</if>
+				</response>
+				<transition to="Call9" event="DialDigitsComplete"/>
+				<transition to="EndCall9" event="Invite"/>
+			</state>
+			
+			<state ID="EndCall9" ES="true">
+				<transition to="OffHook10" event="SessionTerminated"/>
+			</state>
+			
+			<!-- CALL NUMBER 10 -->
+			<state ID="OffHook10">
+				<prelude>
+					<!-- Step 19 test case SIP 1.1.1.1-->
+					<!-- We provide 1 sec gap between OnHook and OffHook-->
+					<sleep time="1000"/>
+					<send protocol="utility" msgtype="OffHook"/>
+				</prelude>
+				<transition to="Call10" event="OffHookComplete"/>
+			</state>
+			
+			<!-- Call10 State -->
+			<state ID="Call10">
+				<prelude once="true">
+					<!-- Step 19 test case SIP 1.1.1.1-->
+					<send protocol="utility" msgtype="DialDigits">
+						<mod modtype="add" hdr="number">
+							<expr>13036619100</expr>
+						</mod>
+					</send>
+				</prelude>
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>INVITE</expr>
+						</eq>
+						<then>
+							<verify step="19" requirements="REQ13403, REQ14364">
+								<eq>
+									<msg_ref type="sip">Invite.Request-Line.Request-URI</msg_ref>
+									<expr>tel:+13036619100</expr>
+								</eq>
+							</verify>
+						</then>
+					</if>
+				</response>
+				<transition to="Call10" event="DialDigitsComplete"/>
+				<transition to="EndCall10" event="Invite"/>
+			</state>
+			
+			<state ID="EndCall10" ES="true">
+				<transition to="OffHook11" event="SessionTerminated"/>
+			</state>
+			
+			<!-- CALL NUMBER 11 -->
+			<state ID="OffHook11">
+				<prelude>
+					<!-- Step 21 test case SIP 1.1.1.1-->
+					<!-- We provide 1 sec gap between OnHook and OffHook-->
+					<sleep time="1000"/>
+					<send protocol="utility" msgtype="OffHook"/>
+				</prelude>
+				<transition to="Call11" event="OffHookComplete"/>
+			</state>
+			
+			<!-- Call11 State -->
+			<state ID="Call11">
+				<prelude once="true">
+					<!-- Step 21 test case SIP 1.1.1.1-->
+					<send protocol="utility" msgtype="DialDigits">
+						<mod modtype="add" hdr="number">
+							<expr>011912226262626</expr>
+						</mod>
+					</send>
+				</prelude>
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>INVITE</expr>
+						</eq>
+						<then>
+							<verify step="21" requirements="REQ13403, REQ14364">
+								<eq>
+									<msg_ref type="sip">Invite.Request-Line.Request-URI</msg_ref>
+									<expr>tel:+912226262626</expr>
+								</eq>
+							</verify>
+						</then>
+					</if>
+				</response>
+				<transition to="Call11" event="DialDigitsComplete"/>
+				<transition to="EndCall11" event="Invite"/>
+			</state>
+			
+			<state ID="EndCall11" ES="true">
+				<transition to="OffHook12" event="SessionTerminated"/>
+			</state>
+			
+			<!-- CALL NUMBER 12 -->
+			<state ID="OffHook12">
+				<prelude>
+					<!-- Step 23 test case SIP 1.1.1.1-->
+					<!-- We provide 1 sec gap between OnHook and OffHook-->
+					<sleep time="1000"/>
+					<send protocol="utility" msgtype="OffHook"/>
+				</prelude>
+				<transition to="Call12" event="OffHookComplete"/>
+			</state>
+			
+			<!-- Call12 State -->
+			<state ID="Call12">
+				<prelude once="true">
+					<!-- Step 23 test case SIP 1.1.1.1-->
+					<send protocol="utility" msgtype="DialDigits">
+						<mod modtype="add" hdr="number">
+							<expr>9002333333</expr>
+						</mod>
+					</send>
+				</prelude>
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>INVITE</expr>
+						</eq>
+						<then>
+							<verify step="23" requirements="REQ13403, REQ14364">
+								<eq>
+									<msg_ref type="sip">Invite.Request-Line.Request-URI</msg_ref>
+									<expr>tel:+19002333333</expr>
+								</eq>
+							</verify>
+						</then>
+					</if>
+				</response>
+				<transition to="Call12" event="DialDigitsComplete"/>
+				<transition to="EndCall12" event="Invite"/>
+			</state>
+			
+			<state ID="EndCall12" ES="true">
+				<transition to="OffHook13" event="SessionTerminated"/>
+			</state>
+			
+			<!-- CALL NUMBER 13 -->
+			<state ID="OffHook13">
+				<prelude>
+					<!-- Step 25 test case SIP 1.1.1.1-->
+					<!-- We provide 1 sec gap between OnHook and OffHook-->
+					<sleep time="1000"/>
+					<send protocol="utility" msgtype="OffHook"/>
+				</prelude>
+				<transition to="Call13" event="OffHookComplete"/>
+			</state>
+			
+			<!-- Call13 State -->
+			<state ID="Call13">
+				<prelude once="true">
+					<!-- Step 25 test case SIP 1.1.1.1-->
+					<send protocol="utility" msgtype="DialDigits">
+						<mod modtype="add" hdr="number">
+							<!-- PCPCII-131 Dial new telephone number -->
+							<expr>10112343036619110</expr>
+						</mod>
+					</send>
+				</prelude>
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>INVITE</expr>
+						</eq>
+						<then>
+							<verify step="25" requirements="REQ13403, REQ14364">
+								<eq>
+									<msg_ref type="sip">Invite.Request-Line.Request-URI</msg_ref>
+									<expr>tel:+13036619110;cic=+1234</expr>
+								</eq>
+							</verify>
+						</then>
+					</if>
+				</response>
+				<transition to="Call13" event="DialDigitsComplete"/>
+				<transition to="EndCall13" event="Invite"/>
+			</state>
+			
+			<state ID="EndCall13" ES="true">
+				<transition to="OffHook14" event="SessionTerminated"/>
+			</state>
+			
+			<!-- CALL NUMBER 14 -->
+			<state ID="OffHook14">
+				<prelude>
+					<!-- Step 27 test case SIP 1.1.1.1-->
+					<!-- We provide 1 sec gap between OnHook and OffHook-->
+					<sleep time="1000"/>
+					<send protocol="utility" msgtype="OffHook"/>
+				</prelude>
+				<transition to="Call14" event="OffHookComplete"/>
+			</state>
+			
+			<!-- Call14 State -->
+			<state ID="Call14">
+				<prelude once="true">
+					<!-- Step 27 test case SIP 1.1.1.1-->
+					<send protocol="utility" msgtype="DialDigits">
+						<mod modtype="add" hdr="number">
+							<expr>08002222222</expr>
+						</mod>
+					</send>
+				</prelude>
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>INVITE</expr>
+						</eq>
+						<then>
+							<verify step="27" requirements="REQ13403, REQ14364">
+								<eq>
+									<msg_ref type="sip">Invite.Request-Line.username</msg_ref>
+									<expr>018002222222</expr>
+								</eq>
+							</verify>
+							<verify step="27" requirements="REQ13403, REQ14364">
+								<eq>
+									<msg_ref type="sip">Invite.Request-Line.domain</msg_ref>
+									<msg_ref type="platform">UE0.domain</msg_ref>
+								</eq>
+							</verify>
+							<verify step="27" requirements="REQ13403, REQ14364">
+								<eq>
+									<msg_ref type="sip">Invite.Request-Line.user</msg_ref>
+									<expr>dialstring</expr>
+								</eq>
+							</verify>
+						</then>
+					</if>
+				</response>
+				<transition to="Call14" event="DialDigitsComplete"/>
+				<transition to="EndCall14" event="Invite"/>
+			</state>
+			
+			<state ID="EndCall14" ES="true">
+				<transition to="OffHook15" event="SessionTerminated"/>
+			</state>
+			
+			<!-- CALL NUMBER 15 -->
+			<state ID="OffHook15">
+				<prelude>
+					<!-- Step 29 test case SIP 1.1.1.1-->
+					<!-- We provide 1 sec gap between OnHook and OffHook-->
+					<sleep time="1000"/>
+					<send protocol="utility" msgtype="OffHook"/>
+				</prelude>
+				<transition to="Call15" event="OffHookComplete"/>
+			</state>
+			
+			<!-- Call15 State -->
+			<state ID="Call15">
+				<prelude once="true">
+					<!-- Step 129 test case SIP 1.1.1.1-->
+					<send protocol="utility" msgtype="DialDigits">
+						<mod modtype="add" hdr="number">
+							<expr>08002234567</expr>
+						</mod>
+					</send>
+				</prelude>
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>INVITE</expr>
+						</eq>
+						<then>
+							<verify step="29" requirements="REQ13403, REQ14364">
+								<eq>
+									<msg_ref type="sip">Invite.Request-Line.username</msg_ref>
+									<expr>018002234567</expr>
+								</eq>
+							</verify>
+							<verify step="29" requirements="REQ13403, REQ14364">
+								<eq>
+									<msg_ref type="sip">Invite.Request-Line.domain</msg_ref>
+									<msg_ref type="platform">UE0.domain</msg_ref>
+								</eq>
+							</verify>
+							<verify step="29" requirements="REQ13403, REQ14364">
+								<eq>
+									<msg_ref type="sip">Invite.Request-Line.user</msg_ref>
+									<expr>dialstring</expr>
+								</eq>
+							</verify>
+						</then>
+					</if>
+				</response>
+				<transition to="Call15" event="DialDigitsComplete"/>
+				<transition to="EndCall15" event="Invite"/>
+			</state>
+			
+			<state ID="EndCall15" ES="true">
+				<transition to="OffHook16" event="SessionTerminated"/>
+			</state>
+			
+			<!-- CALL NUMBER 16 -->
+			<state ID="OffHook16">
+				<prelude>
+					<!-- Step 31 test case SIP 1.1.1.1-->
+					<!-- We provide 1 sec gap between OnHook and OffHook-->
+					<sleep time="1000"/>
+					<send protocol="utility" msgtype="OffHook"/>
+				</prelude>
+				<transition to="Call16" event="OffHookComplete"/>
+			</state>
+			
+			<state ID="Call16" timer="10000">
+				<prelude once="true">
+					<!-- Step 31 test case SIP 1.1.1.1-->
+					<send protocol="utility" msgtype="DialDigits">
+						<mod modtype="add" hdr="number">
+							<expr>8001222222</expr>
+						</mod>
+					</send>
+					<log promptUser="True" yesExpected="True" verify="True" 
+						step="31" requirements="REQ13402, REQ13403, REQ13410, REQ13411, REQ13464" 
+						expr="Verify that there is an error signal."/>
+				</prelude>
+				<response>
+					<if>
+						<or>
+							<eq>
+								<msg_ref type="event"/>
+								<expr>TimerExpired</expr>
+							</eq>
+							<eq>
+								<msg_ref type="sip">Request</msg_ref>
+								<expr>INVITE</expr>
+							</eq>
+						</or>
+						<then>
+							<verify step="31" requirements="REQ13402, REQ13403, REQ13410, REQ13411, REQ13464">
+								<and>
+									<eq>
+										<msg_ref type="event"/>
+										<expr>TimerExpired</expr>
+									</eq>
+									<neq>
+										<msg_ref type="sip">Request</msg_ref>
+										<expr>INVITE</expr>
+									</neq>
+								</and>
+							</verify>
+						</then>
+					</if>
+				</response>
+				<transition to="Call16" event="DialDigitsComplete"/>
+				<transition to="END" event="TimerExpired"/>
+			</state>
+		</states>
+	</fsm>
+</pc2xml>

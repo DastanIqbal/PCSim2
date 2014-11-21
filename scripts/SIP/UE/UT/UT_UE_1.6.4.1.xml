@@ -1,0 +1,51 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+
+<pc2xml version="$Revision: 8188 $" name="UT_UE_1.6.4.1" descrip="This is a unit test script for testing the UE_1.6.4.1 test script." number="1">
+	<configure name="FSM Process Duplicate Messages" value="true"/>
+	<template name="UE0" file="$UT_PATH/Templates/ut/Term_DUT.xml"/>
+	<add_to fsm="UE0">
+		<transition from="Connected" to="Releasing" event="BYE"/>
+		<state ID="Releasing">
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>BYE</expr>
+					</eq>
+					<then>
+						<retransmit protocol="sip" msgtype="200-BYE"/>
+					</then>
+				</if>
+				<if>
+					<count>
+						<cur_state/>
+						<expr>7</expr>
+					</count>
+					<then>
+						<generate event="SucceedEvent"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Releasing" event="BYE"/>
+			<transition to="END" event="SucceedEvent"/>
+		</state>
+	</add_to>
+</pc2xml>

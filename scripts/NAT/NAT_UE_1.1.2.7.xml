@@ -1,0 +1,327 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+	
+	
+ Change History: (Author & Date)
+	PCPCII-135 : UPdate the script to accommodate a de-register message during the reboot. (ghassler 06/24/2009)	
+	
+	
+	
+	
+-->
+
+<pc2xml version="$Revision: 8188 $" 
+	name="NAT_UE_1.1.2.7"
+	descrip="SIP OUTBOUND Flow Failure Detection and Recovery"
+	number="NAT_UE_1.1.2.7">
+	
+	<!-- Next we define the each of state machines -->
+	<fsm name="SCSCF1">
+		<models>
+			<registrar />
+		</models>
+		<!-- Next we define all of the network elements-->
+		<NE sim_type="term" elements="SCSCF1 PCSCF1"
+			targets="SCSCF1 PCSCF1 STUN" />
+		<!-- All of the states for the test. References to "Step x" from the
+			Default Message Flow - UE Registration (DUT) Sequence Diagram -->
+		<states initialstate="Reboot">
+			<state ID="Reboot"  timer="5000">
+				<!-- First we need to power cycle the UE to conduct the test -->
+				<prelude once="true">
+					<!--log expr="Power on (or reset) the UE. "/-->
+					<send protocol="utility" msgtype="SNMPSet">
+						<mod modtype="add" hdr="array">
+							<var_expr>
+								<expr>varBind 1 1 3 \r\n ][ , </expr>
+								<expr>PKTC-IETF-MTA-MIB::pktcMtaDevResetNow.0,INTEGER,1][\r\n</expr>
+							</var_expr>
+						</mod>
+					</send>
+				</prelude>
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="utility">Response</msg_ref>
+							<expr>SNMPRespFailure</expr>
+						</eq>
+						<then>
+							<fail />
+						</then>
+					</if>
+					<if>
+						<or>
+							<eq>
+								<msg_ref type="sip">REGISTER.Contact.expires</msg_ref>
+								<expr>0</expr>
+							</eq>
+							<eq>
+								<msg_ref type="sip">REGISTER.Expires.value</msg_ref>
+								<expr>0</expr>
+							</eq>
+						</or>
+						<then>
+							<send protocol="sip" msgtype="200-REGISTER"/>
+						</then>
+					</if>
+				</response>
+				<!-- Transitions for PendingRegistration state -->
+				<transition to="Reboot" event="SNMPResp" />
+				<transition to="PendingRegistration" event="TimerExpired" />
+				<transition to="END" event="SNMPRespFailure" />
+				<transition to="Reboot" event="REGISTER" />
+			</state>
+			
+			<!-- PENDINGREGISTRATION State -->
+			<state ID="PendingRegistration">
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>REGISTER</expr>
+						</eq>
+						<then>
+							<send protocol="sip" msgtype="401-REGISTER" />
+						</then>
+					</if>
+				</response>
+				<!-- Transitions for PendingRegistration state -->
+				<transition to="Authorization" event="REGISTER" />
+			</state>
+
+			<!-- AUTHORIZATION State -->
+			<state ID="Authorization">
+				<response>
+					<if>
+						<and>
+							<eq>
+								<msg_ref type="sip">Request</msg_ref>
+								<expr>REGISTER</expr>
+							</eq>
+							<and>
+								<contains>
+									<msg_ref type="sip">REGISTER</msg_ref>
+									<expr>Authorization</expr>
+								</contains>
+								<digest />
+							</and>
+						</and>
+						<then>
+							<generate event="AuthenticateSucceed" />
+							<send protocol="sip" msgtype="200-Register" />
+						</then>
+						<else>
+							<generate event="AuthenticateFailed" />
+							<send protocol="sip" msgtype="503-Register" />
+						</else>
+					</if>
+				</response>
+							
+				<transition to="ValidAuth" event="REGISTER" />
+			</state>
+			
+			<state ID="ValidAuth">
+				<transition to="Registered" event="AuthenticateSucceed" />
+				<transition to="END" event="AuthenticateFailed" />
+			</state>
+			
+			<!-- REGISTERED State -->
+			<state ID="Registered">
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="sip">SUBSCRIBE.Event.event-type</msg_ref>
+							<expr>reg</expr>
+						</eq>
+						<then>
+							<send protocol="sip" msgtype="200-SUBSCRIBE"/>
+							<sleep time="100"/>
+							<send protocol="sip" msgtype="NOTIFY"/>
+						</then>
+						<elseif>
+							<eq>
+								<msg_ref type="stun">Request</msg_ref>
+								<expr>BindingRequest</expr>
+							</eq>
+							<then>
+								<send protocol="stun" msgtype="BindingResponse" />
+							</then>
+						</elseif>
+					</if>
+				</response>
+				<transition to="Registered" event="SUBSCRIBE"/>
+				<transition to="Registered" event="BindingRequest" />
+				<transition to="KeepAlive" event="200-NOTIFY"/>
+			</state>
+			
+			<state ID="KeepAlive">
+				<postlude>
+					<send protocol="stun" msgtype="BindingResponse" />
+				</postlude>
+				
+				<transition to="KeepAlive2" event="BindingRequest" />
+			</state>
+			
+			<state ID="KeepAlive2">
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="stun">Request</msg_ref>
+							<expr>BindingRequest</expr>
+						</eq>
+						<then>
+							<send protocol="stun" msgtype="BindingResponse">
+								<mod modtype="replace" hdr="XorMappedAddress" param="IP">
+									<expr>10.5.6.185</expr>
+								</mod>
+								<mod modtype="replace" hdr="XorMappedAddress" param="port">
+									<expr>5000</expr>
+								</mod>
+							</send>
+						</then>
+					</if>
+				</response>
+				
+				<transition to="PendingRegistration2" event="BindingRequest" />
+			</state>
+			
+			<state ID="PendingRegistration2">
+				<response>
+					<verify step="5" requirements="RFC4307, RFC4308, REQ8662">
+						<eq>
+							<msg_ref type="sip">REGISTER.Contact.reg-id</msg_ref>
+							<msg_ref type="sip" msg_instance="2">REGISTER.Contact.reg-id</msg_ref>
+						</eq>
+					</verify>
+				</response>
+				<postlude>
+					<send protocol="sip" msgtype="401-REGISTER" />
+				</postlude>
+				
+				<transition to="Authorization2" event="REGISTER" />
+			</state>
+			
+			<state ID="Authorization2">
+				<response>
+					<if>
+						<and>
+							<eq>
+								<msg_ref type="sip">Request</msg_ref>
+								<expr>REGISTER</expr>
+							</eq>
+							<and>
+								<contains>
+									<msg_ref type="sip">REGISTER</msg_ref>
+									<expr>Authorization</expr>
+								</contains>
+								<digest />
+							</and>
+						</and>
+						<then>
+							<generate event="AuthenticateSucceed" />
+							<!--  We need to set the expiration to 60 seconds so that step 10
+								will work. -->
+							<send protocol="sip" msgtype="200-Register">
+								<mod modtype="replace" hdr="Contact" param="expires">
+									<expr>60</expr>
+								</mod>
+								<mod modtype="replace" hdr="Expires" param="value">
+									<expr>60</expr>
+								</mod>
+							</send>
+						</then>
+						<else>
+							<generate event="AuthenticateFailed" />
+							<send protocol="sip" msgtype="503-Register" />
+						</else>
+					</if>
+				</response>
+							
+				<transition to="ValidAuth2" event="REGISTER" />
+			</state>
+			
+			<state ID="ValidAuth2">
+				<transition to="Registered2" event="AuthenticateSucceed" />
+				<transition to="END" event="AuthenticateFailed" />
+			</state>
+			
+			<state ID="Registered2">
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="sip">SUBSCRIBE.Event.event-type</msg_ref>
+							<expr>reg</expr>
+						</eq>
+						<then>
+							<send protocol="sip" msgtype="200-SUBSCRIBE"/>
+							<sleep time="100"/>
+							<send protocol="sip" msgtype="NOTIFY"/>
+						</then>
+					</if>
+				</response>
+				<transition to="Registered" event="SUBSCRIBE"/>
+				<transition to="KeepAlive3" event="200-NOTIFY"/>
+			</state>
+			
+			<state ID="KeepAlive3">
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="stun">Request</msg_ref>
+							<expr>BindingRequest</expr>
+						</eq>
+						<then>
+							<send protocol="stun" msgtype="BindingResponse">
+								<mod modtype="replace" hdr="XorMappedAddress" param="IP">
+									<expr>10.5.6.180</expr>
+								</mod>
+								<mod modtype="replace" hdr="XorMappedAddress" param="port">
+									<expr>5050</expr>
+								</mod>
+							</send>
+						</then>
+					</if>
+				</response>
+				<transition to="PendingRegistration3" event="BindingRequest" />
+			</state>
+			
+			<state ID="PendingRegistration3">
+				<response>
+					<verify step="8" requirements="RFC4309, REQ8662">
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>REGISTER</expr>
+						</eq>
+					</verify>
+				</response>
+				<transition to="Wait" event="REGISTER" />
+			</state>
+			
+			<state ID="Wait">
+				<response>
+					<verify step="10" requirements="REQ16889">
+						<and>
+							<gte>
+								<msg_ref type="sip">REGISTER.TIMESTAMP</msg_ref>
+								<add_ref type="sip" msg_instance="last"	value="29500">REGISTER.TIMESTAMP</add_ref>
+							</gte>
+							<lte>
+								<msg_ref type="sip">REGISTER.TIMESTAMP</msg_ref>
+								<add_ref type="sip" msg_instance="last"	value="30500">200-REGISTER.TIMESTAMP</add_ref>
+							</lte>
+						</and>
+					</verify>
+				</response>
+				<transition to="END" event="REGISTER" />
+			</state>
+		</states>
+	</fsm>
+</pc2xml>

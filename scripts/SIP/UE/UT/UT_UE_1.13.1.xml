@@ -1,0 +1,46 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+
+<pc2xml version="$Revision: 8188 $" name="UT_UE_1.13.1" descrip="This is a unit test script for testing the UE_1.13.1 test script." number="1">
+	<template name="UE0" file="$UT_PATH/Templates/ut/Orig_DUT.xml"/>
+	<remove_from fsm="UE0">
+		<state ID="Setup"/>
+	</remove_from>
+	<add_to fsm="UE0">
+		<NE ext_require="100rel precondition"/>
+		<states initialstate="Register"/>
+		<state ID="Setup">
+			<prelude>
+				<sleep time="3000"/>
+				<send protocol="sip" msgtype="Invite" target="UE1" originator="DUT">
+					<mod modtype="delete" hdr="Supported"/>
+					<mod modtype="add" hdr="Supported">
+						<expr>100rel, answermode, early-session, gruu, join, outbound, path, precondition, replaces, tdialog, timer</expr>
+					</mod>
+				</send>
+			</prelude>
+			<postlude>
+				<send protocol="sip" msgtype="ACK" target="UE1" originator="DUT"/>
+			</postlude>
+			<transition to="END" event="500-INVITE"/>
+		</state>
+		
+	</add_to>
+</pc2xml>

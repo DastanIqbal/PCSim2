@@ -1,0 +1,24 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+-->
+
+
+<pc2xml version="$Revision: 6798 $" 
+	name="HDV-CODEC-MEDIA_1.2.8" 
+	descrip="RTP/RTCP Support" 
+	number="HDV-CODEC-MEDIA_1.2.8">
+
+	<template file="$SCRIPT_PATH/CODEC/CODEC_UE_1.2.8.xml"/>
+</pc2xml>	

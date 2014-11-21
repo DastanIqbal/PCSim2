@@ -1,0 +1,143 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="CODEC-MEDIA_1.4.5" 
+	descrip="UE Offer –Version Support 'o' line" 
+	number="CODEC-MEDIA_1.4.5">
+	
+	<template file="./templates/Proxy.xml" name="SCSCF1"/>
+	
+	<remove_from fsm="SCSCF1">
+		<state ID="Connected"/>
+	</remove_from>
+	
+	<add_to fsm="SCSCF1">
+		<state ID="Register" sub="prelude">
+			<log promptUser="true" expr="Connect fax machines with phones to UE0 and UE1."/>
+			<start_capture>
+				<filter>
+					<var_expr>
+						<expr>host </expr>
+						<msg_ref type="platform">PCSCF1.IP</msg_ref>
+						<expr> || host </expr>
+						<msg_ref type="platform">UE0.IP</msg_ref>
+						<expr> || host </expr>
+						<msg_ref type="platform">UE1.IP</msg_ref>
+					</var_expr>
+				</filter>
+			</start_capture>
+		</state>
+		
+		<state ID="Connected" timer="115000">
+			<prelude once="true">
+				<!-- Step - 2 test case Appendix B.8 Common Test Procedures -->
+				<log expr="Press start on the DUT so that the fax is transmitted to UE1."/>
+			</prelude>
+			<response>
+				<if>
+					<or>
+						<eq>
+							<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+							<msg_ref type="platform">UE1.IP</msg_ref>
+						</eq>
+						<eq>
+							<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+							<msg_ref type="platform">UE1.IP</msg_ref>
+						</eq>
+					</or>
+					<then>
+						<proxy target="UE0"/>
+					</then>
+					<elseif>
+						<or>
+							<eq>
+								<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE0.IP</msg_ref>
+							</eq>
+							<eq>
+								<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE0.IP</msg_ref>
+							</eq>
+						</or>
+						<then>
+							<proxy target="UE1"/>
+						</then>
+					</elseif>
+				</if>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>REINVITE</expr>
+					</eq>
+					<then>
+						<verify step="4" requirements="RFC2328, RFC3254">
+							<eq>
+								<add_ref type="sdp" msg_instance="first">INVITE.o.session-version</add_ref>
+								<msg_ref type="sdp">REINVITE.o.session-version</msg_ref>
+							</eq>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<transition to="Connected" event="ACK"/>
+			<transition to="Connected" event="200-INVITE"/>
+			<transition to="Connected" event="100-INVITE"/>
+			<transition to="Connected" event="REINVITE"/>
+			<transition to="VerifyFax1" event="TimerExpired"/>
+		</state>
+		
+		<state ID="VerifyFax1">
+			<prelude>
+				<log step="3" requirements="REQ16632" 
+					promptUser="True" yesExpected="True" verify="True" 
+					expr="Verify that all pages are received without any distortions."/>
+				
+				<stop_capture/>
+				
+				<log step="3" requirements="REQ12557, REQ12559, REQ12560, REQ13334" 
+					promptUser="True" yesExpected="True" verify="True" 
+					expr="Verify in the capture UE0's SDP offer and UE1's \nSDP Answer contains a=T38FaxVerson : 0-3\n"/>
+				
+				<log step="3" requirements="REQ12563, REQ12564" 
+					promptUser="True" yesExpected="True" verify="True" 
+					expr="Verify in the capture UE0's SDP offer and UE1's SDP Answer\n contains a=t38FaxRateManagement:transferredTCF\n"/>
+				
+				<log step="3" requirements="REQ12566, REQ16641, REQ12551, REQ12552" 
+					promptUser="True" yesExpected="True" verify="True" 
+					expr="Verify in the capture UE0's SDP offer and UE1's\n SDP Answer contains a=T38FaxMaxDatagram=160 or a=T38FaxMaxDatagram=354 for G3 fax\n"/>
+				
+				<log step="3" requirements="REQ13334, REQ13355, REQ12572, REQ11532" 
+					promptUser="True" yesExpected="True" verify="True" 
+					expr="Verify in the capture UE0's SDP offer and UE1's SDP Answer \ncontains a=T38FaxUdpEC:t38UDPRedundancy. \n"/>
+				
+				<log step="3" requirements="REQ12563, REQ12557, REQ13334, REQ12559, REQ12560, REQ12563, REQ12566, REQ16641, REQ13354, REQ12572, REQ12575, REQ12576, REQ12577, REQ12578, REQ12551, REQ12552, REQ12712" 
+					promptUser="True" yesExpected="True" verify="True" 
+					expr="Verify in the capture that the T38 packets are sent using UDPTL.\n"/>
+				
+				<log step="3" requirements="REQ12575, REQ12576, REQ12577, REQ12578" 
+					promptUser="True" yesExpected="True" verify="True" 
+					expr="Verify in the capture UE0's SDP offer and UE1's SDP Answer\n both contain a=a=T38FaxFillBitRemoval or neither do.\n"/>
+				
+				<generate event="SucceedEvent"/>
+			</prelude>
+			<transition to="OnHook" event="SucceedEvent"/>
+		</state>
+	</add_to>
+</pc2xml>

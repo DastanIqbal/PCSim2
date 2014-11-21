@@ -1,0 +1,333 @@
+################################################################################
+#// Filename: E-UE-PROV_1-1-2-21.test
+#// Author:   Satish Kumar, Texas Instruments
+#// Creation Date: 18-Jul-2004
+#// Modified by:  Matthew Forbes
+################################################################################
+#// Description:
+#//     TC1437 TEST CASE PROV 5.60 Verify ability of MTA to Clear Application
+#//     provisioning server tickets when KDC is unavailable
+#// Objective:
+#//     Test the ability of MTA to invalidate tickets saved in NVRAM for Application
+#//     Provisioning server if the KDC is temporarily unavailable and the device is
+#//     subsequently rebooted.
+#//
+#// PacketCable DUT:
+#//     MTA
+#//
+#// Test Steps:
+#//     - Initial configuration
+#//     - Configure provisioning server
+#//     - Start sniffer capture
+#//     - Reset DUT
+#//     - Check Provisioning state
+#//     - Verify AS REQ/REP sequence
+#//     - Clear Kerberos Tickets
+#//     - Reset MTA using SNMPv3
+#//     - Verify AS REQ/REP sequence
+#//     - Restore provisioning server
+#//     - Reset DUT
+#//     - Check Provisioning state
+#//     - Verify AS REQ/REP sequence
+#//     - Cleanup
+#//     
+#// Notes:
+#//     - Requires provPrimitives.tcl & tftp_primitives.tcl.
+#//     - Requires the specific config file in $BASE_CFG_FILE_PATH in Provisioning Server.
+#//     - Requires parT.tcl parsing tool to parse data from capture file.
+#//
+################################################################################
+
+global SCRIPT_VERSION
+set SCRIPT_VERSION { # $Id: E-UE-PROV_1-1-2-21.test 7406 2010-07-20 17:17:37Z dthakore $ }
+
+################################################################################
+
+
+DoStep "E-UE-PROV_1-1-2-21_1-1" "Initial configuration" {
+    LogMsg "--- Initial PROV module ---"
+    Init_PROV
+    # ProvCreateConfig 291 $MTA_MAC
+    PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122
+    PROV_DEPLOY_DHCP
+} { PASS_STEP }
+
+
+########################## Clear Tickets ##################################
+
+DoStep "E-UE-PROV_1-1-2-21_4-1" "pktcMtaDevResetKrbTickets Reset Kerberos Tickets" {
+    set val [SNMP_SET $oid_pktcMtaDevResetKrbTickets OCTET-STRING 0xC0 $MTA_IP]
+} {
+    if {$val == 0} {
+        LogMsg "Kerberos Tickets Have been cleared"
+        PASS_STEP
+    } else {
+        FAIL_STEP "Cannot reset Kerberos tickets"
+    }
+}
+
+DoStep "E-UE-PROV_1-1-2-21_4-2" "Start sniffer" {
+    LogMsg "--- Start sniffer ---"
+    Init_CONTROLLER_LAN
+    SetupCaptureControllerLan "host $MTA_IP || host $CM_IP || udp port 67"
+    StartCaptureControllerLan
+} {PASS_STEP}
+
+################ Reset CM and MTA and Verify Provisioning ################
+
+DoStep "E-UE-PROV_1-1-2-21_5-1" "Reset CM/MTA" {
+    set val [SNMPvN_RESET $CM_IP ]
+    LogMsg "Reset of CM and MTA has passed"
+} {
+    IsEqual $val 0
+}
+
+DoStep "E-UE-PROV_1-1-2-21_6-1" "pktcMTADevProvisioningState Content Verification" {
+    actionWait "Wait 60 seconds for CM/MTA to provision" 60
+    # Get the OID from the MTA and check it using our previously defined
+    set val [GetProvState 1 600]
+    LogMsg "MTA Provisioning State" 49
+    LogMsg "             - Expected : 1" 49
+    LogMsg "             - Received : $val" 49
+} {
+    IsEqual $val 1
+}
+
+DoStep "E-UE-PROV_1-1-2-21_5-2" "Stop sniffer" {
+    LogMsg "--- Stop sniffer ---"
+    StopCaptureControllerLan
+    SaveToFileControllerLan "_KDCon1"
+} { PASS_STEP }
+
+
+########################## INVOKE PARSING TOOL ##################################
+
+DoStep "E-UE-PROV_1-1-2-21_7-1" "Analyze flow data" {
+    # Initial PARSER TOOL
+    Init_PART
+    
+    # Set up parser file
+    set PARSERFILE    $ETH_DEFAULT_TXT_FILE
+} { PASS_STEP }
+
+DoStep "E-UE-PROV_1-1-2-21_7-2" "Parse IP data into database" {
+    
+    # Parse data
+    
+    set PARAMS_MTA_SRC      "{{} {} {} {} $MTA_IP {} {} {} {}}"
+    set PARAMS_MTA_DST      "{{} {} {} {} {} {} {} $MTA_IP {}}"
+    set msgID_MTA           [ParseFile $PARSERFILE "$PARAMS_MTA_SRC $PARAMS_MTA_DST"]
+    set msgID_MTA2           [ParseFile $PARSERFILE "$PARAMS_MTA_SRC $PARAMS_MTA_DST"]
+    
+} {
+    if { $::PART_RETURN == 0 } {
+        PASS_STEP
+    } else {
+        FAIL_STEP "Cannot find data"
+    }
+}
+
+#####################Defining variable defaults##################
+# set tickets_value 0xC0
+set tickets_value "C0 0 1"
+
+######################### VERIFY KERBEROS MESSAGES Initial power cycle ######
+######Assumption is MTA is first time provisioning in the test network#######
+DoStep "E-UE-PROV_1-1-2-21_7-3" "Kerberos AS-REQ: EXISTS" {
+    LogMsg "Verify AS REQUEST EXISTS"
+} {
+    VerifyValue $msgID_MTA "INFIRST KRB KRB_AS_REQ KRB_TYPE" "EXISTS" ""
+}
+
+DoStep "E-UE-PROV_1-1-2-21_7-4" "Kerberos AS-REQ to KDC IP address" {
+    LogMsg "Verify AS REQUEST TYPE IS AS-REQ"
+} {
+    VerifyValue $msgID_MTA "INFIRST KRB KRB_AS_REQ HEADERDSTIP" "IS" "10.32.0.13"
+}
+
+DoStep "E-UE-PROV_1-1-2-21_8-1" "Kerberos AS-REP exists" {
+    LogMsg "Verify AS REQUEST TYPE IS AS-REQ"
+} {
+    VerifyValue $msgID_MTA "INANY KRB KRB_AS_REP KRB_TYPE" "EXISTS" ""
+}
+
+###################### Configure KDC NOT to reply AS request ####################
+
+DoStep "E-UE-PROV_1-1-2-21_9-1" "Configure Provisioning Server" {
+    # verify_signal "Modify MTA policy for no response from the KDC(MTATC1437)"
+    PROV_MODIFY_DEVICE $MTA_MAC MTATC1437
+    PROV_DEPLOY_DHCP
+} { PASS_STEP }
+
+########################## Clear Tickets ##################################
+
+DoStep "E-UE-PROV_1-1-2-21_10-1" "pktcMtaDevResetKrbTickets Reset Kerberos Tickets" {
+    set val [SNMP_SET $oid_pktcMtaDevResetKrbTickets OCTET-STRING 0xC0 $MTA_IP]
+} {
+    if {$val == 0} {
+        LogMsg "Kerberos Tickets Have been cleared"
+        PASS_STEP
+    } else {
+        FAIL_STEP "Cannot reset Kerberos tickets"
+    }
+}
+
+############### Verify the values set to clear tickets ###################
+
+DoStep "E-UE-PROV_1-1-2-21_11-1" "pktcMtaDevResetKrbTickets Content Verification" {
+    set val [SNMP_GET $oid_pktcMtaDevResetKrbTickets $MTA_IP]
+    puts "val=$val"
+    puts "tickets_value=$tickets_value"
+} {
+    if { $tickets_value == $val } {
+        PASS_STEP
+    } else {
+        FAIL_STEP "MTA Fail: pktcMtaDevResetKrbTickets Content Verification"
+    }
+}
+
+
+################## Start Sniffer and reset MTA #####################
+DoStep "E-UE-PROV_1-1-2-21_12-1" "Start sniffer" {
+    LogMsg "--- Start sniffer ---"
+    #    Init_CONTROLLER_LAN
+    SetupCaptureControllerLan "host $MTA_IP || host $CM_IP || udp port 67"
+    StartCaptureControllerLan
+} {PASS_STEP}
+
+DoStep "E-UE-PROV_1-1-2-21_12-2" "Reset the MTA" {
+    
+    set val [SNMP_SET $oid_pktcMtaDevResetNow INTEGER 1 $MTA_IP]
+} {
+    if {$val == 0} {
+        LogMsg "MTA has reset"
+        PASS_STEP
+    } else {
+        FAIL_STEP "MTA reset failed"
+    }
+}
+
+######################### VERIFY KERBEROS MESSAGES After Reset ##############
+
+    ##Pong change - This section will be automated with sequence i functionality
+
+DoStep "E-UE-PROV_1-1-2-21_13-1" "Kerberos AS-REQ: EXISTS" {
+    LogMsg "Does the AS-REQ EXIST?"
+} {
+    verify_signal " Monitor the sniffer trace:  Does the AS-REQ EXIST?"
+}
+
+DoStep "E-UE-PROV_1-1-2-21_14-1" "Kerberos AS-REP does NOT exist" {
+    LogMsg "Does the AS-REP NOT EXIST?"
+} {
+    verify_signal "Continue to monitor sniffer trace: Does AS-REPLY NOT exist?"
+}
+
+DoStep "E-UE-PROV_1-1-2-21_15-1" "MTA tries to reprovision sending DHCP Discover" {
+    LogMsg "Does MTA send DHCP Discover after multiple AS-REQs?"
+} {
+   verify_signal "Continue to monitor trace: Does MTA send DHCP Discover after multiple AS-REQs?"
+}
+
+DoStep "E-UE-PROV_1-1-2-21_15-2" "Stop sniffer" {
+    LogMsg "--- Stop sniffer ---"
+    StopCaptureControllerLan
+    SaveToFileControllerLan "_KDCoff"
+} { PASS_STEP }
+
+################################# Restore Provisioning Server ##########################
+
+DoStep "E-UE-PROV_1-1-2-21_16-1" "Restore Provisioning Server" {
+    # verify_signal "Restore MTA policy for response from the KDC(MTAFORCW_122)"
+    PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122
+    PROV_DEPLOY_DHCP
+} { PASS_STEP }
+
+###################### Start Sniffer and reset MTA ###############################
+
+DoStep "E-UE-PROV_1-1-2-21_17-1" "Start sniffer" {
+    LogMsg "--- Start sniffer ---"
+    #    Init_CONTROLLER_LAN
+    SetupCaptureControllerLan "host $MTA_IP || host $CM_IP || udp port 67"
+    StartCaptureControllerLan
+} {PASS_STEP}
+
+DoStep "E-UE-PROV_1-1-2-21_17-2" "Reset CM/MTA" {
+    set val [SNMPvN_RESET $CM_IP ]
+    LogMsg "Reset of CM and MTA has passed"
+} {
+    IsEqual $val 0
+}
+
+################ Reset MTA and Verify Provisioning ###############
+DoStep "E-UE-PROV_1-1-2-21_18-1" "pktcMTADevProvisioningState Content Verification" {  
+    actionWait "Wait 60 seconds for CM/MTA to provision" 60
+    # Get the OID from the MTA and check it using our previously defined
+    set val [GetProvState 1 600]
+    LogMsg "MTA Provisioning State"
+    LogMsg "             - Expected : 1"
+    LogMsg "             - Received : $val"
+} {
+    IsEqual $val 1
+}
+
+
+DoStep "E-UE-PROV_1-1-2-21_19-1" "Stop sniffer" {
+    LogMsg "--- Stop sniffer ---"
+    StopCaptureControllerLan
+    SaveToFileControllerLan "_KDCon2"
+} { PASS_STEP }
+
+
+DoStep "E-UE-PROV_1-1-2-21_19-2" "Analyze flow data" {
+    # Initial PARSER TOOL
+    # Init_PART
+    
+    # Set up parser file
+    set PARSERFILE    $ETH_DEFAULT_TXT_FILE
+} { PASS_STEP }
+
+
+DoStep "E-UE-PROV_1-1-2-21_19-3" "Parse IP data into database" {
+    
+    # Parse data
+    
+    set PARAMS_MTA_SRC      "{{} {} {} {} $MTA_IP {} {} {} {}}"
+    set PARAMS_MTA_DST      "{{} {} {} {} {} {} {} $MTA_IP {}}"
+    set msgID_MTA2           [ParseFile $PARSERFILE "$PARAMS_MTA_SRC $PARAMS_MTA_DST"]
+    puts "msg_id2: $msgID_MTA2"
+} {
+    if { $::PART_RETURN == 0 } {
+        PASS_STEP
+    } else {
+        FAIL_STEP "Cannot find data"
+    }
+}
+
+######################### VERIFY KERBEROS MESSAGES ##########################
+DoStep "E-UE-PROV_1-1-2-21_19-4" "Kerberos AS-REQ: EXISTS" {
+    LogMsg "Verify AS REQUEST EXISTS"
+} {
+    VerifyValue $msgID_MTA2 "INFIRST KRB KRB_AS_REQ KRB_TYPE" "EXISTS" ""
+}
+
+DoStep "E-UE-PROV_1-1-2-21_19-5" "Kerberos AS-REQ to KDC IP address" {
+    LogMsg "Verify AS REQUEST TYPE IS AS-REQ"
+} {
+    VerifyValue $msgID_MTA "INFIRST KRB KRB_AS_REQ HEADERDSTIP" "IS" "10.32.0.13"
+}
+
+DoStep "E-UE-PROV_1-1-2-21_20-1" "Kerberos AS-REP Exists" {
+    LogMsg "Verify AS-REP exists"
+} {
+    VerifyValue $msgID_MTA "INANY KRB KRB_AS_REP KRB_TYPE" "EXISTS" ""
+}
+
+
+################################################################################
+# Cleanup
+################################################################################
+
+Cleanup
+return 0
+

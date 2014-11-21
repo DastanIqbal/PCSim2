@@ -1,0 +1,79 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	PCPCII-522 : Add transition for the DialDigitsComplete event in the UE1Wait state. (ghassler 07/22/2010)
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-UE 1.5.4.6" 
+	descrip="Call Transfer Anonymous - Transferor " 
+	number="RST-UE 1.5.4.6" inspector="disable">
+	
+	<template file="./templates/Call_Transfer_Transferor.xml"/>
+	
+	<remove_from fsm="UE1 Calls DUT">
+		<state ID="UE1Wait"/>
+	</remove_from>
+	
+	<add_to fsm="UE1 Calls DUT">
+		<state ID="UE1Wait" timer="120000">
+			<prelude once="true">
+				<send protocol="utility" msgtype="DialDigits">
+					<mod modtype="add" hdr="number">
+						<msg_ref type="platform">UE2.phone number 1</msg_ref>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>REFER</expr>
+					</eq>
+					<then>
+						<verify step="4" requirements="REQ13856">
+							<and>
+								<contains>
+									<msg_ref type="sip" msg_instance="1">INVITE.From.name-addr</msg_ref>
+									<expr>anonymous</expr>
+								</contains>
+								<and>
+									<contains>
+										<msg_ref type="sip" msg_instance="1" fsm="UE2 Calls DUT">INVITE.From.name-addr</msg_ref>
+										<expr>anonymous</expr>
+									</contains>
+									<or>
+										<dnc>
+											<msg_ref type="sip">REFER</msg_ref>
+											<expr>Referred-By: </expr>
+										</dnc>
+										<contains>
+											<msg_ref type="sip">REFER.Referred-By</msg_ref>
+											<expr>anonymous</expr>
+										</contains>
+									</or>
+								</and>
+							</and>
+						</verify>
+						<send protocol="sip" msgtype="500-REFER"/>
+					</then>
+				</if>
+			</response>
+			<transition to="UE1WaitForByeOrSucceed" event="REFER"/>
+			<transition to="UE1Wait" event="DialDigitsComplete"/>
+		</state>
+	</add_to>
+</pc2xml>

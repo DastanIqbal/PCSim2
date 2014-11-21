@@ -1,0 +1,327 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+	
+	
+	Change History: (Author & Date)
+	
+-->
+
+<pc2xml version="$Revision: 6076 $" 
+    name="UT-HDV-RST-UE 1.6.3.3"
+	descrip="This is a unit test script for testing HDV_RST_UE_1.6.3.3 test script."
+	number="1">
+
+	<fsm name="UE1">
+		<models>
+			<session />
+		</models>
+		<NE sim_type="term" elements="DUT" targets="UE0 DUT" />
+		<states initialstate="Register">
+
+			<!-- REGISTER State -->
+			<state ID="Register">
+				<prelude>
+					<send protocol="sip" msgtype="Register"	target="PCSCF1" originator="DUT" />
+				</prelude>
+				<transition to="Digest" event="401-Register" />
+				<transition to="Call" event="200-Register" />
+			</state>
+
+			<state ID="Digest">
+				<prelude>
+					<send protocol="sip" msgtype="Register"
+						target="PCSCF1" originator="DUT" />
+				</prelude>
+				<transition to="Call" event="200-Register" />
+			</state>
+
+			<!-- Call1 doesn't require any messaging from the unit test script.
+				Wait until call completes and then send an INVITE with the correct Request-Line -->
+			<state ID="Call">
+				<prelude once="true">
+					<log
+						expr="Start the test script if you haven't already." />
+					<sleep time="15000" />
+					<send protocol="sip" msgtype="Invite" target="UE1" originator="DUT" />
+				</prelude>
+				<response>
+					<if>
+						<gte>
+							<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+							<expr>486</expr>
+						</gte>
+						<then>
+							<send protocol="sip" msgtype="Ack" target="UE1" originator="DUT" />
+						</then>
+					</if>
+				</response>
+				<!-- Transitions for Call state -->
+				<transition to="setup1" event="486-INVITE" />
+			</state>
+
+			<state ID="setup1">
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>Invite</expr>
+						</eq>
+						<then>
+							<send protocol="sip" msgtype="100-INVITE" target="UE1" originator="DUT" />
+							<send protocol="sip" msgtype="180-INVITE" target="UE1" originator="DUT" />
+						</then>
+					</if>
+				</response>
+				<!-- Transitions for Setup state -->
+				<transition to="CANCEL1" event="INVITE" />
+			</state>
+			<!-- CANCEL2 State -->
+			<state ID="CANCEL1">
+				<!-- Transitions for CANCEL2 state -->
+				<postlude>
+					<send protocol="sip" msgtype="200-CANCEL" target="UE1" originator="DUT" />
+					<send protocol="sip" msgtype="487-INVITE" target="UE1" originator="DUT" />
+				</postlude>
+				<transition to="SessionEnd2" event="CANCEL" />
+			</state>
+			<state ID="SessionEnd2">
+				<transition to="setup2" event="ACK" />
+			</state>
+
+			<state ID="setup2">
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>Invite</expr>
+						</eq>
+						<then>
+							<send protocol="sip" msgtype="100-INVITE" target="UE1" originator="DUT" />
+							<send protocol="sip" msgtype="180-INVITE" target="UE1" originator="DUT" />
+						</then>
+					</if>
+				</response>
+				<!-- Transitions for Setup state -->
+				<transition to="CANCEL2" event="INVITE" />
+			</state>
+			<!-- CANCEL2 State -->
+			<state ID="CANCEL2">
+				<!-- Transitions for CANCEL2 state -->
+				<postlude>
+					<send protocol="sip" msgtype="200-CANCEL" target="UE1" originator="DUT" />
+					<send protocol="sip" msgtype="487-INVITE" target="UE1" originator="DUT" />
+				</postlude>
+				<transition to="SessionEnd3" event="CANCEL" />
+			</state>
+			<state ID="SessionEnd3">
+				<transition to="setup3" event="ACK" />
+			</state>
+
+			<state ID="setup3">
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>Invite</expr>
+						</eq>
+						<then>
+							<send protocol="sip" msgtype="100-INVITE" target="UE1" originator="DUT" />
+							<send protocol="sip" msgtype="180-INVITE" target="UE1" originator="DUT" />
+						</then>
+					</if>
+				</response>
+				<!-- Transitions for Setup state -->
+				<transition to="CANCEL3" event="INVITE" />
+			</state>
+			<!-- CANCEL2 State -->
+			<state ID="CANCEL3">
+				<!-- Transitions for CANCEL2 state -->
+				<postlude>
+					<send protocol="sip" msgtype="200-CANCEL" target="UE1" originator="DUT" />
+					<send protocol="sip" msgtype="487-INVITE" target="UE1" originator="DUT" />
+				</postlude>
+				<transition to="SessionEnd4" event="CANCEL" />
+			</state>
+			<state ID="SessionEnd4">
+				<transition to="setup4" event="ACK" />
+			</state>
+
+			<state ID="setup4">
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>Invite</expr>
+						</eq>
+						<then>
+							<send protocol="sip" msgtype="100-INVITE" target="UE1" originator="DUT" />
+							<send protocol="sip" msgtype="180-INVITE" target="UE1" originator="DUT" />
+						</then>
+					</if>
+				</response>
+				<!-- Transitions for Setup state -->
+				<transition to="CANCEL4" event="INVITE" />
+			</state>
+			<!-- CANCEL2 State -->
+			<state ID="CANCEL4">
+				<!-- Transitions for CANCEL2 state -->
+				<postlude>
+					<send protocol="sip" msgtype="200-CANCEL" target="UE1" originator="DUT" />
+					<send protocol="sip" msgtype="487-INVITE" target="UE1" originator="DUT" />
+				</postlude>
+				<transition to="SessionEnd5" event="CANCEL" />
+			</state>
+
+			<state ID="SessionEnd5">
+				<transition to="setup5" event="ACK" />
+			</state>
+
+			<state ID="setup5">
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>Invite</expr>
+						</eq>
+						<then>
+							<send protocol="sip" msgtype="100-INVITE" target="UE1" originator="DUT" />
+							<send protocol="sip" msgtype="180-INVITE" target="UE1" originator="DUT" />
+						</then>
+					</if>
+				</response>
+				<!-- Transitions for Setup state -->
+				<transition to="CANCEL5" event="INVITE" />
+			</state>
+			<!-- CANCEL2 State -->
+			<state ID="CANCEL5">
+				<!-- Transitions for CANCEL2 state -->
+				<postlude>
+					<send protocol="sip" msgtype="200-CANCEL" target="UE1" originator="DUT" />
+					<send protocol="sip" msgtype="487-INVITE" target="UE1" originator="DUT" />
+				</postlude>
+				<transition to="SessionEnd6" event="CANCEL" />
+			</state>
+			<state ID="SessionEnd6">
+				<transition to="setup6" event="ACK" />
+			</state>
+
+			<state ID="setup6">
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>Invite</expr>
+						</eq>
+						<then>
+							<send protocol="sip" msgtype="100-INVITE" target="UE1" originator="DUT" />
+							<send protocol="sip" msgtype="180-INVITE" target="UE1" originator="DUT" />
+						</then>
+					</if>
+				</response>
+				<!-- Transitions for Setup state -->
+				<transition to="CANCEL6" event="INVITE" />
+			</state>
+
+			<!-- CANCEL2 State -->
+			<state ID="CANCEL6">
+				<!-- Transitions for CANCEL2 state -->
+				<postlude>
+					<send protocol="sip" msgtype="200-CANCEL" target="UE1" originator="DUT" />
+					<send protocol="sip" msgtype="487-INVITE" target="UE1" originator="DUT" />
+				</postlude>
+				<transition to="SessionEnd7" event="CANCEL" />
+			</state>
+			<state ID="SessionEnd7">
+				<transition to="setup7" event="ACK" />
+			</state>
+
+			<state ID="setup7">
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>Invite</expr>
+						</eq>
+						<then>
+							<send protocol="sip" msgtype="100-INVITE" target="UE1" originator="DUT" />
+							<send protocol="sip" msgtype="180-INVITE" target="UE1" originator="DUT" />
+						</then>
+					</if>
+				</response>
+				<!-- Transitions for Setup state -->
+				<transition to="CANCEL7" event="INVITE" />
+			</state>
+			<!-- CANCEL2 State -->
+			<state ID="CANCEL7">
+				<!-- Transitions for CANCEL2 state -->
+				<postlude>
+					<send protocol="sip" msgtype="200-CANCEL" target="UE1" originator="DUT" />
+					<send protocol="sip" msgtype="487-INVITE" target="UE1" originator="DUT" />
+				</postlude>
+				<transition to="SessionEnd8" event="CANCEL" />
+			</state>
+			<state ID="SessionEnd8">
+				<transition to="setup8" event="ACK" />
+			</state>
+
+			<state ID="setup8">
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>Invite</expr>
+						</eq>
+						<then>
+							<send protocol="sip" msgtype="100-INVITE" target="UE1" originator="DUT" />
+							<send protocol="sip" msgtype="180-INVITE" target="UE1" originator="DUT" />
+						</then>
+					</if>
+				</response>
+				<!-- Transitions for Setup state -->
+				<transition to="CANCEL8" event="INVITE" />
+			</state>
+			<!-- CANCEL2 State -->
+			<state ID="CANCEL8">
+				<!-- Transitions for CANCEL2 state -->
+				<postlude>
+					<send protocol="sip" msgtype="200-CANCEL" target="UE1" originator="DUT" />
+					<send protocol="sip" msgtype="487-INVITE" target="UE1" originator="DUT" />
+				</postlude>
+				<transition to="SessionEnd9" event="CANCEL" />
+			</state>
+			<state ID="SessionEnd9">
+				<transition to="call2" event="ACK" />
+			</state>
+
+			<state ID="call2">
+				<prelude once="true">
+					<log
+						expr="Start the test script if you haven't already." />
+					<sleep time="15000" />
+					<send protocol="sip" msgtype="Invite" target="UE1" originator="DUT" />
+				</prelude>
+				<response>
+					<if>
+						<gte>
+							<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+							<expr>486</expr>
+						</gte>
+						<then>
+							<send protocol="sip" msgtype="Ack" target="UE1" originator="DUT" />
+						</then>
+					</if>
+				</response>
+				<!-- Transitions for Call state -->
+				<transition to="END" event="486-INVITE" />
+			</state>
+		</states>
+	</fsm>
+</pc2xml>

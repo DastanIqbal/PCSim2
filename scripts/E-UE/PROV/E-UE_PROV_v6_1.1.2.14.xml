@@ -1,0 +1,317 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+ Change History: (Author & Date)
+
+
+
+-->
+<!-- Document type and attributes. -->
+<pc2xml version="$Revision: 6076 $"
+        name="E-UE_PROV_1.1.2.14"
+        descrip="Realm table default value when sub-option 4 offset contains invalid value."
+        number="E-UE_PROV_1.1.2.14">
+
+
+    <!-- Reset UE; start capture. -->
+    <template file="./templates/EUE_Prov_B_1_1_1.xml" name="SubOption4"/>
+
+
+    <add_to fsm="SubOption4">
+        <transition from="StartCapture_RebootWait" to="VerifyRealmTable_1" event="TimerExpired"/>
+
+
+        <!--  Verify first ATP table of SubOption4 values. -->
+        <state ID="VerifyRealmTable_1">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPGetTable">
+                    <mod modtype="add" hdr="oids">
+                        <expr>PKTC-IETF-MTA-MIB::pktcMtaDevRealmTable</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP Address</msg_ref>
+                    </mod>
+                    <mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPResp</expr>
+                    </eq>
+                <then>
+                    <verify step="7">
+                        <and>
+                            <eq>
+                                <!-- pktcMtaDevProvUnsolicitedKeyMaxTimeout -->
+                                <msg_ref type="utility" index="0 4 2">SNMPResp.varBind</msg_ref>
+                                <expr>255</expr>
+                            </eq>
+                        <and>
+                            <eq>
+                                <!-- pktcMtaDevProvUnsolicitedKeyNomTimeout -->
+                                <msg_ref type="utility" index="0 5 2">SNMPResp.varBind</msg_ref>
+                                <expr>50</expr>
+                            </eq>
+                            <eq>
+                                <!-- pktcMtaDevProvUnsolicitedKeyMaxRetries -->
+                                <msg_ref type="utility" index="0 6 2">SNMPResp.varBind</msg_ref>
+                                <expr>1</expr>
+                            </eq>
+                        </and>
+                        </and>
+                    </verify>
+                </then>
+                </if>
+            </response>
+            <transition to="ConfigurePolicy2" event="SNMPResp"/>
+        </state>
+
+
+        <!--  Change configuration of provisioning server policy as in Table 2 of the ATP. -->
+        <!--state ID="ConfigurePolicy2"
+               provFile="E-UE_PROV_v6_2.1.2.1_2.bin" 
+               policyFile="MTAFORCW122_test" 
+               nextState="Reset2">
+        </state-->
+
+		
+		<state ID="ConfigurePolicy2">
+			<prelude>
+				<log promptUser="true" expr="Set the DUT to use a new policy, X_eUEv6_wrong_sub4_2 and depoly."/>
+				<generate event="Branch1Event"/>
+			</prelude>
+			<transition to="Reset2" event="Branch1Event"/>
+		</state>
+
+        <!--  Second UE reset. -->
+        <state ID="Reset2" timer="150000">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPSet">
+                    <mod modtype="add" hdr="array">
+                        <var_expr>
+                            <expr>varBind 1 1 3 \r\n ][ , </expr>
+                            <expr>DOCS-CABLE-DEVICE-MIB::docsDevResetNow.0,INTEGER,1][\r\n</expr>
+                        </var_expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.CM IP Address</msg_ref>
+                    </mod>
+                    <!-- Always use version 2 for a CM reset -->
+                    <mod modtype="replace" hdr="version">
+                        <expr>2c</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPRespFailure</expr>
+                    </eq>
+                <then>
+                    <fail/>
+                </then>
+                </if>
+                <if>
+                    <or>
+                        <eq>
+                            <msg_ref type="sip">REGISTER.Contact.expires</msg_ref>
+                            <expr>0</expr>
+                        </eq>
+                        <eq>
+                            <msg_ref type="sip">REGISTER.Expires.value</msg_ref>
+                            <expr>0</expr>
+                        </eq>
+                    </or>
+                <then>
+                    <send protocol="sip" msgtype="200-REGISTER"/>
+                </then>
+                </if>
+            </response>
+            <transition to="Reset2" event="SNMPResp"/>
+            <transition to="Reset2" event="REGISTER"/>
+            <transition to="VerifyRealmTable_2" event="TimerExpired"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+            
+            
+        <!--  Verify second ATP table of SubOption4 values. -->
+        <state ID="VerifyRealmTable_2">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPGetTable">
+                    <mod modtype="add" hdr="oids">
+                        <expr>PKTC-IETF-MTA-MIB::pktcMtaDevRealmTable</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP Address</msg_ref>
+                    </mod>
+                    <mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPResp</expr>
+                    </eq>
+                <then>
+                    <verify step="10">
+                        <and>
+                            <eq>
+                                <!-- pktcMtaDevProvUnsolicitedKeyMaxTimeout -->
+                                <msg_ref type="utility" index="0 4 2">SNMPResp.varBind</msg_ref>
+                                <expr>800</expr>
+                            </eq>
+                        <and>
+                            <eq>
+                                <!-- pktcMtaDevProvUnsolicitedKeyNomTimeout -->
+                                <msg_ref type="utility" index="0 5 2">SNMPResp.varBind</msg_ref>
+                                <expr>8000</expr>
+                            </eq>
+                            <eq>
+                                <!-- pktcMtaDevProvUnsolicitedKeyMaxRetries -->
+                                <msg_ref type="utility" index="0 6 2">SNMPResp.varBind</msg_ref>
+                                <expr>7</expr>
+                            </eq>
+                        </and>
+                        </and>
+                    </verify>
+                </then>
+                </if>
+            </response>
+            <transition to="ConfigurePolicy3" event="SNMPResp"/>
+        </state>
+
+
+        <!--  Change configuration of provisioning server policy as in Table 3 of the ATP. -->
+        <!--state ID="ConfigurePolicy3"
+               provFile="E-UE_PROV_v6_2.1.2.1_2.bin" 
+               policyFile="MTAFORCW122_test" 
+               nextState="Reset3">
+        </state-->
+
+
+		<state ID="ConfigurePolicy3">
+			<prelude>
+				<log promptUser="true" expr="Set the DUT to use a new policy, X_eUEv6_wrong_sub4_3 and depoly."/>
+				<generate event="Branch1Event"/>
+			</prelude>
+			<transition to="Reset3" event="Branch1Event"/>
+		</state>
+		
+        <!--  Third UE reset. -->
+        <state ID="Reset3" timer="150000">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPSet">
+                    <mod modtype="add" hdr="array">
+                        <var_expr>
+                            <expr>varBind 1 1 3 \r\n ][ , </expr>
+                            <expr>DOCS-CABLE-DEVICE-MIB::docsDevResetNow.0,INTEGER,1][\r\n</expr>
+                        </var_expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.CM IP Address</msg_ref>
+                    </mod>
+                    <!-- Always use version 2 for a CM reset -->
+                    <mod modtype="replace" hdr="version">
+                        <expr>2c</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPRespFailure</expr>
+                    </eq>
+                <then>
+                    <fail/>
+                </then>
+                </if>
+                <if>
+                    <or>
+                        <eq>
+                            <msg_ref type="sip">REGISTER.Contact.expires</msg_ref>
+                            <expr>0</expr>
+                        </eq>
+                        <eq>
+                            <msg_ref type="sip">REGISTER.Expires.value</msg_ref>
+                            <expr>0</expr>
+                        </eq>
+                    </or>
+                <then>
+                        <send protocol="sip" msgtype="200-REGISTER"/>
+                </then>
+                </if>
+            </response>
+            <transition to="Reset3" event="SNMPResp"/>
+            <transition to="Reset3" event="REGISTER"/>
+            <transition to="VerifyRealmTable_3" event="TimerExpired"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+
+        <!--  Verify third ATP table of SubOption4 values. -->
+        <state ID="VerifyRealmTable_3">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPGetTable">
+                    <mod modtype="add" hdr="oids">
+                        <expr>PKTC-IETF-MTA-MIB::pktcMtaDevRealmTable</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP Address</msg_ref>
+                    </mod>
+                    <mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPResp</expr>
+                    </eq>
+                <then>
+                    <verify step="13">
+                        <and>
+                            <eq>
+                                <!-- pktcMtaDevProvUnsolicitedKeyMaxTimeout -->
+                                <msg_ref type="utility" index="0 4 2">SNMPResp.varBind</msg_ref>
+                                <expr>255</expr>
+                            </eq>
+                        <and>
+                            <eq>
+                                <!-- pktcMtaDevProvUnsolicitedKeyNomTimeout -->
+                                <msg_ref type="utility" index="0 5 2">SNMPResp.varBind</msg_ref>
+                                <expr>8000</expr>
+                            </eq>
+                            <eq>
+                                <!-- pktcMtaDevProvUnsolicitedKeyMaxRetries -->
+                                <msg_ref type="utility" index="0 6 2">SNMPResp.varBind</msg_ref>
+                                <expr>2000</expr>
+                            </eq>
+                        </and>
+                        </and>
+                    </verify>
+                </then>
+                </if>
+            </response>
+			<transition to="END" event="SNMPResp"/>
+        </state>
+    </add_to>
+</pc2xml>

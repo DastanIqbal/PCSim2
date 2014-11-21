@@ -1,0 +1,476 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+
+<!-- First are the document type and the attributes for our document -->
+<pc2xml version="$Revision: 8188 $" 
+	name="NAT_UE_1.2.5.8" 
+	descrip="Call to Full-ICE UE from a Lite-ICE UE (DUT) - host candidate" 
+	number="NAT_UE_1.2.5.8">
+	
+	<template file="./templates/CallTermAtUETemp.xml" name="UE1"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Setup"/>
+		<state ID="Answer"/>
+		<state ID="Alerting"/>
+		<state ID="Proceeding"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<NE targets="RTP RTCP"/>
+		<state ID="Setup">
+			<response>
+				<!-- If the current message that we received is an Invite, answer with
+               a 100-trying -->
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>Invite</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="100-INVITE"/>
+					</then>
+				</if>
+				<verify step="1" requirements="RFC4361, RFC4365, RFC4367, RFC4369, RFC4371, RFC4446, RFC4496, RFC4497, RFC4501, RFC4506, RFC4509, RFC4510" group="1">
+					<and>
+						<contains>
+							<msg_ref type="sip">18x-Invite.SDP</msg_ref>
+							<expr>RTP</expr>
+						</contains>
+						<contains>
+							<msg_ref type="sip">18x-Invite.SDP</msg_ref>
+							<expr>RTCP</expr>
+						</contains>
+					</and>
+				</verify>
+				<verify step="1" requirements="RFC4361, RFC4365, RFC4367, RFC4369, RFC4371, RFC4446, RFC4496, RFC4497, RFC4501, RFC4506, RFC4509, RFC4510" group="2">
+					<contains>
+						<msg_ref type="sip">18x-Invite.SDP</msg_ref>
+						<expr>a=ice-lite</expr>
+					</contains>
+				</verify>
+				<verify step="1" requirements="RFC4361, RFC4365, RFC4367, RFC4369, RFC4371, RFC4446, RFC4496, RFC4497, RFC4501, RFC4506, RFC4509, RFC4510" group="3">
+					<contains>
+						<msg_ref type="sdp">18x-Invite.c.address</msg_ref>
+						<msg_ref type="sdp" hdr_instance="any">18x-Invite.candidate.address</msg_ref>
+					</contains>
+				</verify>
+				<verify step="1" requirements="RFC4361, RFC4365, RFC4367, RFC4369, RFC4371, RFC4446, RFC4496, RFC4497, RFC4501, RFC4506, RFC4509, RFC4510" group="4">
+					<contains>
+						<msg_ref type="rtp">18x-Invite.candidate.component-id</msg_ref>
+						<expr>1</expr>
+					</contains>
+				</verify>
+				<verify step="1" requirements="RFC4361, RFC4365, RFC4367, RFC4369, RFC4371, RFC4446, RFC4496, RFC4497, RFC4501, RFC4506, RFC4509, RFC4510" group="5">
+					<contains>
+						<msg_ref type="rtcp">18x-Invite.candidate.component-id</msg_ref>
+						<expr>2</expr>
+					</contains>
+				</verify>
+				<verify step="1" requirements="RFC4361, RFC4365, RFC4367, RFC4369, RFC4371, RFC4446, RFC4496, RFC4497, RFC4501, RFC4506, RFC4509, RFC4510" group="6">
+					<contains>
+						<msg_ref type="sip">18x-Invite.SDP</msg_ref>
+						<expr>a=rtcp</expr>
+					</contains>
+				</verify>
+				<verify step="1" requirements="RFC4361, RFC4365, RFC4367, RFC4369, RFC4371, RFC4446, RFC4496, RFC4497, RFC4501, RFC4506, RFC4509, RFC4510" group="7">
+					<and>
+						<dnc>
+							<msg_ref type="sip">18x-Invite.SDP</msg_ref>
+							<expr>raddr</expr>
+						</dnc>
+						<dnc>
+							<msg_ref>18x-Invite.SDP</msg_ref>
+							<expr>rport</expr>
+						</dnc>
+					</and>
+				</verify>
+				<verify step="1" requirements="RFC4361, RFC4365, RFC4367, RFC4369, RFC4371, RFC4446, RFC4496, RFC4497, RFC4501, RFC4506, RFC4509, RFC4510" group="8">
+					<contains>
+						<msg_ref type="sip">18x-Invite.SDP</msg_ref>
+						<expr>ice-ufrag</expr>
+					</contains>
+				</verify>
+				<verify step="1" requirements="RFC4361, RFC4365, RFC4367, RFC4369, RFC4371, RFC4446, RFC4496, RFC4497, RFC4501, RFC4506, RFC4509, RFC4510" group="9">
+					<contains>
+						<msg_ref type="sip">18x-Invite.SDP</msg_ref>
+						<expr>ice-pwd</expr>
+					</contains>
+				</verify>
+				<verify step="1" requirements="RFC4361, RFC4365, RFC4367, RFC4369, RFC4371, RFC4446, RFC4496, RFC4497, RFC4501, RFC4506, RFC4509, RFC4510" group="10">
+					<contains>
+						<msg_ref type="sip">18x-Invite.SDP</msg_ref>
+						<expr>ice-ufrag</expr>
+					</contains>
+				</verify>
+				<verify step="1" requirements="RFC4361, RFC4365, RFC4367, RFC4369, RFC4371, RFC4446, RFC4496, RFC4497, RFC4501, RFC4506, RFC4509, RFC4510" group="11">
+					<contains>
+						<msg_ref type="sip">18x-Invite.SDP</msg_ref>
+						<expr>a=rtcp</expr>
+					</contains>
+				</verify>
+			</response>
+			<transition to="Send200invite" event="INVITE"/>
+		</state>
+		
+		<state ID="Send200invite" timer="5000">
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="event"/>
+						<expr>TimerExpired</expr>
+					</eq>
+					<then>
+						<!--Sending 200-Invite-->
+						<send protocol="sip" msgtype="200-INVITE">
+							<mod modtype="add" hdr="c">
+								<var_expr>
+									<expr>IN IP4</expr>
+									<msg_ref type="platform">Platform.TURN IP Address</msg_ref>
+								</var_expr>
+							</mod>
+							<mod modtype="add" hdr="rtpmap">
+								<expr>icepwd:asd88fgpdd777uzjYhagZg</expr>
+							</mod>
+							<mod modtype="add" hdr="rtpmap">
+								<expr>ice-ufrag:8hhY</expr>
+							</mod>
+							<mod modtype="add" hdr="SDP">
+								<var_expr>
+									<expr>a=candidate:1 1 UDP 2130706431</expr>
+									<msg_ref type="platform">PCSCF1.IP</msg_ref>
+									<msg_ref type="platform">PCSCF1.port</msg_ref>
+									<expr> typ host unkwownAttr unknownVal</expr>
+								</var_expr>
+							</mod>
+							<mod modtype="add" hdr="SDP">
+								<var_expr>
+									<expr>a=candidate:2 1 UDP 1694498815</expr>
+									<msg_ref type="platform">Platform.STUN IP Address</msg_ref>
+									<msg_ref type="platform">Platform.STUN UDP Port</msg_ref>
+									<expr>typ srflxraddr </expr>
+									<msg_ref type="platform">PCSCF1.IP</msg_ref>
+									<expr> rport </expr>
+									<msg_ref type="platform">PCSCF1.port</msg_ref>
+									<expr>unknownAttr unknownVal</expr>
+								</var_expr>
+							</mod>
+							<mod modtype="add" hdr="SDP">
+								<expr>a=candidate:Rd8bb574e 1 UDP16777215 216.187.87.78 65535typ relay raddr 216.187.87.78rport 65535 unkwownAttr</expr>
+							</mod>
+						</send>
+					</then>
+				</if>
+				<!-- Now test for an UPDATE message -->
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>UPDATE</expr>
+					</eq>
+					<then>
+						<!--QoS required or supported sending 200-Update message to peer.-->
+						<send protocol="sip" msgtype="200-Update"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Send200invite" event="UPDATE"/>
+			<transition to="Send200invite" event="TimerExpired"/>
+			<transition to="Connected" event="ACK"/>
+		</state>
+		
+		<state ID="Connected">
+			<prelude once="true">
+				<generate event="Branch3Event" fsm="STUN1"/>
+			</prelude>
+			<transition to="Connected" event="OffHookComplete"/>
+			<transition to="SendReinvite" event="Branch4Event"/>
+		</state>
+		
+		<state ID="SendReinvite">
+			<prelude once="true">
+				<send protocol="sip" msgtype="ReInvite"/>
+			</prelude>
+			<!-- Expected responses are 100 or 200 -->
+			<response>
+				<if>
+					<contains>
+						<msg_ref type="sip" hdr_instance="any">18x-Invite.Require</msg_ref>
+						<expr>100rel</expr>
+					</contains>
+					<then>
+						<!--Reliablity required for test sending Prack message to peer.-->
+						<send protocol="sip" msgtype="Prack"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Proceeding1" event="100-INVITE"/>
+			<transition to="Alerting1" event="180-INVITE"/>
+			<transition to="Alerting1" event="183-INVITE"/>
+			<transition to="Connected1" event="200-INVITE"/>
+		</state>
+		
+		<state ID="Proceeding1">
+			<!-- Expected responses are 180, 183 or 200 -->
+			<response>
+				<if>
+					<contains>
+						<msg_ref type="sip" hdr_instance="any">18x-Invite.Require</msg_ref>
+						<expr>100rel</expr>
+					</contains>
+					<then>
+						<!--Reliablity required for test sending Prack message to peer.-->
+						<send protocol="sip" msgtype="Prack"/>
+					</then>
+				</if>
+			</response>
+			<!-- Transitions for Proceeding state -->
+			<transition to="Alerting1" event="180-INVITE"/>
+			<transition to="Alerting1" event="183-INVITE"/>
+			<transition to="Connected1" event="200-INVITE"/>
+		</state>
+		
+		<state ID="Alerting1" timer="12000">
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="event"/>
+						<expr>TimerExpired</expr>
+					</eq>
+					<then>
+						<!--Take DUT phone off hook-->
+						<send protocol="utility" msgtype="OffHook"/>
+					</then>
+				</if>
+				<!-- Expected responses are 180, 183, PRACK, UPDATE, or 200 -->
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>UPDATE</expr>
+					</eq>
+					<then>
+						<!--QoS required for test, sending a 200-OK to Update message to peer.-->
+						<send protocol="sip" msgtype="200-Update"/>
+					</then>
+					<!-- Step 8 from the Default Message Flow Call-Term-at-UE(DUT) Sequence Diagram - received 180 -->
+					<elseif>
+						<and>
+							<eq>
+								<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+								<expr>180</expr>
+							</eq>
+							<contains>
+								<msg_ref type="sip" hdr_instance="any">180-INVITE.Require</msg_ref>
+								<expr>100rel</expr>
+							</contains>
+						</and>
+						<then>
+							<!--Reliablity required for test, sending Prack message to peer.-->
+							<send protocol="sip" msgtype="Prack"/>
+						</then>
+					</elseif>
+				</if>
+			</response>
+			<transition to="Alerting" event="200-PRACK"/>
+			<transition to="Alerting" event="UPDATE"/>
+			<transition to="Alerting" event="18x-INVITE"/>
+			<transition to="Answer" event="TimerExpired"/>
+			<transition to="Connected" event="200-INVITE"/>
+		</state>
+		
+		<state ID="Answer1">
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>UPDATE</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="200-Update"/>
+					</then>
+				</if>
+			</response>
+			<!-- Transitions for Answer state -->
+			<transition to="Answer1" event="UPDATE"/>
+			<transition to="Answer1" event="200-PRACK"/>
+			<transition to="Answer1" event="18x-INVITE"/>
+			<transition to="Answer1" event="OffHookComplete"/>
+			<transition to="Connected1" event="200-INVITE"/>
+		</state>
+		
+		<state ID="Connected1">
+			<prelude once="true">
+				<send protocol="sip" msgtype="ACK"/>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="rtp" msg_instance="last">Message</msg_ref>
+						<expr>RTP</expr>
+					</eq>
+					<then>
+						<verify step="6" requirements="RFC4483, RFC4487, RFC4484">
+							<eq>
+								<msg_ref type="rtp" msg_instance="last">Message</msg_ref>
+								<expr>RTP</expr>
+							</eq>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<transition to="Connected1" event="OffHookComplete"/>
+			<transition to="Releasing1" event="RTP"/>
+		</state>
+		
+		<state ID="Releasing1">
+			<prelude>
+				<send protocol="sip" msgtype="Bye"/>
+			</prelude>
+			<transition to="OnHook1" event="200-BYE"/>
+		</state>
+		
+		<state ID="OnHook1" ES="true">
+			<prelude>
+				<send protocol="utility" msgtype="OnHook"/>
+			</prelude>
+			<transition to="END" event="OnHookComplete"/>
+		</state>
+	</add_to>
+	
+	<fsm name="STUN1">
+		<models>
+			<stun/>
+		</models>
+		
+		<NE sim_type="term" elements="SCSCF1 PCSCF1" targets="SCSCF1"/>
+		
+		<states initialstate="WaitSucceedEvent">
+			<state ID="WaitSucceedEvent">
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="stun">Request</msg_ref>
+							<expr>BindingRequest</expr>
+						</eq>
+						<then>
+							<send protocol="stun" msgtype="BindingResponse"/>
+						</then>
+					</if>
+				</response>
+				<transition to="SendBindingReq" event="SucceedEvent"/>
+				<transition to="WaitSucceedEvent" event="BindingRequest"/>
+			</state>
+			
+			<state ID="SendBindingReq">
+				<prelude once="true">
+					<send protocol="stun" msgtype="BindingRequest">
+						<mod modtype="replace" hdr="FINGERPRINT">
+							<expr>xxxx</expr>
+						</mod>
+						<mod modtype="replace" hdr="USERNAME">
+							<expr>xxxx</expr>
+						</mod>
+						<mod modtype="replace" hdr="ICE-CONTROLLING">
+							<expr>xxxx</expr>
+						</mod>
+						<mod modtype="replace" hdr="PRIORITY">
+							<expr>xxxx</expr>
+						</mod>
+						<mod modtype="replace" hdr="MESSAGE-INTEGRIT">
+							<expr>xxxx</expr>
+						</mod>
+					</send>
+				</prelude>
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="stun">Response</msg_ref>
+							<expr>BindingResponse</expr>
+						</eq>
+						<then>
+							<verify step="3" requirements="RFC4373, RFC4408, RFC4409, RFC4411, RFC4415, RFC4416, RFC4417, RFC4529">
+								<eq>
+									<msg_ref type="stun">BindingResponse</msg_ref>
+									<expr>FINGERPRINT</expr>
+								</eq>
+							</verify>
+							<!--???????? Verify that the response uses the short
+								term authentication mechanism. -->
+							<generate event="Branch2Event" fsm="UE1"/>
+						</then>
+					</if>
+					<if>
+						<eq>
+							<msg_ref type="stun">Request</msg_ref>
+							<expr>BindingRequest</expr>
+						</eq>
+						<then>
+							<send protocol="stun" msgtype="BindingResponse"/>
+						</then>
+					</if>
+				</response>
+				<transition to="WaitBranch3Event" event="BindingResponse"/>
+				<transition to="SendBindingReq" event="BindingRequest"/>
+			</state>
+			
+			<state ID="WaitBranch3Event">
+				<transition to="Re-BindingReq" event="Branch3Event"/>
+			</state>
+			
+			<state ID="Re-BindingReq">
+				<prelude once="true">
+					<send protocol="stun" msgtype="BindingRequest"/>
+				</prelude>
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="stun">Request</msg_ref>
+							<expr>BindingRequest</expr>
+						</eq>
+						<then>
+							<send protocol="stun" msgtype="BindingResponse"/>
+						</then>
+					</if>
+					<if>
+						<eq>
+							<msg_ref type="stun">Response</msg_ref>
+							<expr>BindingResponse</expr>
+						</eq>
+						<then>
+							<verify step="6" requirements="RFC4373, RFC4408, RFC4409, RFC4411, RFC4415, RFC4416, RFC4417, RFC4529">
+								<eq>
+									<msg_ref type="stun">Response</msg_ref>
+									<expr>BindingResponse</expr>
+								</eq>
+							</verify>
+						</then>
+					</if>
+				</response>
+				<transition to="SendBranch4Event" event="BindingResponse"/>
+				<transition to="Re-BindingReq" event="BindingRequest"/>
+			</state>
+			
+			<state ID="SendBranch4Event" ES="true">
+				<prelude>
+					<generate event="Branch4Event" fsm="UE1"/>
+				</prelude>
+			</state>
+		</states>
+	</fsm>
+</pc2xml>

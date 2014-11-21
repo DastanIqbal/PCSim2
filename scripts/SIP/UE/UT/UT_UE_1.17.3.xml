@@ -1,0 +1,40 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+
+<pc2xml version="$Revision: 8188 $" name="UT_UE_1.17.3" descrip="This is a unit test script for the UE_1.17.3 test script." number="1">
+	<template name="UE0" file="$UT_PATH/Templates/ut/Reg_DUT.xml"/>
+	<add_to fsm="UE0">
+		<NE ext_require="gruu"/>
+		<transition from="Digest" to="Reregister" event="200-Register"/>
+		<state ID="Reregister">
+			<prelude>
+				<sleep time="10000"/>
+				<send protocol="sip" msgtype="Register" target="UE1" originator="DUT"/>
+			</prelude>
+			<transition to="Digest2" event="401-REGISTER"/>
+		</state>
+		<state ID="Digest2">
+			<prelude>
+				<send protocol="sip" msgtype="Register" target="PCSCF1" originator="DUT"/>
+			</prelude>
+			<transition to="END" event="200-Register"/>
+		</state>
+	</add_to>
+</pc2xml>

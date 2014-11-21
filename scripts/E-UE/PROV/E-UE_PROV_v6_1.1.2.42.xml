@@ -1,0 +1,181 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+Change History: (Author & Date)
+
+
+-->
+<!-- Document type and attributes. -->
+<pc2xml version="$Revision: 6076 $"
+        name="E-UE_PROV_1.1.2.42"
+        descrip="eUE retrieves ToD from eCM."
+        number="E-UE_PROV_1.1.2.42">
+
+
+    <!-- Reset UE; start capture. -->
+    <template file="./templates/EUE_Prov_B_1_1_1.xml" name="SecProvFlow"/>
+
+    <add_to fsm="SecProvFlow">
+    
+	<transition from="Reboot" to="blockToD" event="TimerExpired"/>
+
+	<state ID="blockToD">
+		<prelude once="true">
+			<send protocol="utility" msgtype="PROVManagePort">
+				<mod modtype="add" hdr="protocol">
+					<expr>tod</expr>
+				</mod>
+				<mod modtype="add" hdr="timer">
+					<expr>180</expr>
+				</mod>
+				<mod modtype="replace" hdr="operation">
+					<expr>stop</expr>
+				</mod>
+			</send>
+		</prelude>
+			
+		<transition to="END" event="PROVManagePortFailure"/>
+		<transition to="StartCapture_RebootWait" event="PROVManagePortAck"/>
+	</state>
+
+	<transition from="StartCapture_RebootWait" to="checkCMstatus" event="TimerExpired"/>
+	
+	<state ID="checkCMstatus">
+		<prelude once="true">
+			<stop_capture/>
+
+			<parse_capture name="eUE_v6">
+			    <parser_filter protocol="dhcpv6" clientMAC="DUT.MAC Address"/>
+			</parse_capture>
+
+			<send protocol="utility" msgtype="SNMPGet">
+				<mod modtype="add" hdr="oids">
+					<expr>DOCS-CABLE-DEVICE-MIB::docsDevServerBootState.0</expr>
+				</mod>
+				<mod modtype="replace" hdr="agentip">
+					<msg_ref type="platform">DUT.CM IP Address</msg_ref>
+				</mod>
+				<mod modtype="replace" hdr="version">
+					<expr>2c</expr>
+				</mod>
+			</send>			
+		</prelude>
+		<response>
+			<verify step="9">
+				<contains>
+					<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+					<expr>1</expr>
+				</contains>
+			</verify>
+			
+			<verify step="10">
+				<and>
+					<notnull>
+						<capture_ref type="dhcpv6" name="eUE_v6">Reply.num</capture_ref>
+					</notnull>
+					<notnull>
+						<capture_ref type="dhcpv6" name="eUE_v6">Release.num</capture_ref>
+					</notnull>
+				</and>
+			</verify>
+		</response>
+		
+		<transition to="unblockToD" event="SNMPResp"/>
+		<transition to="END" event="SNMPRespFailure"/>
+	</state>
+
+	<!-- 11 unblock ToD port -->
+	<state ID="unblockToD">
+		<prelude once="true">
+			<start_capture>
+				<filter>
+					<var_expr>
+						<expr>host </expr>
+						<msg_ref type="platform">DUT.IP</msg_ref>
+						<expr> || host </expr>
+						<msg_ref type="platform">DUT.CM IP Address</msg_ref>
+						<expr> || host </expr>
+						<msg_ref type="platform">DUT.DHCP Server IP</msg_ref>
+					</var_expr>
+				</filter>
+			</start_capture>
+			<send protocol="utility" msgtype="PROVManagePort">
+				<mod modtype="add" hdr="protocol">
+					<expr>tod</expr>
+				</mod>
+				<mod modtype="replace" hdr="operation">
+					<expr>start</expr>
+				</mod>
+			</send>
+		</prelude>
+			
+		<transition to="END" event="PROVManagePortFailure"/>
+		<transition to="EDVAProvisions" event="PROVManagePortAck"/>
+	</state>
+	
+        <state ID="EDVAProvisions">
+		<prelude once="true">
+			<sleep time ="60000"/>
+			
+			<stop_capture/>
+			
+			<parse_capture name="eUE_syslog">
+			    <parser_filter protocol="syslog" ip="DUT.IP"/>
+			</parse_capture>
+
+			<parse_capture name="eCM_time">
+				<parser_filter protocol="time" ip="DUT.CM IP Address"/>
+			</parse_capture>
+			
+			<send protocol="utility" msgtype="SNMPGet">
+				<mod modtype="add" hdr="oids">
+					<expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvisioningState.0</expr>
+				</mod>
+				<mod modtype="replace" hdr="agentip">
+					<msg_ref type="platform">DUT.IP</msg_ref>
+				</mod>
+				<mod modtype="replace" hdr="version">
+					<expr>3</expr>
+				</mod>
+			</send>
+		</prelude>
+		<response>
+			<verify step="12">
+				<notnull>
+					<capture_ref type="time" name="eCM_time">Response.num</capture_ref>
+				</notnull>
+			</verify>
+			
+			<verify step="13">
+			    <contains>
+				<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+				<expr>1</expr>
+			    </contains>
+			</verify>
+
+			<verify step="14">
+				<or>
+					<contains>
+						<capture_ref type="syslog" name="eUE_syslog" msg_instance="1">syslog.msg.showname</capture_ref>
+						<expr>ToD</expr>
+					</contains>
+					<contains>
+						<capture_ref type="syslog" name="eUE_syslog" msg_instance="2">syslog.msg.showname</capture_ref>
+						<expr>ToD</expr>
+					</contains>
+				</or>
+			</verify>
+		</response>
+            <transition to="END" event="SNMPResp"/>
+	    <transition to="END" event="SNMPRespFailure"/>
+        </state>
+    </add_to>
+</pc2xml>

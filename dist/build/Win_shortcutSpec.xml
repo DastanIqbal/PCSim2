@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes" ?>
+
+<shortcuts>
+
+  <skipIfNotSupported />
+
+  <programGroup defaultName="CableLabs\PCSim2" location="startMenu"/>
+  
+  <shortcut
+     name="PCSim2"
+     programGroup="yes"
+     desktop="yes"
+     applications="no"
+     startMenu="no"
+     startup="no"
+     target="$INSTALL_PATH\bin\PCSim2.bat"
+     commandLine=""
+     description="PacketCable 2.0 Simultation Tool"
+     iconFile="$INSTALL_PATH\bin\pcsim2.ico"
+     iconIndex="0"
+     initialState="noShow"
+		 workingDirectory="$INSTALL_PATH\bin">
+   </shortcut>
+
+   <shortcut
+     name="PCSim2 Uninstaller"
+     programGroup="yes"
+     desktop="no"
+     applications="no"
+     startMenu="no"
+     startup="no"
+     target="$INSTALL_PATH\bin\PCSim2_Uninstaller.bat"
+     commandLine=""
+		 workingDirectory="$INSTALL_PATH\bin"
+     description="Uninstalls the PCSim2 tool.">
+          
+   </shortcut>
+  
+</shortcuts>

@@ -1,0 +1,267 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-UE 1.1.3.2" 
+	descrip=" Held Media: Dual-hold " 
+	number="RST-UE 1.1.3.2">
+	
+	<template file="./templates/CallOrigAtUETemp.xml" name="UE1"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Connected"/>
+		<state ID="OnHook"/>
+		<state ID="Releasing"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<state ID="OffHook" sub="postlude">
+			<start_capture>
+				<filter>
+					<var_expr>
+						<expr>host </expr>
+						<msg_ref type="platform">UE0.IP</msg_ref>
+						<expr> || host </expr>
+						<msg_ref type="platform">Platform.STUN IP Address</msg_ref>
+					</var_expr>
+				</filter>
+			</start_capture>
+		</state>
+		
+		<state ID="Connected">
+			<prelude once="true">
+				<!-- Step 2 of test case 1.1.3.2 - -->
+				<send protocol="sip" msgtype="REINVITE">
+					<mod modtype="replace" hdr="mode" param="value">
+						<expr>inactive</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+						<expr>200</expr>
+					</eq>
+					<then>
+						<verify step="2" group="200Invite">
+							<eq>
+								<msg_ref type="sdp">200-Invite.mode.value</msg_ref>
+								<expr>inactive</expr>
+							</eq>
+						</verify>
+						<send protocol="sip" msgtype="ACK"/>
+					</then>
+				</if>
+			</response>
+			<transition to="HookFlash1" event="100-INVITE"/>
+			<transition to="SendHookFlash1" event="200-Invite"/>
+		</state>
+		
+		<state ID="HookFlash1">
+			<response>
+				<verify step="2" group="200Invite">
+					<eq>
+						<msg_ref type="sdp">200-Invite.mode.value</msg_ref>
+						<expr>inactive</expr>
+					</eq>
+				</verify>
+			</response>
+			<postlude>
+				<send protocol="sip" msgtype="ACK"/>
+			</postlude>
+			<transition to="SendHookFlash1" event="200-Invite"/>
+		</state>
+		
+		<state ID="SendHookFlash1">
+			<prelude>
+				<!-- Step 4 of test case 1.1.3.2 - -->
+				<send protocol="utility" msgtype="HookFlash"/>
+			</prelude>
+			<transition to="HookFlash2" event="HookFlashComplete"/>
+		</state>
+		
+		<state ID="HookFlash2">
+			<response>
+				<verify step="3" requirements="REQ13454, REQ13452, REQ13453, REQ14425">
+					<eq>
+						<msg_ref type="sdp">REINVITE.mode.value</msg_ref>
+						<expr>inactive</expr>
+					</eq>
+				</verify>
+				<verify step="3" requirements="REQ13454, REQ13452, REQ13453, REQ14425">
+					<and>
+						<ipv4>
+							<msg_ref type="sdp">REINVITE.c.address</msg_ref>
+						</ipv4>
+						<dnc>
+							<msg_ref type="sdp">REINVITE.c.address</msg_ref>
+							<expr>0.0.0.0</expr>
+						</dnc>
+					</and>
+				</verify>
+			</response>
+			<postlude>
+				<send protocol="sip" msgtype="100-INVITE"/>
+				<sleep time="800"/>
+				<send protocol="sip" msgtype="200-INVITE">
+					<mod modtype="replace" hdr="mode" param="value">
+						<expr>inactive</expr>
+					</mod>
+				</send>
+			</postlude>
+			<transition to="ACK2" event="REINVITE"/>
+		</state>
+		
+		<state ID="ACK2">
+			<transition to="SendHookFlash2" event="ACK"/>
+		</state>
+		
+		<state ID="SendHookFlash2">
+			<prelude>
+				<log promptUser="true" verify="true" yesExpected="true" 
+					step="4" requirements="REQ13454, REQ13464" 
+					expr="Verify in the capture file that the device is still transmitting RTCP packets."/>
+				<!-- Step 5 of test case 1.1.3.2 - -->
+				<send protocol="utility" msgtype="HookFlash"/>
+			</prelude>
+			<transition to="HookFlash3" event="HookFlashComplete"/>
+		</state>
+		
+		<state ID="HookFlash3">
+			<response>
+				<verify step="5" requirements="REQ13454, REQ13461">
+					<eq>
+						<msg_ref type="sdp">REINVITE.mode.value</msg_ref>
+						<expr>sendrecv</expr>
+					</eq>
+				</verify>
+			</response>
+			<postlude>
+				<send protocol="sip" msgtype="100-INVITE"/>
+				<!-- Step 6 of test case 1.1.3.2 - -->
+				<send protocol="sip" msgtype="200-INVITE">
+					<mod modtype="replace" hdr="mode" param="value">
+						<expr>inactive</expr>
+					</mod>
+				</send>
+			</postlude>
+			<transition to="ACK3" event="REINVITE"/>
+		</state>
+		
+		<state ID="ACK3">
+			<transition to="SendHookFlash4" event="ACK"/>
+		</state>
+		
+		<state ID="SendHookFlash4">
+			<prelude>
+				<!-- Step 7 of test case 1.1.3.2 - -->
+				<send protocol="utility" msgtype="HookFlash"/>
+			</prelude>
+			<transition to="HookFlash5" event="HookFlashComplete"/>
+		</state>
+		
+		<state ID="HookFlash5">
+			<response>
+				<verify step="7" requirements="REQ13454, REQ13452">
+					<eq>
+						<msg_ref type="sdp">REINVITE.mode.value</msg_ref>
+						<expr>inactive</expr>
+					</eq>
+				</verify>
+			</response>
+			<postlude>
+				<send protocol="sip" msgtype="100-INVITE"/>
+				<sleep time="200"/>
+				<send protocol="sip" msgtype="200-INVITE">
+					<mod modtype="replace" hdr="mode" param="value">
+						<expr>inactive</expr>
+					</mod>
+				</send>
+			</postlude>
+			<transition to="HookFlash6" event="REInvite"/>
+		</state>
+		
+		<state ID="HookFlash6">
+			<transition to="SendINVITE" event="ACK"/>
+		</state>
+		
+		<state ID="SendINVITE">
+			<prelude once="true">
+				<!-- Step 9 of test case 1.1.3.2 - -->
+				<send protocol="sip" msgtype="REINVITE">
+					<mod modtype="replace" hdr="mode" param="value">
+						<expr>sendrecv</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+						<expr>200</expr>
+					</eq>
+					<then>
+						<verify step="9" requirements="REQ13463" group="200">
+							<eq>
+								<msg_ref type="sdp">200-Invite.mode.value</msg_ref>
+								<expr>inactive</expr>
+							</eq>
+						</verify>
+						<send protocol="sip" msgtype="ACK"/>
+					</then>
+				</if>
+			</response>
+			<transition to="SendINVITE" event="100-INVITE"/>
+			<transition to="HookFlash8" event="200-INVITE"/>
+		</state>
+		
+		<state ID="HookFlash8">
+			<prelude>
+				<!-- Step 12 of test case 1.1.3.2 - -->
+				<send protocol="utility" msgtype="HookFlash"/>
+			</prelude>
+			<transition to="HookFlash9" event="HookFlashComplete"/>
+		</state>
+		
+		<state ID="HookFlash9">
+			<response>
+				<verify step="11" requirements="REQ13454, REQ13461">
+					<eq>
+						<msg_ref type="sdp">REINVITE.mode.value</msg_ref>
+						<expr>sendrecv</expr>
+					</eq>
+				</verify>
+			</response>
+			<postlude>
+				<send protocol="sip" msgtype="100-INVITE"/>
+				<sleep time="500"/>
+				<send protocol="sip" msgtype="200-INVITE"/>
+			</postlude>
+			<transition to="HookFlash10" event="REInvite"/>
+		</state>
+		
+		<state ID="HookFlash10">
+			<postlude>
+				<stop_capture/>
+			</postlude>
+			<transition to="END" event="ACK"/>
+		</state>
+	</add_to>
+</pc2xml>

@@ -1,0 +1,208 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	PCPCII-139 : Update the Voicetronix modifiers to use the new values. (ghassler 07/10/2009)
+
+
+
+
+-->
+
+<!-- First are the document type and the attributes for our document -->
+<pc2xml version="$Revision: 8188 $" 
+	name="UE Terminates Call Template" 
+	descrip="This is a template for testing SIP calls to a terminating UE (DUT)." 
+	number="1">
+
+	<!-- The below FSM handles both the cases when we have REAL UE or when we have Simulated UE -->
+	<!-- Next we define all of the network elements and extension 
+     controls to be used in this test -->
+	<fsm name="Term Call Template">
+		<models>
+			<!-- By default the SS will release the call after 30 seconds. -->
+			<session/>
+		</models>
+	
+		<NE sim_type="orig" elements="UE1 SCSCF1 PCSCF1" targets="UE1"/>
+		<!-- NOTE - The test platform is assumed to be performing the 
+            registrar between tests. The session model requests
+						to be informed when the DUT registers and the fsm
+						will receive the Registered event once the DUT is
+						registered -->
+	
+		<states initialstate="Register">
+			<!-- REGISTER State -->
+			<state ID="Register">
+				<transition to="Setup" event="Registered"/>
+			</state>
+
+			<!-- SETUP STATE -->
+			<state ID="Setup">
+				<!-- Step 1 from the Default Message Flow Call-Term-at-UE(DUT) Sequence Diagram -
+               Test 18x response for reliability for possible Prack message- send Invite -->
+				<prelude>
+					<send protocol="sip" msgtype="Invite"/>
+				</prelude>
+				<!-- Expected responses are 100, 180, 183 or 200 -->
+				<response>
+					<!-- Step 4 from the Default Message Flow Call-Term-at-UE(DUT) Sequence Diagram -
+               Test 18x response for reliability for possible Prack message -->
+					<if>
+						<contains>
+							<msg_ref type="sip" hdr_instance="any">18x-Invite.Require</msg_ref>
+							<expr>100rel</expr>
+						</contains>
+						<then>
+							<!--Reliablity required for test sending Prack message to peer.-->
+							<send protocol="sip" msgtype="Prack"/>
+						</then>
+					</if>
+				</response>
+				<!-- Transitions for Setup state -->
+				<transition to="Proceeding" event="100-INVITE"/>
+				<transition to="Alerting" event="180-INVITE"/>
+				<transition to="Alerting" event="183-INVITE"/>
+				<transition to="Connected" event="200-INVITE"/>
+			</state>
+			<!-- PROCEEDING STATE -->
+			<!-- Step 2 from the Default Message Flow Call-Term-at-UE(DUT) Sequence Diagram - received 100-Invite -->
+			<state ID="Proceeding">
+				<!-- Expected responses are 180, 183 or 200 -->
+				<response>
+					<!-- Step 4 from the Default Message Flow Call-Term-at-UE(DUT) Sequence Diagram-
+               Test 18x response for reliability for possible Prack message -->
+					<if>
+						<contains>
+							<msg_ref type="sip" hdr_instance="any">18x-Invite.Require</msg_ref>
+							<expr>100rel</expr>
+						</contains>
+						<then>
+							<!--Reliablity required for test sending Prack message to peer.-->
+							<!-- Step 3 from the Default Message Flow Call-Term-at-UE(DUT) Sequence Diagram- send Prack -->
+							<send protocol="sip" msgtype="Prack"/>
+						</then>
+					</if>
+				</response>
+				<!-- Transitions for Proceeding state -->
+				<transition to="Alerting" event="180-INVITE"/>
+				<transition to="Alerting" event="183-INVITE"/>
+				<transition to="Connected" event="200-INVITE"/>
+			</state>
+			<!-- ALERTING STATE -->
+			<!-- Step 5 from the Default Message Flow Call-Term-at-UE(DUT) Sequence Diagram- requires no special processing we simply need a transition 
+			     back to this state. -->
+			<state ID="Alerting" timer="12000">
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="event"/>
+							<expr>TimerExpired</expr>
+						</eq>
+						<then>
+							<!--Take DUT phone off hook-->
+							<send protocol="utility" msgtype="OffHook"/>
+						</then>
+					</if>
+					<!-- Expected responses are 180, 183, PRACK, UPDATE, or 200 -->
+					<!-- Step 6 from the Default Message Flow Call-Term-at-UE(DUT) Sequence Diagram - received UPDATE -->
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>UPDATE</expr>
+						</eq>
+						<then>
+							<!-- Step 7 from the Default Message Flow Call-Term-at-UE(DUT) Sequence Diagram- received UPDATE -->
+							<!--QoS required for test, sending a 200-OK to Update message to peer.-->
+							<send protocol="sip" msgtype="200-Update"/>
+						</then>
+						<!-- Step 8 from the Default Message Flow Call-Term-at-UE(DUT) Sequence Diagram - received 180 -->
+						<elseif>
+							<and>
+								<eq>
+									<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+									<expr>180</expr>
+								</eq>
+								<contains>
+									<msg_ref type="sip" hdr_instance="any">180-INVITE.Require</msg_ref>
+									<expr>100rel</expr>
+								</contains>
+							</and>
+							<then>
+								<!--Reliablity required for test, sending Prack message to peer.-->
+								<send protocol="sip" msgtype="Prack"/>
+							</then>
+						</elseif>
+					</if>
+				</response>
+				<!-- Transitions for Alerting state -->
+				<transition to="Alerting" event="200-PRACK"/>
+				<transition to="Alerting" event="UPDATE"/>
+				<transition to="Alerting" event="18x-INVITE"/>
+				<transition to="Answer" event="TimerExpired"/>
+				<transition to="Connected" event="200-INVITE"/>
+			</state>
+			
+			<!-- ANSWER STATE -->
+			<state ID="Answer">
+				<response>
+					<!-- Step 7 from the Default Message Flow Call-Term-at-UE(DUT) Sequence Diagram- received UPDATE -->
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>UPDATE</expr>
+						</eq>
+						<then>
+							<send protocol="sip" msgtype="200-Update"/>
+						</then>
+					</if>
+				</response>
+				<!-- Transitions for Answer state -->
+				<transition to="Answer" event="UPDATE"/>
+				<transition to="Answer" event="200-PRACK"/>
+				<transition to="Answer" event="18x-INVITE"/>
+				<transition to="Answer" event="OffHookComplete"/>
+				<transition to="Connected" event="200-INVITE"/>
+			</state>
+			<!-- CONNECTED STATE -->
+			<state ID="Connected" timer="30000">
+				<prelude once="true">
+					<!-- Step 11 from the Default Message Flow Call-Term-at-UE(DUT) Sequence Diagram - received 200-OK to Invite -->
+					<send protocol="sip" msgtype="ACK"/>
+				</prelude>
+				<!-- Transitions for Connected state -->
+				<transition to="Connected" event="OffHookComplete"/>
+				<transition to="Releasing" event="TimerExpired"/>
+			</state>
+			<!-- RELEASING STATE -->
+			<state ID="Releasing">
+				<prelude>
+					<send protocol="sip" msgtype="Bye"/>
+				</prelude>
+				<!-- Transitions for Releasing state -->
+				<transition to="OnHook" event="200-BYE"/>
+			</state>
+			<!-- ONHOOK STATE -->
+			<state ID="OnHook">
+				<prelude>
+					<!-- This message is only sent to the third party tools
+               when Voicetronix is enabled in the platform settings. 
+               Otherwise the utility stack will always return a 
+               OnHookComplete event. -->
+					<send protocol="utility" msgtype="OnHook"/>
+				</prelude>
+				<!-- Transitions for OnHook state -->
+				<transition to="END" event="OnHookComplete"/>
+			</state>
+		</states>
+	</fsm>
+</pc2xml>

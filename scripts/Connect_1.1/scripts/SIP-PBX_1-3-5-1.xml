@@ -1,0 +1,292 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+ Change History: (Author & Date)
+	2011-11-15	Seung Lee - final versionfor
+
+
+
+-->
+<pc2xml version="$Revision: 1 $" 
+	name="SIP-PBX 1.3.5.1" 
+	descrip="Applying Ring back " 
+	number="SIP-PBX 1.3.5.1">
+
+	<template file="./templates/CallOrigAtUETemp.xml" name="UE1"/>
+
+	<remove_from fsm="UE1">
+		<state ID="Register"/>
+		<state ID="Setup"/>
+		<state ID="Alerting"/>
+		<state ID="Answer"/>
+		<state ID="Connected"/>
+		<state ID="OnHook"/>
+	</remove_from>
+
+	<add_to fsm="UE1">
+		<state ID="Register">
+			<prelude once="true">
+				<start_capture>
+					<filter>
+						<var_expr>
+							<expr>host </expr>
+							<msg_ref type="platform">UE0.IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">UE0.IP2</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">PCSCF1.IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">UE1.IP</msg_ref>
+						</var_expr>
+					</filter>
+				</start_capture>
+			</prelude>
+			<transition to="OffHook" event="Registered"/>
+		</state>
+		
+		<state ID="Setup">
+			<prelude once="true">
+				<send protocol="utility" msgtype="DialDigits">
+					<mod modtype="add" hdr="number">
+						<msg_ref type="platform">UE1.phone number 1</msg_ref>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<!-- If the current message that we received is an Invite, answer with
+               a 100-trying -->
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>Invite</expr>
+					</eq>
+					<then>
+						<verify step="1" requirements="REQ ">
+							<and>
+								<eq>
+									<msg_ref type="sip" msg_instance="last">Invite.Content-Type.media-subtype</msg_ref>
+									<expr>sdp</expr>
+								</eq>
+								<and>
+									<gt>
+										<msg_ref type="sip" msg_instance="last">Invite.Content-Length.value</msg_ref>
+										<expr>0</expr>
+									</gt>
+									<contains>
+										<msg_ref type="sip">INVITE.SDP</msg_ref>
+										<expr>rtpmap</expr>
+									</contains>
+								</and>
+							</and>
+						</verify>
+						<send protocol="sip" msgtype="100-INVITE"/>
+					</then>
+				</if>
+				<!-- This set of tests determines whether to send 183 with Answer
+						 or a 180 to the INVITE -->
+				<if>
+					<and>
+						<eq>
+							<msg_ref type="extensions">precondition</msg_ref>
+							<expr>require</expr>
+						</eq>
+						<or>
+							<contains>
+								<msg_ref type="sip" hdr_instance="any">Invite.Require</msg_ref>
+								<expr>precondition</expr>
+							</contains>
+							<contains>
+								<msg_ref type="sip" hdr_instance="any">Invite.Supported</msg_ref>
+								<expr>precondition</expr>
+							</contains>
+						</or>
+					</and>
+					<then>
+						<!--Sending 183-Invite with answer-->
+						<sleep time="200"/>
+						<send protocol="sip" msgtype="183-Invite" bodies="SDP">
+							<mod modtype="delete" hdr="Alert-Info"/>
+						</send>
+						<start_stream name="tone1" file="../config/tones/tone1.rtp" format="G711">
+							<to>
+								<ip>
+									<msg_ref type="sdp" msg_instance="last">INVITE.c.address</msg_ref>
+								</ip>
+								<port>
+									<msg_ref type="sdp" msg_instance="last">INVITE.audio.port</msg_ref>
+								</port>
+							</to>
+							<from>
+								<ip>
+									<msg_ref type="platform">Platform.STUN IP Address</msg_ref>
+								</ip>
+								<port>
+									<msg_ref type="platform">Platform.RTP Port1</msg_ref>
+								</port>
+							</from>
+						</start_stream>
+					</then>
+					<elseif>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>Invite</expr>
+						</eq>
+						<then>
+							<!--Sending 180-Invite with SS not supporting precondition.-->
+							<sleep time="200"/>
+							<send protocol="sip" msgtype="180-Invite" bodies="SDP">
+								<mod modtype="delete" hdr="Alert-Info"/>
+							</send>
+							<start_stream name="tone1" file="../config/tones/tone1.rtp" format="G711">
+								<to>
+									<ip>
+										<msg_ref type="sdp" msg_instance="last">INVITE.c.address</msg_ref>
+									</ip>
+									<port>
+										<msg_ref type="sdp" msg_instance="last">INVITE.audio.port</msg_ref>
+									</port>
+								</to>
+								<from>
+									<ip>
+										<msg_ref type="platform">Platform.STUN IP Address</msg_ref>
+									</ip>
+									<port>
+										<msg_ref type="platform">Platform.RTP Port1</msg_ref>
+									</port>
+								</from>
+							</start_stream>
+						</then>
+					</elseif>
+				</if>
+			</response>
+			<transition to="Setup" event="DialDigitsComplete"/>
+			<transition to="Alerting" event="INVITE"/>
+		</state>
+		
+		<state ID="Alerting">
+			<response>
+				<!-- Now test to see if the incoming message is a PRACK message because
+							 the system is using reliability -->
+				<if>
+					<and>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>PRACK</expr>
+						</eq>
+						<contains>
+							<msg_ref type="sip" msg_instance="last" hdr_instance="any">18x-Invite.Require</msg_ref>
+							<expr>100rel</expr>
+						</contains>
+					</and>
+					<then>
+						<!--Reliability required for test sending 200-Prack message to peer.-->
+						<send protocol="sip" msgtype="200-PRACK"/>
+					</then>
+				</if>
+				<!-- Now test for an UPDATE message -->
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>UPDATE</expr>
+					</eq>
+					<then>
+						<!--QoS required or supported sending 200-Update message to peer.-->
+						<send protocol="sip" msgtype="200-Update"/>
+					</then>
+				</if>
+				<!-- Test whether to send 180 -->
+				<if>
+					<and>
+						<contains>
+							<msg_ref type="sip" msg_instance="last">18x-Invite.Status-Line.status-code</msg_ref>
+							<expr>183</expr>
+						</contains>
+						<eq>
+							<msg_ref type="sdp">Request.qos-curr-remote.direction</msg_ref>
+							<msg_ref type="sdp">Request.qos-des-remote.direction</msg_ref>
+						</eq>
+					</and>
+					<then>
+						<!--Sending 180 for required preconditions.-->
+						<send protocol="sip" msgtype="180-Invite" bodies="SDP">
+							<mod modtype="delete" hdr="Alert-Info"/>
+						</send>
+					</then>
+				</if>
+			</response>
+			<transition to="Alerting" event="DialDigitsComplete"/>
+			<transition to="Alerting" event="PRACK"/>
+			<transition to="Alerting" event="UPDATE"/>
+			<transition to="VerifyRingBack" event="ALERTING_UAS"/>
+		</state>
+		
+		<state ID="VerifyRingBack">
+			<prelude>
+				<log promptUser="True" yesExpected="True" verify="True" step="2" requirements="REQ24301" 
+					expr="Verify the local ring back tone is not played."/>
+					
+				<log promptUser="True" yesExpected="True" verify="True" step="3" requirements="REQ24299, REQ24300, REQ24302, REQ24303" 
+					expr="Verify the audio is audible on the SIP-PBX extension. (Verify that the RTP stream is received on SIP-PBX,)"/>
+				<generate event="SucceedEvent"/>
+				
+			</prelude>
+			<transition to="Answer" event="SucceedEvent"/>
+		</state>
+		
+		<state ID="Answer" timer="2000">
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="event"/>
+						<expr>TimerExpired</expr>
+					</eq>
+					<then>
+						<!--Sending 200-Invite-->
+						<send protocol="sip" msgtype="200-INVITE"/>
+					</then>
+				</if>
+
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>UPDATE</expr>
+					</eq>
+					<then>
+							<!--QoS required or supported sending 200-Update message to peer.-->
+						<send protocol="sip" msgtype="200-Update"/>
+					</then>
+				</if>
+			</response>
+			<!-- Transitions for Answer state -->
+			<transition to="Answer" event="UPDATE"/>
+			<transition to="Answer" event="TimerExpired"/>
+			<transition to="Connected" event="ACK"/>
+		</state>		
+		
+		<state ID="Connected" timer="10000">
+			<prelude>
+				<stop_stream name="tone1"/>
+				<log promptUser="True" verify="True" step="4" requirements="REQ, REQ " expr="Verify the audio tone is not heard any more."/>
+			</prelude>
+			<transition to="Releasing" event="TimerExpired"/>
+		</state>
+		
+		<state ID="OnHook">
+			<prelude>
+				<stop_capture/>
+				<send protocol="utility" msgtype="OnHook"/>
+			</prelude>
+			<!-- Transitions for OnHook state -->
+			<transition to="END" event="OnHookComplete"/>
+		</state>
+		
+	</add_to>
+</pc2xml>

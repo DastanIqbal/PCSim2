@@ -1,0 +1,135 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	PCPCII-135 : UPdate the script to accommodate a de-register message during the reboot. (ghassler 06/24/2009)
+	
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="SIP-UE 1.18.1" 
+	descrip="UE Does Not Alter Service-Route Order " 
+	number="SIP-UE 1.18.1" inspector="disable">
+
+	<template file="./templates/UERegAndSubTemp.xml" name="Registrar"/>
+	<template file="./templates/CallOrigAtUETemp.xml" name="UE1"/>
+
+	<remove_from fsm="Registrar">
+		<state ID="Registered"/>
+	</remove_from>
+
+	<remove_from fsm="UE1">
+		<state ID="Setup"/>
+	</remove_from>
+
+	<add_to fsm="Registrar">
+		<state ID="Registered">
+			<prelude once="true">
+				<!-- Step 2 of test case 1.18.1 - 
+					Execute step 4 of [UE Registration Case Flow] 
+					by sending a 200-REGISTER -->
+				<send protocol="sip" msgtype="200-Register">
+					<mod modtype="replace" hdr="Service-Route">
+						<expr>&lt;sip:P1.test.com;lr&gt;,&lt;sip:P2.localtest.com;lr&gt;,&lt;sip:P3.wildtest.com;lr&gt;</expr>
+					</mod>
+				</send>
+				<generate event="Registered" fsm="UE1"/>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">SUBSCRIBE.Event.event-type</msg_ref>
+						<expr>reg</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="200-SUBSCRIBE"/>
+						<sleep time="100"/>
+						<send protocol="sip" msgtype="NOTIFY"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Registered" event="REGISTER"/>
+			<transition to="Registered" event="SUBSCRIBE"/>
+			<transition to="EndRegistrar" event="200-NOTIFY"/>
+		</state>
+		<state ID="EndRegistrar">
+			<transition to="END" event="SucceedEvent"/>
+		</state>
+	</add_to>
+	
+	<add_to fsm="UE1">
+		<state ID="Setup">
+			<prelude once="true">
+					<send protocol="utility" msgtype="DialDigits">
+						<mod modtype="add" hdr="number">
+							<msg_ref type="platform">UE1.phone number 1</msg_ref>
+						</mod>
+					</send>
+				</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>INVITE</expr>
+					</eq>
+					<then>
+						<verify step="4" requirements="RFC2011, REQ17076, REQ17068">
+							<or>
+								<contains>
+									<msg_ref type="sip" hdr_instance="1">INVITE.Route.name-addr</msg_ref>
+									<msg_ref type="platform">PCSCF1.FQDN</msg_ref>
+								</contains>
+								<contains>
+									<msg_ref type="sip" hdr_instance="1">INVITE.Route.name-addr</msg_ref>
+									<msg_ref type="platform">PCSCF1.IP</msg_ref>
+								</contains>
+							</or>
+						</verify>
+						<verify step="4" requirements="RFC2011, REQ17076, REQ17068">
+							<and>
+								<contains>
+									<msg_ref type="sip" hdr_instance="2">INVITE.Route.name-addr</msg_ref>
+									<msg_ref type="sip" msg_instance="last" hdr_instance="1" fsm="Registrar">200-REGISTER.Service-Route.name-addr</msg_ref>
+								</contains>
+								<and>
+									<contains>
+										<msg_ref type="sip" hdr_instance="3">INVITE.Route.name-addr</msg_ref>
+										<msg_ref type="sip" msg_instance="last" hdr_instance="2" fsm="Registrar">200-REGISTER.Service-Route.name-addr</msg_ref>
+									</contains>
+									<contains>
+										<msg_ref type="sip" hdr_instance="4">INVITE.Route.name-addr</msg_ref>
+										<msg_ref type="sip" msg_instance="last" hdr_instance="3" fsm="Registrar">200-REGISTER.Service-Route.name-addr</msg_ref>
+									</contains>
+								</and>
+							</and>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<transition to="Setup" event="DialDigitsComplete"/>
+			<transition to="EndCall" event="INVITE"/>
+		</state>
+		
+		<state ID="EndCall" ES="true">
+			<transition to="Complete" event="SessionTerminated"/>
+		</state>
+		
+		<state ID="Complete">
+			<prelude>
+				<generate event="SucceedEvent" fsm="Registrar"/>
+			</prelude>
+		</state>
+	</add_to>
+</pc2xml>

@@ -1,0 +1,100 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="SIP-UE 1.2.1.12" 
+	descrip="Basic Session Establishment: UE Originates Session UE Sends BYE" 
+	number="SIP-UE 1.2.1.12">
+	
+	<template name="UE1" file="./templates/CallOrigAtUETemp.xml"/>
+	<configure name="SIP Inspector Type" value="UE"/>
+	<configure name="SIP Inspector" value="enable"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Register" sub="response"/>
+		<state ID="Connected"/>
+		<state ID="Releasing"/>
+		<state ID="OnHook"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<state ID="Register" sub="response">
+			<if>
+				<or>
+					<neq>
+						<msg_ref type="platform">Platform.SIP Inspector Type</msg_ref>
+						<expr>UE</expr>
+					</neq>
+					<neq>
+						<msg_ref type="platform">Platform.SIP Inspector</msg_ref>
+						<expr>enable</expr>
+					</neq>
+				</or>
+				<then>
+					<log level="FATAL" 
+						expr="The SIP Inspector Type setting must equal enable and the SIP Inspector setting must equal UE for the test to be executed."/>
+					<fail/>
+				</then>
+				<elseif>
+					<or>
+						<eq>
+							<msg_ref type="platform">UE1.simulated</msg_ref>
+							<expr>false</expr>
+						</eq>
+						<or>
+							<eq>
+								<msg_ref type="platform">UE1.simulated</msg_ref>
+								<expr>disable</expr>
+							</eq>
+							<eq>
+								<msg_ref type="platform">UE1.simulated</msg_ref>
+								<expr>off</expr>
+							</eq>
+						</or>
+					</or>
+					<then>
+						<generate event="Branch1Event"/>
+					</then>
+					<else>
+						<generate event="Branch2Event"/>
+					</else>
+				</elseif>
+			</if>
+		</state>
+		
+		<state ID="Connected" timer="20000">
+			<transition to="OnHook" event="TimerExpired"/>
+		</state>
+		
+		<state ID="OnHook">
+			<prelude>
+				<send protocol="utility" msgtype="OnHook"/>
+			</prelude>
+			<transition to="Releasing" event="OnHookComplete"/>
+		</state>
+		
+		<state ID="Releasing">
+			<postlude>
+				<!--Sending BYE to peer to terminate call.-->
+				<send protocol="sip" msgtype="200-BYE"/>
+			</postlude>
+			<transition to="END" event="BYE"/>
+		</state>
+	</add_to>
+</pc2xml>

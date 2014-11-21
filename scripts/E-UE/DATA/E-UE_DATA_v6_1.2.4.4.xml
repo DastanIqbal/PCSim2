@@ -1,0 +1,677 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+ Change History: (Author & Date)
+
+
+
+-->
+
+<!-- First are the document type and the attributes for our document -->
+<pc2xml version="$Revision: 7768 $" name="E-UE_Data_1.2.4.4" descrip="Ability of eUE to Support Reporting of Management Events for Registration."
+	number="E-UE_Data_1.2.4.4">
+	
+	<!-- Step 1 -->
+	<template file="./templates/Reboot_Capture.xml" name="CMReset"/>
+
+	<add_to fsm="CMReset">
+		<transition from="EUEProvisions" to="VerifyPktcEUEMEMVersion" event="SNMPResp" />
+
+		<!-- Step 2 The E-UE DUT provisions successfully and becomes operational. -->
+		<state ID="EUEProvisions" sub="response">
+			<verify step="2">
+				<eq>
+					<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+					<expr>1</expr>
+				</eq>
+			</verify>
+		</state>
+		
+		<!-- Step 3 -->
+		<state ID="VerifyPktcEUEMEMVersion" >
+			<prelude once="true" >
+			 	<send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>PC20_Mgmt_Event_MIB::pktcEUEMEMVersion.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+                </send>
+			</prelude>
+			<response>
+                <verify step="3">
+                    <eq>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>1.0</expr>
+                    </eq>
+                </verify>
+            </response>
+            <transition to="VerifyNonWritable" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+		</state>
+		
+		<!-- State 4 -->
+		<state ID="VerifyNonWritable" >
+			<prelude once="true" >
+			 	<send protocol="utility" msgtype="SNMPSet">
+                    <mod modtype="add" hdr="array">
+                        <var_expr>
+                            <expr>varBind 1 1 3 \r\n ][ , </expr>
+                            <expr>PC20_Mgmt_Event_MIB::pktcEUEMEMVersion.0,STRING,2.0][\r\n</expr>
+                        </var_expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+                    <mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+			</prelude>
+			<response>
+                <verify step="4">
+                    <eq>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>17</expr><!-- NonWritable -->
+                    </eq>
+                </verify>
+            </response>
+            <transition to="VerifyPktcDevEvLogTable" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+		</state>
+		
+		<!-- Step 5 -->
+		<state ID="VerifyPktcDevEvLogTable" >
+			<prelude once="true">
+				<send protocol="utility" msgtype="SNMPGetTable">
+                    <mod modtype="add" hdr="oids">
+                        <expr>PKTC-IETF-EVENT-MIB::pktcDevEvLogTable</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP Address</msg_ref>
+                    </mod>
+                    <mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+			</prelude>
+			
+			<response>
+            	
+            	<if>
+					<eq>
+						<msg_ref type="utility">Response</msg_ref>
+						<expr>SNMPResp</expr>
+					</eq>
+					<then>
+						<stop_capture />
+						<var name="pkEvtLog">
+							<array_ref>SNMPResp.varBind</array_ref>
+							<where>
+								<contains>
+									<array_index index="* 0 0" />
+									<expr>1</expr>
+								</contains>
+							</where>
+						</var>
+						<!--
+						Column		Field						  Type			
+						   0		pktcDevEvLogTime              DateAndTime,
+						   1		pktcDevEvLogEnterprise        Unsigned32,
+						   2		pktcDevEvLogId                Unsigned32,
+						   3		pktcDevEvLogText              SnmpAdminString,
+						   4		pktcDevEvLogEndpointName      SnmpAdminString,
+						   5		pktcDevEvLogType              BITS,
+						   6		pktcDevEvLogTargetInfo        SnmpAdminString,
+						   7		pktcDevEvLogCorrelationId     Unsigned32,
+						   8		pktcDevEvLogAdditionalInfo    SnmpAdminString
+						 -->
+						<verify step="5-pktcDevEvLogTime">
+							<!-- TODO validate this is in SNMP DateTime format ex: "2011-5-26,13:30:15.0,-4:0" -->
+							<isDate>
+                                <var_ref name="pkEvtLog" index="0 0 2" />
+                            </isDate>
+						</verify>
+						<verify step="5-pktcDevEvLogEnterprise">
+							<eq>
+                                <var_ref name="pkEvtLog" index="0 1 2" />
+                                <expr>4491</expr>
+                            </eq>
+						</verify>
+						<verify step="5-pktcDevEvLogId">
+							<eq>
+                                <var_ref name="pkEvtLog" index="0 2 2" />
+                                <expr>4000960000</expr>
+                            </eq>
+						</verify>
+						<verify step="5-pktcDevEvLogText">
+							<contains>
+                               	<var_ref name="pkEvtLog" index="0 3 2" />
+                               	<expr>Registration did not comply with SigSecurity configuration for user</expr>
+                           	</contains>
+                        </verify>
+						<verify step="5-pktcDevEvLogEndpointName">
+							<!-- This should be equal to <FQDN>/<IP> -->
+							<and>
+								<contains>
+                                	<var_ref name="pkEvtLog" index="0 4 2" />
+                                	<msg_ref type="platform">DUT.IP</msg_ref>
+                            	</contains>
+                            	<contains>
+                                	<var_ref name="pkEvtLog" index="0 4 2" />
+                                	<msg_ref type="platform">DUT.FQDN</msg_ref>
+                            	</contains>
+							</and>
+					
+						</verify>
+						
+						<verify step="5-pktcDevEvLogType">
+							<!-- pktcDevEvLogType is a Bit Field: {local, syslog, trap, inform} -->
+							<!-- and should be equal to 1101 or 13 in base 10 -->
+							<eq>
+                                <var_ref name="pkEvtLog" index="0 5 2" />
+                                <expr>13</expr>
+                            </eq>
+						</verify>
+						
+						<var name="pktcDevEvLogTargetInfo">
+							<var_ref name="pkEvtLog" index="0 6 2" />
+						</var>
+						<log expr="The value of pktcDevEvLogTargetInfo should be a list of actions taken \nand must appear in the following format: &lt;syslog/IP&gt;, &lt;snmpInform/IP&lt;, Port number must not be shown.\nvalue=$pktcDevEvLogTargetInfo"
+							step="5-pktcDevEvLogTargetInfo" promptUser="true" verify="true" />
+						
+						<var name="pktcDevEvLogCorrelationId">
+							<var_ref name="pkEvtLog" index="0 7 2" />
+						</var>
+						<log expr="Is The value of pktcDevEvLogCorrelationId correct?\n value=$pktcDevEvLogCorrelationId"
+							step="5-pktcDevEvLogCorrelationId" promptUser="true" verify="true" />
+					
+						<var name="pktcDevEvLogAdditionalInfo">
+							<var_ref name="pkEvtLog" index="0 8 2" />
+						</var>
+						<log expr="Vendor specific info: $pktcDevEvLogAdditionalInfo" />
+						<verify step="5-pktcDevEvLogAdditionalInfo">
+							<or>
+								<null>
+                                	<var_ref name="pktcDevEvLogCorrelationId" />
+                            	</null>
+                            	<contains caseSensitive="false">
+                                	<var_ref name="pktcDevEvLogCorrelationId" />
+                                	<msg_ref type="platform">DUT.Vendor</msg_ref>
+                            	</contains>
+							</or>
+					
+						</verify>
+						
+					</then>
+				</if>
+			</response>
+			
+			<transition to="Reconfigure2" event="SNMPResp" />
+			<transition to="END" event="SNMPRespFailure" />
+		</state>
+		
+		<!-- Step 6, Note: the provFile given here must give a valid but unused ip for the PCSCF so it can not respond to regesiter events -->
+		<state ID="Reconfigure2" provFile="C.1.1.3.bin" policyFile="MTAFORCW122"
+			nextState="Reboot2"/>
+
+		<transition from="EUEProvisions2" to="VerifyPktcDevEvLogTable2" event="SNMPResp" />
+		<state ID="EUEProvisions2" sub="response">
+			<verify step="6">
+				<eq>
+					<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+					<expr>1</expr>
+				</eq>
+			</verify>
+		</state>
+		
+		<!-- Step 7 -->
+		<state ID="VerifyPktcDevEvLogTable2" >
+			<prelude once="true">
+				<send protocol="utility" msgtype="SNMPGetTable">
+                    <mod modtype="add" hdr="oids">
+                        <expr>PKTC-IETF-EVENT-MIB::pktcDevEvLogTable</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP Address</msg_ref>
+                    </mod>
+                    <mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+			</prelude>
+			
+			<response>
+            	
+            	<if>
+					<eq>
+						<msg_ref type="utility">Response</msg_ref>
+						<expr>SNMPResp</expr>
+					</eq>
+					<then>
+						<stop_capture />
+						<var name="pkEvtLog">
+							<array_ref>SNMPResp.varBind</array_ref>
+							<where>
+								<contains>
+									<array_index index="* 0 0" />
+									<expr>1</expr>
+								</contains>
+							</where>
+						</var>
+						<verify step="7-pktcDevEvLogTime">
+							<!-- TODO validate this is in SNMP DateTime format ex: "2011-5-26,13:30:15.0,-4:0" -->
+							<isDate>
+                                <var_ref name="pkEvtLog" index="0 0 2" />
+                            </isDate>
+						</verify>
+						<verify step="7-pktcDevEvLogEnterprise">
+							<eq>
+                                <var_ref name="pkEvtLog" index="0 1 2" />
+                                <expr>4491</expr>
+                            </eq>
+						</verify>
+						<verify step="7-pktcDevEvLogId">
+							<eq>
+                                <var_ref name="pkEvtLog" index="0 2 2" />
+                                <expr>4000960001</expr>
+                            </eq>
+						</verify>
+						<verify step="7-pktcDevEvLogText">
+							<contains>
+                               	<var_ref name="pkEvtLog" index="0 3 2" />
+                               	<expr>"Registration failed for user IMPU</expr>
+                           	</contains>
+                        </verify>
+						<verify step="7-pktcDevEvLogEndpointName">
+							<!-- This should be equal to <FQDN>/<IP> -->
+							<and>
+								<contains>
+                                	<var_ref name="pkEvtLog" index="0 4 2" />
+                                	<msg_ref type="platform">DUT.IP</msg_ref>
+                            	</contains>
+                            	<contains>
+                                	<var_ref name="pkEvtLog" index="0 4 2" />
+                                	<msg_ref type="platform">DUT.FQDN</msg_ref>
+                            	</contains>
+							</and>
+					
+						</verify>
+						
+						<verify step="7-pktcDevEvLogType">
+							<!-- pktcDevEvLogType is a Bit Field: {local, syslog, trap, inform} -->
+							<!-- and should be equal to 1101 or 13 in base 10 -->
+							<eq>
+                                <var_ref name="pkEvtLog" index="0 5 2" />
+                                <expr>13</expr>
+                            </eq>
+						</verify>
+						
+						<var name="pktcDevEvLogTargetInfo">
+							<var_ref name="pkEvtLog" index="0 6 2" />
+						</var>
+						<log expr="The value of pktcDevEvLogTargetInfo should be a list of actions taken \nand must appear in the following format: &lt;syslog/IP&gt;, &lt;snmpInform/IP&lt;, Port number must not be shown.\nvalue=$pktcDevEvLogTargetInfo"
+							step="7-pktcDevEvLogTargetInfo" promptUser="true" verify="true" />
+						
+						<var name="pktcDevEvLogCorrelationId">
+							<var_ref name="pkEvtLog" index="0 7 2" />
+						</var>
+						<log expr="Is The value of pktcDevEvLogCorrelationId correct?\n value=$pktcDevEvLogCorrelationId"
+							step="7-pktcDevEvLogCorrelationId" promptUser="true" verify="true" />
+					
+						<var name="pktcDevEvLogAdditionalInfo">
+							<var_ref name="pkEvtLog" index="0 8 2" />
+						</var>
+						<log expr="Vendor specific info: $pktcDevEvLogAdditionalInfo" />
+						<verify step="7-pktcDevEvLogAdditionalInfo">
+							<or>
+								<null>
+                                	<var_ref name="pktcDevEvLogCorrelationId" />
+                            	</null>
+                            	<contains caseSensitive="false">
+                                	<var_ref name="pktcDevEvLogCorrelationId" />
+                                	<msg_ref type="platform">DUT.Vendor</msg_ref>
+                            	</contains>
+							</or>
+					
+						</verify>
+						
+					</then>
+				</if>
+			</response>
+			
+			<transition to="Reconfigure3" event="SNMPResp" />
+			<transition to="END" event="SNMPRespFailure" />
+		</state>
+		
+		<!-- Step 9 -->
+		<state ID="Reconfigure3" provFile="C.1.1.3.bin" policyFile="MTAFORCW122" nextState="Reboot3"/>
+
+		<!-- Step 10 -->
+		<transition from="EUEProvisions3" to="VerifyPktcEUEMEMVersion2" event="SNMPResp" />
+		<state ID="EUEProvisions3" sub="response">
+			<verify step="10">
+				<eq>
+					<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+					<expr>1</expr>
+				</eq>
+			</verify>
+		</state>
+		
+		<!-- Step 11, 3 -->
+		<state ID="VerifyPktcEUEMEMVersion2" >
+			<prelude once="true" >
+			 	<send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>PC20_Mgmt_Event_MIB::pktcEUEMEMVersion.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+                </send>
+			</prelude>
+			<response>
+                <verify step="11,3">
+                    <eq>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>1.0</expr>
+                    </eq>
+                </verify>
+            </response>
+            <transition to="VerifyNonWritable2" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+		</state>
+		
+		<!-- State 11, 4 -->
+		<state ID="VerifyNonWritable2" >
+			<prelude once="true" >
+			 	<send protocol="utility" msgtype="SNMPSet">
+                    <mod modtype="add" hdr="array">
+                        <var_expr>
+                            <expr>varBind 1 1 3 \r\n ][ , </expr>
+                            <expr>PC20_Mgmt_Event_MIB::pktcEUEMEMVersion.0,STRING,2.0][\r\n</expr>
+                        </var_expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+                    <mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+			</prelude>
+			<response>
+                <verify step="11, 4">
+                    <eq>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>17</expr><!-- NonWritable -->
+                    </eq>
+                </verify>
+            </response>
+            <transition to="VerifyPktcDevEvLogTable3" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+		</state>
+		
+		<!-- Step 11, 5 -->
+		<state ID="VerifyPktcDevEvLogTable3" >
+			<prelude once="true">
+				<send protocol="utility" msgtype="SNMPGetTable">
+                    <mod modtype="add" hdr="oids">
+                        <expr>PKTC-IETF-EVENT-MIB::pktcDevEvLogTable</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP Address</msg_ref>
+                    </mod>
+                    <mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+			</prelude>
+			
+			<response>
+            	
+            	<if>
+					<eq>
+						<msg_ref type="utility">Response</msg_ref>
+						<expr>SNMPResp</expr>
+					</eq>
+					<then>
+						<stop_capture />
+						<var name="pkEvtLog">
+							<array_ref>SNMPResp.varBind</array_ref>
+							<where>
+								<contains>
+									<array_index index="* 0 0" />
+									<expr>1</expr>
+								</contains>
+							</where>
+						</var>
+						<verify step="11,5-pktcDevEvLogTime">
+							<!-- TODO validate this is in SNMP DateTime format ex: "2011-5-26,13:30:15.0,-4:0" -->
+							<isDate>
+                                <var_ref name="pkEvtLog" index="0 0 2" />
+                            </isDate>
+						</verify>
+						<verify step="11,5-pktcDevEvLogEnterprise">
+							<eq>
+                                <var_ref name="pkEvtLog" index="0 1 2" />
+                                <expr>4491</expr>
+                            </eq>
+						</verify>
+						<verify step="11,5-pktcDevEvLogId">
+							<eq>
+                                <var_ref name="pkEvtLog" index="0 2 2" />
+                                <expr>4000960000</expr>
+                            </eq>
+						</verify>
+						<verify step="11,5-pktcDevEvLogText">
+							<contains>
+                               	<var_ref name="pkEvtLog" index="0 3 2" />
+                               	<expr>Registration did not comply with SigSecurity configuration for user</expr>
+                           	</contains>
+                        </verify>
+						<verify step="11,5-pktcDevEvLogEndpointName">
+							<!-- This should be equal to <FQDN>/<IP> -->
+							<and>
+								<contains>
+                                	<var_ref name="pkEvtLog" index="0 4 2" />
+                                	<msg_ref type="platform">DUT.IP</msg_ref>
+                            	</contains>
+                            	<contains>
+                                	<var_ref name="pkEvtLog" index="0 4 2" />
+                                	<msg_ref type="platform">DUT.FQDN</msg_ref>
+                            	</contains>
+							</and>
+					
+						</verify>
+						
+						<verify step="11,5-pktcDevEvLogType">
+							<!-- pktcDevEvLogType is a Bit Field: {local, syslog, trap, inform} -->
+							<!-- and should be equal to 1101 or 13 in base 10 -->
+							<eq>
+                                <var_ref name="pkEvtLog" index="0 5 2" />
+                                <expr>13</expr>
+                            </eq>
+						</verify>
+						
+						<var name="pktcDevEvLogTargetInfo">
+							<var_ref name="pkEvtLog" index="0 6 2" />
+						</var>
+						<log expr="The value of pktcDevEvLogTargetInfo should be a list of actions taken \nand must appear in the following format: &lt;syslog/IP&gt;, &lt;snmpInform/IP&lt;, Port number must not be shown.\nvalue=$pktcDevEvLogTargetInfo"
+							step="11,5-pktcDevEvLogTargetInfo" promptUser="true" verify="true" />
+						
+						<var name="pktcDevEvLogCorrelationId">
+							<var_ref name="pkEvtLog" index="0 7 2" />
+						</var>
+						<log expr="Is The value of pktcDevEvLogCorrelationId correct?\n value=$pktcDevEvLogCorrelationId"
+							step="11,5-pktcDevEvLogCorrelationId" promptUser="true" verify="true" />
+					
+						<var name="pktcDevEvLogAdditionalInfo">
+							<var_ref name="pkEvtLog" index="0 8 2" />
+						</var>
+						<log expr="Vendor specific info: $pktcDevEvLogAdditionalInfo" />
+						<verify step="11,5-pktcDevEvLogAdditionalInfo">
+							<or>
+								<null>
+                                	<var_ref name="pktcDevEvLogCorrelationId" />
+                            	</null>
+                            	<contains caseSensitive="false">
+                                	<var_ref name="pktcDevEvLogCorrelationId" />
+                                	<msg_ref type="platform">DUT.Vendor</msg_ref>
+                            	</contains>
+							</or>
+					
+						</verify>
+						
+					</then>
+				</if>
+			</response>
+			
+			<transition to="Reconfigure4" event="SNMPResp" />
+			<transition to="END" event="SNMPRespFailure" />
+		</state>
+		
+		<!-- Step 11, 6 Note: the provFile given here must give a valid but unused ip for the PCSCF so it can not respond to regesiter events -->
+		<state ID="Reconfigure4" provFile="C.1.1.3.bin" policyFile="MTAFORCW122"
+			nextState="Reboot4"/>
+
+		<transition from="EUEProvisions4" to="VerifyPktcDevEvLogTable4" event="SNMPResp" />
+		<state ID="EUEProvisions4" sub="response">
+			<verify step="11,6">
+				<eq>
+					<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+					<expr>1</expr>
+				</eq>
+			</verify>
+		</state>
+		
+		<!-- Step 11,7 -->
+		<state ID="VerifyPktcDevEvLogTable4" >
+			<prelude once="true">
+				<send protocol="utility" msgtype="SNMPGetTable">
+                    <mod modtype="add" hdr="oids">
+                        <expr>PKTC-IETF-EVENT-MIB::pktcDevEvLogTable</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP Address</msg_ref>
+                    </mod>
+                    <mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+			</prelude>
+			
+			<response>
+            	
+            	<if>
+					<eq>
+						<msg_ref type="utility">Response</msg_ref>
+						<expr>SNMPResp</expr>
+					</eq>
+					<then>
+						<stop_capture />
+						<var name="pkEvtLog">
+							<array_ref>SNMPResp.varBind</array_ref>
+							<where>
+								<contains>
+									<array_index index="* 0 0" />
+									<expr>1</expr>
+								</contains>
+							</where>
+						</var>
+						<verify step="11,7-pktcDevEvLogTime">
+							<!-- TODO validate this is in SNMP DateTime format ex: "2011-5-26,13:30:15.0,-4:0" -->
+							<isDate>
+                                <var_ref name="pkEvtLog" index="0 0 2" />
+                            </isDate>
+						</verify>
+						<verify step="11,7-pktcDevEvLogEnterprise">
+							<eq>
+                                <var_ref name="pkEvtLog" index="0 1 2" />
+                                <expr>4491</expr>
+                            </eq>
+						</verify>
+						<verify step="11,7-pktcDevEvLogId">
+							<eq>
+                                <var_ref name="pkEvtLog" index="0 2 2" />
+                                <expr>4000960001</expr>
+                            </eq>
+						</verify>
+						<verify step="11,7-pktcDevEvLogText">
+							<contains>
+                               	<var_ref name="pkEvtLog" index="0 3 2" />
+                               	<expr>"Registration failed for user IMPU</expr>
+                           	</contains>
+                        </verify>
+						<verify step="11,7-pktcDevEvLogEndpointName">
+							<!-- This should be equal to <FQDN>/<IP> -->
+							<and>
+								<contains>
+                                	<var_ref name="pkEvtLog" index="0 4 2" />
+                                	<msg_ref type="platform">DUT.IP</msg_ref>
+                            	</contains>
+                            	<contains>
+                                	<var_ref name="pkEvtLog" index="0 4 2" />
+                                	<msg_ref type="platform">DUT.FQDN</msg_ref>
+                            	</contains>
+							</and>
+					
+						</verify>
+						
+						<verify step="11,7-pktcDevEvLogType">
+							<!-- pktcDevEvLogType is a Bit Field: {local, syslog, trap, inform} -->
+							<!-- and should be equal to 1101 or 13 in base 10 -->
+							<eq>
+                                <var_ref name="pkEvtLog" index="0 5 2" />
+                                <expr>13</expr>
+                            </eq>
+						</verify>
+						
+						<var name="pktcDevEvLogTargetInfo">
+							<var_ref name="pkEvtLog" index="0 6 2" />
+						</var>
+						<log expr="The value of pktcDevEvLogTargetInfo should be a list of actions taken \nand must appear in the following format: &lt;syslog/IP&gt;, &lt;snmpInform/IP&lt;, Port number must not be shown.\nvalue=$pktcDevEvLogTargetInfo"
+							step="11,7-pktcDevEvLogTargetInfo" promptUser="true" verify="true" />
+						
+						<var name="pktcDevEvLogCorrelationId">
+							<var_ref name="pkEvtLog" index="0 7 2" />
+						</var>
+						<log expr="Is The value of pktcDevEvLogCorrelationId correct?\n value=$pktcDevEvLogCorrelationId"
+							step="11,7-pktcDevEvLogCorrelationId" promptUser="true" verify="true" />
+					
+						<var name="pktcDevEvLogAdditionalInfo">
+							<var_ref name="pkEvtLog" index="0 8 2" />
+						</var>
+						<log expr="Vendor specific info: $pktcDevEvLogAdditionalInfo" />
+						<verify step="11,7-pktcDevEvLogAdditionalInfo">
+							<or>
+								<null>
+                                	<var_ref name="pktcDevEvLogCorrelationId" />
+                            	</null>
+                            	<contains caseSensitive="false">
+                                	<var_ref name="pktcDevEvLogCorrelationId" />
+                                	<msg_ref type="platform">DUT.Vendor</msg_ref>
+                            	</contains>
+							</or>
+					
+						</verify>
+						
+					</then>
+				</if>
+			</response>
+			
+			<transition to="END" event="SNMPResp" />
+			<transition to="END" event="SNMPRespFailure" />
+		</state>
+		
+	</add_to>
+</pc2xml>

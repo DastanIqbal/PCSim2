@@ -1,0 +1,194 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+<pc2xml version="$Revision: 6076 $" 
+	name="UT_RST_UE_1.5.2.1"
+	descrip="Call Waiting support " 
+	number="1">
+	
+	<template file="./templates/ut/Orig_DUT.xml" name="UT_RST_UE_1.5.2.1" />
+
+	<remove_from fsm="UT_RST_UE_1.5.2.1">
+		<state ID="Setup" sub="prelude"/>
+		<state ID="Connected" />
+	</remove_from>
+
+	<add_to fsm="UT_RST_UE_1.5.2.1">
+		<state ID="Setup" sub="prelude">
+			<log promptUser="true" expr="Start the test script if you haven't already."/>
+			<log promptUser="true" expr="Answer yes to the prompts for confirmation tone and then the dial tone."/>
+			<send protocol="sip" msgtype="Invite" target="UE1" originator="DUT"/>
+		</state>
+				
+		<state ID="Connected">
+			<prelude>
+				<send protocol="sip" msgtype="ACK" target="UE1"	originator="DUT" />
+			</prelude>
+			<transition to="Busy" event="200-INVITE" />
+			<transition to="Busy" event="INVITE" />
+		</state>
+
+		<state ID="Busy" timer="5000">
+			<prelude>
+				<send protocol="sip" msgtype="486-INVITE" target="UE2" originator="DUT" />
+				<sleep time="1500" />
+			</prelude>
+
+			<!-- Transitions for Setup state -->
+			<transition to="Setup1" event="ACK" />
+		</state>
+
+
+		<state ID="Setup1" timer="12000">
+			<prelude>
+				<send protocol="sip" msgtype="REInvite" target="UE1" originator="DUT" origReq="INVITE" orig_instance="1">
+					<mod modtype="replace" hdr="c" param="address">
+						<expr>0.0.0.0</expr>
+					</mod>
+					<mod modtype="replace" hdr="mode" param="value">
+						<expr>inactive</expr>
+					</mod>
+				</send>
+			</prelude>
+			<!-- Expected responses are 100, 180, 183 or 200 -->
+			<response>
+
+				<if>
+					<contains>
+						<msg_ref type="sip" msg_instance="last"	hdr_instance="any">18x-Invite.Require</msg_ref>
+						<expr>100rel</expr>
+					</contains>
+					<then>
+						<!--Reliablity required for test sending Prack message to peer.-->
+						<send protocol="sip" msgtype="Prack" target="UE1" originator="DUT" />
+					</then>
+				</if>
+			</response>
+			<!-- Transitions for Setup state -->
+			<transition from="Setup1" to="Proceeding1" event="100-INVITE" />
+
+		</state>
+
+		<state ID="Proceeding1">
+			<!-- Expected responses are 180, 183 or 200 -->
+			<response>
+
+				<if>
+					<eq>
+						<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+						<expr>200</expr>
+					</eq>
+					<then>
+
+						<send protocol="sip" msgtype="ACK" target="UE1" originator="DUT" />
+						<sleep time="12000" />
+					</then>
+				</if>
+			</response>
+			<!-- Transitions for Proceeding state -->
+			<transition from="Proceeding1" to="Setup2" event="200-INVITE" />
+		</state>
+		<state ID="Setup2" timer="12000">
+			<prelude once="true">
+				<send protocol="sip" msgtype="REInvite" target="UE1" originator="DUT" origReq="INVITE" orig_instance="1"/>
+			</prelude>
+			<!-- Expected responses are 100, 180, 183 or 200 -->
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+						<expr>200</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="ACK" target="UE1" originator="DUT" />
+					</then>
+				</if>
+			</response>
+			<transition to="Setup2" event="100-INVITE" />
+			<transition to="Setup3" event="200-INVITE" />
+		</state>
+
+		
+		<state ID="Setup3" timer="5000">
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>Invite</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="100-INVITE" target="UE2" originator="DUT" />
+						<sleep time="200"/>
+						<send protocol="sip" msgtype="180-INVITE" target="UE2" originator="DUT" />
+						<sleep time="200"/>
+					</then>
+				</if>
+			</response>
+			<transition to="MuteUE1" event="INVITE" />
+		</state>
+		
+				
+		<state ID="MuteUE1">
+			<prelude once="true">
+				<sleep time="10000"/>
+				<send protocol="sip" msgtype="REInvite" target="UE1" originator="DUT" origReq="INVITE" orig_instance="1">
+					<mod modtype="replace" hdr="mode" param="value">
+						<expr>inactive</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+						<expr>200</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="ACK" target="UE1" originator="DUT" />
+					</then>
+				</if>
+			</response>
+			<transition to="MuteUE1" event="100-INVITE" />
+			<transition to="ConnectUE2" event="200-INVITE" />
+		</state>
+
+		<state ID="ConnectUE2" timer="12000">
+			<prelude>
+				<send protocol="sip" msgtype="200-INVITE" target="UE2" originator="DUT" origReq="INVITE" orig_instance="prev"/>	
+			</prelude>
+			<transition to="EndUE2Call" event="ACK" />
+		</state>
+
+		<state ID="EndUE2Call">
+			<postlude>
+				<send protocol="sip" msgtype="200-BYE" target="UE2" originator="DUT" />
+			</postlude>
+			<transition to="EndUE1Call" event="BYE" />
+		</state>
+
+		<state ID="EndUE1Call">
+			<postlude>
+				<send protocol="sip" msgtype="200-BYE" target="UE1" originator="DUT" />
+			</postlude>
+			<transition to="END" event="BYE" />
+		</state>
+	</add_to>
+</pc2xml>
+
+

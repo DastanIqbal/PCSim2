@@ -1,0 +1,288 @@
+#//*****************************************************************************
+#// Filename: E-UE-PROV_1-1-3-7.test
+#// Author:   Matthew Forbes 
+#// Creation Date: 10/28/2008
+#// Modified by: 
+#//*****************************************************************************
+#// Description:
+#//     TC2804 TEST CASE E-UE-PROV_1-1-3-7 To test the ability of the MTA to continue
+#//     provisioning upon receiving valid DHCP OFFERs amidst ones indicating
+#//     shutdown
+#//     
+#// Objective:
+#//     Test the capability of the MTA to choose the right DHCP OVVER, among valid
+#//       OFFERs.
+#//
+#// PacketCable DUT:
+#//     MTA
+#//
+#// Test Steps:
+#//     - Initial Configuration: Configure 2 DHCP servers:
+#//            1st DHCP server with valid 122.3 option which is provided in 122.1, 122.2 not provided
+#//            2nd DHCP server with 122.3 = 0.0.0.0. DHCP server IP address is not provided as part of
+#//                Option 122.1 or Option 122.2
+#//     - Start sniffer
+#//     - Reset DUT
+#//     - Check Provisioning state of MTA
+#//     - Stop sniffer
+#//     - Invoke parsing tool and validate using Pass/Fail scripts
+#//     - Delete MTA config file
+#//
+#// Notes:
+#//     - Requires provPrimitives.tcl & tftp_primitives.tcl.
+#//     - Requires the specific config file in $BASE_CFG_FILE_PATH in Provisioning Server.
+#//     - Requires parT.tcl parsing tool to parse data from capture file.                
+#//*****************************************************************************
+global SCRIPT_VERSION
+set SCRIPT_VERSION { # $Id: E-UE-PROV_1-1-3-7.test 7406 2010-07-20 17:17:37Z dthakore $ }
+
+DoStep "E-UE-PROV_1-1-3-7-PreStep-1" "Initialize Test Platform" {
+    Init_PROV
+    Init_CONTROLLER_LAN
+    # Initial PARSER TOOL
+    Init_PART
+} { PASS_STEP }
+
+set msgStr "Configure TWO - DHCP SERVERS(on CMTS and PROV server): \n\
+        1st DHCP SERVER: Option 122.3 valid FQDN (MTAFORCW122) provided in Option 122.1, Option 122.2 NOT provided (CMFORCW122) \n\
+        2nd DHCP SERVER: Option 122.3 = 0.0.0.0 (MTATC932) & DHCP server IP address is not provided in CM suboption 122.1 or 122.2 (CMTSGROUPEXCLUDE for CM)"
+DoStep "E-UE-PROV_1-1-3-7_1-1" $msgStr {
+    # verify_signal $msgStr
+    verify_signal "Configure TWO - DHCP SERVERS(add IP helper-address $PROV_DHCP2_IP on CMTS and enter & include DUT on this server): \n\
+            2nd DHCP SERVER: Exclude CM ($PROV_DHCP2_IP, list devices, then check box by $CM_MAC then click exclude & ok)"        
+    PACT_SWITCH_PROV_TO $PROV_DHCP2_IP
+    # ProvCreateConfig 291 $MTA_MAC
+        set NEW_IP [split $MTA_IP .]
+        set NEW_IP [lreplace $NEW_IP 3 3 11]
+        set NEW_IP [join $NEW_IP .]
+    PROV_MODIFY_DEVICE $MTA_MAC MTATC932 Device_Level_Secure.cfg $NEW_IP
+    PROV_DEPLOY_DHCP
+    PACT_SWITCH_PROV_BACK
+} {PASS_STEP}
+
+DoStep "E-UE-PROV_1-1-3-7_2-1" "Initial configuration" {
+    LogMsg "--- Initial PROV module ---"
+    # ProvCreateConfig 291 $MTA_MAC
+        set NEW_IP1 [split $MTA_IP .]
+        set NEW_IP1 [lreplace $NEW_IP1 3 3 10]
+        set NEW_IP1 [join $NEW_IP1 .]
+    PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122 Device_Level_Secure.cfg $NEW_IP1
+    PROV_MODIFY_DEVICE $CM_MAC CMFORCW_122_no_SO2
+    PROV_DEPLOY_DHCP
+} { PASS_STEP }
+
+
+set msgStr "Start Sniffer"
+DoStep "E-UE-PROV_1-1-3-7_3-1" $msgStr {
+    LogMsg "--- $msgStr ---"
+    SetupCaptureControllerLan "host $MTA_IP || udp port 67 || host $CM_IP || host $NEW_IP1"
+    StartCaptureControllerLan
+} {PASS_STEP}
+
+################ Reset CM and MTA and Verify Provisioning ################
+
+DoStep "E-UE-PROV_1-1-3-7_4-1" "Reset DUT" {
+    set val [SNMPvN_RESET $CM_IP]
+    LogMsg "Hard reboot of CM and MTA has passed"
+} {
+    IsEqual $val 0
+}
+
+DoStep "E-UE-PROV_1-1-3-7_5-1" "Verify Cable Modem Prov" {
+    # Wait for a minute to let CM/MTA starting to reboot
+    actionWait "Wait for CM/MTA to reboot" 60
+    # Get the OID from the MTA and check it using our previously defined
+    # Thought is that must have CM est before can obtain MTA mib.
+    set old_ip $MTA_IP
+    set MTA_IP $NEW_IP1
+    set val [GetProvState 1 600]
+    LogMsg "MTA Provisioning State"
+    LogMsg "             - Expected : 1"
+    LogMsg "             - Received : $val"
+} {
+    IsEqual $val 1
+}
+
+
+
+set msgStr "Stop Sniffer"
+DoStep "E-UE-PROV_1-1-3-7_5-2" $msgStr {    
+    LogMsg "--- $msgStr ---"
+    StopCaptureControllerLan
+    SaveToFileControllerLan
+} {PASS_STEP}
+
+########################## INVOKE PARSING TOOL ##################################
+
+DoStep "E-UE-PROV_1-1-3-7_5-3" "Analyze flow data" {
+    # Set up parser file
+    set PARSERFILE    $ETH_DEFAULT_TXT_FILE
+} { PASS_STEP }
+
+DoStep "E-UE-PROV_1-1-3-7_5-4" "Parse all data into database" {
+    # Parse data
+    set PARAMS_DHCP         "{DHCP {} {} {} {} {} {} {} {}}"
+    set PARAMS_MTA_SRC      "{{} {} {} {} $MTA_IP {} {} {} {}}"
+    set PARAMS_MTA_DST      "{{} {} {} {} {} {} {} $MTA_IP {}}"
+    set PARAMS_NEW_DST      "{{} {} {} {} {} {} {} $NEW_IP1 {}}"
+    set msgID_MTA           [ParseFile $PARSERFILE "$PARAMS_DHCP $PARAMS_MTA_SRC $PARAMS_MTA_DST $PARAMS_NEW_DST"]
+} {
+    if { $::PART_RETURN == 0 } {
+        PASS_STEP
+    } else {
+        FAIL_STEP "Cannot find data"
+    }
+}
+
+set msgStr "DHCP DISCOVER: EXISTS"
+DoStep "E-UE-PROV_1-1-3-7_5-5" $msgStr {
+    LogMsg "--- $msgStr ---"
+    # Find MTA MAC with colons
+    set MTA_MAC_COL [AddColMac $MTA_MAC]
+} {
+    # Verify OPTION 60 EXISTS
+    VerifyValue $msgID_MTA "INANY DHCP DISCOVER OPTION60" "EXISTS" "" AND \
+            "OPTIONCLIENTHWADDRESS" "IS" "$MTA_MAC_COL"
+}
+
+set msgStr "DHCP OFFER from 1st DHCP SERVER EXISTS: 122.3 = $PROV_SNMP_ENTITY"
+DoStep "E-UE-PROV_1-1-3-7_5-6" $msgStr {
+    LogMsg "--- $msgStr ---"
+    # Find MTA MAC with colons
+    set MTA_MAC_COL [AddColMac $MTA_MAC]
+} {
+    # Verify OPTION 122.3 = $PROV_SNMP_ENTITY   
+    VerifyValue $msgID_MTA "INANY DHCP OFFER OPTION122SUBOPTION3" "IS" ".*$PROV_SNMP_ENTITY.*" AND \
+            "OPTIONCLIENTHWADDRESS" "IS" "$MTA_MAC_COL"
+}
+
+set msgStr "DHCP OFFER from 2nd DHCP SERVER EXISTS: 122.3 = 0.0.0.0"
+DoStep "E-UE-PROV_1-1-3-7_5-7" $msgStr {
+    LogMsg "--- $msgStr ---"
+
+    # Find MTA MAC with colons
+    set MTA_MAC_COL [AddColMac $MTA_MAC]
+} {
+    # Verify OPTION 122.3 = 0.0.0.0
+    VerifyValue $msgID_MTA "INANY DHCP OFFER OPTION122SUBOPTION3" "IS" ".*0.0.0.0.*" AND \
+            "OPTIONCLIENTHWADDRESS" "IS" "$MTA_MAC_COL"
+}
+
+DoStep "E-UE-PROV_1-1-3-7_6-1" "Verify MTA Prov" {   
+    set val [GetProvState 1 20]
+    LogMsg "MTA Provisioning State"
+    LogMsg "             - Expected : 1"
+    LogMsg "             - Received : $val"
+} {
+    IsEqual $val 1
+}
+
+set MTA_IP $old_ip
+
+set msgStr "Verify DHCP REQUEST: EXISTS to correct server"
+DoStep "E-UE-PROV_1-1-3-7_7-1" $msgStr {
+    LogMsg "--- $msgStr ---"    
+} {
+    # VerifyValue $msgID_MTA "INANY DHCP REQUEST OPTION54" "IS" ".*$PROV_DHCP1_IP.*" AND \
+            # "OPTIONCLIENTHWADDRESS" "IS" "$MTA_MAC_COL"
+            VerifyValue $msgID_MTA "INANY DHCP REQUEST HEADERDSTIP" "IS" ".*$PROV_DHCP1_IP.*" AND \
+                    "OPTIONCLIENTHWADDRESS" "IS" "$MTA_MAC_COL"
+}
+
+# set msgStr "Verify DHCP REQUEST: DOES NOT EXIST to server w/122.3 = 0.0.0.0"
+# DoStep "E-UE-PROV_1-1-3-7_7-2" $msgStr {
+    # LogMsg "--- $msgStr ---"
+# } {
+    # set dhcpip2 [GetValue $msgID_MTA "INANY DHCP OFFER HEADERSRCIP" AND \
+            # "OPTION122SUBOPTION3" "IS" ".*0.0.0.0.*" AND \
+            # "OPTIONCLIENTHWADDRESS" "IS" "$MTA_MAC_COL"]
+            # VerifyNotValue $msgID_MTA "INANY DHCP REQUEST OPTION54" "IS" ".*$dhcpip2.*" AND \
+                    # "OPTIONCLIENTHWADDRESS" "IS" "$MTA_MAC_COL"
+            # VerifyNotValue $msgID_MTA "INANY DHCP REQUEST HEADERDSTIP" "IS" ".*$dhcpip2.*" AND \
+                    # "OPTIONCLIENTHWADDRESS" "IS" "$MTA_MAC_COL"
+             # IsEqual $dhcpip2 $NEW_IP       
+# }
+
+set msgStr "Verify DHCP ACK: EXISTS from correct server"
+DoStep "E-UE-PROV_1-1-3-7_7-3" $msgStr {
+    LogMsg "--- $msgStr ---"
+} {
+    VerifyValue $msgID_MTA "INANY DHCP ACK HEADERSRCIP" "IS" ".*$PROV_DHCP1_IP.*" AND \
+            "OPTIONCLIENTIPADDRESS" "IS" ".*$NEW_IP1.*" AND "OPTIONCLIENTHWADDRESS" "IS" "$MTA_MAC_COL"
+}
+
+DoStep "E-UE-PROV_1-1-3-7_7-4" "SNMP INFORM SUCCESS" {
+    LogMsg "Verify SNMP INFORM"
+} {
+    # Verify Correlation ID
+    VerifyValue $msgID_MTA "INFIRST SNMP SNMP_INFORM SNMP_ERROR_STATUS" "IS" "NO ERROR"
+}
+
+set msgStr "Verify DHCP REQUEST: Option 54 = $PROV_DHCP1_IP."
+DoStep "E-UE-PROV_1-1-3-7_7-2" $msgStr {
+    LogMsg "--- $msgStr ---"
+} {
+    set option54val1 [GetValue $msgID_MTA "INANY DHCP REQUEST OPTION54" AND \
+            "HEADERDSTIP" "IS" ".*$PROV_DHCP1_IP.*" AND \
+            "OPTIONCLIENTHWADDRESS" "IS" "$MTA_MAC_COL"]
+            set option54val2 [GetValue $msgID_MTA "INANY DHCP REQUEST OPTION54" AND \
+                    "HEADERDSTIP" "IS" ".*$PROV_DHCP2_IP.*" AND \
+            "OPTIONCLIENTHWADDRESS" "IS" "$MTA_MAC_COL"]
+    verify_signal "The value for Option54 in the DHCP Request to the primary server
+    is $option54val1 (Should be $PROV_DHCP1_IP). Is this correct?"
+    set choice [tk_messageBox -type yesno -default yes -message "The value for Option54 in the DHCP Request to the secondary server
+    is $option54val2 (Should be $PROV_DHCP1_IP or N/A). Is this correct?" -icon question]
+if {$choice == no} {
+    verify_signal "Enable the RF sniffer, set up a trace, & reboot the DUT. Stop the trace when the DUT is back up.  Filter the trace
+for $MTA_MAC, the MAC address for the MTA. Check the DHCP Request messages and verify that there is only one Request
+                                      containing Option 54 with the value of $PROV_DHCP1_IP. Is this correct?"
+} else {
+    PASS_STEP
+}
+}
+################################################################################
+# Cleanup
+################################################################################
+set msgStr "Restore DHCP server policy "
+DoStep "E-UE-PROV_1-1-3-7-PostStep-1" $msgStr {
+    verify_signal "Restore DHCP server policies and CMTS:
+    2nd DHCP SERVER: Exclude MTA & IP Helper-address ($PROV_DHCP2_IP, remove ip helper-address from cmts,
+    list devices on PACT, then check box by $MTA_MAC then click exclude & ok)"
+    PACT_SWITCH_PROV_TO $PROV_DHCP2_IP
+    PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122
+    PROV_DEPLOY_DHCP
+    PACT_SWITCH_PROV_BACK
+    PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122 Device_Level_Secure.cfg $MTA_IP
+    PROV_MODIFY_DEVICE $CM_MAC CMFORCW_122
+    PROV_DEPLOY_DHCP
+} {PASS_STEP}
+
+################ Reset CM and MTA and Verify Provisioning ################
+
+DoStep "E-UE-PROV_1-1-3-7_PostStep-2" "Reset DUT" {
+    set val [SNMPvN_RESET $CM_IP]
+    LogMsg "Hard reboot of CM and MTA has passed"
+} {
+    IsEqual $val 0
+}
+
+DoStep "E-UE-PROV_1-1-3-7_PostStep-3" "Verify Cable Modem Prov" {
+    # Wait for a minute to let CM/MTA starting to reboot
+    actionWait "Wait for CM/MTA to reboot" 60
+    # Get the OID from the MTA and check it using our previously defined
+    # Thought is that must have CM est before can obtain MTA mib.
+    set val [GetProvState 1 600]
+    LogMsg "MTA Provisioning State"
+    LogMsg "             - Expected : 1"
+    LogMsg "             - Received : $val"
+} {
+    IsEqual $val 1
+}
+
+set msgStr "Restore DHCP server policy "
+DoStep "E-UE-PROV_1-1-3-7-PostStep-4" $msgStr {
+    PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122 Device_Level_Secure.cfg {""}
+    PROV_DEPLOY_DHCP
+} {PASS_STEP}
+
+Cleanup

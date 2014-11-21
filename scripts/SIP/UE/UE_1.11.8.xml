@@ -1,0 +1,59 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="SIP-UE 1.11.8" 
+	descrip="UAC – Reliable Provisional Responses Sequence" 
+	number="SIP-UE 1.11.8">
+	
+	<template file="./templates/CallOrigAtUETemp.xml" name="UE1"/>
+	
+	<add_to fsm="UE1">
+		<NE ext_require="100rel" ext_supported="100rel"/>
+		
+		<transition from="Setup" to="AlertingUAS" event="ALERTING_UAS"/>
+		
+		<transition from="Alerting" to="AlertingUAS" event="ALERTING_UAS"/>
+		
+		<state ID="AlertingUAS" timer="5000">
+			<prelude>
+				<send protocol="sip" msgtype="180-INVITE">
+					<mod modtype="replace" hdr="RSeq" param="response-num">
+						<add_ref type="sip" msg_instance="last" value="2">18x-INVITE.RSeq.response-num</add_ref>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="3" requirements="RFC26, RFC27, RFC28, RFC29, RFC30">
+					<or>
+						<eq>
+							<msg_ref type="event"/>
+							<expr>TimerExpired</expr>
+						</eq>
+						<neq>	
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>PRACK</expr>
+						</neq>
+					</or>
+				</verify>
+			</response>
+			<transition to="Answer" event="TimerExpired"/>
+		</state>
+	</add_to>
+</pc2xml>

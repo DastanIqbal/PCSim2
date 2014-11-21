@@ -1,0 +1,560 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+ Change History: (Author & Date)
+
+
+
+-->
+
+<pc2xml version="$Revision: 7768 $" 
+		name="E-UE_Data_1.2.4.2-10" 
+		descrip="pktcDevEventDescrText Content Verification"
+		number="E-UE_Data_1.2.4.2-10">
+
+	<template file="./templates/EUE_Prov_B_1_1_1.xml" name="MIBTest"/>
+
+	<add_to fsm="MIBTest">
+		
+		<!--transition from="IP4 Provision" to="VerifyPktcDevEventDescrReporting" event="SNMPResp" />
+		<transition from="IP6 Provision" to="VerifyPktcDevEventDescrReporting" event="SNMPResp" /-->
+		<transition from="StartCapture_RebootWait" to="EUEProvision" event="TimerExpired"/>		
+
+        <state ID="EUEProvision" timer="30000">
+            <prelude once="true">				
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvisioningState.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+					<mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="5">
+                    <eq>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>1</expr>
+                    </eq>
+                </verify>
+            </response>
+            <transition to="VerifyMIB" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+		
+		<state ID="VerifyMIB" timer="30000">
+			<prelude once="true" >
+			 	<send protocol="utility" msgtype="SNMPGetTable">
+                    <mod modtype="add" hdr="oids">
+                        <expr>PKTC-EVENT-MIB::pktcDevEventDescrText</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+					<mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+			</prelude>
+			
+			<response>
+	                <verify step="6">
+	                	<and>
+	                    	<contains>
+	                        	<msg_ref type="utility" index="7 0 0">SNMPResp.varBind</msg_ref>
+	                        	<expr>4000850100</expr>
+	                    	</contains>
+	                    	<eq>
+	                        	<msg_ref type="utility" index="7 0 2">SNMPResp.varBind</msg_ref>
+	                        	<expr>On Battery</expr>
+	                    	</eq>
+	                    </and>
+	                </verify>
+	                <verify step="6">
+	                	<and>
+	                    	<contains>
+	                        	<msg_ref type="utility" index="8 0 0">SNMPResp.varBind</msg_ref>
+	                        	<expr>4000850200</expr>
+	                    	</contains>
+	                    	<eq>
+	                        	<msg_ref type="utility" index="8 0 2">SNMPResp.varBind</msg_ref>
+	                        	<expr>AC Restored</expr>
+	                    	</eq>
+	                    </and>
+	                </verify>
+	                <verify step="6">
+	                	<and>
+	                    	<contains>
+	                        	<msg_ref type="utility" index="9 0 0">SNMPResp.varBind</msg_ref>
+	                        	<expr>4000850300</expr>
+	                    	</contains>
+	                    	<eq>
+	                        	<msg_ref type="utility" index="9 0 2">SNMPResp.varBind</msg_ref>
+	                        	<expr>Battery Bad</expr>
+	                    	</eq>
+	                    </and>
+	                </verify>
+	                <verify step="6">
+	                	<and>
+	                    	<contains>
+	                        	<msg_ref type="utility" index="10 0 0">SNMPResp.varBind</msg_ref>
+	                        	<expr>4000850400</expr>
+	                    	</contains>
+	                    	<eq>
+	                        	<msg_ref type="utility" index="10 0 2">SNMPResp.varBind</msg_ref>
+	                        	<expr>Battery Good</expr>
+	                    	</eq>
+	                    </and>
+	                </verify>
+	                <verify step="6">
+	                	<and>
+	                    	<contains>
+	                        	<msg_ref type="utility" index="11 0 0">SNMPResp.varBind</msg_ref>
+	                        	<expr>4000850500</expr>
+	                    	</contains>
+	                    	<eq>
+	                        	<msg_ref type="utility" index="11 0 2">SNMPResp.varBind</msg_ref>
+	                        	<expr>Battery Missing</expr>
+	                    	</eq>
+	                    </and>
+	                </verify>
+	                <verify step="6">
+	                	<and>
+	                    	<contains>
+	                        	<msg_ref type="utility" index="12 0 0">SNMPResp.varBind</msg_ref>
+	                        	<expr>4000850600</expr>
+	                    	</contains>
+	                    	<eq>
+	                        	<msg_ref type="utility" index="12 0 2">SNMPResp.varBind</msg_ref>
+	                        	<expr>Battery Present</expr>
+	                    	</eq>
+	                    </and>
+	                </verify>
+	                <verify step="6">
+	                	<and>
+	                    	<contains>
+	                        	<msg_ref type="utility" index="13 0 0">SNMPResp.varBind</msg_ref>
+	                        	<expr>4000850700</expr>
+	                    	</contains>
+	                    	<eq>
+	                        	<msg_ref type="utility" index="13 0 2">SNMPResp.varBind</msg_ref>
+	                        	<expr>Depleted Battery</expr>
+	                    	</eq>
+	                    </and>
+	                </verify>
+	                <verify step="6">
+	                	<and>
+	                    	<contains>
+	                        	<msg_ref type="utility" index="14 0 0">SNMPResp.varBind</msg_ref>
+	                        	<expr>4000850800</expr>
+	                    	</contains>
+	                    	<eq>
+	                        	<msg_ref type="utility" index="14 0 2">SNMPResp.varBind</msg_ref>
+	                        	<expr>Battery Charging</expr>
+	                    	</eq>
+	                    </and>
+	                </verify>	                
+	                <verify step="6">
+	                	<and>
+	                    	<contains>
+	                        	<msg_ref type="utility" index="15 0 0">SNMPResp.varBind</msg_ref>
+	                        	<expr>4000950100</expr>
+	                    	</contains>
+	                    	<eq>
+	                        	<msg_ref type="utility" index="15 0 2">SNMPResp.varBind</msg_ref>
+	                        	<expr>Waiting for DNS Resolution of Provisioning Realm Name</expr>
+	                    	</eq>
+	                    </and>
+	                </verify>
+	                <verify step="6">
+	                	<and>
+	                    	<contains>
+	                        	<msg_ref type="utility" index="16 0 0">SNMPResp.varBind</msg_ref>
+	                        	<expr>4000950101</expr>
+	                    	</contains>
+	                    	<eq>
+	                        	<msg_ref type="utility" index="16 0 2">SNMPResp.varBind</msg_ref>
+	                        	<expr>Provisioning Realm Name unknown to the DNS Server</expr>
+	                    	</eq>
+	                    </and>
+	                </verify>
+	                <verify step="6">
+	                	<and>
+	                    	<contains>
+	                        	<msg_ref type="utility" index="17 0 0">SNMPResp.varBind</msg_ref>
+	                        	<expr>4000950200</expr>
+	                    	</contains>
+	                    	<eq>
+	                        	<msg_ref type="utility" index="17 0 2">SNMPResp.varBind</msg_ref>
+	                        	<expr>Waiting for DNS resolution of MSO/Provisioning KDC FQDN</expr>
+	                    	</eq>
+	                    </and>
+	                </verify>
+	                <verify step="6">
+	                	<and>
+	                    	<contains>
+	                        	<msg_ref type="utility" index="18 0 0">SNMPResp.varBind</msg_ref>
+	                        	<expr>4000950201</expr>
+	                    	</contains>
+	                    	<eq>
+	                        	<msg_ref type="utility" index="18 0 2">SNMPResp.varBind</msg_ref>
+	                        	<expr>MSO/Provisioning KDC FQDN unknown to the DNS Server</expr>
+	                    	</eq>
+	                    </and>
+	                </verify>
+	                <verify step="6">
+	                	<and>
+	                    	<contains>
+	                        	<msg_ref type="utility" index="19 0 0">SNMPResp.varBind</msg_ref>
+	                        	<expr>4000950202</expr>
+	                    	</contains>
+	                    	<eq>
+	                        	<msg_ref type="utility" index="19 0 2">SNMPResp.varBind</msg_ref>
+	                        	<expr>Waiting for DNS resolution of Provisioning Server FQDN</expr>
+	                    	</eq>
+	                    </and>
+	                </verify>
+	                <verify step="6">
+	                	<and>
+	                    	<contains>
+	                        	<msg_ref type="utility" index="20 0 0">SNMPResp.varBind</msg_ref>
+	                        	<expr>4000950203</expr>
+	                    	</contains>
+	                    	<eq>
+	                        	<msg_ref type="utility" index="20 0 2">SNMPResp.varBind</msg_ref>
+	                        	<expr>Provisioning Server FQDN unknown to the DNS Server</expr>
+	                    	</eq>
+	                    </and>
+	                </verify>
+	                <verify step="6">
+	                	<and>
+	                    	<contains>
+	                        	<msg_ref type="utility" index="21 0 0">SNMPResp.varBind</msg_ref>
+	                        	<expr>4000950300</expr>
+	                    	</contains>
+	                    	<eq>
+	                        	<msg_ref type="utility" index="21 0 2">SNMPResp.varBind</msg_ref>
+	                        	<expr>Waiting For MSO/Provisioning KDC AS Reply</expr>
+	                    	</eq>
+	                    </and>
+	                </verify>
+	                <verify step="6">
+	                	<and>
+	                    	<contains>
+	                        	<msg_ref type="utility" index="22 0 0">SNMPResp.varBind</msg_ref>
+	                        	<expr>4000950301</expr>
+	                    	</contains>
+	                    	<eq>
+	                        	<msg_ref type="utility" index="22 0 2">SNMPResp.varBind</msg_ref>
+	                        	<expr>MSO/Provisioning KDC did not accept AS Request</expr>
+	                    	</eq>
+	                    </and>
+	                </verify>	                
+	                <verify step="6">
+	                	<and>
+	                    	<contains>
+	                        	<msg_ref type="utility" index="23 0 0">SNMPResp.varBind</msg_ref>
+	                        	<expr>4000950400</expr>
+	                    	</contains>
+	                    	<eq>
+	                        	<msg_ref type="utility" index="23 0 2">SNMPResp.varBind</msg_ref>
+	                        	<expr>Waiting For MSO/Provisioning KDC TGS Reply</expr>
+	                    	</eq>
+	                    </and>
+	                </verify>
+	                <verify step="6">
+	                	<and>
+	                    	<contains>
+	                        	<msg_ref type="utility" index="24 0 0">SNMPResp.varBind</msg_ref>
+	                        	<expr>4000950401</expr>
+	                    	</contains>
+	                    	<eq>
+	                        	<msg_ref type="utility" index="24 0 2">SNMPResp.varBind</msg_ref>
+	                        	<expr>MSO/Provisioning KDC did not accept AS Request</expr>
+	                    	</eq>
+	                    </and>
+	                </verify>
+	                <verify step="6">
+	                	<and>
+	                    	<contains>
+	                        	<msg_ref type="utility" index="25 0 0">SNMPResp.varBind</msg_ref>
+	                        	<expr>4000950500</expr>
+	                    	</contains>
+	                    	<eq>
+	                        	<msg_ref type="utility" index="25 0 2">SNMPResp.varBind</msg_ref>
+	                        	<expr>Waiting for Provisioning Server AP Reply</expr>
+	                    	</eq>
+	                    </and>
+	                </verify>
+	                <verify step="6">
+	                	<and>
+	                    	<contains>
+	                        	<msg_ref type="utility" index="26 0 0">SNMPResp.varBind</msg_ref>
+	                        	<expr>4000950501</expr>
+	                    	</contains>
+	                    	<eq>
+	                        	<msg_ref type="utility" index="26 0 2">SNMPResp.varBind</msg_ref>
+	                        	<expr>Provisioning Server/SNMP Entity rejected the Provisioning AP Request</expr>
+	                    	</eq>
+	                    </and>
+	                </verify>
+	                <verify step="6">
+	                	<and>
+	                    	<contains>
+	                        	<msg_ref type="utility" index="27 0 0">SNMPResp.varBind</msg_ref>
+	                        	<expr>4000950600</expr>
+	                    	</contains>
+	                    	<eq>
+	                        	<msg_ref type="utility" index="27 0 2">SNMPResp.varBind</msg_ref>
+	                        	<expr>SNMPv3 INFORM transmitted; Waiting for SNMPv3 GET and/or SNMPv3 SET messages</expr>
+	                    	</eq>
+	                    </and>
+	                </verify>
+	                <verify step="6">
+	                	<and>
+	                    	<contains>
+	                        	<msg_ref type="utility" index="28 0 0">SNMPResp.varBind</msg_ref>
+	                        	<expr>4000950601</expr>
+	                    	</contains>
+	                    	<eq>
+	                        	<msg_ref type="utility" index="28 0 2">SNMPResp.varBind</msg_ref>
+	                        	<expr>SNMPv2c INFORM transmitted; Waiting for SNMPv2c GET and/or SNMPv2c SET messages</expr>
+	                    	</eq>
+	                    </and>
+	                </verify>
+	                <verify step="6">
+	                	<and>
+	                    	<contains>
+	                        	<msg_ref type="utility" index="29 0 0">SNMPResp.varBind</msg_ref>
+	                        	<expr>4000950800</expr>
+	                    	</contains>
+	                    	<eq>
+	                        	<msg_ref type="utility" index="29 0 2">SNMPResp.varBind</msg_ref>
+	                        	<expr>Waiting For DNS Resolution of TFTP FQDN</expr>
+	                    	</eq>
+	                    </and>
+	                </verify>
+	                <verify step="6">
+	                	<and>
+	                    	<contains>
+	                        	<msg_ref type="utility" index="30 0 0">SNMPResp.varBind</msg_ref>
+	                        	<expr>4000950801</expr>
+	                    	</contains>
+	                    	<eq>
+	                        	<msg_ref type="utility" index="30 0 2">SNMPResp.varBind</msg_ref>
+	                        	<expr>TFTP FQDN unknown to the DNS Server</expr>
+	                    	</eq>
+	                    </and>
+	                </verify>
+	                <verify step="6">
+	                	<and>
+	                    	<contains>
+	                        	<msg_ref type="utility" index="31 0 0">SNMPResp.varBind</msg_ref>
+	                        	<expr>4000950900</expr>
+	                    	</contains>
+	                    	<eq>
+	                        	<msg_ref type="utility" index="31 0 2">SNMPResp.varBind</msg_ref>
+	                        	<expr>Waiting for TFTP Response</expr>
+	                    	</eq>
+	                    </and>
+	                </verify>
+	                <verify step="6">
+	                	<and>
+	                    	<contains>
+	                        	<msg_ref type="utility" index="32 0 0">SNMPResp.varBind</msg_ref>
+	                        	<expr>4000950901</expr>
+	                    	</contains>
+	                    	<eq>
+	                        	<msg_ref type="utility" index="32 0 2">SNMPResp.varBind</msg_ref>
+	                        	<expr>Configuration File Error - Bad Authentication</expr>
+	                    	</eq>
+	                    </and>
+	                </verify>
+	                <verify step="6">
+	                	<and>
+	                    	<contains>
+	                        	<msg_ref type="utility" index="33 0 0">SNMPResp.varBind</msg_ref>
+	                        	<expr>4000950902</expr>
+	                    	</contains>
+	                    	<eq>
+	                        	<msg_ref type="utility" index="33 0 2">SNMPResp.varBind</msg_ref>
+	                        	<expr>Configuration File Error - Bad Privacy</expr>
+	                    	</eq>
+	                    </and>
+	                </verify>
+	                <verify step="6">
+	                	<and>
+	                    	<contains>
+	                        	<msg_ref type="utility" index="34 0 0">SNMPResp.varBind</msg_ref>
+	                        	<expr>4000950903</expr>
+	                    	</contains>
+	                    	<eq>
+	                        	<msg_ref type="utility" index="34 0 2">SNMPResp.varBind</msg_ref>
+	                        	<expr>Configuration File Error - Bad Format</expr>
+	                    	</eq>
+	                    </and>
+	                </verify>
+	                <verify step="6">
+	                	<and>
+	                    	<contains>
+	                        	<msg_ref type="utility" index="35 0 0">SNMPResp.varBind</msg_ref>
+	                        	<expr>4000950904</expr>
+	                    	</contains>
+	                    	<eq>
+	                        	<msg_ref type="utility" index="35 0 2">SNMPResp.varBind</msg_ref>
+	                        	<expr>Configuration File Error - Missing Parameter</expr>
+	                    	</eq>
+	                    </and>
+	                </verify>
+	                <verify step="6">
+	                	<and>
+	                    	<contains>
+	                        	<msg_ref type="utility" index="36 0 0">SNMPResp.varBind</msg_ref>
+	                        	<expr>4000950905</expr>
+	                    	</contains>
+	                    	<eq>
+	                        	<msg_ref type="utility" index="36 0 2">SNMPResp.varBind</msg_ref>
+	                        	<expr>Configuration File Error - Bad Parameter</expr>
+	                    	</eq>
+	                    </and>
+	                </verify>
+	                <verify step="6">
+	                	<and>
+	                    	<contains>
+	                        	<msg_ref type="utility" index="37 0 0">SNMPResp.varBind</msg_ref>
+	                        	<expr>4000950906</expr>
+	                    	</contains>
+	                    	<eq>
+	                        	<msg_ref type="utility" index="37 0 2">SNMPResp.varBind</msg_ref>
+	                        	<expr>Configuration File Error - Bad Linkage</expr>
+	                    	</eq>
+	                    </and>
+	                </verify>	                
+	                <verify step="6">
+	                	<and>
+	                    	<contains>
+	                        	<msg_ref type="utility" index="38 0 0">SNMPResp.varBind</msg_ref>
+	                        	<expr>4000950907</expr>
+	                    	</contains>
+	                    	<eq>
+	                        	<msg_ref type="utility" index="38 0 2">SNMPResp.varBind</msg_ref>
+	                        	<expr>Configuration File Error - Misc.</expr>
+	                    	</eq>
+	                    </and>
+	                </verify>
+	                <verify step="6">
+	                	<and>
+	                    	<contains>
+	                        	<msg_ref type="utility" index="39 0 0">SNMPResp.varBind</msg_ref>
+	                        	<expr>4000951500</expr>
+	                    	</contains>
+	                    	<eq>
+	                        	<msg_ref type="utility" index="39 0 2">SNMPResp.varBind</msg_ref>
+	                        	<expr>Provisioning Complete</expr>
+	                    	</eq>
+	                    </and>
+	                </verify>
+	                <verify step="6">
+	                	<and>
+	                    	<contains>
+	                        	<msg_ref type="utility" index="40 0 0">SNMPResp.varBind</msg_ref>
+	                        	<expr>4000951501</expr>
+	                    	</contains>
+	                    	<eq>
+	                        	<msg_ref type="utility" index="40 0 2">SNMPResp.varBind</msg_ref>
+	                        	<expr>Provisioning Complete - Warnings</expr>
+	                    	</eq>
+	                    </and>
+	                </verify>
+	                <verify step="6">
+	                	<and>
+	                    	<contains>
+	                        	<msg_ref type="utility" index="41 0 0">SNMPResp.varBind</msg_ref>
+	                        	<expr>4000951502</expr>
+	                    	</contains>
+	                    	<eq>
+	                        	<msg_ref type="utility" index="41 0 2">SNMPResp.varBind</msg_ref>
+	                        	<expr>Provisioning Complete - Fail</expr>
+	                    	</eq>
+	                    </and>
+	                </verify>
+            </response>
+            
+            <transition to="SetMIB" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+		</state>
+		
+		
+		<state ID="SetMIB" timer="30000">
+			<prelude once="true">
+				<!-- Set pktcDevEventDescrReporting to ipv6(2)  -->
+                <send protocol="utility" msgtype="SNMPSet">
+                    <mod modtype="add" hdr="array">
+                        <var_expr>
+                            <expr>varBind 1 1 3 \r\n ][ , </expr>
+                            <expr>PKTC-EVENT-MIB::pktcDevEventDescrText.4000951500.4491,STRING,foo][\r\n</expr>
+                        </var_expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+                    <mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+            </prelude>
+			<response>
+				<verify step="7">
+					<eq>
+						<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+						<expr>foo</expr>
+					</eq>
+				</verify>
+            </response>
+            <transition to="VerifyMIB2" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+		</state>
+		
+		<state ID="VerifyMIB2" timer="10000">
+			<prelude once="true" >
+			 	<send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>PKTC-EVENT-MIB::pktcDevEventDescrText.4000951500.4491</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+					<mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+			</prelude>
+			<response>
+				<verify step="8">
+					<eq>
+						<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+						<expr>foo</expr>
+					</eq>
+				</verify>
+            </response>
+            <postlude>
+            	<stop_capture/>
+            </postlude>
+            <transition to="END" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+		</state>
+	
+	</add_to>
+</pc2xml>

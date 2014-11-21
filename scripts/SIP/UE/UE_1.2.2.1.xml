@@ -1,0 +1,126 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="SIP-UE 1.2.2.1" 
+	descrip="UAS Error Response with out-of-sequence re-INVITE" 
+	number="SIP-UE 1.2.2.1">
+	
+	<template file="./templates/CallTermAtUETemp.xml" name="UE1"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Alerting"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<state ID="Alerting" timer="12000">
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="event"/>
+						<expr>TimerExpired</expr>
+					</eq>
+					<then>
+						<!--Take DUT phone off hook-->
+						<send protocol="utility" msgtype="OffHook"/>
+					</then>
+				</if>
+				<!-- Expected responses are 180, 183, PRACK, UPDATE, or 200 -->
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>UPDATE</expr>
+					</eq>
+					<then>
+						<!--QoS required for test, sending a 200-OK to Update message to peer.-->
+						<send protocol="sip" msgtype="200-Update"/>
+					</then>
+					<elseif>
+						<and>
+							<eq>
+								<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+								<expr>180</expr>
+							</eq>
+							<contains>
+								<msg_ref type="sip" hdr_instance="any">180-INVITE.Require</msg_ref>
+								<expr>100rel</expr>
+							</contains>
+						</and>
+						<then>
+							<!--Reliability required for test, sending Prack message to peer.-->
+							<send protocol="sip" msgtype="Prack"/>
+						</then>
+					</elseif>
+				</if>
+			</response>
+			<transition to="Alerting" event="200-PRACK"/>
+			<transition to="Alerting" event="UPDATE"/>
+			<transition to="Alerting" event="18x-INVITE"/>
+			<transition to="EarlyDialog" event="EARLY_DIALOG_UAC"/>
+		</state>
+		<!-- Step 1 of Message Flow from test case 1.2.2.1 - 
+			Stop the default session -->
+		<!-- EarlyDialog STATE -->
+		<!-- Enter this state when EARLY_DIALOG_UAC 
+			[RFP table UE terminating case] is attained -->
+		<state ID="EarlyDialog">
+			<prelude>
+				<!-- Step 2 of Message Flow from test case 1.2.2.1 - 
+					Send an INVITE -->
+				<send protocol="sip" msgtype="REINVITE"/>
+			</prelude>
+			<response>
+				<if>
+					<contains>
+						<msg_ref type="sip" msg_instance="last">Response.Status-Line.status-code</msg_ref>
+						<expr>500</expr>
+					</contains>
+					<then>
+						<verify step="2" requirements="RFC691">
+							<and>
+								<eq>
+									<msg_ref type="sip">Response</msg_ref>
+									<expr>500-INVITE</expr>
+								</eq>
+								<contains>
+									<msg_ref type="sip">500-INVITE</msg_ref>
+									<expr>Retry-After:</expr>
+								</contains>
+							</and>
+						</verify>
+						<verify step="3" requirements="RFC692">
+							<and>
+								<gt>
+									<msg_ref type="sip">500-INVITE.Retry-After.value</msg_ref>
+									<expr>0</expr>
+								</gt>
+								<lte>
+									<msg_ref type="sip">500-INVITE.Retry-After.value</msg_ref>
+									<expr>10</expr>
+								</lte>
+							</and>
+						</verify>
+						<send protocol="sip" msgtype="ACK"/>
+					</then>
+				</if>
+			</response>
+			<transition to="END" event="500-INVITE"/>
+		</state>
+	</add_to>
+</pc2xml>

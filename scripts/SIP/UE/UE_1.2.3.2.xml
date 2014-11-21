@@ -1,0 +1,137 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="SIP-UE 1.2.3.2" 
+	descrip="UAC Exhibits Correct Session Termination Behavior" 
+	number="SIP-UE 1.2.3.2">
+	
+	<template name="UE1" file="./templates/CallOrigAtUETemp.xml"/>
+	<configure name="FSM End Immediately" value="true"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Connected"/>
+		<state ID="Releasing"/>
+		<state ID="OnHook"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<NE targets="RTP"/>
+		
+		<state ID="Connected">
+			<prelude>
+				<!-- Step 1 of test case 1.2.3.2- Session is established -->
+				<log expr="Media Session is established"/>
+			</prelude>
+			<transition to="Releasing" event="RTP"/>
+		</state>
+		
+		<state ID="Releasing">
+			<prelude>
+				<send protocol="utility" msgtype="OnHook"/>
+			</prelude>
+			<transition to="OnHook" event="OnHookComplete"/>
+		</state>
+		
+		<state ID="OnHook">
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="event"/>
+						<expr>MediaComplete</expr>
+					</eq>
+					<then>
+						<verify step="4" requirements="RFC729" group="stopped">
+							<eq>
+								<msg_ref type="event"/>
+								<expr>MediaComplete</expr>
+							</eq>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<transition to="VerifyNoMedia" event="BYE"/>
+			<transition to="OnHook" event="RTP"/>
+		</state>
+		
+		<state ID="VerifyNoMedia" timer="10000">
+			<response>
+				<if>
+					<neq>
+						<msg_ref type="event"/>
+						<expr>TimerExpired</expr>
+					</neq>
+					<then>
+						<verify step="4" requirements="RFC729" group="stopped">
+							<eq>
+								<msg_ref type="event"/>
+								<expr>MediaComplete</expr>
+							</eq>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<transition to="SendREINVITE" event="TimerExpired"/>
+			<transition to="SendREINVITE" event="MediaComplete"/>
+		</state>
+		
+		<state ID="SendREINVITE">
+			<prelude once="true">
+				<send protocol="sip" msgtype="REINVITE">
+					<mod modtype="replace" hdr="CSeq" param="value">
+						<add_ref type="sip" msg_instance="1">INVITE.CSeq.value</add_ref>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<and>
+						<gte>
+							<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+							<expr>300</expr>
+						</gte>
+						<eq>
+							<msg_ref type="sip">Response.CSeq.method</msg_ref>
+							<expr>INVITE</expr>
+						</eq>
+					</and>
+					<then>
+						<verify step="5" requirements="RFC730">
+							<eq>
+								<msg_ref type="sip">Response</msg_ref>
+								<expr>481-INVITE</expr>
+							</eq>
+						</verify>
+						<!-- Need to make the CSeq value match that of the REINVITE we
+							sent above. -->
+						<send protocol="sip" msgtype="ACK">
+							<mod modtype="replace" hdr="CSeq" param="value">
+								<msg_ref type="sip" msg_instance="last">REINVITE.CSeq.value</msg_ref>
+							</mod>
+						</send>
+						<send protocol="sip" msgtype="200-BYE" origReq="BYE"/>
+					</then>
+				</if>
+			</response>
+			
+			<transition to="END" event="481-INVITE"/>
+			<transition to="SendREINVITE" event="100-INVITE"/>
+		</state>
+	</add_to>
+</pc2xml>

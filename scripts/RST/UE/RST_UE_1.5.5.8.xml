@@ -1,0 +1,177 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-UE 1.5.5.8" 
+	descrip="3 Way Conference – Transfer before Third-Party answers " 
+	number="RST-UE 1.5.5.8" inspector="disable">
+	
+	<template file="./templates/Call_Transfer_Transferor.xml"/>
+	
+	<remove_from fsm="UE1 Calls DUT">
+		<state ID="UE1Wait"/>
+		<state ID="UE1SendNotify"/>
+		<state ID="UE1SendRingNotify"/>
+		<state ID="UE1WaitFor200NotifyOrSucceed"/>
+		<state ID="UE1WaitFor200Notify"/>
+	</remove_from>
+	
+	<add_to fsm="UE1 Calls DUT">
+		<state ID="UE1Wait" timer="120000">
+			<prelude once="true">
+				<send protocol="utility" msgtype="DialDigits">
+					<mod modtype="add" hdr="number">
+						<msg_ref type="platform">UE2.phone number 1</msg_ref>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>REFER</expr>
+					</eq>
+					<then>
+						<verify step="4" requirements="REQ13875">
+							<eq>
+								<msg_ref type="sip">Request</msg_ref>
+								<expr>REFER</expr>
+							</eq>
+						</verify>
+						<send protocol="sip" msgtype="202-REFER"/>
+						<send protocol="sip" msgtype="NOTIFY"/>
+					</then>
+				</if>
+			</response>
+			<transition to="UE1Wait" event="REFER"/>
+			<transition to="UE1Wait" event="DialDigitsComplete"/>
+			<transition to="UE1SendRingNotify" event="200-NOTIFY"/>
+		</state>
+		
+		<state ID="UE1SendRingNotify">
+			<prelude>
+				<send protocol="sip" msgtype="NOTIFY"/>
+			</prelude>
+			<transition to="UE1SendNotify" event="200-NOTIFY"/>
+		</state>
+		
+		<state ID="UE1SendNotify">
+			<prelude>
+				<send protocol="sip" msgtype="NOTIFY"/>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Response</msg_ref>
+						<expr>200-NOTIFY</expr>
+					</eq>
+					<then>
+						<verify step="4" requirements="REQ13875" group="last200Notify">
+							<eq>
+								<msg_ref type="sip">Response</msg_ref>
+								<expr>200-NOTIFY</expr>
+							</eq>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<!-- Transitions for UE1SendNotify state -->
+			<transition to="UE1WaitFor200NotifyOrSucceed" event="BYE"/>
+			<!--  Allow a subscribe for refer to come in, but don't answer it -->
+			<transition to="UE1SendNotify" event="SUBSCRIBE"/>
+			<transition to="UE1WaitForByeOrSucceed" event="200-NOTIFY"/>
+		</state>
+		
+		
+			<state ID="UE1WaitFor200NotifyOrSucceed">
+				<prelude once="true">
+					<send protocol="sip" msgtype="200-BYE"/>
+				</prelude>
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="sip">Response</msg_ref>
+							<expr>200-NOTIFY</expr>
+						</eq>
+						<then>
+							<verify step="4" requirements="REQ13875" group="last200Notify">
+								<eq>
+									<msg_ref type="sip">Response</msg_ref>
+									<expr>200-NOTIFY</expr>
+								</eq>
+							</verify>
+						</then>
+					</if>
+				</response>
+				<!--  Allow a subscribe for refer to come in, but don't answer it -->
+				<transition to="UE1WaitFor200NotifyOrSucceed" event="SUBSCRIBE"/>
+				<transition to="UE1WaitFor200Notify" event="SucceedEvent"/>
+				<transition to="UE1WaitSucceed" event="200-NOTIFY"/>
+			</state>
+		
+		<state ID="UE1WaitFor200Notify">
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Response</msg_ref>
+						<expr>200-NOTIFY</expr>
+					</eq>
+					<then>
+						<verify step="4" requirements="REQ13875" group="last200Notify">
+							<eq>
+								<msg_ref type="sip">Response</msg_ref>
+								<expr>200-NOTIFY</expr>
+							</eq>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<transition to="END" event="200-NOTIFY"/>
+		</state>
+			
+	</add_to>
+	
+	<remove_from fsm="UE2 Calls DUT">
+		<state ID="UE2Answer"/>
+		<state ID="UE2EndDialog"/>
+	</remove_from>
+	
+	<add_to fsm="UE2 Calls DUT">	
+		<state ID="UE2Answer">
+			<prelude once="true">
+				<send protocol="utility" msgtype="OnHook"/>
+			</prelude>
+			<transition to="WaitCancel" event="OnHookComplete"/>
+		</state>
+		
+		<state ID="WaitCancel">
+			<postlude>
+				<send protocol="sip" msgtype="200-CANCEL"/>
+				<send protocol="sip" msgtype="487-INVITE"/>
+			</postlude>
+			<transition to="UE2EndDialog" event="CANCEL"/>
+		</state>
+		
+		<state ID="UE2EndDialog" ES="true">
+			<prelude>
+				<generate event="SucceedEvent" fsm="UE1 Calls DUT"/>
+			</prelude>
+		</state>
+	</add_to>
+</pc2xml>

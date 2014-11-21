@@ -1,0 +1,63 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+
+<!-- First are the document type and the attributes for our document -->
+<pc2xml version="$Revision: 8188 $" name="NAT_UE_1.1.2.4" descrip="SIP OUTBOUND REGISTER Message Components " number="NAT_UE_1.1.2.4">
+		<template file="./templates/UERegAndSubTemp.xml" name="Registrar" />
+		<remove_from fsm="Registrar">
+				<state ID="PendingRegistration" sub="response" />
+				<state ID="Notification" />
+		</remove_from>
+		<add_to fsm="Registrar">
+				<!-- PENDINGREGISTRATION State -->
+				<state ID="PendingRegistration" sub="response">
+						<!-- Step 1 from the Default Message Flow - 
+			UE Registration (DUT) Sequence Diagram- received REGISTER message-->
+						<verify step="2" requirements="REQ19213, RFC4288, RFC4295">
+								<contains>
+										<msg_ref type="sip">REGISTER.Contact.sip-instance</msg_ref>
+										<expr>urn:uuid:</expr>
+								</contains>
+						</verify>
+						<verify step="3" requirements="REQ19213, RFC4338">
+								<and>
+										<gt>
+												<msg_ref type="sip">REGISTER.Contact.reg-id</msg_ref>
+												<expr>0</expr>
+										</gt>
+										<lte>
+												<msg_ref type="sip">REGISTER.Contact.reg-id</msg_ref>
+												<expr>2147483648</expr>
+										</lte>
+								</and>
+						</verify>
+						<verify step="4" requirements="RFC4297">
+								<contains>
+										<msg_ref type="sip" hdr_instance="any">REGISTER.Supported</msg_ref>
+										<expr>path</expr>
+								</contains>
+						</verify>
+				</state>
+				<state ID="Notification">
+						<!-- Transitions for Notification state -->
+						<transition to="END" event="200-NOTIFY" />
+				</state>
+		</add_to>
+</pc2xml>

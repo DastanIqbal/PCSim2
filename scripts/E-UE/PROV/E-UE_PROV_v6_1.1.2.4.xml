@@ -1,0 +1,132 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+ Change History: (Author & Date)
+
+
+
+-->
+
+<!-- First are the document type and the attributes for our document -->
+<pc2xml version="$Revision: 7768 $" name="E-UE_PROV_1.1.2.4" descrip="DHCP Back-off and Retry Algorithms for eUE"
+	number="E-UE_PROV_1.1.2.4">
+	
+	<template file="./templates/EUE_Prov_B_1_1_1.xml" name="Reset"/>
+	
+	<add_to fsm="Reset">
+	
+		<!-- Step 2 -->
+		<state ID="StartCapture_RebootWait" sub="" timer="300000" /> <!-- Change the wait time to 5 minutes -->
+		<state ID="StartCapture_RebootWait" sub="postlude">
+			<stop_capture />
+			
+			
+			
+		</state>
+		<transition from="StartCapture_RebootWait" to="Verify" event="TimerExpired" />
+		
+	
+	
+		<state ID="Verify">
+			<prelude>
+				<generate event="Branch1Event" />
+			</prelude>
+			<response>
+				<if>
+					<ipv4>DUT.IP</ipv4>
+				<then>
+					<generate event="Branch2Event" />
+				</then>
+				<else>
+					<generate event="Branch3Event" />
+				</else>
+				</if>
+			</response>
+			<transition to="ipv6" event="Branch3Event" />
+			<transition to="ipv4" event="Branch2Event" />
+		</state>
+		
+		<state ID="ipv4">
+			<prelude>
+				<!-- Step 3 -->
+				<parse_capture name="eCM_V4">
+					<parser_filter protocol="bootp" clientMAC="DUT.CM MAC Address"/>
+				</parse_capture>
+				
+				<verify>
+					<and>
+						<notnull>
+							<capture_ref name="eCM_V4" type="bootp" msg_instance="1">Discover.num</capture_ref>
+						</notnull>
+					<and>
+						<notnull>
+							<capture_ref name="eCM_V4" type="bootp" msg_instance="2">Discover.num</capture_ref>
+						</notnull>
+					<and>
+						<notnull>
+							<capture_ref name="eCM_V4" type="bootp" msg_instance="3">Discover.num</capture_ref>
+						</notnull>
+					<and>
+						<notnull>
+							<capture_ref name="eCM_V4" type="bootp" msg_instance="4">Discover.num</capture_ref>
+						</notnull>
+						<!-- It is not necessary to check for the 5th message since it is acceptable to receive 4 or 5 messages. -->
+						<null>
+							<capture_ref name="eCM_V4" type="bootp" msg_instance="6">Discover.num</capture_ref>
+						</null>
+					</and>
+					</and>
+					</and>	
+					</and>
+				</verify>
+			</prelude>
+			<transition to="END" event="Branch2Event"/>	
+		</state>
+		
+		<state ID="ipv6">
+			<prelude>
+				<!-- Step 3 -->
+				<parse_capture name="eue_dhcpv6">
+					<parser_filter protocol="dhcpv6" clientMAC="DUT.MAC Address"/>
+				</parse_capture>
+				
+				<verify>
+					<and>
+						<notnull>
+							<capture_ref name="eue_dhcpv6" type="dhcpv6" msg_instance="1">Solicit.num</capture_ref>
+						</notnull>
+					<and>
+						<notnull>
+							<capture_ref name="eue_dhcpv6" type="dhcpv6" msg_instance="2">Solicit.num</capture_ref>
+						</notnull>
+					<and>
+						<notnull>
+							<capture_ref name="eue_dhcpv6" type="dhcpv6" msg_instance="3">Solicit.num</capture_ref>
+						</notnull>
+					<!--and-->
+						<notnull>
+							<capture_ref name="eue_dhcpv6" type="dhcpv6" msg_instance="4">Solicit.num</capture_ref>
+						</notnull>
+						<!-- It is not necessary to check for the 5th message since it is acceptable to receive 4 or 5 messages. -->
+						<!--null>
+							<capture_ref name="eue_dhcpv6" type="dhcpv6" msg_instance="6">Solicit.num</capture_ref>
+						</null>
+					</and-->
+					</and>
+					</and>	
+					</and>
+				</verify>
+			</prelude>
+			<transition to="END" event="Branch3Event"/>	
+		</state>
+		
+	</add_to>
+</pc2xml>

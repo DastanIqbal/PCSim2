@@ -1,0 +1,136 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+ Change History: (Author & Date)
+	2011-10-11	prosenberg-watt - Initial version
+	2011-11-15	Seung Lee - final versionfor
+
+-->
+<pc2xml version="$Revision: 1 $" 
+	name="ESG 1.6.1.1" 
+	descrip="Ability of ESG to Report VoIP Metrics and Statistics" 
+	number="ESG 1.6.1.1">
+	
+	<template file="./templates/Proxy_mod4ESG.xml" name="UE0"/>
+	<configure name="SIP Inspector Type" value="UE"/>
+	<configure name="SIP Inspector" value="enable"/>
+
+	<remove_from fsm="UE0">
+		<state ID="Register"/>
+		<state ID="Connected"/>
+	</remove_from>
+
+	<add_to fsm="UE0">
+	
+		<transition from="OnHookUE1" to="VerifySteps" event="OnHookComplete"/>
+
+		<state ID="Register">
+			<prelude>
+				<start_capture>
+					<filter>
+						<var_expr>
+							<expr>host </expr>
+							<msg_ref type="platform">UE0.IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">UE0.IP2</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">PCSCF1.IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">UE1.IP</msg_ref>
+						</var_expr>
+					</filter>
+				</start_capture>
+			</prelude>
+			<transition to="OffHook" event="Registered"/>
+		</state>
+		
+		<state ID="Connected" timer="120000">
+			<prelude>
+				<log expr="Waiting 2 minutes. Pay close attention. Something could happen at any moment."/>
+			</prelude>
+			<transition to="OnHook" event="TimerExpired"/>
+		</state>
+		
+		<state ID="VerifySteps">
+			<prelude>
+				<stop_capture/>
+				<log expr="ESG under test sends the PUBLISH reports." step="2" promptUser="true" verify="true" yesExpected="true"/>
+				<log expr="Syslog message is sent to the correct server and it contains the following: Facility value 16 (local use 0)/Severity 6 (informational/Priority value = 134" step="3" promptUser="true" verify="true" yesExpected="true"/>
+			</prelude>
+			<response>
+<!-- 				<if> -->
+<!-- 					<then> -->
+<!-- 						<verify step="4"> -->
+<!-- 							<contains> -->
+<!-- 								<msg_ref type="sip">PUBLISH</msg_ref> -->
+<!-- 								<expr>CallID</expr> -->
+<!-- 							</contains> -->
+<!-- 						</verify> -->
+<!-- 						<verify step="4"> -->
+<!-- 							<contains> -->
+<!-- 								<msg_ref type="sip">PUBLISH</msg_ref> -->
+<!-- 								<expr>LocalID</expr> -->
+<!-- 							</contains> -->
+<!-- 						</verify> -->
+<!-- 						<verify step="4"> -->
+<!-- 							<contains> -->
+<!-- 								<msg_ref type="sip">PUBLISH</msg_ref> -->
+<!-- 								<expr>RemoteID</expr> -->
+<!-- 							</contains> -->
+<!-- 						</verify> -->
+<!-- 						<verify step="4"> -->
+<!-- 							<contains> -->
+<!-- 								<msg_ref type="sip">PUBLISH</msg_ref> -->
+<!-- 								<expr>OrigID</expr> -->
+<!-- 							</contains> -->
+<!-- 						</verify> -->
+<!-- 						<verify step="4"> -->
+<!-- 							<contains> -->
+<!-- 								<msg_ref type="sip">PUBLISH</msg_ref> -->
+<!-- 								<expr>LocalAddr</expr> -->
+<!-- 							</contains> -->
+<!-- 						</verify> -->
+<!-- 						<verify step="4"> -->
+<!-- 							<contains> -->
+<!-- 								<msg_ref type="sip">PUBLISH</msg_ref> -->
+<!-- 								<expr>RemoteAddr</expr> -->
+<!-- 							</contains> -->
+<!-- 						</verify> -->
+<!-- 						<verify step="4"> -->
+<!-- 							<contains> -->
+<!-- 								<msg_ref type="sip">PUBLISH</msg_ref> -->
+<!-- 								<expr>LocalGroupID</expr> -->
+<!-- 							</contains> -->
+<!-- 						</verify> -->
+<!-- 						<verify step="4"> -->
+<!-- 							<contains> -->
+<!-- 								<msg_ref type="sip">PUBLISH</msg_ref> -->
+<!-- 								<expr>RemoteGroupID</expr> -->
+<!-- 							</contains> -->
+<!-- 						</verify> -->
+<!-- 					</then> -->
+<!-- 				</if> -->
+				<log expr="Examine the PUBLISH reports and verify contents (see test plan for more details). Verify both upstream and downlstream legs." requirements="RFC3550" step="4" promptUser="true" verify="true" yesExpected="true"/>
+				<log expr="Using the web UI, access the local log on the ESG to verify the clal statistics. The ESG reports the same VoIP metrics reported in step 4." step="5" promptUser="true" verify="true" yesExpected="true"/>
+				<log expr="Using the web UI, verify SIP signaling trace for the call. (see test plan for details)" step="6" promptUser="true" verify="true" yesExpected="true"/>
+				<log expr="Upload the SIP traces from the ESG to an external TFP server." step="7" promptUser="true" verify="true" yesExpected="true"/>
+				<log expr="Upload the RTP streams from the ESG to an external FTP server." step="8" promptUser="true" verify="true" yesExpected="true"/>
+				<generate event="VerifyStepsComplete"/>
+			</response>
+			
+			<postlude>
+				<stop_capture/>	
+			</postlude>
+			<transition to="END" event="VerifyStepsComplete"/>
+		</state>
+
+	</add_to>
+</pc2xml>

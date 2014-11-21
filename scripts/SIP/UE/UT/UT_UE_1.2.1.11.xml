@@ -1,0 +1,84 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+
+<!-- First are the document type and the attributes for our document -->
+<pc2xml version="$Revision: 8188 $" name="UT_SIP-UE 1.2.1.11" descrip="UE Populates From and P-Preferred-Identity headers when privacy is configured" number="UT_SIP-UE 1.2.1.11">
+	<template name="UT_SIP-UE 1.2.1.11 Orig call template" file="./templates/ut/Orig_DUT.xml"/>
+	<remove_from fsm="UT_SIP-UE 1.2.1.11 Orig call template">
+		<state ID="Setup"/>
+	</remove_from>
+	<add_to fsm="UT_SIP-UE 1.2.1.11 Orig call template">
+		<!-- SETUP State -->
+		<!-- The state machine will wait in the Setup state until it 
+				 receives an Invite from the originating UE or the fail timeout occurs. -->
+		<!-- Step 1 of the Call-Orig-at_UE(DUT) Default Message Flow document. -->
+		<state ID="Setup">
+			<!-- Step 1 from the Default Message Flow Call-Term-at-UE(DUT) Sequence Diagram -
+               Test 18x response for reliability for possible Prack message- send Invite -->
+			<prelude>
+				<log promptUser="true" expr="Start the test script if you haven't already."/>
+				<sleep time="3000"/>
+				<send protocol="sip" msgtype="Invite" target="UE1" originator="DUT">
+					<mod modtype="replace" hdr="From" param="name-addr">
+						<expr>"anonymous" &lt;sip:anonymous@anonymous.invalid&gt;</expr>
+					</mod>
+					<mod modtype="add" hdr="P-Preferred-Identity">
+						<expr>DUT</expr>
+					</mod>
+				</send>
+			</prelude>
+			<!-- Expected responses are 100, 180, 183 or 200 -->
+			<response>
+				<!-- Step 4 from the Default Message Flow Call-Term-at-UE(DUT) Sequence Diagram -
+               Test 18x response for reliability for possible Prack message -->
+				<if>
+					<contains>
+						<msg_ref type="sip" msg_instance="last" hdr_instance="any">18x-Invite.Require</msg_ref>
+						<expr>100rel</expr>
+					</contains>
+					<then>
+						<!--Reliablity required for test sending Prack message to peer.-->
+						<send protocol="sip" msgtype="Prack" target="UE1" originator="DUT">
+							<mod modtype="replace" hdr="From" param="name-addr">
+								<expr>"anonymous" &lt;sip:anonymous@anonymous.invalid&gt;</expr>
+							</mod>
+						</send>
+					</then>
+				</if>
+			</response>
+			<!-- Transitions for Setup state -->
+			<transition to="Ringing" event="100-INVITE"/>
+			<transition to="WaitAnswer" event="18x-INVITE"/>
+		</state>
+		<state ID="Ringing">
+			<transition to="WaitAnswer" event="18x-INVITE"/>
+		</state>
+		<state ID="WaitAnswer">
+			<postlude>
+				<send protocol="sip" msgtype="ACK" target="UE1" originator="DUT"/>
+			</postlude>
+			<transition to="END" event="2xx-INVITE"/>\
+			<transition to="END" event="3xx-INVITE"/>
+			<transition to="END" event="4xx-INVITE"/>
+			<transition to="END" event="5xx-INVITE"/>
+			<transition to="END" event="6xx-INVITE"/>
+		</state> 
+	</add_to>
+</pc2xml>

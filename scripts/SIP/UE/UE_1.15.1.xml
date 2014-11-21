@@ -1,0 +1,97 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	PCPCII-135 : UPdate the script to accommodate a de-register message during the reboot. (ghassler 06/24/2009)
+	
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="SIP-UE 1.15.1" 
+	descrip="Initial Subscription to Reg-Event Package" 
+	number="SIP-UE 1.15.1">
+	
+	<template file="./templates/UERegAndSubTemp.xml" name="Registrar"/>
+	
+	<remove_from fsm="Registrar">
+		<state ID="Registered"/>
+	</remove_from>
+	
+	<add_to fsm="Registrar">
+		<state ID="Registered">
+			<prelude>
+				<send protocol="sip" msgtype="200-Register"/>
+			</prelude>
+			<response>
+				<verify step="1" requirements="REQ16890">
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>SUBSCRIBE</expr>
+					</eq>
+				</verify>
+				<verify step="2" requirements="REQ16893, REQ16894">
+					<contains>
+						<msg_ref type="sip">SUBSCRIBE.Request-Line.Request-URI</msg_ref>
+						<msg_ref type="platform">DUT.pui</msg_ref>
+					</contains>
+				</verify>
+				<verify step="3" requirements="REQ16893, REQ16895">
+					<contains>
+						<msg_ref type="sip">SUBSCRIBE.From.addr-spec</msg_ref>
+						<msg_ref type="platform">DUT.pui</msg_ref>
+					</contains>
+				</verify>
+				<verify step="4" requirements="REQ16893, REQ16896">
+					<contains>
+						<msg_ref type="sip">SUBSCRIBE.To.addr-spec</msg_ref>
+						<msg_ref type="platform">DUT.pui</msg_ref>
+					</contains>
+				</verify>
+				<verify step="5" requirements="REQ16893, REQ16896, RFC1543, RFC1589">
+					<eq>
+						<msg_ref type="sip">SUBSCRIBE.Event.event-type</msg_ref>
+						<expr>reg</expr>
+					</eq>
+				</verify>
+				<verify step="6" requirements="REQ16893, REQ16897">
+					<eq>
+						<msg_ref type="sip">SUBSCRIBE.Expires.value</msg_ref>
+						<expr>600000</expr>
+					</eq>
+				</verify>
+				<verify step="7" requirements="REQ16893, REQ16899">
+					<or>
+						<contains>
+							<msg_ref type="sip">SUBSCRIBE.Contact.addr-spec</msg_ref>
+							<msg_ref type="platform">DUT.IP</msg_ref>
+						</contains>
+						<contains>
+							<msg_ref type="sip">SUBSCRIBE.Contact.addr-spec</msg_ref>
+							<msg_ref type="platform">DUT.FQDN</msg_ref>
+						</contains>
+					</or>
+				</verify>
+			</response>
+			<postlude>
+				<send protocol="sip" msgtype="200-SUBSCRIBE"/>
+				<sleep time="100"/>
+				<send protocol="sip" msgtype="NOTIFY"/>
+			</postlude>
+			<transition to="Notification" event="SUBSCRIBE"/>
+		</state>
+		
+		<transition from="Notification" to="END" event="200-NOTIFY"/>
+	</add_to>
+</pc2xml>

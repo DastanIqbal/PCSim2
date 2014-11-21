@@ -1,0 +1,167 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	PCPCII-97 : Change the transition in the WaitPublish state to go to the OnHookUE1 state from the 
+		template instead of going directly to the END state. (ghassler 1/5/09)
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="SIP-UE 1.21.2" 
+	descrip="UE Doesn’t retry PUBLISH after receiving a 412 response" 
+	number="SIP-UE 1.21.2" inspector="disable">
+	<!-- This script assumes UE1 is the DUT and UE2 is defined by UE1 in 
+		the configuration file. -->
+	
+	<template file="./templates/Proxy.xml" name="UE1"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="OnHook"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<NE targets="SCSCF1 PCSCF1"/>
+		<state ID="OnHook">
+			<prelude once="true">
+				<send protocol="utility" msgtype="OnHook"/>
+			</prelude>
+			<response>
+				<if>
+					<and>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>PUBLISH</expr>
+						</eq>
+						<eq>
+							<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+							<msg_ref type="platform">UE0.IP</msg_ref>
+						</eq>
+					</and>
+					<then>
+						<send protocol="sip" msgtype="412-PUBLISH"/>
+					</then>
+					<elseif>
+						<or>
+							<eq>
+								<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE1.IP</msg_ref>
+							</eq>
+							<eq>
+								<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE1.IP</msg_ref>
+							</eq>
+						</or>
+						<then>
+							<proxy target="UE0"/>
+						</then>
+					</elseif>
+					<elseif>
+						<or>
+							<eq>
+								<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE0.IP</msg_ref>
+							</eq>
+							<eq>
+								<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE0.IP</msg_ref>
+							</eq>
+						</or>
+						<then>
+							<proxy target="UE1"/>
+						</then>
+					</elseif>
+				</if>
+			</response>
+			<transition to="OnHook" event="OnHookComplete"/>
+			<transition to="OnHook" event="Bye"/>
+			<transition to="OnHook" event="200-Bye"/>
+			<transition to="WaitPublish" event="PUBLISH"/>
+		</state>
+		
+		<state ID="WaitPublish" timer="10000">
+			<response>
+				<if>
+					<or>
+						<eq>
+							<msg_ref type="event"/>
+							<expr>TimerExpired</expr>
+						</eq>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>PUBLISH</expr>
+						</eq>
+					</or>
+					<then>
+						<verify step="3" requirements="REQ2139">
+							<or>
+								<eq>
+									<msg_ref type="event"/>
+									<expr>TimerExpired</expr>
+								</eq>
+								<and>
+									<eq>
+										<msg_ref type="sip">Request</msg_ref>
+										<expr>PUBLISH</expr>
+									</eq>
+									<neq>
+										<msg_ref type="sip">PUBLISH.SourceAddress.IP</msg_ref>
+										<msg_ref type="platform">UE0.IP</msg_ref>
+									</neq>
+								</and>
+							</or>
+						</verify>
+						<send protocol="sip" msgtype="200-PUBLISH"/>
+					</then>
+					<elseif>
+						<or>
+							<eq>
+								<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE1.IP</msg_ref>
+							</eq>
+							<eq>
+								<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE1.IP</msg_ref>
+							</eq>
+						</or>
+						<then>
+							<proxy target="UE0"/>
+						</then>
+						
+					</elseif>
+					<elseif>
+						<or>
+							<eq>
+								<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE0.IP</msg_ref>
+							</eq>
+							<eq>
+								<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE0.IP</msg_ref>
+							</eq>
+						</or>
+						<then>
+							<proxy target="UE1"/>
+						</then>
+					</elseif>
+				</if>
+			</response>
+			<transition to="OnHookUE1" event="TimerExpired"/>
+			<transition to="WaitPublish" event="Bye"/>
+			<transition to="WaitPublish" event="200-Bye"/>
+			<transition to="WaitPublish" event="xxx-PUBLISH"/>
+			<transition to="WaitPublish" event="PUBLISH"/>
+		</state>
+	</add_to>
+</pc2xml>

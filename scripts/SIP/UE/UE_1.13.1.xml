@@ -1,0 +1,66 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="SIP-UE 1.13.1" 
+	descrip="Preconditions Indicated in Require Header." 
+	number="SIP-UE 1.13.1">
+	
+	<template file="./templates/CallOrigAtUETemp.xml" name="UE1"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Setup"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<state ID="Setup">
+			<prelude once="true">
+				<send protocol="utility" msgtype="DialDigits">
+					<mod modtype="add" hdr="number">
+						<msg_ref type="platform">UE1.phone number 1</msg_ref>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>INVITE</expr>
+					</eq>
+					<then>
+						<verify step="2" requirements="REQ17093, REQ17094">
+							<contains>
+								<msg_ref type="sip" hdr_instance="any">INVITE.Supported</msg_ref>
+								<expr>100rel</expr>
+							</contains>
+						</verify>
+						<verify step="3" requirements="REQ17093, REQ17095">
+							<contains>
+								<msg_ref type="sip" hdr_instance="any">INVITE.Supported</msg_ref>
+								<expr>precondition</expr>
+							</contains>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<transition to="Setup" event="DialDigitsComplete"/>
+			<transition to="END" event="INVITE"/>
+		</state>
+	</add_to>
+</pc2xml>

@@ -1,0 +1,206 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+ Change History: (Author & Date)
+	PCPCIIATP-110 : Remove verifies from step 6 of the D09 version of the ATP as this step is being
+		removed in D10. (ghassler 01/06/2010)
+	PCPCII-318 : Remove the testing from A 2.1 and 2.2. Update the comparison for the image line to have
+		a port value of zero. (ghassler 06/08/2010)
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="CODEC-MEDIA_1.4.1" 
+	descrip="Media Line Verification" 
+	number="CODEC-MEDIA_1.4.1">
+	
+	<template file="./templates/CallTermAtUETemp.xml" name="UE1"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Setup"/>
+		<state ID="Connected"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<state ID="Setup">
+			<prelude>
+				<!--Create the variables.-->
+				<var name="Audio1">
+					<var_expr>
+						<expr>m=audio </expr>
+						<msg_ref type="platform">UE1.SDPPort</msg_ref>
+						<expr> RTP/AVP 0</expr>
+					</var_expr>
+				</var>
+				<!--Create the variables.-->
+				<var name="image">
+					<var_expr>
+						
+						
+					</var_expr>
+				</var>
+				<send protocol="sip" msgtype="Invite">
+					<mod modtype="add" hdr="SDP">
+						<var_expr>
+							<expr>m=image 0 udptl t38\r\n</expr>
+							<expr>b=AS:47\r\n</expr>
+							<expr>b=TIAS:34400\r\n</expr>
+							<expr>a=maxprate:50.0\r\n</expr>
+							<expr>a=T38FaxRateManagement:transferredTCF\r\n</expr>
+							<expr>a=T38FaxMaxDatagram:160\r\n</expr>
+							<expr>a=T38FaxVersion:0\r\n</expr>
+							<expr>a=T38FaxUdpEC:t38UDPRedundancy\r\n</expr>
+							<expr>a=T38FaxMaxBuffer:123</expr>
+						</var_expr>
+					</mod>
+				</send>
+			</prelude>
+			<!-- Expected responses are 100, 180, 183 or 200 -->
+			<response>
+				<if>
+					<contains>
+						<msg_ref type="sip">Invite.SDP</msg_ref>
+						<expr>m=audio</expr>
+					</contains>
+					<then>
+						<var name="offer">
+							<msg_ref type="sip">Invite</msg_ref>
+						</var>
+						<var name="audioPort">
+							<var_ref name="offer" protocol="sdp" hdr="audio" param="port"/>
+						</var>
+						<var name="ulaw">
+							<var_expr>
+								<expr>m=audio </expr>
+								<var_ref name="audioPort"/>
+								<expr> RTP/AVP 0</expr>
+							</var_expr>
+						</var>
+						<var name="image">
+							<var_expr>
+								<expr>m=image </expr>
+								<var_ref name="audioPort"/>
+								<expr> udptl t38</expr>
+							</var_expr>
+						</var>
+					</then>
+				</if>
+				<if>
+					<contains>
+						<msg_ref type="sip" hdr_instance="any">18x-Invite.Require</msg_ref>
+						<expr>100rel</expr>
+					</contains>
+					<then>
+						<!--Reliablity required for test sending Prack message to peer.-->
+						<send protocol="sip" msgtype="Prack"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Proceeding" event="100-INVITE"/>
+			<transition to="Alerting" event="180-INVITE"/>
+			<transition to="Alerting" event="183-INVITE"/>
+			<transition to="Connected" event="200-INVITE"/>
+		</state>
+		
+		<state ID="Connected" timer="15000">
+			<prelude once="true">
+				<send protocol="sip" msgtype="ACK"/>
+			</prelude>
+			<response>
+				<if>
+					<and>
+						<eq>
+							<msg_ref type="event"/>
+							<expr>DIALOG_CONFIRMED_UAC</expr>
+						</eq>
+						<contains>
+							<msg_ref type="sip" msg_instance="last">18x-Invite.SDP</msg_ref>
+							<expr>m=audio</expr>
+						</contains>
+					</and>
+					<then>
+						<var name="answer">
+							<msg_ref type="sip" msg_instance="last">18x-Invite</msg_ref>
+						</var>
+					</then>
+					<elseif>
+						<and>
+							<eq>
+								<msg_ref type="event"/>
+								<expr>DIALOG_CONFIRMED_UAC</expr>
+							</eq>
+							<contains>
+								<msg_ref type="sip" msg_instance="last">200-UPDATE.SDP</msg_ref>
+								<expr>m=audio</expr>
+							</contains>
+						</and>
+						<then>
+							<var name="answer">
+								<msg_ref type="sip" msg_instance="last">200-UPDATE</msg_ref>
+							</var>
+						</then>
+					</elseif>
+					<elseif>
+						<and>
+							<eq>
+								<msg_ref type="event"/>
+								<expr>DIALOG_CONFIRMED_UAC</expr>
+							</eq>
+							<contains>
+								<msg_ref type="sip" msg_instance="last">200-Invite.SDP</msg_ref>
+								<expr>m=audio</expr>
+							</contains>
+						</and>
+						<then>
+							<var name="answer">
+								<msg_ref type="sip" msg_instance="last">200-INVITE</msg_ref>
+							</var>
+						</then>
+					</elseif>
+				</if>
+				<if>
+					<eq>
+						<msg_ref type="event"/>
+						<expr>DIALOG_CONFIRMED_UAC</expr>
+					</eq>
+					<then>
+						<var name="audioPort">
+							<var_ref name="answer" protocol="sdp" hdr="audio" param="port"/>
+						</var>
+						<var name="ulaw">
+							<var_expr>
+								<expr>m=audio </expr>
+								<var_ref name="audioPort"/>
+								<expr> RTP/AVP 0</expr>
+							</var_expr>
+						</var>
+												
+						<verify step="3" requirements="RFC2284, RFC2285">
+							<contains>
+								<var_ref name="answer" protocol="sip" hdr="SDP"/>
+								<var_ref name="ulaw"/>
+							</contains>
+						</verify>
+												
+						<verify step="5" requirements="RFC2284, RFC2285, RFC2267">
+							<contains>
+								<var_ref name="answer" protocol="sip" hdr="SDP"/>
+								<expr>m=image 0 udptl t38</expr>
+							</contains>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<transition to="Connected" event="OffHookComplete"/>
+			<transition to="Releasing" event="TimerExpired"/>
+		</state>
+	</add_to>
+</pc2xml>

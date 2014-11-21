@@ -1,0 +1,300 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+
+<pc2xml version="$Revision: 8188 $" 
+	name="UT_RST_UE_1.1.1.1" 
+	descrip="This is a unit test for the RST_UE 1.1.1.1 test script" 
+	number="1">
+
+	<fsm name="UE1">
+		<models>
+			<session/>
+		</models>
+		<NE sim_type="term" elements="DUT" targets="UE0 DUT"/>
+		<states initialstate="Register">
+			<!-- REGISTER State -->
+			<state ID="Register">
+				<prelude>
+					<send protocol="sip" msgtype="Register" target="PCSCF1" originator="DUT"/>
+				</prelude>
+				<transition to="Digest" event="401-Register"/>
+				<transition to="Call2" event="200-Register"/>
+			</state>
+			<state ID="Digest">
+				<prelude>
+					<send protocol="sip" msgtype="Register" target="PCSCF1" originator="DUT"/>
+				</prelude>
+				<transition to="Call2" event="200-Register"/>
+			</state>
+			<!-- Call1 doesn't require any messaging from the unit test script.
+				Simply wait until it completes and then send an INVITE with the 
+				correct Request-Line -->
+			<state ID="Call2">
+				<prelude>
+					<log promptUser="true" expr="Start the test script if you haven't already."/>
+					<sleep time="23000"/>
+					<send protocol="sip" msgtype="Invite" target="UE1" originator="DUT">
+						<mod modtype="replace" hdr="Request-Line" param="Request-URI">
+							<var_expr>
+								<expr>sip:0@</expr>
+								<msg_ref type="platform">DUT.domain</msg_ref>
+								<expr>;user=dialstring</expr>
+							</var_expr>
+						</mod>
+					</send>
+				</prelude>
+				<postlude>
+					<send protocol="sip" msgtype="Ack" target="UE1" originator="DUT"/>
+				</postlude>
+				<!-- Transitions for Call2 state -->
+				<transition to="Call3" event="500-INVITE"/>
+			</state>
+			<state ID="Call3">
+				<prelude>
+					<sleep time="5000"/>
+					<send protocol="sip" msgtype="Invite" target="UE1" originator="DUT">
+						<mod modtype="replace" hdr="Request-Line" param="Request-URI">
+							<var_expr>
+								<expr>sip:0@</expr>
+								<msg_ref type="platform">DUT.domain</msg_ref>
+								<expr>;user=dialstring</expr>
+							</var_expr>
+						</mod>
+					</send>
+				</prelude>
+				<postlude>
+					<send protocol="sip" msgtype="Ack" target="UE1" originator="DUT"/>
+				</postlude>
+				<!-- Transitions for Call3 state -->
+				<transition to="Call4" event="500-INVITE"/>
+			</state>
+			<state ID="Call4">
+				<prelude>
+					<sleep time="5000"/>
+					<send protocol="sip" msgtype="Invite" target="UE1" originator="DUT">
+						<mod modtype="replace" hdr="Request-Line" param="Request-URI">
+							<var_expr>
+								<expr>sip:00@</expr>
+								<msg_ref type="platform">DUT.domain</msg_ref>
+								<expr>;user=dialstring</expr>
+							</var_expr>
+						</mod>
+					</send>
+				</prelude>
+				<postlude>
+					<send protocol="sip" msgtype="Ack" target="UE1" originator="DUT"/>
+				</postlude>
+				<!-- Transitions for Call4 state -->
+				<transition to="Call5" event="500-INVITE"/>
+			</state>
+			<state ID="Call5">
+				<prelude>
+					<sleep time="5000"/>
+					<send protocol="sip" msgtype="Invite" target="UE1" originator="DUT">
+						<mod modtype="replace" hdr="Request-Line" param="Request-URI">
+							<!--var_expr>
+								<expr>sip:911@</expr>
+								<msg_ref type="platform">DUT.domain</msg_ref>
+								<expr>;user=dialstring</expr>
+							</var_expr-->
+							<!-- TODO THE REAL ONE -->
+							<expr>urn:service:sos</expr>
+						</mod>
+					</send>
+				</prelude>
+				<postlude>
+					<send protocol="sip" msgtype="Ack" target="UE1" originator="DUT"/>
+				</postlude>
+				<!-- Transitions for Call5 state -->
+				<transition to="EndCall6" event="200-INVITE"/>
+			</state>
+			
+			<state ID="EndCall6">
+				<postlude>
+					<send protocol="sip" msgtype="200-BYE" target="UE1" originator="DUT"/>
+				</postlude>
+				<transition to="Call6" event="BYE"/>
+			</state>
+				
+			<state ID="Call6">
+				<prelude>
+					<sleep time="5000"/>
+					<send protocol="sip" msgtype="Invite" target="UE1" originator="DUT">
+						<mod modtype="replace" hdr="Request-Line" param="Request-URI">
+							<var_expr>
+								<expr>sip:711@</expr>
+								<msg_ref type="platform">DUT.domain</msg_ref>
+								<expr>;user=dialstring</expr>
+							</var_expr>
+						</mod>
+					</send>
+				</prelude>
+				<postlude>
+					<send protocol="sip" msgtype="Ack" target="UE1" originator="DUT"/>
+				</postlude>
+				<!-- Transitions for Call6 state -->
+				<transition to="Call7" event="500-INVITE"/>
+			</state>
+			<state ID="Call7">
+				<prelude>
+					<sleep time="5000"/>
+					<send protocol="sip" msgtype="Invite" target="UE1" originator="DUT">
+						<mod modtype="replace" hdr="Request-Line" param="Request-URI">
+							<expr>tel:+18002222222</expr>
+						</mod>
+					</send>
+				</prelude>
+				<postlude>
+					<send protocol="sip" msgtype="Ack" target="UE1" originator="DUT"/>
+				</postlude>
+				<!-- Transitions for Call7 state -->
+				<transition to="Call8" event="500-INVITE"/>
+			</state>
+			<state ID="Call8">
+				<prelude>
+					<sleep time="5000"/>
+					<send protocol="sip" msgtype="Invite" target="UE1" originator="DUT">
+						<mod modtype="replace" hdr="Request-Line" param="Request-URI">
+							<expr>tel:+13036619100</expr>
+						</mod>
+					</send>
+				</prelude>
+				<postlude>
+					<send protocol="sip" msgtype="Ack" target="UE1" originator="DUT"/>
+				</postlude>
+				<!-- Transitions for Call8 state -->
+				<transition to="Call9" event="500-INVITE"/>
+			</state>
+			<state ID="Call9">
+				<prelude>
+					<sleep time="5000"/>
+					<send protocol="sip" msgtype="Invite" target="UE1" originator="DUT">
+						<mod modtype="replace" hdr="Request-Line" param="Request-URI">
+							<expr>tel:+13036619100</expr>
+						</mod>
+					</send>
+				</prelude>
+				<postlude>
+					<send protocol="sip" msgtype="Ack" target="UE1" originator="DUT"/>
+				</postlude>
+				<!-- Transitions for Call9 state -->
+				<transition to="Call10" event="500-INVITE"/>
+			</state>
+			<state ID="Call10">
+				<prelude>
+					<sleep time="5000"/>
+					<send protocol="sip" msgtype="Invite" target="UE1" originator="DUT">
+						<mod modtype="replace" hdr="Request-Line" param="Request-URI">
+							<expr>tel:+13036619100</expr>
+						</mod>
+					</send>
+				</prelude>
+				<postlude>
+					<send protocol="sip" msgtype="Ack" target="UE1" originator="DUT"/>
+				</postlude>
+				<!-- Transitions for Call10 state -->
+				<transition to="Call11" event="500-INVITE"/>
+			</state>
+			<state ID="Call11">
+				<prelude>
+					<sleep time="5000"/>
+					<send protocol="sip" msgtype="Invite" target="UE1" originator="DUT">
+						<mod modtype="replace" hdr="Request-Line" param="Request-URI">
+							<expr>tel:+912226262626</expr>
+						</mod>
+					</send>
+				</prelude>
+				<postlude>
+					<send protocol="sip" msgtype="Ack" target="UE1" originator="DUT"/>
+				</postlude>
+				<!-- Transitions for Call11 state -->
+				<transition to="Call12" event="500-INVITE"/>
+			</state>
+			<state ID="Call12">
+				<prelude>
+					<sleep time="5000"/>
+					<send protocol="sip" msgtype="Invite" target="UE1" originator="DUT">
+						<mod modtype="replace" hdr="Request-Line" param="Request-URI">
+							<expr>tel:+19002333333</expr>
+						</mod>
+					</send>
+				</prelude>
+				<postlude>
+					<send protocol="sip" msgtype="Ack" target="UE1" originator="DUT"/>
+				</postlude>
+				<!-- Transitions for Call12 state -->
+				<transition to="Call13" event="500-INVITE"/>
+			</state>
+			<state ID="Call13">
+				<prelude>
+					<sleep time="5000"/>
+					<send protocol="sip" msgtype="Invite" target="UE1" originator="DUT">
+						<mod modtype="replace" hdr="Request-Line" param="Request-URI">
+							<expr>tel:+13036619110;cic=+1234</expr>
+						</mod>
+					</send>
+				</prelude>
+				<postlude>
+					<send protocol="sip" msgtype="Ack" target="UE1" originator="DUT"/>
+				</postlude>
+				<!-- Transitions for Call13 state -->
+				<transition to="Call14" event="500-INVITE"/>
+			</state>
+			<state ID="Call14">
+				<prelude>
+					<sleep time="5000"/>
+					<send protocol="sip" msgtype="Invite" target="UE1" originator="DUT">
+						<mod modtype="replace" hdr="Request-Line" param="Request-URI">
+							<var_expr>
+								<expr>sip:018002222222@</expr>
+								<msg_ref type="platform">DUT.domain</msg_ref>
+								<expr>;user=dialstring</expr>
+							</var_expr>
+						</mod>
+					</send>
+				</prelude>
+				<postlude>
+					<send protocol="sip" msgtype="Ack" target="UE1" originator="DUT"/>
+				</postlude>
+				<!-- Transitions for Call14 state -->
+				<transition to="Call15" event="500-INVITE"/>
+			</state>
+			<state ID="Call15">
+				<prelude>
+					<sleep time="5000"/>
+					<send protocol="sip" msgtype="Invite" target="UE1" originator="DUT">
+						<mod modtype="replace" hdr="Request-Line" param="Request-URI">
+							<var_expr>
+								<expr>sip:018002234567@</expr>
+								<msg_ref type="platform">DUT.domain</msg_ref>
+								<expr>;user=dialstring</expr>
+							</var_expr>
+						</mod>
+					</send>
+				</prelude>
+				<postlude>
+					<send protocol="sip" msgtype="Ack" target="UE1" originator="DUT"/>
+				</postlude>
+				<!-- Transitions for Call15 state -->
+				<transition to="END" event="500-INVITE"/>
+			</state>
+		</states>
+	</fsm>
+</pc2xml>

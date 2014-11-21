@@ -1,0 +1,45 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	PCPCII-497: Add the telephone to the targets attribute to allow the hotline number to work. (ghassler 07/06/2010)
+	
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-UE 1.6.9.3" 
+	descrip="hotline - feature enabled (off-hook timer 0)" 
+	number="RST-UE 1.6.9.3">
+	
+	<template file="./templates/CallOrigAtUETemp.xml" name="UE1"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Setup"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<NE targets="3035551234"/>
+		<state ID="Setup">
+			<response>
+				<verify step="1" requirements="REQ23664">
+					<contains>
+						<msg_ref type="sip">INVITE.Request-Line.Request-URI</msg_ref>
+						<expr>3035551234</expr>
+					</contains>
+				</verify>
+			</response>
+			<transition to="END" event="INVITE"/>
+		</state>
+	</add_to>
+</pc2xml>

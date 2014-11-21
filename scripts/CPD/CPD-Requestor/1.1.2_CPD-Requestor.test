@@ -1,0 +1,64 @@
+###########################################################
+#   Author: Vikas Sarawat (CableLabs)
+#   Date :   06/22/07  
+#   DUT:     CPD-Requestor
+#   Title   : TEST CASE CPD-Requestor 1.1.2 – Error Value 0
+#   Objective:Verify that the Requestor ignores a response with error value of 0.
+#
+#
+##
+###########################################################
+
+
+set procNum 1
+set stepNum 0
+
+set mod cpd
+set cpd ::$mod\::
+
+set str "InitModule CPD"
+DoStep "Step $procNum.[incr stepNum]" $str {
+    # Doc: InitModule CPD (Source-Link Plugin-Module & Open Socket)
+    set isOk [set soc [ InitModule $mod ] ]
+} { if {$isOk == -1 } {FAIL_STEP $str } else {PASS_STEP} }
+
+set str "Rx CPD Request Msg"
+DoStep "Step $procNum.[incr stepNum]" $str {
+    # Doc: Rx 1st Message
+    set rxData_Req [ $cpd\MsgRx 30 ]
+
+    set cpdMessageType [$cpd\MsgGetVal $rxData_Req AppPayload cpdMessageType ]
+    if {$cpdMessageType != 1} { 
+        LogMsg "!!cpdMessageType is not 1"; set isOk -1
+    } else {
+        LogMsg "Its a CPD Request"
+    }
+
+} { if {$isOk == -1 } {FAIL_STEP $str } else {PASS_STEP} }
+
+
+set str "Build & Tx CPD Response Msg"
+DoStep "Step $procNum.[incr stepNum]" $str {
+    # Doc: Instantiate New Message
+    set txData_Rep [ $cpd\MsgNew Response "Hdr AppPayload Ipv4ErrorCode"  ]
+    
+    # Turn around CPD hdr.flowId 
+    set results [ $cpd\MsgSetVal $txData_Rep Hdr flowId \
+            [ $cpd\MsgGetVal $rxData_Req Hdr flowId ] ]
+    # Turn around CPD AppPayload.transactionId
+    set results [ $cpd\MsgSetVal $txData_Rep AppPayload transactionId \
+            [ $cpd\MsgGetVal $rxData_Req AppPayload transactionId ] ]
+    # Set AppPayload cpdMessageType
+    set results [ $cpd\MsgSetVal $txData_Rep AppPayload cpdMessageType 2 ]
+    
+    # Set AppPayload IPv6 Address ???
+    set results [ $cpd\MsgSetVal $txData_Rep AppPayload controlPointIpAddress0 $gCPD_CONTROL_POINT_IP ]
+    
+    # Doc: Build & Tx Message to DstIp, DstPort
+    set msgLen [ $cpd\MsgTx [ $cpd\MsgBuild $txData_Rep ] $soc $::gCPD_REMOTE_IP $::gCPD_REMOTE_PORT ]
+    
+} { if {$isOk == -1 } {FAIL_STEP $str } else {PASS_STEP} }
+
+Cleanup
+
+

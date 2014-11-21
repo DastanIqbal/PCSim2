@@ -1,0 +1,369 @@
+################################################################################
+#// Filename: E-UE-PROV_1-1-2-26.test
+#// Author:   Matthew Forbes
+#// Creation Date: 1/10/06
+#// Modified by:
+#//	Matt Forbes 10/12/07
+#//		Step 18-1, added popup to remove IP helper addresses from CMTS
+################################################################################
+#// Description:
+#//     TC1572 TEST CASE PROV 5.70 MTA Ability to use selected IP address when Multiple IP addresses are
+#//     resolved from SNMP Entity FQDN (Secure Flow, No SNMPv3 response)
+#// Objective:
+#//     Test the MTA ability in the secure flow to use only the selected IP address through MTA-25
+#//     when multiple IP addresses are resolved for SNMP Entity FQDN contained in Option 122, sub-option 3 
+#//     in the case where no SNMPv3 response is received.
+#//
+#// PacketCable DUT:
+#//     MTA
+#//
+#// Test Steps:
+#//     - Initial configuration
+#//     - Configure provisioning server
+#//     - Start sniffer capture
+#//     - Reset DUT
+#//     - Check Provisioning state
+#//     - Clear Kerberos Tickets
+#//     - Configure DNS
+#//     - Reset MTA using SNMPv3
+#//     - Verify SNMP INFORM to first IP address
+#//     - Verify No SNMP RESPONSE
+#//     - Verify SNMP INFORM to second IP address
+#//     - Verify No SNMP RESPONSE
+#//     - Verify SNMP INFORM to third IP address
+#//     - Verify SNMP RESPONSE
+#//     - Verify DUT completes provisioning
+#//     - Check Provisioning state
+#//     - Verify that the SNMPv3 enrollment Inform is sent to the same address as the SNMPv3 Set
+#//     - Verify that the SNMPv3 final Inform is sent to the same address as the SNMPv3 Set
+#//     - Stop Capture
+#//     - Restore provisioning server
+#//     - Reset DUT
+#//     - Check Provisioning state
+#//     - Cleanup
+#//
+#// Notes:
+#//     - Requires provPrimitives.tcl & tftp_primitives.tcl.
+#//     - Requires the specific config file in $BASE_CFG_FILE_PATH in Provisioning Server.
+#//     - Requires parT.tcl parsing tool to parse data from capture file.
+#//
+################################################################################
+
+global SCRIPT_VERSION
+set SCRIPT_VERSION { # $Id: E-UE-PROV_1-1-2-26.test 7406 2010-07-20 17:17:37Z dthakore $ }
+
+################################################################################
+
+DoStep "E-UE-PROV_1-1-2-26_1-1" "Initial configuration" {
+    LogMsg "--- Initial PROV module ---"
+    Init_PROV
+    # ProvCreateConfig 291 $MTA_MAC
+    PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122
+    PROV_DEPLOY_DHCP
+} { PASS_STEP }
+
+
+################ Reset CM and MTA and Verify Provisioning ################
+
+DoStep "E-UE-PROV_1-1-2-26_4-1" "Reset CM/MTA" {
+    set val [SNMPvN_RESET $CM_IP ]
+    LogMsg "Reset of CM and MTA has passed"
+} {
+    IsEqual $val 0
+}
+
+DoStep "E-UE-PROV_1-1-2-26_5-1" "pktcMTADevProvisioningState Content Verification" {
+    actionWait "Wait 60 seconds for CM/MTA to provision" 60
+    # Get the OID from the MTA and check it using our previously defined
+    set val [GetProvState 1 600]
+    LogMsg "MTA Provisioning State" 49
+    LogMsg "             - Expected : 1" 49
+    LogMsg "             - Received : $val" 49
+} {
+    IsEqual $val 1
+}
+
+
+DoStep "E-UE-PROV_1-1-2-26_5-2" "Start sniffer" {
+    LogMsg "--- Start sniffer ---"
+    Init_CONTROLLER_LAN
+    SetupCaptureControllerLan "host $MTA_IP || host $CM_IP || udp port 67"
+    StartCaptureControllerLan
+} {PASS_STEP}
+
+########################## Clear Tickets ##################################
+
+DoStep "E-UE-PROV_1-1-2-26_6-1" "pktcMtaDevResetKrbTickets Reset Kerberos Tickets" {
+    set val [SNMP_SET $oid_pktcMtaDevResetKrbTickets OCTET-STRING 0xC0 $MTA_IP]
+} {
+    if {$val == 0} {
+        LogMsg "Kerberos Tickets Have been cleared"
+        PASS_STEP
+    } else {
+        FAIL_STEP "Cannot reset Kerberos tickets"
+    }
+}
+
+################ Reset CM and MTA and Verify Provisioning ################
+
+DoStep "E-UE-PROV_1-1-2-26_7-1" "Setup policy in provisioning server" {
+    LogMsg "Setup policy in provisioning server"
+    # Set value for third provisioning server ip address
+    set PROV_DHCP3_IP 10.32.0.73
+} {
+    verify_signal "Set IP Helper Addresses on CMTS to $PROV_DHCP1_IP, $PROV_DHCP2_IP, $PROV_DHCP3_IP"
+    # verify_signal "Setup policy in server and configure DNS to resolve to 3 provisioning servers (MTATC1570 on DHCP1)
+    # with no SNMP Response (Block UDP port 162 on DHCP2 & 3)"
+    # verify_signal "Set up sessions with the provisioning servers $PROV_DHCP2_IP and $PROV_DHCP3_IP to block the SNMP port
+    # (setup SSH session with server,PuTTY or other, at $PROV_DHCP2_IP and $PROV_DHCP3_IP in directory /opt/CableLabs/pact/common/bin/
+    # and type the command: iptables -A pact_chain -p udp -s ! $PROV_DHCP2_IP --dport 162 -j DROP
+    # then enter for $PROV_DHCP2_IP, use the same string with $PROV_DHCP2_IP change to $PROV_DHCP3_IP & enter)"
+    PACT_SWITCH_PROV_TO $PROV_DHCP2_IP
+    PROV_BLOCK_SNMP_TRAP_PORT $PROV_DHCP2_IP
+    PACT_SWITCH_PROV_TO $PROV_DHCP3_IP
+    PROV_BLOCK_SNMP_TRAP_PORT $PROV_DHCP3_IP
+    PACT_SWITCH_PROV_BACK
+    PROV_MODIFY_DEVICE $MTA_MAC MTATC1570 
+    PROV_DEPLOY_DHCP
+}
+
+DoStep "E-UE-PROV_1-1-2-26_7-2" "Reset MTA" {
+set val [SNMP_SET $oid_pktcMtaDevResetNow INTEGER 1 $MTA_IP]
+LogMsg "Reset of MTA has passed"
+} {
+    IsEqual $val 0
+}
+
+
+
+DoStep "E-UE-PROV_1-1-2-26_8-1" "Monitor Trace for SNMP Inform to one of the IP addresses" {
+    LogMsg "Monitor Trace for SNMP Inform to one of the IP addresses"
+} {
+    verify_signal "Monitor the trace : Is there an SNMP Inform from the MTA($MTA_IP) to either $PROV_DHCP1_IP/$PROV_DHCP2_IP,/$PROV_DHCP3_IP?"
+}
+
+DoStep "E-UE-PROV_1-1-2-26_9-1" "Monitor Trace for SNMP Response from DHCP1 to the MTA" {
+    LogMsg "Monitor Trace for SNMP Response from DHCP1 to the MTA"
+    set choice [tk_messageBox -type yesno -default yes -message "Is there an SNMP Response from $PROV_DHCP1_IP to $MTA_IP ?" -icon question]
+} {
+    PASS_STEP
+}
+
+if {$choice == no} {
+    
+    DoStep "E-UE-PROV_1-1-2-26_10-1" "Monitor Trace for no SNMP Response to the MTA" {
+        LogMsg "Monitor Trace for no SNMP Response to the MTA"
+    } {
+        verify_signal "Monitor the trace : Is there no SNMP Response to the MTA($MTA_IP) from that address?"
+    }
+        
+    DoStep "E-UE-PROV_1-1-2-26_12-1" "Monitor Trace for SNMP enrollment inform to one of the IP addresses" {
+        LogMsg "Monitor Trace for SNMP enrollment inform to one of the IP addresses"
+    } {
+        verify_signal "Monitor the trace : Is there an SNMP enrollment inform from the MTA($MTA_IP) to a different one of $PROV_DHCP1_IP/$PROV_DHCP2_IP/$PROV_DHCP3_IP?"
+    }
+    
+    
+    DoStep "E-UE-PROV_1-1-2-26_13-1" "Monitor Trace for SNMP Response from DHCP1 to the MTA" {
+        LogMsg "MMonitor Trace for SNMP Response from DHCP1 to the MTA"
+        set choice [tk_messageBox -type yesno -default yes -message "Is there an SNMP Response from $PROV_DHCP1_IP to $MTA_IP ?" -icon question]
+    } {
+        PASS_STEP
+    }
+    
+    if {$choice == no} {
+        
+        
+        DoStep "E-UE-PROV_1-1-2-26_14-1" "Monitor Trace for no SNMP Response to the MTA" {
+            LogMsg "Monitor Trace for no SNMP Response to the MTA"
+        } {
+            verify_signal "Monitor the trace : Is there no SNMP Response to the MTA($MTA_IP) from that address?"
+        }
+        
+        
+        DoStep "E-UE-PROV_1-1-2-26_16-1" "Monitor Trace for SNMP enrollment inform to one of the IP addresses" {
+            LogMsg "Monitor Trace for SNMP enrollment inform to one of the IP addresses"
+        } {
+        verify_signal "Monitor the trace : Is there an SNMP enrollment inform from the MTA($MTA_IP) to a different one of $PROV_DHCP1_IP/$PROV_DHCP2_IP/$PROV_DHCP3_IP?"
+        }
+        
+              
+        DoStep "E-UE-PROV_1-1-2-26_17-1" "Monitor Trace for SNMP Response from $PROV_DHCP1_IP" {
+            LogMsg "Monitor Trace for SNMP Response from $PROV_DHCP1_IP"
+        } {
+            verify_signal "Monitor the trace : Is there an SNMP Response to the MTA($MTA_IP) from $PROV_DHCP1_IP?"
+        }
+
+################################################################################
+# Skip to here if Prov server resolves earlier
+}
+}
+
+DoStep "E-UE-PROV_1-1-2-26_18-1" "pktcMTADevProvisioningState Content Verification" {
+    actionWait "Wait a few seconds for CM/MTA to provision" 3
+    # Get the OID from the MTA and check it using our previously defined
+    set val [GetProvState 1 600]
+    LogMsg "MTA Provisioning State" 49
+    LogMsg "             - Expected : 1" 49
+    LogMsg "             - Received : $val" 49
+} {
+    IsEqual $val 1
+}
+
+DoStep "E-UE-PROV_1-1-2-26_17-1" "Monitor Trace for SNMPv3 enrollment and final INFORMs to $PROV_DHCP1_IP" {
+    LogMsg "Monitor Trace for SNMPv3 enrollment and final INFORMs to $PROV_DHCP1_IP"
+} {
+    verify_signal "Monitor the trace : Are the SNMPv3 final and enrollment INFORMs sent to $PROV_DHCP1_IP?"
+}
+
+DoStep "E-UE-PROV_1-1-2-26_8-2" "Stop sniffer" {
+    LogMsg "--- Stop sniffer ---"
+    StopCaptureControllerLan
+    SaveToFileControllerLan
+} { PASS_STEP }
+
+############################### For Automated Test #################################
+
+if {000} {
+
+################ Initialize parsing tool and parse data ################
+
+DoStep "E-UE-PROV_1-1-2-26_8-3" "Analyze flow data" {
+    # Initial PARSER TOOL
+    Init_PART
+    
+    # Set up parser file
+    set PARSERFILE    $ETH_DEFAULT_TXT_FILE
+} { PASS_STEP }
+
+DoStep "E-UE-PROV_1-1-2-26_8-4" "Parse all data into database" {
+    # Parse data
+    set PARAMS_DHCP         "{DHCP {} {} {} {} {} {} {} {}}"
+    
+    set PARAMS_MTA_SRC      "{{} {} {} {} $MTA_IP {} {} {} {}}"
+    set PARAMS_MTA_DST      "{{} {} {} {} {} {} {} $MTA_IP {}}"
+    set msgID_MTA           [ParseFile $PARSERFILE "$PARAMS_DHCP $PARAMS_MTA_SRC $PARAMS_MTA_DST"]
+} {
+    if { $::PART_RETURN == 0 } {
+        PASS_STEP
+    } else {
+        FAIL_STEP "Cannot find data"
+    }
+}
+
+DoStep "E-UE-PROV_1-1-2-26_8-5" "Verify SNMP INFORM from MTA to PROV Server 1" {
+    LogMsg "Verify SNMP INFORM from MTAto PROV Server 1"
+} {
+    set mtaMac [string toupper [regsub -all {:} [AddColMac $MTA_MAC] { }] ]
+    # Verify MTA MAC
+    VerifyValue $msgID_MTA "INANY SNMP SNMP_INFORM SNMP_MACID" "IS" "$mtaMac " AND \
+            "HEADERDSTIP" "IS" "$PROV_DHCP1_IP"
+}
+
+DoStep "E-UE-PROV_1-1-2-26_9-1" "Verify NO SNMP Response from Provisioning Server 1" {
+    LogMsg "Verify NO SNMP INFORM from Provisioning server 1"
+} {
+    VerifyNotValue $msgID_MTA "INANY SNMP SNMP_RESPONSE SNMP_MACID" "EXISTS" "" AND \
+            "HEADERSRCIP" "IS" "$PROV_DHCP1_IP"
+}
+
+DoStep "E-UE-PROV_1-1-2-26_8-1" "Verify SNMP INFORM from MTA to PROV Server 2" {
+    LogMsg "Verify SNMP INFORM from MTAto PROV Server 2"
+} {
+    # Verify MTA MAC
+    VerifyValue $msgID_MTA "INANY SNMP SNMP_INFORM SNMP_MACID" "IS" "$mtaMac " AND \
+            "HEADERDSTIP" "IS" "$PROV_DHCP2_IP"
+}
+
+DoStep "E-UE-PROV_1-1-2-26_8-1" "Verify NO SNMP Response from Provisioning Server 2" {
+    LogMsg "Verify NO SNMP INFORM from Provisioning server 2"
+} {
+    VerifyNotValue $msgID_MTA "INANY SNMP SNMP_RESPONSE SNMP_MACID" "EXISTS" "" AND \
+            "HEADERSRCIP" "IS" "$PROV_DHCP2_IP"
+}
+
+DoStep "E-UE-PROV_1-1-2-26_8-1" "Verify SNMP INFORM from MTA to PROV Server 3" {
+    LogMsg "Verify SNMP INFORM from MTAto PROV Server 3"
+} {
+    VerifyValue $msgID_MTA "INANY SNMP SNMP_INFORM SNMP_MACID" "IS" "$mtaMac " AND \
+            "HEADERDSTIP" "IS" "$PROV_DHCP3_IP"
+}
+
+DoStep "E-UE-PROV_1-1-2-26_8-1" "Verify NO SNMP Response from Provisioning Server 3" {
+    LogMsg "Verify NO SNMP INFORM from Provisioning server 3"
+} {
+    VerifyNotValue $msgID_MTA "INANY SNMP SNMP_RESPONSE SNMP_MACID" "EXISTS" "" AND \
+            "HEADERSRCIP" "IS" "$PROV_DHCP3_IP"
+}
+
+
+DoStep "E-UE-PROV_1-1-2-26_17-1" "MTA Sequence" {
+    LogMsg "Verify MTA Sequence"
+    
+    # Set MTA SEQUENCE to check
+    set MTA_SEQUENCE "DHCP:DISCOVER,DHCP:OFFER,DHCP:REQUEST,DHCP:ACK,\
+            DNS:DNS_QUERY_SRV,DNS:DNS_RESPONSE_SRV,DNS:DNS_QUERY_HOST,DNS:DNS_RESPONSE_HOST,\
+            KRB:KRB_AS_REQ,KRB:KRB_AS_REP,PKKM:PKKM_AP_REQ,PKKM:PKKM_AP_REP,SNMP:SNMP_INFORM,\
+            SNMP:SNMP_INFORM,SNMP:SNMP_INFORM,DHCP:DISCOVER,DHCP:OFFER,DHCP:REQUEST,DHCP:ACK"
+    # Remove whitespace
+    regsub -all { } $MTA_SEQUENCE {} MTA_SEQUENCE
+} {
+    # Verify TOD Response
+    VerifyValue $msgID_MTA "SEQUENCE $MTA_SEQUENCE" "" ""
+}
+
+}
+
+################## Skip to here for non-automated test #############
+
+DoStep "E-UE-PROV_1-1-2-26_18-1" "Unblock Ports" {
+    LogMsg "Unblock Ports"
+    
+    # verify_signal "Unblock Ports (For the 3 sessions use the same strings as before, but set iptables -A to iptables -D)."
+    # added popup to remove IP helper addresses from CMTS - MF 11/27/07
+    verify_signal "Remove IP Helper Addresses on CMTS for $PROV_DHCP2_IP & $PROV_DHCP3_IP"
+    PACT_SWITCH_PROV_TO $PROV_DHCP2_IP
+    PROV_UNBLOCK_SNMP_TRAP_PORT $PROV_DHCP2_IP
+    PACT_SWITCH_PROV_TO $PROV_DHCP3_IP
+    PROV_UNBLOCK_SNMP_TRAP_PORT $PROV_DHCP3_IP
+    PACT_SWITCH_PROV_BACK
+} {
+    PASS_STEP
+}
+
+    DoStep "E-UE-PROV_1-1-2-26_18-2" "Restore policy in provisioning server" {
+        LogMsg "Setup policy in provisioning server"
+        PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122
+        PROV_DEPLOY_DHCP
+} {
+ PASS_STEP
+}
+    
+
+################ Reset CM and MTA and Verify Provisioning ################
+
+DoStep "E-UE-PROV_1-1-2-26_19-1" "Reset MTA" {
+    set val [SNMP_SET $oid_pktcMtaDevResetNow INTEGER 1 $MTA_IP]
+    LogMsg "Reset of MTA has passed"
+} {
+    IsEqual $val 0
+}
+
+DoStep "E-UE-PROV_1-1-2-268_19-2" "pktcMTADevProvisioningState Content Verification" {
+    actionWait "Wait 30 seconds for CM/MTA to provision" 30
+    # Get the OID from the MTA and check it using our previously defined
+    set val [GetProvState 1 600]
+    LogMsg "MTA Provisioning State" 49
+    LogMsg "             - Expected : 1" 49
+    LogMsg "             - Received : $val" 49
+} {
+    IsEqual $val 1
+}
+
+################################################################################
+# Cleanup
+################################################################################
+
+Cleanup
+return 0
+

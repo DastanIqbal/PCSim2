@@ -1,0 +1,30 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+
+<pc2xml version="$Revision: 8188 $" name="UT_SIP-UE 1.3.2.2" descrip="UE Treats First Session Description as Answer" number="UT_SIP-UE 1.3.2.2">
+	<template name="DUT" file="./templates//UT/Orig_DUT.xml"/>
+	<remove_from fsm="DUT">
+
+	</remove_from>
+	<add_to fsm="DUT">
+
+
+	</add_to>
+</pc2xml>

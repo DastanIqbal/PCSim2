@@ -1,0 +1,76 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-UE 1.2.2.4" 
+	descrip="+Number in User Part of SIP URI in P-Asserted-Identity header" 
+	number="RST-UE 1.2.2.4">
+	
+	<fsm name="UE1">
+		<models>
+			<session/>
+		</models>
+		
+		<NE sim_type="orig" elements="UE1 PCSCF2 SCSCF1 PCSCF1" targets="UE1 441273203113"/>
+		
+		<states initialstate="Register">
+			<state ID="Register">
+				<transition to="Setup" event="Registered"/>
+			</state>
+			
+			<state ID="Setup">
+				<prelude>
+					<send protocol="sip" msgtype="Invite">
+						<!-- Step 1 test case SIP 1.2.2.3-->
+						<mod modtype="replace" hdr="P-Asserted-Identity">
+							<expr>&lt;sip:+441273203113@server.phone.com&gt;</expr>
+						</mod>
+					</send>
+				</prelude>
+				<postlude>
+					<log promptUser="True" yesExpected="True" verify="True" 
+						step="2" requirements="REQ14460" 
+						expr="Verify the Caller ID display has 441273203113 the number field?"/>
+				</postlude>
+				<transition to="EndSession" event="xxx-INVITE"/>
+			</state>
+			
+			<state ID="EndSession" ES="true">
+				<transition to="Setup1" event="SessionTerminated"/>
+			</state>
+
+			<state ID="Setup1">
+				<prelude>
+					<send protocol="sip" msgtype="Invite">
+						<!-- Step 4 test case SIP 1.2.2.3-->
+						<mod modtype="replace" hdr="P-Asserted-Identity">
+							<expr>&lt;sip:+44-1273-203113@server.phone.com&gt;</expr>
+						</mod>
+					</send>
+				</prelude>
+				<postlude>
+					<log promptUser="True" yesExpected="True" verify="True" 
+						step="5" requirements="REQ14460" 
+						expr="Verify the Caller ID display has 441273203113 the number field?"/>
+				</postlude>
+				<transition to="END" event="xxx-INVITE"/>
+			</state>
+		</states>
+	</fsm>
+</pc2xml>

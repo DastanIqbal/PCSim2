@@ -1,0 +1,77 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	PCPCII-90 : The REINVITE message contained a mode parameter in the SDP of sendrecv. Add a mod 
+		operation to make the parameter be inactive as it should be. (ghassler 12/19/2008)
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-UE 1.5.3.1" 
+	descrip="Call Hold – DUT is the held party " 
+	number="RST-UE 1.5.3.1">
+	
+	<template file="./templates/CallOrigAtUETemp.xml" name="UE1"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Connected"/>
+		<state ID="Releasing"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<state ID="Connected">
+			<prelude>
+				<sleep time="5000"/>
+				<send protocol="sip" msgtype="REINVITE">
+					<mod modtype="replace" hdr="mode" param="value">
+						<expr>inactive</expr>
+					</mod>
+				</send>
+			</prelude>
+			<transition to="UE1GoOnHold" event="100-INVITE"/>
+			<transition to="Releasing" event="200-INVITE"/>
+		</state>
+		
+		<state ID="UE1GoOnHold">
+			<transition to="Releasing" event="200-INVITE"/>
+		</state>
+		
+		<state ID="Releasing">
+			<prelude>
+				<send protocol="sip" msgtype="ACK"/>
+				<sleep time="5000"/>
+				<!--Sending BYE to peer to terminate call.-->
+				<send protocol="sip" msgtype="BYE"/>
+			</prelude>
+			<transition to="ReorderTone" event="200-Bye"/>
+		</state>
+		
+		<state ID="ReorderTone">
+			<prelude>
+				<send protocol="utility" msgtype="VerifyReorder"/>
+			</prelude>
+			<response>
+				<verify step="3" requirements="REQ13812">
+					<eq>
+						<msg_ref type="utility">Response</msg_ref>
+						<expr>VerifyReorderComplete</expr>
+					</eq>
+				</verify>
+			</response>
+			<transition to="OnHook" event="VerifyReorderComplete"/>
+			<transition to="OnHook" event="VerifyReorderError"/>
+		</state>
+	</add_to>
+</pc2xml>

@@ -1,0 +1,77 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-UE 1.7.1.4" 
+	descrip="UE acknowledges network hold request " 
+	number="RST-UE 1.7.1.4">
+	
+	<template file="./templates/CallOrigAtUETemp.xml" name="UE1"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Connected"/>
+		<state ID="OnHook"/>
+		<state ID="Releasing"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<state ID="Connected" ES="True">
+			<transition to="OffHook1" event="SessionTerminated"/>
+		</state>
+		
+		<state ID="OffHook1">
+			<prelude>
+				<send protocol="utility" msgtype="OffHook"/>
+			</prelude>
+			<transition to="Dial1" event="offhookcomplete"/>
+		</state>
+		
+		<state ID="Dial1">
+			<prelude>
+				<!-- Step 3 test case SIP 1.7.1.4-->
+				<send protocol="utility" msgtype="DialDigits">
+					<mod modtype="replace" hdr="digits">
+						<expr>*69</expr>
+					</mod>
+				</send>
+			</prelude>
+			<transition to="Verify" event="dialdigitscomplete"/>
+		</state>
+		
+		<state ID="Verify" timer="10000">
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="event"/>
+						<expr>TimerExpired</expr>
+					</eq>
+					<then>
+						<verify step="3" requirements="REQ13967">
+							<eq>
+								<msg_ref type="event"/>
+								<expr>TimerExpired</expr>
+							</eq>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<transition to="END" event="TimerExpired"/>
+		</state>
+	</add_to>
+</pc2xml>

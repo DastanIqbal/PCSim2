@@ -1,0 +1,914 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+Change History: (Author & Date)
+
+-->
+<!-- Document type and attributes. -->
+<pc2xml version="$Revision: 6076 $"
+        name="E-UE_PROV_1.1.2.44"
+        descrip="eUE updates ToD and send corresponding event when eCM changes ToD."
+        number="E-UE_PROV_1.1.2.44">
+
+
+    <!-- Reset UE; start capture. -->
+    <template file="./templates/EUE_Prov_B_1_1_1.xml" name="ToD_Retrevial"/>
+
+    <add_to fsm="ToD_Retrevial">
+        <transition from="StartCapture_RebootWait" to="CMProvisions1" event="TimerExpired"/>
+
+
+
+<!-- vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv -->
+<!-- ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ -->
+        <!-- 12 Configure SCENARIO-2. -->
+        <!-- 13 Verify eUE and CM successfully provisioned and in Operational State. -->
+        <!-- 14 Repeat Steps 3-10. -->
+        <state ID="CMProvisions1">
+            <prelude once="true">
+                <stop_capture/>
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>DOCS-CABLE-DEVICE-MIB::docsDevServerBootState.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.CM IP Address</msg_ref>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="13">
+                    <contains>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>1</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="EUEProvisions1" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+        <state ID="EUEProvisions1">
+            <prelude once="true">
+                <stop_capture/>
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>DOCS-CABLE-DEVICE-MIB::docsDevServerBootState.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="13">
+                    <contains>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>1</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="VerifyTimestamp1" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+
+        <!-- 3 Timestamp of Syslog Event Messages issued by eUE contain correct ToD. -->
+        <!-- 4 Configure eCM DHCP service. -->
+        <state ID="VerifyTimestamp1">
+            <prelude once="true">
+                <parse_capture name="eUE_SysLog">
+                    <parser_filter protocol="syslog" ip="DUT.IP"/>
+                </parse_capture>
+                <parse_capture name="CM_ToD">
+                    <parser_filter protocol="time" ip="DUT.CM IP Address"/>
+                </parse_capture>
+            </prelude>
+            <response>
+                <verify step="14-3">
+                    <neq>
+                        <capture_ref type="syslog" name="eUE_SysLog">syslog.timestamp</capture_ref>
+                        <capture_ref type="time"   name="CM_ToD">Response.time</capture_ref>
+                    </neq>
+                </verify>
+            </response>
+            <postlude>
+                <log promptUser="true"
+                    expr="Step 14-4. Configure ToD Server to be responsive for ToD requests.\n"/>
+                <generate event="SucceedEvent"/>
+            </postlude>
+            <transition to="PromptReConfigure1" event="SucceedEvent"/>
+        </state>
+
+
+        <!-- 4 Wait until eCM renews its IP address.
+               Verify eCM sends DHCP REQUEST message to renew IP Address. -->
+        <state ID="PromptReConfigure1">
+            <prelude once="true" >
+                <start_capture>
+                    <filter>
+                        <var_expr>
+                            <expr>host </expr>
+                            <msg_ref type="platform">DUT.IP</msg_ref>
+                            <expr> || host </expr>
+                            <msg_ref type="platform">DUT.CM IP Address</msg_ref>
+                            <expr> || host </expr>
+                            <msg_ref type="platform">DUT.DHCP Gateway IP</msg_ref>
+                            <expr> || host </expr>
+                            <msg_ref type="platform">DUT.DHCP CM Gateway IP</msg_ref>
+                            <expr> || host </expr>
+                            <msg_ref type="platform">DUT.KDC IP Address</msg_ref>
+                            <expr> || host </expr>
+                            <msg_ref type="platform">DUT.TFTP Server IP</msg_ref>
+                        </var_expr>
+                    </filter>
+                </start_capture>
+                <log promptUser="true"
+                    expr="Step 4.  Configure new eCM DHCP Time Offset and Time Server Address DHCP Options.\n"/>
+                <sleep time="180000"/>
+                <generate event="SucceedEvent"/>
+            </prelude>
+            <transition to="VerifyMessaging1" event="SucceedEvent"/>
+        </state>
+
+
+        <!-- Step 5, 6, 7. -->
+        <state ID="VerifyMessaging1">
+            <prelude once="true">
+                <stop_capture/>
+
+                <parse_capture name="CM_ToD">
+                    <parser_filter protocol="time" ip="DUT.CM IP Address"/>
+                </parse_capture>
+                <parse_capture name="eUE_SysLog">
+                    <parser_filter protocol="syslog" ip="DUT.IP"/>
+                </parse_capture>
+                <parse_capture name="eUE_Prov">
+                    <parser_filter protocol="kerberos" ip="DUT.IP"/>
+                </parse_capture>
+            </prelude>
+
+            <response>
+                <!-- 5 Verify eCM sends ToD Request to new ToD server acknowledged by ToD Response from ToD Server. -->
+                <verify step="14-5">
+                    <eq>
+                        <capture_ref type="time" name="CM_ToD">Request.ip.dst_host.show</capture_ref>
+                        <msg_ref type="platform">DUT.ToD Server IP 2</msg_ref>
+                    </eq>
+                </verify>
+
+                <!-- 6 Management Event message with EventID EUE-EV-7 (4000960006) issued by eUE.
+                       The Timestamp of this Event Message correct ToD value corresponding to new values of
+                       ToD Server and new value of Time Offset retrieved during DHCP renewal at Step 4. -->
+                <verify step="14-6">
+                    <and>
+                    <eq>
+                        <!-- <capture_ref type="time" name="CM_ToD">Response.time</capture_ref> -->
+                        <expr>I don't know how to obtains EventID EUE-EV-7 yet.</expr>
+                        <expr>In ATP, concrete values to verify against.</expr>
+                    </eq>
+                    <eq>
+                        <!-- <capture_ref type="time" name="CM_ToD">Response.time</capture_ref> -->
+                        <expr>I don't know how to obtains EventID EUE-EV-7 yet.</expr>
+                        <expr>In ATP, concrete values to verify against.</expr>
+                    </eq>
+                    </and>
+                </verify>
+
+                <!-- 7 eUE sends AS-REQUEST message to invalidate Kerberos Ticket. -->
+                <verify step="14-7">
+                    <notnull>
+                        <capture_ref type="kerberos" name="eUE_Prov">AS-REQ.1.3.6.1.2.1.140.1.3.9.0</capture_ref>
+                    </notnull>
+                </verify>
+            </response>
+            <postlude>
+                <generate event="SucceedEvent"/>
+            </postlude>
+            <transition to="SecurityMIBs_1a" event="SucceedEvent"/>
+        </state>
+
+
+        <!-- 8 Execute SNMP GET Operation on any of eUE MIB Objects.
+               Ensure existing SNMPv3 Security association preserved.
+               Verify SNMP GET Operation successfully completed. -->
+        <state ID="SecurityMIBs_1a">
+            <prelude once="true">
+                <stop_capture/>
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>DOCS-CABLE-DEVICE-MIB::docsDevServerBootState.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="14-8">
+                    <contains>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>1</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="WakeUp1" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+
+        <!-- 9 Send WAKEUP message from Provisioning Server.
+               Verify eUE sends AP-REQUEST message. -->
+        <state ID="WakeUp1">
+            <prelude once="true" >
+                <start_capture>
+                    <filter>
+                        <var_expr>
+                            <expr>host </expr>
+                            <msg_ref type="platform">DUT.IP</msg_ref>
+                            <expr> || host </expr>
+                            <msg_ref type="platform">DUT.CM IP Address</msg_ref>
+                            <expr> || host </expr>
+                            <msg_ref type="platform">DUT.DHCP Gateway IP</msg_ref>
+                            <expr> || host </expr>
+                            <msg_ref type="platform">DUT.DHCP CM Gateway IP</msg_ref>
+                            <expr> || host </expr>
+                            <msg_ref type="platform">DUT.KDC IP Address</msg_ref>
+                            <expr> || host </expr>
+                            <msg_ref type="platform">DUT.TFTP Server IP</msg_ref>
+                        </var_expr>
+                    </filter>
+                </start_capture>
+
+                <log promptUser="true"
+                    expr="Step 14-9. Hey Matt, can we automate this?  Send Wakeup Message from Provisioning.\n"/>
+
+                <sleep time="10000"/>
+
+                <parse_capture name="eUE_Prov">
+                    <parser_filter protocol="kerberos" ip="DUT.IP"/>
+                </parse_capture>
+
+                <verify step="14-9">
+                    <notnull>
+                        <capture_ref type="kerberos" name="eUE_Prov">AP-REQ</capture_ref>
+                    </notnull>
+                </verify>
+
+                <generate event="SucceedEvent"/>
+            </prelude>
+            <transition to="SecurityMIBs_1b" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+
+        <!-- 10 Execute SNMP GET Operation on any of eUE MIB Objects to ensure
+                new SNMPv3 Security association successfully established.
+                Verify SNMP GET Operation successfully completed. -->
+        <state ID="SecurityMIBs_1b">
+            <prelude once="true">
+                <log promptUser="true"
+                    expr="Step 14-9. Send Wakeup Message from Provisioning.\n"/>
+                <generate event="SucceedEvent"/>
+
+                <stop_capture/>
+
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>DOCS-CABLE-DEVICE-MIB::docsDevServerBootState.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="14-10">
+                    <contains>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>1</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="ReConfigure2" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+
+<!-- vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv -->
+<!-- ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ -->
+        <!-- 16 Configure SCENARIO-3. -->
+        <!-- 17 Verify eUE successfully provisioned and in Operational State. -->
+        <!-- 18 Repeat Steps 3-10. -->
+        <state ID="ReConfigure2"
+               provFile="E-UE_PROV_v6_2.1.2.1_2.bin"
+               policyFile="MTAFORCW122_test"
+               nextState="Reset2"/>
+
+        <state ID="Reset2">
+            <prelude once="true">
+                <stop_capture/>
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>DOCS-CABLE-DEVICE-MIB::docsDevServerBootState.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="2">
+                    <contains>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>1</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="CMProvisions2" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+        <state ID="CMProvisions2">
+            <prelude once="true">
+                <stop_capture/>
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>DOCS-CABLE-DEVICE-MIB::docsDevServerBootState.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.CM IP Address</msg_ref>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="5">
+                    <contains>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>1</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="EUEProvisions2" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+        <state ID="EUEProvisions2">
+            <prelude once="true">
+                <stop_capture/>
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>DOCS-CABLE-DEVICE-MIB::docsDevServerBootState.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="5">
+                    <contains>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>1</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="VerifyTimestamp2" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+
+        <!-- 3 Timestamp of Syslog Event Messages issued by eUE contain correct ToD. -->
+        <!-- 4 Configure eCM DHCP service. -->
+        <state ID="VerifyTimestamp2">
+            <prelude once="true">
+                <parse_capture name="eUE_SysLog">
+                    <parser_filter protocol="syslog" ip="DUT.IP"/>
+                </parse_capture>
+                <parse_capture name="CM_ToD">
+                    <parser_filter protocol="time" ip="DUT.CM IP Address"/>
+                </parse_capture>
+            </prelude>
+            <response>
+                <verify step="18-3">
+                    <neq>
+                        <capture_ref type="syslog" name="eUE_SysLog">syslog.timestamp</capture_ref>
+                        <capture_ref type="time"   name="CM_ToD">Response.time</capture_ref>
+                    </neq>
+                </verify>
+            </response>
+            <postlude>
+                <log promptUser="true"
+                    expr="Step 18-4. Configure ToD Server to be responsive for ToD requests.\n"/>
+                <generate event="SucceedEvent"/>
+            </postlude>
+            <transition to="PromptReConfigure2" event="SucceedEvent"/>
+        </state>
+
+
+        <!-- 4 Wait until eCM renews its IP address.
+               Verify eCM sends DHCP REQUEST message to renew IP Address. -->
+        <state ID="PromptReConfigure2">
+            <prelude once="true" >
+                <start_capture>
+                    <filter>
+                        <var_expr>
+                            <expr>host </expr>
+                            <msg_ref type="platform">DUT.IP</msg_ref>
+                            <expr> || host </expr>
+                            <msg_ref type="platform">DUT.CM IP Address</msg_ref>
+                            <expr> || host </expr>
+                            <msg_ref type="platform">DUT.DHCP Gateway IP</msg_ref>
+                            <expr> || host </expr>
+                            <msg_ref type="platform">DUT.DHCP CM Gateway IP</msg_ref>
+                            <expr> || host </expr>
+                            <msg_ref type="platform">DUT.KDC IP Address</msg_ref>
+                            <expr> || host </expr>
+                            <msg_ref type="platform">DUT.TFTP Server IP</msg_ref>
+                        </var_expr>
+                    </filter>
+                </start_capture>
+                <log promptUser="true"
+                    expr="Step 4.  Configure new eCM DHCP Time Offset and Time Server Address DHCP Options.\n"/>
+                <sleep time="180000"/>
+                <generate event="SucceedEvent"/>
+            </prelude>
+            <transition to="VerifyMessaging2" event="SucceedEvent"/>
+        </state>
+
+
+        <!-- Step 5, 6, 7. -->
+        <state ID="VerifyMessaging2">
+            <prelude once="true">
+                <stop_capture/>
+
+                <parse_capture name="CM_ToD">
+                    <parser_filter protocol="time" ip="DUT.CM IP Address"/>
+                </parse_capture>
+                <parse_capture name="eUE_SysLog">
+                    <parser_filter protocol="syslog" ip="DUT.IP"/>
+                </parse_capture>
+                <parse_capture name="eUE_Prov">
+                    <parser_filter protocol="kerberos" ip="DUT.IP"/>
+                </parse_capture>
+            </prelude>
+
+            <response>
+                <!-- 5 Verify eCM sends ToD Request to new ToD server acknowledged by ToD Response from ToD Server. -->
+                <verify step="18-5">
+                    <eq>
+                        <capture_ref type="time" name="CM_ToD">Request.ip.dst_host.show</capture_ref>
+                        <msg_ref type="platform">DUT.ToD Server IP 2</msg_ref>
+                    </eq>
+                </verify>
+
+                <!-- 6 Management Event message with EventID EUE-EV-7 (4000960006) issued by eUE.
+                       The Timestamp of this Event Message correct ToD value corresponding to new values of
+                       ToD Server and new value of Time Offset retrieved during DHCP renewal at Step 4. -->
+                <verify step="18-6">
+                    <and>
+                    <eq>
+                        <!-- <capture_ref type="time" name="CM_ToD">Response.time</capture_ref> -->
+                        <expr>I don't know how to obtains EventID EUE-EV-7 yet.</expr>
+                        <expr>In ATP, concrete values to verify against.</expr>
+                    </eq>
+                    <eq>
+                        <!-- <capture_ref type="time" name="CM_ToD">Response.time</capture_ref> -->
+                        <expr>I don't know how to obtains EventID EUE-EV-7 yet.</expr>
+                        <expr>In ATP, concrete values to verify against.</expr>
+                    </eq>
+                    </and>
+                </verify>
+
+                <!-- 7 eUE sends AS-REQUEST message to invalidate Kerberos Ticket. -->
+                <verify step="18-7">
+                    <notnull>
+                        <capture_ref type="kerberos" name="eUE_Prov">AS-REQ.1.3.6.1.2.1.140.1.3.9.0</capture_ref>
+                    </notnull>
+                </verify>
+            </response>
+            <postlude>
+                <generate event="SucceedEvent"/>
+            </postlude>
+            <transition to="SecurityMIBs_2a" event="SucceedEvent"/>
+        </state>
+
+
+        <!-- 8 Execute SNMP GET Operation on any of eUE MIB Objects.
+               Ensure existing SNMPv3 Security association preserved.
+               Verify SNMP GET Operation successfully completed. -->
+        <state ID="SecurityMIBs_2a">
+            <prelude once="true">
+                <stop_capture/>
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>DOCS-CABLE-DEVICE-MIB::docsDevServerBootState.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="18-8">
+                    <contains>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>1</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="WakeUp2" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+
+        <!-- 9 Send WAKEUP message from Provisioning Server.
+               Verify eUE sends AP-REQUEST message. -->
+        <state ID="WakeUp2">
+            <prelude once="true" >
+                <start_capture>
+                    <filter>
+                        <var_expr>
+                            <expr>host </expr>
+                            <msg_ref type="platform">DUT.IP</msg_ref>
+                            <expr> || host </expr>
+                            <msg_ref type="platform">DUT.CM IP Address</msg_ref>
+                            <expr> || host </expr>
+                            <msg_ref type="platform">DUT.DHCP Gateway IP</msg_ref>
+                            <expr> || host </expr>
+                            <msg_ref type="platform">DUT.DHCP CM Gateway IP</msg_ref>
+                            <expr> || host </expr>
+                            <msg_ref type="platform">DUT.KDC IP Address</msg_ref>
+                            <expr> || host </expr>
+                            <msg_ref type="platform">DUT.TFTP Server IP</msg_ref>
+                        </var_expr>
+                    </filter>
+                </start_capture>
+
+                <log promptUser="true"
+                    expr="Step 18-9. Hey Matt, can we automate this?  Send Wakeup Message from Provisioning.\n"/>
+
+                <sleep time="10000"/>
+
+                <parse_capture name="eUE_Prov">
+                    <parser_filter protocol="kerberos" ip="DUT.IP"/>
+                </parse_capture>
+
+                <verify step="18-9">
+                    <notnull>
+                        <capture_ref type="kerberos" name="eUE_Prov">AP-REQ</capture_ref>
+                    </notnull>
+                </verify>
+
+                <generate event="SucceedEvent"/>
+            </prelude>
+            <transition to="SecurityMIBs_2b" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+
+        <!-- 10 Execute SNMP GET Operation on any of eUE MIB Objects to ensure
+                new SNMPv3 Security association successfully established.
+                Verify SNMP GET Operation successfully completed. -->
+        <state ID="SecurityMIBs_2b">
+            <prelude once="true">
+                <log promptUser="true"
+                    expr="Step 18-9. Send Wakeup Message from Provisioning.\n"/>
+                <generate event="SucceedEvent"/>
+
+                <stop_capture/>
+
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>DOCS-CABLE-DEVICE-MIB::docsDevServerBootState.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="18-10">
+                    <contains>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>1</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="ReConfigure3" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+
+<!-- vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv -->
+<!-- ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ -->
+        <!-- 20 Configure SCENARIO-4. -->
+        <!-- 21 Both the eCM and the eUE successfully provisioned. -->
+        <!-- 22 Repeat Steps 3-10.  -->
+        <state ID="ReConfigure3"
+               provFile="E-UE_PROV_v6_2.1.2.1_2.bin"
+               policyFile="MTAFORCW122_test"
+               nextState="Reset3"/>
+
+        <state ID="Reset3">
+            <prelude once="true">
+                <stop_capture/>
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>DOCS-CABLE-DEVICE-MIB::docsDevServerBootState.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="2">
+                    <contains>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>1</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="CMProvisions3" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+        <state ID="CMProvisions3">
+            <prelude once="true">
+                <stop_capture/>
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>DOCS-CABLE-DEVICE-MIB::docsDevServerBootState.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.CM IP Address</msg_ref>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="5">
+                    <contains>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>1</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="EUEProvisions3" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+        <state ID="EUEProvisions3">
+            <prelude once="true">
+                <stop_capture/>
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>DOCS-CABLE-DEVICE-MIB::docsDevServerBootState.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="5">
+                    <contains>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>1</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="VerifyTimestamp3" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+
+        <!-- 3 Timestamp of Syslog Event Messages issued by eUE contain correct ToD. -->
+        <!-- 4 Configure eCM DHCP service. -->
+        <state ID="VerifyTimestamp3">
+            <prelude once="true">
+                <parse_capture name="eUE_SysLog">
+                    <parser_filter protocol="syslog" ip="DUT.IP"/>
+                </parse_capture>
+                <parse_capture name="CM_ToD">
+                    <parser_filter protocol="time" ip="DUT.CM IP Address"/>
+                </parse_capture>
+            </prelude>
+            <response>
+                <verify step="20-3">
+                    <neq>
+                        <capture_ref type="syslog" name="eUE_SysLog">syslog.timestamp</capture_ref>
+                        <capture_ref type="time"   name="CM_ToD">Response.time</capture_ref>
+                    </neq>
+                </verify>
+            </response>
+            <postlude>
+                <log promptUser="true"
+                    expr="Step 20-4. Configure ToD Server to be responsive for ToD requests.\n"/>
+                <generate event="SucceedEvent"/>
+            </postlude>
+            <transition to="PromptReConfigure3" event="SucceedEvent"/>
+        </state>
+
+
+        <!-- 4 Wait until eCM renews its IP address.
+               Verify eCM sends DHCP REQUEST message to renew IP Address. -->
+        <state ID="PromptReConfigure3">
+            <prelude once="true" >
+                <start_capture>
+                    <filter>
+                        <var_expr>
+                            <expr>host </expr>
+                            <msg_ref type="platform">DUT.IP</msg_ref>
+                            <expr> || host </expr>
+                            <msg_ref type="platform">DUT.CM IP Address</msg_ref>
+                            <expr> || host </expr>
+                            <msg_ref type="platform">DUT.DHCP Gateway IP</msg_ref>
+                            <expr> || host </expr>
+                            <msg_ref type="platform">DUT.DHCP CM Gateway IP</msg_ref>
+                            <expr> || host </expr>
+                            <msg_ref type="platform">DUT.KDC IP Address</msg_ref>
+                            <expr> || host </expr>
+                            <msg_ref type="platform">DUT.TFTP Server IP</msg_ref>
+                        </var_expr>
+                    </filter>
+                </start_capture>
+                <log promptUser="true"
+                    expr="Step 4.  Configure new eCM DHCP Time Offset and Time Server Address DHCP Options.\n"/>
+                <sleep time="180000"/>
+                <generate event="SucceedEvent"/>
+            </prelude>
+            <transition to="VerifyMessaging3" event="SucceedEvent"/>
+        </state>
+
+
+        <!-- Step 5, 6, 7. -->
+        <state ID="VerifyMessaging3">
+            <prelude once="true">
+                <stop_capture/>
+
+                <parse_capture name="CM_ToD">
+                    <parser_filter protocol="time" ip="DUT.CM IP Address"/>
+                </parse_capture>
+                <parse_capture name="eUE_SysLog">
+                    <parser_filter protocol="syslog" ip="DUT.IP"/>
+                </parse_capture>
+                <parse_capture name="eUE_Prov">
+                    <parser_filter protocol="kerberos" ip="DUT.IP"/>
+                </parse_capture>
+            </prelude>
+
+            <response>
+                <!-- 5 Verify eCM sends ToD Request to new ToD server acknowledged by ToD Response from ToD Server. -->
+                <verify step="20-5">
+                    <eq>
+                        <capture_ref type="time" name="CM_ToD">Request.ip.dst_host.show</capture_ref>
+                        <msg_ref type="platform">DUT.ToD Server IP 2</msg_ref>
+                    </eq>
+                </verify>
+
+                <!-- 6 Management Event message with EventID EUE-EV-7 (4000960006) issued by eUE.
+                       The Timestamp of this Event Message correct ToD value corresponding to new values of
+                       ToD Server and new value of Time Offset retrieved during DHCP renewal at Step 4. -->
+                <verify step="20-6">
+                    <and>
+                    <eq>
+                        <!-- <capture_ref type="time" name="CM_ToD">Response.time</capture_ref> -->
+                        <expr>I don't know how to obtains EventID EUE-EV-7 yet.</expr>
+                        <expr>In ATP, concrete values to verify against.</expr>
+                    </eq>
+                    <eq>
+                        <!-- <capture_ref type="time" name="CM_ToD">Response.time</capture_ref> -->
+                        <expr>I don't know how to obtains EventID EUE-EV-7 yet.</expr>
+                        <expr>In ATP, concrete values to verify against.</expr>
+                    </eq>
+                    </and>
+                </verify>
+
+                <!-- 7 eUE sends AS-REQUEST message to invalidate Kerberos Ticket. -->
+                <verify step="20-7">
+                    <notnull>
+                        <capture_ref type="kerberos" name="eUE_Prov">AS-REQ.1.3.6.1.2.1.140.1.3.9.0</capture_ref>
+                    </notnull>
+                </verify>
+            </response>
+            <postlude>
+                <generate event="SucceedEvent"/>
+            </postlude>
+            <transition to="SecurityMIBs_3a" event="SucceedEvent"/>
+        </state>
+
+
+        <!-- 8 Execute SNMP GET Operation on any of eUE MIB Objects.
+               Ensure existing SNMPv3 Security association preserved.
+               Verify SNMP GET Operation successfully completed. -->
+        <state ID="SecurityMIBs_3a">
+            <prelude once="true">
+                <stop_capture/>
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>DOCS-CABLE-DEVICE-MIB::docsDevServerBootState.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="20-8">
+                    <contains>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>1</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="WakeUp3" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+
+        <!-- 9 Send WAKEUP message from Provisioning Server.
+               Verify eUE sends AP-REQUEST message. -->
+        <state ID="WakeUp3">
+            <prelude once="true" >
+                <start_capture>
+                    <filter>
+                        <var_expr>
+                            <expr>host </expr>
+                            <msg_ref type="platform">DUT.IP</msg_ref>
+                            <expr> || host </expr>
+                            <msg_ref type="platform">DUT.CM IP Address</msg_ref>
+                            <expr> || host </expr>
+                            <msg_ref type="platform">DUT.DHCP Gateway IP</msg_ref>
+                            <expr> || host </expr>
+                            <msg_ref type="platform">DUT.DHCP CM Gateway IP</msg_ref>
+                            <expr> || host </expr>
+                            <msg_ref type="platform">DUT.KDC IP Address</msg_ref>
+                            <expr> || host </expr>
+                            <msg_ref type="platform">DUT.TFTP Server IP</msg_ref>
+                        </var_expr>
+                    </filter>
+                </start_capture>
+
+                <log promptUser="true"
+                    expr="Step 20-9. Hey Matt, can we automate this?  Send Wakeup Message from Provisioning.\n"/>
+
+                <sleep time="10000"/>
+
+                <parse_capture name="eUE_Prov">
+                    <parser_filter protocol="kerberos" ip="DUT.IP"/>
+                </parse_capture>
+
+                <verify step="20-9">
+                    <notnull>
+                        <capture_ref type="kerberos" name="eUE_Prov">AP-REQ</capture_ref>
+                    </notnull>
+                </verify>
+
+                <generate event="SucceedEvent"/>
+            </prelude>
+            <transition to="SecurityMIBs_3b" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+
+        <!-- 10 Execute SNMP GET Operation on any of eUE MIB Objects to ensure
+                new SNMPv3 Security association successfully established.
+                Verify SNMP GET Operation successfully completed. -->
+        <state ID="SecurityMIBs_3b">
+            <prelude once="true">
+                <log promptUser="true"
+                    expr="Step 20-9. Send Wakeup Message from Provisioning.\n"/>
+                <generate event="SucceedEvent"/>
+
+                <stop_capture/>
+
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>DOCS-CABLE-DEVICE-MIB::docsDevServerBootState.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="20-10">
+                    <contains>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>1</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="END" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+    </add_to>
+</pc2xml>

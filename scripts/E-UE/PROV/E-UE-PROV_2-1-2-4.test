@@ -1,0 +1,86 @@
+#//****************************************************************************
+#// Filename: E-UE_PROV_2-1-2-4.test 
+#// Author:   Matt Forbes
+#// Creation Date: 31-Oct-2008
+#// Modified by:
+#//     
+#//     
+#//     
+#//****************************************************************************
+#// Description:
+#//     TC2832 TEST CASE PROV 2.1.2.4 To verify MTA returns passWithWarnings in
+#// final SNMP inform 
+#//
+#// Objective:
+#//     Test the capability of the E/ MTA DUT to recognize a faulty value
+#// present in optional parameters and generate the proper provisioning status
+#// (in MTA-25).
+#//
+#// PacketCable DUT:
+#//     MTA
+#//
+#// Test Steps:
+#//     - Initial configuration
+#//     - Start sniffer
+#//     - TFTP GET MTA config File
+#//     - TFTP PUT and SNMP RESET
+#//     - Check Provisioning state
+#//     - Stop sniffer
+#//     - Delete MTA config file
+#// 
+#// Notes: 
+#//     - Requires provPrimitives.tcl & tftp_primitives.tcl.
+#//     - Requires the specific config file in $BASE_CFG_FILE_PATH in Provisioning Server.
+#//****************************************************************************
+global SCRIPT_VERSION
+set SCRIPT_VERSION { # $Id: E-UE-PROV_2-1-2-4.test 7406 2010-07-20 17:17:37Z dthakore $ }
+
+DoStep "PRESTEP_E-UE_PROV_2-1-2-4_1" "Initial configuration" {
+    LogMsg "--- Initial PROV module ---"
+    Init_PROV
+    # ProvCreateConfig 1078 $MTA_MAC
+    PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122 cfg-2832.bin
+    PROV_DEPLOY_DHCP
+} {PASS_STEP}
+
+
+DoStep "PRESTEP_E-UE_PROV_2-1-2-4_2" "Start sniffer" {
+    LogMsg "--- Start sniffer ---"
+    Init_CONTROLLER_LAN
+    SetupCaptureControllerLan "host $MTA_IP"
+    StartCaptureControllerLan 
+} {PASS_STEP}
+
+DoStep "E-UE_PROV_2-1-2-4_3" "SNMP RESET" {
+    SNMP_SET $oid_pktcMtaDevResetNow INTEGER 1 $MTA_IP
+    actionWait "Wait for MTA to reboot" 90
+} {PASS_STEP}
+
+
+DoStep "E-UE_PROV_2-1-2-4_4" "pktcMtaDevProvisioningState Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMP_GET $oid_pktcMtaDevProvisioningState $MTA_IP 20]
+    LogMsg "The Value of MTA Provisioning State is: $val"
+} {
+    IsEqual $val 4
+}
+
+
+DoStep "E-UE_PROV_2-1-2-4_5" "pktcMtaDevProvisioningTimer Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMP_GET $oid_pktcMtaDevProvisioningTimer $MTA_IP 20]
+    LogMsg "The Value of pktcMtaDevProvisioningTimer is: $val"
+} {
+    IsEqual $val 10
+}
+
+
+DoStep "POSTSTEP_E-UE_PROV_2-1-2-4_1" "Stop sniffer" {
+    LogMsg "--- Stop sniffer ---"
+    StopCaptureControllerLan
+    SaveToFileControllerLan 
+} {PASS_STEP}
+
+
+
+Cleanup

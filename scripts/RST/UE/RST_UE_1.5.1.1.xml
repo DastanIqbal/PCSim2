@@ -1,0 +1,523 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+ Change History: (Author & Date)
+	PCPCII-139 : Update the Voicetronix modifiers to use the new values. (ghassler 07/10/2009)
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-UE 1.5.1.1" 
+	descrip="Hook Flash processing " 
+	number="RST-UE 1.5.1.1" inspector="disable">
+	
+	<template file="./templates/Proxy_with_HF.xml" name="Core"/>
+	
+	<remove_from fsm="Core">
+		<state ID="Mute"/>
+		<state ID="Muted"/>
+		<state ID="MediaResumed"/>
+	</remove_from>
+	
+	<add_to fsm="Core">
+		<state ID="Mute">
+			<prelude once="true">
+				<send protocol="utility" msgtype="HookFlash"/>
+			</prelude>
+			<response>
+				<if>
+					<or>
+						<eq>
+							<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+							<msg_ref type="platform">UE1.IP</msg_ref>
+						</eq>
+						<eq>
+							<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+							<msg_ref type="platform">UE1.IP</msg_ref>
+						</eq>
+					</or>
+					<then>
+						<proxy target="UE0"/>
+					</then>
+					<elseif>
+						<or>
+							<eq>
+								<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE0.IP</msg_ref>
+							</eq>
+							<eq>
+								<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE0.IP</msg_ref>
+							</eq>
+						</or>
+						<then>
+							<proxy target="UE1"/>
+						</then>
+					</elseif>
+				</if>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>REINVITE</expr>
+					</eq>
+					<then>
+						<verify step="2" requirements="REQ13769">
+							<eq>
+								<msg_ref type="sdp">REINVITE.mode.value</msg_ref>
+								<expr>inactive</expr>
+							</eq>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<transition to="Mute" event="HookFlashComplete"/>
+			<transition to="Mute" event="REINVITE"/>
+			<transition to="Mute" event="xxx-INVITE"/>
+			<transition to="VerifyDialTone" event="ACK"/>
+		</state>
+		
+		<state ID="VerifyDialTone">
+			<prelude>
+				<send protocol="utility" msgtype="VerifyDialTone"/>
+			</prelude>
+			<response>
+				<verify step="3" requirements="REQ13770">
+					<eq>
+						<msg_ref type="utility">Response</msg_ref>
+						<expr>VerifyDialToneComplete</expr>
+					</eq>
+				</verify>
+			</response>
+			<transition to="Muted" event="VerifyDialToneComplete"/>
+			<transition to="Muted" event="VerifyDialToneError"/>
+		</state>
+		
+		<state ID="Muted">
+			<prelude once="true">
+				<send protocol="utility" msgtype="DialDigits">
+					<mod modtype="add" hdr="number">
+						<expr>822</expr>
+					</mod>
+				</send>
+			</prelude>
+			<transition to="WaitReorder1" event="DialDigitsComplete"/>
+		
+		</state>
+		<state ID="WaitReorder1" timer="16000">
+			<transition to="Unmute" event="TimerExpired"/>
+		</state>
+		
+		<state ID="MediaResumed">
+			<prelude>
+				<verify step="5" requirements="REQ13771">
+					<eq>
+						<msg_ref type="sdp" msg_instance="last">REINVITE.mode.value</msg_ref>
+						<expr>sendrecv</expr>
+					</eq>
+				</verify>
+				<verify step="5" requirements="REQ13771">
+					<eq>
+						<msg_ref type="sip" msg_instance="last">Response.Status-Line.status-code</msg_ref>
+						<expr>200</expr>
+					</eq>
+				</verify>
+				<send protocol="utility" msgtype="VerifyVoicePath2Way">
+					<mod modtype="replace" hdr="from voiceport">
+						<msg_ref type="platform">Platform.voiceport0</msg_ref>
+					</mod>
+					<mod modtype="replace" hdr="to voiceport">
+						<msg_ref type="platform">Platform.voiceport1</msg_ref>
+					</mod>
+					<mod modtype="replace" hdr="voiceExpected">
+						<expr>yes</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="5" requirements="REQ13771">
+					<eq>
+						<msg_ref type="utility">Response</msg_ref>
+						<expr>VerifyVoicePath2WayComplete</expr>
+					</eq>
+				</verify>
+			</response>
+			<transition to="Mute2" event="VerifyVoicePath2WayComplete"/>
+			<transition to="Mute2" event="VerifyVoicePath2WayError"/>
+		</state>
+		
+		<state ID="Mute2">
+			<prelude once="true">
+				<send protocol="utility" msgtype="HookFlash"/>
+			</prelude>
+			<response>
+				<if>
+					<or>
+						<eq>
+							<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+							<msg_ref type="platform">UE1.IP</msg_ref>
+						</eq>
+						<eq>
+							<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+							<msg_ref type="platform">UE1.IP</msg_ref>
+						</eq>
+					</or>
+					<then>
+						<proxy target="UE0"/>
+					</then>
+					<elseif>
+						<or>
+							<eq>
+								<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE0.IP</msg_ref>
+							</eq>
+							<eq>
+								<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE0.IP</msg_ref>
+							</eq>
+						</or>
+						<then>
+							<proxy target="UE1"/>
+						</then>
+					</elseif>
+				</if>
+			</response>
+			<transition to="Mute2" event="HookFlashComplete"/>
+			<transition to="Mute2" event="REINVITE"/>
+			<transition to="Mute2" event="xxx-INVITE"/>
+			<transition to="Muted2" event="ACK"/>
+		</state>
+		
+		<state ID="Muted2" timer="3000">
+			<prelude>
+				<verify step="6" requirements="REQ13769">
+					<eq>
+						<msg_ref type="sdp" msg_instance="last">REINVITE.mode.value</msg_ref>
+						<expr>inactive</expr>
+					</eq>
+				</verify>
+				<verify step="6" requirements="REQ13769">
+					<eq>
+						<msg_ref type="sip" msg_instance="last">Response.Status-Line.status-code</msg_ref>
+						<expr>200</expr>
+					</eq>
+				</verify>
+			</prelude>
+			<transition to="Unmute2" event="TimerExpired"/>
+		</state>
+		
+		<state ID="Unmute2">
+			<prelude once="true">
+				<send protocol="utility" msgtype="HookFlash"/>
+			</prelude>
+			<response>
+				<if>
+					<or>
+						<eq>
+							<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+							<msg_ref type="platform">UE1.IP</msg_ref>
+						</eq>
+						<eq>
+							<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+							<msg_ref type="platform">UE1.IP</msg_ref>
+						</eq>
+					</or>
+					<then>
+						<proxy target="UE0"/>
+					</then>
+					<elseif>
+						<or>
+							<eq>
+								<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE0.IP</msg_ref>
+							</eq>
+							<eq>
+								<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE0.IP</msg_ref>
+							</eq>
+						</or>
+						<then>
+							<proxy target="UE1"/>
+						</then>
+					</elseif>
+				</if>
+			</response>
+			<transition to="Unmute2" event="HookFlashComplete"/>
+			<transition to="Unmute2" event="REINVITE"/>
+			<transition to="Unmute2" event="xxx-INVITE"/>
+			<transition to="MediaResumed2" event="ACK"/>
+		</state>
+		
+		<state ID="MediaResumed2">
+			<prelude>
+				<verify step="7" requirements="REQ13773">
+					<eq>
+						<msg_ref type="sdp" msg_instance="last">REINVITE.mode.value</msg_ref>
+						<expr>sendrecv</expr>
+					</eq>
+				</verify>
+				<verify step="7" requirements="REQ13773">
+					<eq>
+						<msg_ref type="sip" msg_instance="last">Response.Status-Line.status-code</msg_ref>
+						<expr>200</expr>
+					</eq>
+				</verify>
+				<send protocol="utility" msgtype="VerifyVoicePath2Way">
+					<mod modtype="replace" hdr="from voiceport">
+						<msg_ref type="platform">Platform.voiceport0</msg_ref>
+					</mod>
+					<mod modtype="replace" hdr="to voiceport">
+						<msg_ref type="platform">Platform.voiceport1</msg_ref>
+					</mod>
+					<mod modtype="replace" hdr="voiceExpected">
+						<expr>yes</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="7" requirements="REQ13773">
+					<eq>
+						<msg_ref type="utility">Response</msg_ref>
+						<expr>VerifyVoicePath2WayComplete</expr>
+					</eq>
+				</verify>
+			</response>
+			<transition to="Mute3" event="VerifyVoicePath2WayComplete"/>
+			<transition to="Mute3" event="VerifyVoicePath2WayError"/>
+		</state>
+		
+		<state ID="Mute3">
+			<prelude once="true">
+				<send protocol="utility" msgtype="HookFlash"/>
+			</prelude>
+			<response>
+				<if>
+					<or>
+						<eq>
+							<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+							<msg_ref type="platform">UE1.IP</msg_ref>
+						</eq>
+						<eq>
+							<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+							<msg_ref type="platform">UE1.IP</msg_ref>
+						</eq>
+					</or>
+					<then>
+						<proxy target="UE0"/>
+					</then>
+					<elseif>
+						<or>
+							<eq>
+								<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE0.IP</msg_ref>
+							</eq>
+							<eq>
+								<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE0.IP</msg_ref>
+							</eq>
+						</or>
+						<then>
+							<proxy target="UE1"/>
+						</then>
+					</elseif>
+				</if>
+			</response>
+			<transition to="Mute3" event="HookFlashComplete"/>
+			<transition to="Mute3" event="REINVITE"/>
+			<transition to="Mute3" event="xxx-INVITE"/>
+			<transition to="Muted3" event="ACK"/>
+		</state>
+		
+		<state ID="Muted3">
+			<prelude>
+				<verify step="8" requirements="REQ13769">
+					<eq>
+						<msg_ref type="sdp" msg_instance="last">REINVITE.mode.value</msg_ref>
+						<expr>inactive</expr>
+					</eq>
+				</verify>
+				<verify step="8" requirements="REQ13769">
+					<eq>
+						<msg_ref type="sip" msg_instance="last">Response.Status-Line.status-code</msg_ref>
+						<expr>200</expr>
+					</eq>
+				</verify>
+				<send protocol="utility" msgtype="VerifyDialTone"/>
+			</prelude>
+			<response>
+				<verify step="9" requirements="REQ13770">
+					<eq>
+						<msg_ref type="utility">Response</msg_ref>
+						<expr>VerifyDialToneComplete</expr>
+					</eq>
+				</verify>
+			</response>
+			<transition to="WaitReorder" event="VerifyDialToneComplete"/>
+			<transition to="WaitReorder" event="VerifyDialToneError"/>
+		</state>
+		
+		<state ID="WaitReorder" timer="16000">
+			<transition to="VerifyReorder" event="TimerExpired"/>
+		</state>
+		
+		<state ID="VerifyReorder">
+			<prelude>
+				<send protocol="utility" msgtype="VerifyReorder"/>
+			</prelude>
+			<response>
+				<verify step="10" requirements="REQ13443">
+					<eq>
+						<msg_ref type="utility">Response</msg_ref>
+						<expr>VerifyReorderComplete</expr>
+					</eq>
+				</verify>
+			</response>
+			<transition to="Unmute3" event="VerifyReorderComplete"/>
+			<transition to="Unmute3" event="VerifyReorderError"/>
+		</state>
+		
+		<state ID="Unmute3">
+			<prelude once="true">
+				<send protocol="utility" msgtype="HookFlash"/>
+			</prelude>
+			<response>
+				<if>
+					<or>
+						<eq>
+							<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+							<msg_ref type="platform">UE1.IP</msg_ref>
+						</eq>
+						<eq>
+							<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+							<msg_ref type="platform">UE1.IP</msg_ref>
+						</eq>
+					</or>
+					<then>
+						<proxy target="UE0"/>
+					</then>
+					<elseif>
+						<or>
+							<eq>
+								<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE0.IP</msg_ref>
+							</eq>
+							<eq>
+								<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE0.IP</msg_ref>
+							</eq>
+						</or>
+						<then>
+							<proxy target="UE1"/>
+						</then>
+					</elseif>
+				</if>
+			</response>
+			<transition to="Unmute3" event="HookFlashComplete"/>
+			<transition to="Unmute3" event="REINVITE"/>
+			<transition to="Unmute3" event="xxx-INVITE"/>
+			<transition to="MediaResumed3" event="ACK"/>
+		</state>
+		
+		<state ID="MediaResumed3">
+			<prelude>
+				<verify step="11" requirements="REQ16702">
+					<eq>
+						<msg_ref type="sdp" msg_instance="last">REINVITE.mode.value</msg_ref>
+						<expr>sendrecv</expr>
+					</eq>
+				</verify>
+				<verify step="11" requirements="REQ16702">
+					<eq>
+						<msg_ref type="sip" msg_instance="last">Response.Status-Line.status-code</msg_ref>
+						<expr>200</expr>
+					</eq>
+				</verify>
+				<send protocol="utility" msgtype="VerifyVoicePath2Way">
+					<mod modtype="replace" hdr="from voiceport">
+						<msg_ref type="platform">Platform.voiceport0</msg_ref>
+					</mod>
+					<mod modtype="replace" hdr="to voiceport">
+						<msg_ref type="platform">Platform.voiceport1</msg_ref>
+					</mod>
+					<mod modtype="replace" hdr="voiceExpected">
+						<expr>yes</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="11" requirements="REQ16702">
+					<eq>
+						<msg_ref type="utility">Response</msg_ref>
+						<expr>VerifyVoicePath2WayComplete</expr>
+					</eq>
+				</verify>
+			</response>
+			<transition to="EndCall" event="VerifyVoicePath2WayComplete"/>
+			<transition to="EndCall" event="VerifyVoicePath2WayError"/>
+		</state>
+		
+		<state ID="EndCall" timer="10000">
+			<prelude once="true">
+				<send protocol="utility" msgtype="OnHook"/>
+			</prelude>
+			<response>
+				<if>
+					<or>
+						<eq>
+							<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+							<msg_ref type="platform">UE1.IP</msg_ref>
+						</eq>
+						<eq>
+							<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+							<msg_ref type="platform">UE1.IP</msg_ref>
+						</eq>
+					</or>
+					<then>
+						<proxy target="UE0"/>
+					</then>
+					<elseif>
+						<or>
+							<eq>
+								<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE0.IP</msg_ref>
+							</eq>
+							<eq>
+								<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE0.IP</msg_ref>
+							</eq>
+						</or>
+						<then>
+							<proxy target="UE1"/>
+						</then>
+					</elseif>
+				</if>
+				<if>
+					<eq>
+						<msg_ref type="sip">Response</msg_ref>
+						<expr>200-BYE</expr>
+					</eq>
+					<then>
+						<send protocol="utility" msgtype="OnHook">
+							<mod modtype="replace" hdr="voiceport">
+								<msg_ref type="platform">Platform.voiceport1</msg_ref>
+							</mod>
+						</send>
+					</then>
+				</if>
+			</response>
+			<transition to="EndCall" event="BYE"/>
+			<transition to="EndCall" event="200-BYE"/>
+			<transition to="EndCall" event="OnHookComplete"/>
+			<transition to="END" event="TimerExpired"/>
+		</state>
+	</add_to>
+</pc2xml>

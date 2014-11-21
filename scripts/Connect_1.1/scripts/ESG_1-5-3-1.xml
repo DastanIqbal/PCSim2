@@ -1,0 +1,541 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	2011-11-15	Seung Lee - final versionfor
+
+
+
+
+-->
+<pc2xml version="$Revision: 1 $" 
+	name="ESG 1.5.3.1" 
+	descrip="ESG Firewall" 
+	number="ESG 1.5.3.1">
+	
+	<fsm name="firewall">
+	<models>
+		<registrar/>
+	</models>	
+	
+	<NE sim_type="term" elements="SCSCF1 PCSCF1" targets="SCSCF1 PCSCF1 3033920001 3034090001"/>
+		<states initialstate="Reboot">
+			<state ID="Reboot">
+				<prelude once="True">
+					<log promptUser="True" verify="True" step="1" requirements="REQ23865, REQ23867,  REQ23868, REQ23869, REQ23870, REQ23871" 
+					expr="Verify SBC supports a SIP-aware firewall."/>
+					<log promptUser="True" verify="True" step="1" requirements="REQ23865, REQ23867,  REQ23868, REQ23869, REQ23870, REQ23871" 
+					expr="Verify SBC supports configuration of the firewall rule-set."/>
+					<log promptUser="True" verify="True" step="1" requirements="REQ23865, REQ23867,  REQ23868, REQ23869, REQ23870, REQ23871" 
+					expr="Verify SBC supports a configurable ACL and it identifies IP addresses/domain name of the configured entities in the ACL entries."/>
+					
+					<start_capture>
+						<filter>
+							<var_expr>
+								<expr>host </expr>
+								<msg_ref type="platform">UE0.IP</msg_ref>
+								<expr> || host </expr>
+								<msg_ref type="platform">UE0.IP2</msg_ref>
+								<expr> || host </expr>
+								<msg_ref type="platform">PCSCF1.IP</msg_ref>
+								<expr> || host </expr>
+								<msg_ref type="platform">UE1.IP</msg_ref>
+							</var_expr>
+						</filter>
+					</start_capture>
+					
+					<log promptUser="True"
+						expr="Set up the ESG to transparent mode. Enable ESG's firewall and allow the SIP traffic only at port 5060."/>
+					<log promptUser="True"
+						expr="Reconfigure the SIP-PBX to use port 5069 for SIP traffic."/>
+					<log promptUser="True"
+						expr="Restart the SIP-PBX."/>
+					<generate event="Branch1Event"/>
+							
+				</prelude>
+				<transition to="testRegister" event="Branch1Event"/>
+				<transition to="testRegister" event="REGISTER"/>
+			</state>
+			
+			<state ID="testRegister">
+				<prelude once="True">
+					<sleep time="10000"/>
+					<verify step="3" requirements="REQ23866">
+						<neq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>REGISTER</expr>
+						</neq>			
+					</verify>
+					<stop_capture/>
+					
+					<log promptUser="True" verify="True" step="3" requirements="REQ23866" 
+							expr="Verify the REGISTER message is sent from SIP-PBX to ESG, but the REGISTER message is not sent from ESG to the SIP core."/>
+							
+					<generate event="Branch2Event"/>
+				</prelude>
+				
+				<transition to="Reboot2" event="Branch2Event"/>
+				<transition to="Reboot2" event="REGISTER"/>
+			</state>
+			
+			<state ID="Reboot2" timer="60000" >
+				<prelude once="True">
+					<start_capture>
+						<filter>
+							<var_expr>
+								<expr>host </expr>
+								<msg_ref type="platform">UE0.IP</msg_ref>
+								<expr> || host </expr>
+								<msg_ref type="platform">UE0.IP2</msg_ref>
+								<expr> || host </expr>
+								<msg_ref type="platform">PCSCF1.IP</msg_ref>
+								<expr> || host </expr>
+								<msg_ref type="platform">UE1.IP</msg_ref>
+							</var_expr>
+						</filter>
+					</start_capture>
+					
+					<log promptUser="True"	expr="Reconfigure the SIP-PBX to use port 5060 for SIP traffic."/>
+					<log promptUser="True" 	expr="Restart the SIP-PBX."/>
+					<generate event="Branch4Event"/>
+				</prelude>
+				<transition to="PendingRegistration" event="Branch4Event"/>
+			</state>
+			
+			<state ID="PendingRegistration">
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>REGISTER</expr>
+						</eq>
+						<then>
+							<send protocol="sip" msgtype="401-REGISTER"/>
+						</then>
+					</if>
+				</response>
+				
+				<transition to="Authorization" event="REGISTER"/>
+			</state>
+
+			<state ID="Authorization">
+				<response>
+					<if>
+						<or>
+							<eq>
+								<msg_ref type="event"/>
+								<expr>AuthenticateSucceed</expr>
+							</eq>
+							<eq>
+								<msg_ref type="event"/>
+								<expr>AuthenticateFailed</expr>
+							</eq>
+						</or>
+						<then>
+
+						</then>
+						<elseif>
+							<and>
+								<eq>
+									<msg_ref type="sip">Request</msg_ref>
+									<expr>REGISTER</expr>
+								</eq>
+								<and>
+									<contains>
+										<msg_ref type="sip">REGISTER</msg_ref>
+										<expr>Authorization</expr>
+									</contains>
+									<digest/>
+								</and>
+							</and>
+							<then>
+								<generate event="AuthenticateSucceed"/>
+							</then>
+							<else>
+								<generate event="AuthenticateFailed"/>
+								<send protocol="sip" msgtype="503-Register"/>
+							</else>
+						</elseif>
+					</if>
+				</response>
+
+				<transition to="Registered" event="AuthenticateSucceed"/>
+				<transition to="END" event="AuthenticateFailed"/>
+				<transition to="Authorization" event="REGISTER"/>
+			</state>
+			<!-- REGISTERED State -->
+			<state ID="Registered">
+				<prelude>
+					<send protocol="sip" msgtype="200-Register"/>
+					<generate event="RegEventSucceed" />
+					<stop_capture/>
+				</prelude>
+
+				<transition to="Registered" event="REGISTER"/>
+				<transition to="CTRegister" event="200-Register"/>
+				<transition to="CTRegister" event="RegEventSucceed"/>
+			</state>
+
+		<state ID="CTRegister" timer="5000" >
+			<prelude>
+				<start_capture>
+					<filter>
+						<var_expr>
+							<expr>host </expr>
+							<msg_ref type="platform">UE0.IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">UE0.IP2</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">PCSCF1.IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">UE1.IP</msg_ref>
+						</var_expr>
+					</filter>
+				</start_capture>
+			</prelude>
+			<transition to="Setup" event="RegEventSucceed"/>
+			<transition to="Setup" event="TimerExpired"/>
+		</state>
+		
+		<state ID="Setup" timer="10000">
+			<prelude>
+				<send protocol="sip" msgtype="Invite" stack="SIP Stack 2" target="UE2">
+					<mod modtype="replace" hdr="Request-Line" param="username">
+						<msg_ref type="platform">UE0.phone number 1</msg_ref>
+					</mod>
+				</send>
+			</prelude>
+				
+			<response>
+				<verify step="8, 9" requirements="REQ23866, REQ23872, REQ23873">
+					<or>
+						<neq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>XXX-INVITE</expr>
+						</neq>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>486-INVITE</expr>
+						</eq>
+					</or>
+				</verify>
+				
+			</response>
+			<postlude>
+				<send protocol="sip" msgtype="CANCEL" target="UE2"/>
+			</postlude>
+			
+			<transition to="Terminate" event="100-INVITE"/>
+			<transition to="Terminate" event="180-INVITE"/>
+			<transition to="Terminate" event="183-INVITE"/>
+			<transition to="Terminate" event="200-INVITE"/>
+			<transition to="Terminate" event="CANCEL"/>
+			<transition to="Terminate" event="TimerExpired"/>
+		</state>		
+		
+		<state ID="Terminate">
+			<prelude>
+				<generate event="Branch3Event" fsm="Call"/>
+				<stop_capture/>
+				<log promptUser="True" verify="True" step="9" requirements="REQ23866, REQ23874" 
+				expr="Open the third traffic capture. Verify the INVITE message is notforwarded by the ESG to PBX."/>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>487-INVITE</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="ACK"/>
+						
+					</then>
+				</if>
+
+			</response>
+			
+			<transition to="Terminate" event="180-INVITE"/>
+			<transition to="Terminate" event="200-CANCEL"/>
+			<transition to="Terminate" event="487-INVITE"/>
+			<transition to="END" event="Branch3Event"/>
+		</state>
+	</states>	
+		</fsm>
+	
+	<fsm name="Call">
+	<models>
+		<session/>
+	</models>
+	<NE sim_type="term" elements="SCSCF1 PCSCF1" targets="SCSCF1 PCSCF1 3033920001 3034090001"/>
+	
+	<states initialstate="PRegister">
+		<state ID="PRegister" sleep="500000" >
+			<transition to="OffHook" event="Branch3Event"/>
+		</state>
+		
+		<state ID="OffHook">
+			<prelude>
+				<start_capture>
+					<filter>
+						<var_expr>
+							<expr>host </expr>
+							<msg_ref type="platform">UE0.IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">UE0.IP2</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">PCSCF1.IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">UE1.IP</msg_ref>
+						</var_expr>
+					</filter>
+				</start_capture>
+				<send protocol="utility" msgtype="OffHook"/>
+			</prelude>
+			<transition to="Setup2" event="OffHookComplete"/>
+		</state>
+		
+		<state ID="Setup2">
+			<prelude once="true">
+				<send protocol="utility" msgtype="DialDigits">
+					<mod modtype="add" hdr="number">
+						<msg_ref type="platform">UE1.phone number 1</msg_ref>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+			<if>
+				<eq>
+					<msg_ref type="sip">Request</msg_ref>
+					<expr>INVITE</expr>
+				</eq>
+				<then>
+					<proxy target="UE1"/>
+				</then>
+
+				<elseif>
+					<or>
+						<eq>
+							<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+							<msg_ref type="platform">UE1.IP</msg_ref>
+						</eq>
+						<eq>
+							<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+							<msg_ref type="platform">UE1.IP</msg_ref>
+						</eq>
+					</or>
+					<then>
+						<proxy target="UE0"/>
+					</then>
+				</elseif>
+					<elseif>
+						<or>
+							<eq>
+								<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE0.IP</msg_ref>
+							</eq>
+							<eq>
+								<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE0.IP</msg_ref>
+							</eq>
+						</or>
+						<then>
+							<proxy target="UE1"/>
+						</then>
+					</elseif>
+				</if>
+			</response>
+			<transition to="Setup2" event="DialDigitsComplete"/>
+			<transition to="Setup2" event="INVITE"/>
+			<transition to="Alerting" event="CANCEL"/>
+			<transition to="Alerting" event="xxx-INVITE"/>
+			<transition to="Setup2" event="OffHookComplete"/>
+		</state>
+		
+		<state ID="Alerting" timer="6000">
+			<response>
+				<if>
+					<and>
+						<null>
+							<msg_ref type="sip">200-INVITE.SDP</msg_ref>
+						</null>
+						<or>
+							<eq>
+								<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE1.IP</msg_ref>
+							</eq>
+							<eq>
+								<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE1.IP</msg_ref>
+							</eq>
+						</or>
+					</and>
+					<then>
+						<proxy target="UE0"/>
+			
+					</then>
+
+					<elseif>
+					<and>
+						<eq>
+							<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+							<msg_ref type="platform">UE1.IP</msg_ref>
+						</eq>
+						<notnull>
+							<msg_ref type="sip">200-INVITE.SDP</msg_ref>
+						</notnull>
+					</and>
+					<then>
+						  <proxy target="UE0"/>
+					</then>	
+					</elseif>
+					<elseif>
+						<or>
+							<eq>
+								<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE0.IP</msg_ref>
+							</eq>
+							<eq>
+								<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE0.IP</msg_ref>
+							</eq>
+						</or>
+						<then>
+							<proxy target="UE1"/>
+						</then>
+					</elseif>
+				</if>
+				<if>
+					<eq>
+						<msg_ref type="event"/>
+						<expr>TimerExpired</expr>
+					</eq>
+					<then>
+						<send protocol="utility" msgtype="OffHook">
+							<mod modtype="replace" hdr="voiceport">
+								<msg_ref type="platform">Platform.voiceport1</msg_ref>
+							</mod>
+						</send>
+					</then>
+				</if>
+			</response>
+			<transition to="Alerting" event="INVITE"/>
+			<transition to="Alerting" event="OPTIONS"/>
+			<transition to="Alerting" event="200-OPTIONS"/>
+			<transition to="Alerting" event="PRACK"/>
+			<transition to="Alerting" event="200-PRACK"/>
+			<transition to="Alerting" event="UPDATE"/>
+			<transition to="Alerting" event="200-UPDATE"/>
+			<transition to="Alerting" event="xxx-INVITE"/>
+			<transition to="Alerting" event="OffHookComplete"/>
+			<transition to="Connected" event="ACK"/>
+		</state>
+
+		<state ID="Connected" timer="10000">
+			<transition to="OnHook" event="TimerExpired"/>
+		</state>
+		
+		<state ID="OnHook">
+			<prelude once="true">
+				<send protocol="utility" msgtype="OnHook"/>
+			</prelude>
+			<response>
+				<if>
+					<or>
+						<eq>
+							<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+							<msg_ref type="platform">UE1.IP</msg_ref>
+						</eq>
+						<eq>
+							<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+							<msg_ref type="platform">UE1.IP</msg_ref>
+						</eq>
+					</or>
+					<then>
+						<proxy target="UE0"/>
+					</then>
+					<elseif>
+						<or>
+							<eq>
+								<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE0.IP</msg_ref>
+							</eq>
+							<eq>
+								<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE0.IP</msg_ref>
+							</eq>
+						</or>
+						<then>
+							<proxy target="UE1"/>
+						</then>
+					</elseif>
+				</if>
+			</response>
+			<transition to="OnHook" event="OnHookComplete"/>
+			<transition to="OnHook" event="Bye"/>
+			<transition to="OnHookUE1" event="200-Bye"/>
+		</state>
+		
+		<state ID="OnHookUE1">
+			<prelude>
+				<send protocol="utility" msgtype="OnHook"/>
+								 
+			</prelude>
+			<postlude>
+				<stop_capture/>
+				<log promptUser="True" 	expr="Open the third traffic capture."/>
+				
+				<log promptUser="True" verify="True" step="13" requirements="REQ23880"
+				 expr="Verify that the RTP port number from step 9 is odd number for both LAN and WAN side."/>
+				 <log promptUser="True" verify="True" step="13" requirements="REQ23880"
+				 expr="Verify that the RTCP port number from step 9 is „RTP port?+1 for both LAN and WAN side."/>
+				 <log promptUser="True" verify="True" step="13" requirements="REQ23880"
+				 expr="Verify via RTP header that the same RTP packet from step 10 is not found in the traffic capture on WAN-side."/>
+				 
+				 
+				 <log promptUser="True" 	expr="Open the ESG GUI where it shows the activity log."/>
+				 
+				 <log promptUser="True" verify="True" step="14" requirements="REQ"
+				 expr="Verify the log shows the REGISTER message from the SIP-PBX (per step 3) is dropped by ESG due to the port number mismatch."/>
+				 
+				 <log promptUser="True" verify="True" step="15" requirements="REQ"
+				 expr="Verify the log shows the RTP packets from the Packet Generator are dropped by ESG due to the mismatch."/>
+				 
+				 <log promptUser="True" verify="True" step="16" requirements="REQ23877, REQ23878, REQ23879"
+				 expr="Verify the Date and Time elements appear in the log."/>
+				 <log promptUser="True" verify="True" step="16" requirements="REQ23877, REQ23878, REQ23879"
+				 expr="Verify the SIP or RTP Protocol elements appear in the log."/>
+				 <log promptUser="True" verify="True" step="16" requirements="REQ23877, REQ23878, REQ23879"
+				 expr="Verify the SIP identity elements appear in the log."/>
+				 <log promptUser="True" verify="True" step="16" requirements="REQ23877, REQ23878, REQ23879"
+				 expr="Verify the Source IP Address of SIP and RTP elements appear in the log."/>
+				 <log promptUser="True" verify="True" step="16" requirements="REQ23877, REQ23878, REQ23879"
+				 expr="Verify the Destination IP Address of SIP and RTP elements appear in the log."/>
+				 <log promptUser="True" verify="True" step="16" requirements="REQ23877, REQ23878, REQ23879"
+				 expr="Verify the Source port of SIP and RTP elements appear in the log."/>
+				 <log promptUser="True" verify="True" step="16" requirements="REQ23877, REQ23878, REQ23879"
+				 expr="Verify the Destination port of SIP and RTP elements appear in the log."/>
+				 <log promptUser="True" verify="True" step="16" requirements="REQ23877, REQ23878, REQ23879"
+				 expr="Verify the Message type of SIP and RTP elements appear in the log."/>
+				 <log promptUser="True" verify="True" step="16" requirements="REQ23877, REQ23878, REQ23879"
+				 expr="Verify the event Disposition (description) elements appear in the log."/>
+				 <log promptUser="True" verify="True" step="16" requirements="REQ23877, REQ23878, REQ23879"
+				 expr="Verify the Indication of failure of events appear in the log."/>
+				 <log promptUser="True" verify="True" step="16" requirements="REQ23877, REQ23878, REQ23879"
+				 expr="Verify the Reason for failure elements appear in the log."/>
+				 
+				 
+			</postlude>
+			<transition to="END" event="OnHookComplete"/>
+		</state>
+	</states>
+	</fsm>
+</pc2xml>		

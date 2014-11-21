@@ -1,0 +1,543 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	PCPCII-139 : Update the Voicetronix modifiers to use the new values. (ghassler 07/10/2009)
+
+
+
+
+-->
+
+<!-- First are the document type and the attributes for our document -->
+<pc2xml version="$Revision: 8188 $" 
+	name="3way conf template" 
+	descrip="3 Way Conference - Controller" 
+	number="3way conf template">
+	
+	<!-- Next we define the each of state mahcines -->
+	<fsm name="UE1">
+		<models>
+			<session/>
+		</models>
+	
+		<!-- Next we define all of the network elements and extension 
+     controls to be used in this test -->_
+		<NE sim_type="term" elements="UE1 PCSCF2 SCSCF1 PCSCF1" targets="UE1"/>
+		
+		<!-- NOTE - The test platform is assumed to be performing 
+            the registrar between tests. The session model 
+						requests to be informed when the DUT registers
+						and the fsm will receive the Registered event	
+						once the DUT is registered -->
+		<!-- All of the states for the test. References to "Step x" are from Default Message Flow Call-Orig-at-UE(DUT)-->
+		<states initialstate="DUTRegister">
+			<!-- DUTREGISTER State -->
+			<state ID="DUTRegister">
+				<!-- Transitions for DUTRegister state -->
+				<transition to="UE1OffHook" event="Registered"/>
+			</state>
+			<!-- UE1OFFHOOK State -->
+			<state ID="UE1OffHook">
+				<prelude>
+					<send protocol="utility" msgtype="OffHook"/>
+				</prelude>
+				<!-- Transitions for UE1OffHook state -->
+				<transition to="UE1Setup" event="OffHookComplete"/>
+			</state>
+			
+			<!-- UE1SETUP State -->
+			<!-- The state machine will wait in the Setup state until it 
+				 receives an Invite from the originating UE or the fail timeout occurs. -->
+			<!-- Step 1 of the Call-Orig-at_UE(DUT) Default Message Flow document. -->
+			<state ID="UE1Setup">
+				<prelude once="true">
+					<!-- Step 1 test case SIP xxxx-->
+					<send protocol="utility" msgtype="DialDigits">
+						<mod modtype="add" hdr="number">
+							<msg_ref type="platform">UE1.phone number 1</msg_ref>
+						</mod>
+					</send>
+				</prelude>
+				<response>
+					<!-- If the current message that we received is an Invite, answer with
+               a 100-trying -->
+					<!-- Step 2 in the Call-Orig-at_UE(DUT) Default Message Flow document. -->
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>Invite</expr>
+						</eq>
+						<then>
+							<send protocol="sip" msgtype="100-INVITE"/>
+						</then>
+					</if>
+					<!-- This set of tests determines whether to send 183 with Answer
+						 or a 180 to the INVITE -->
+					<!-- Step 3 in the Call-Orig-at_UE(DUT) Default Message Flow document. -->
+					<if>
+						<and>
+							<eq>
+								<msg_ref type="extensions">precondition</msg_ref>
+								<expr>require</expr>
+							</eq>
+							<or>
+								<contains>
+									<msg_ref type="sip" hdr_instance="any">Invite.Require</msg_ref>
+									<expr>precondition</expr>
+								</contains>
+								<contains>
+									<msg_ref type="sip" hdr_instance="any">Invite.Supported</msg_ref>
+									<expr>precondition</expr>
+								</contains>
+							</or>
+						</and>
+						<then>
+							<!--Sending 183-Invite with answer-->
+							<send protocol="sip" msgtype="183-Invite"/>
+						</then>
+						<elseif>
+							<eq>
+								<msg_ref type="sip">Request</msg_ref>
+								<expr>Invite</expr>
+							</eq>
+							<then>
+								<!--Sending 180-Invite with SS not supporting precondition.-->
+								<send protocol="sip" msgtype="180-Invite"/>
+							</then>
+						</elseif>
+					</if>
+				</response>
+				<!-- Transitions for UE1Setup state -->
+				<transition to="UE1Setup" event="DialDigitsComplete"/>
+				<transition to="UE1Alerting" event="INVITE"/>
+			</state>
+			<!-- UE1ALERTING State -->
+			<!-- NOTE: This is were all of the optional message processing before the 
+           session is complete will occur during an originate test call. -->
+			<state ID="UE1Alerting">
+				<response>
+					<!-- Now test to see if the incoming message is a PRACK message because
+							 the system is using reliability -->
+					<!-- Steps 4 and 5 in the Call-Orig-at_UE(DUT) Default Message Flow document. -->
+					<!-- test for need to answer second PRACK -->
+					<!-- Steps 9 and 10 in the Call-Orig-at_UE(DUT) Default Message Flow document. -->
+					<!-- This is same as for steps 4 and 5 -->
+					<if>
+						<and>
+							<eq>
+								<msg_ref type="sip">Request</msg_ref>
+								<expr>PRACK</expr>
+							</eq>
+							<contains>
+								<msg_ref type="sip" msg_instance="last" hdr_instance="any">18x-Invite.Require</msg_ref>
+								<expr>100rel</expr>
+							</contains>
+						</and>
+						<then>
+							<!--Reliablity required for test sending 200-Prack message to peer.-->
+							<send protocol="sip" msgtype="200-PRACK"/>
+						</then>
+					</if>
+					<!-- Now test for an UPDATE message -->
+					<!-- Steps 6 and 7 in the Call-Orig-at_UE(DUT) Default Message Flow document. -->
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>UPDATE</expr>
+						</eq>
+						<then>
+							<!--QoS required or supported sending 200-Update message to peer.-->
+							<send protocol="sip" msgtype="200-Update"/>
+						</then>
+					</if>
+					<!-- Test whether to send 180 -->
+					<!-- Step 8 in the Call-Orig-at_UE(DUT) Default Message Flow document. -->
+					<if>
+						<and>
+							<contains>
+								<msg_ref type="sip" msg_instance="last">18x-Invite.Status-Line.status-code</msg_ref>
+								<expr>183</expr>
+							</contains>
+							<eq>
+								<msg_ref type="sdp">Request.qos-curr-remote.direction</msg_ref>
+								<msg_ref type="sdp">Request.qos-des-remote.direction</msg_ref>
+							</eq>
+						</and>
+						<then>
+							<!--Sending 180 for required preconditions.-->
+							<send protocol="sip" msgtype="180-Invite"/>
+						</then>
+					</if>
+				</response>
+				<!-- Transitions for UE1Alerting state -->
+				<transition to="UE1Alerting" event="DialDigitsComplete"/>
+				<transition to="UE1Alerting" event="PRACK"/>
+				<transition to="UE1Alerting" event="UPDATE"/>
+				<transition to="UE1Answer" event="ALERTING_UAS"/>
+			</state>
+			<!-- UE1ANSWER State -->
+			<state ID="UE1Answer" timer="10000">
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="event"/>
+							<expr>TimerExpired</expr>
+						</eq>
+						<then>
+							<!--Sending 200-Invite-->
+							<send protocol="sip" msgtype="200-INVITE"/>
+						</then>
+					</if>
+					<!-- Now test for an UPDATE message -->
+					<!-- Steps 6 and 7 in the Call-Orig-at_UE(DUT) Default Message Flow document. -->
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>UPDATE</expr>
+						</eq>
+						<then>
+							<!--QoS required or supported sending 200-Update message to peer.-->
+							<send protocol="sip" msgtype="200-Update"/>
+						</then>
+					</if>
+				</response>
+				<!-- Transitions for UE1Answer state -->
+				<transition to="UE1Answer" event="UPDATE"/>
+				<transition to="UE1Answer" event="TimerExpired"/>
+				<transition to="UE1Connected" event="ACK"/>
+			</state>
+			<!-- UE1Connected State -->
+			<state ID="UE1Connected" timer="5000">
+				<postlude>
+					<!-- Step 2 of test case xxxx  - Hook Flash on DUT (UE-B Transferor).-->
+					<send protocol="utility" msgtype="HookFlash"/>
+					<generate event="Branch1Event" fsm="UE2"/>
+				</postlude>
+				<!-- Transitions for UE1Connected state -->
+				<transition to="UE1GoOnHold" event="TimerExpired"/>
+			</state>
+			<!-- UE1GoOnHold State -->
+			<state ID="UE1GoOnHold">
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>REINVITE</expr>
+						</eq>
+						<then>
+							<!-- HookFlash Step 2 and 3 -Sending 100-Invite and 200-Invite to Invite -->
+							<send protocol="sip" msgtype="100-INVITE"/>
+							<send protocol="sip" msgtype="200-INVITE"/>
+						</then>
+					</if>
+				</response>
+				<!-- Transitions for UE1GoOnHold state -->
+				<transition to="UE1Muted" event="ACK"/>
+				<transition to="UE1GoOnHold" event="REINVITE"/>
+				<transition to="UE1GoOnHold" event="HookFlashComplete"/>
+			</state>
+			
+			<!-- UE1Muted State -->
+			<state ID="UE1Muted">
+				<prelude once="true">
+					<!-- Step 3 test case SIP xxx -->
+					<send protocol="utility" msgtype="DialDigits">
+						<mod modtype="add" hdr="number">
+							<msg_ref type="platform">UE2.phone number 1</msg_ref>
+						</mod>
+					</send>
+				</prelude>
+				<!-- Transitions for UE1Muted state -->
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>REINVITE</expr>
+						</eq>
+						<then>
+							<!-- HookFlash Step 2 and 3 -Sending 100-Invite and 200-Invite to Invite -->
+							<send protocol="sip" msgtype="100-INVITE"/>
+							<send protocol="sip" msgtype="200-INVITE"/>
+						</then>
+					</if>
+				</response>
+				<transition to="UE1Muted" event="DialDigitsComplete"/>
+				<transition to="UE1GoOffHold" event="REINVITE"/>
+			</state>
+			<!-- UE1GoOffHold State -->
+			<state ID="UE1GoOffHold">
+				<!-- Transitions for UE1GoOffHold state -->
+				<transition to="UE1GoOffHold" event="DialDigitsComplete"/>
+				<transition to="UE1GoOnHook" event="ACK"/>
+			</state>
+			<!-- UE1GoOnHook State -->
+			<state ID="UE1GoOnHook">
+				<prelude>
+					<!-- log yesExpected="True" verify="True" 
+					expr="Verify that the speech from any of the three UEs can be heard by all three UEs?"/-->
+					<send protocol="utility" msgtype="OnHook"/>
+				</prelude>
+				<!-- Transitions for UE1GoOnHook state -->
+				<transition to="UE1WaitForByeOrSucceed" event="OnHookComplete"/>
+			</state>
+			<!-- UE1WaitForByeOrSucceed State -->
+			<state ID="UE1WaitForByeOrSucceed">
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>BYE</expr>
+						</eq>
+						<then>
+							<send protocol="sip" msgtype="200-BYE"/>
+						</then>
+					</if>
+				</response>
+				<!-- Transitions for UE1WaitForByeOrSucceed state -->
+				<transition to="UE1WaitBYE" event="SucceedEvent"/>
+				<transition to="UE1WaitSucceed" event="BYE"/>
+			</state>
+			<!-- UE1WaitBYE State -->
+			<state ID="UE1WaitBYE">
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>BYE</expr>
+						</eq>
+						<then>
+							<send protocol="sip" msgtype="200-BYE"/>
+						</then>
+					</if>
+				</response>
+				<!-- Transitions for UE1WaitBYE state -->
+				<transition to="END" event="BYE"/>
+			</state>
+			<!-- UE1WaitSucceed State -->
+			<state ID="UE1WaitSucceed">
+				<!-- Transitions for UE1WaitSucceed state -->
+				<transition to="END" event="SucceedEvent"/>
+			</state>
+		</states>
+	</fsm>
+	
+	<fsm name="UE2">
+		<models>
+			<session/>
+		</models>
+		<!-- Next we define all of the network elements and extension 
+     controls to be used in this test -->
+		<NE sim_type="term" elements="UE2 PCSCF2 SCSCF1 PCSCF1" targets="UE2"/>
+		<!-- NOTE - The test platform is assumed to be performing 
+            the registrar between tests. The session model 
+						requests to be informed when the DUT registers
+						and the fsm will receive the Registered event	
+						once the DUT is registered -->
+		<states initialstate="DUTRegister">
+			<!-- DUTRegister State -->
+			<state ID="DUTRegister">
+				<!-- Transitions for DUTRegister state -->
+				<transition to="WaitUE1" event="Registered"/>
+			</state>
+			
+			<state ID="WaitUE1">
+				<transition to="UE2Setup" event="Branch1Event"/>
+			</state>
+			
+			<!-- UE2SETUP State -->
+			<!-- The state machine will wait in the Setup state until it 
+				 receives an Invite from the originating UE or the fail timeout occurs. -->
+			<!-- Step 1 of the Call-Orig-at_UE(DUT) Default Message Flow document. -->
+			<state ID="UE2Setup">
+				<response>
+					<!-- If the current message that we received is an Invite, answer with
+               a 100-trying -->
+					<!-- Step 2 in the Call-Orig-at_UE(DUT) Default Message Flow document. -->
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>Invite</expr>
+						</eq>
+						<then>
+							<send protocol="sip" msgtype="100-INVITE"/>
+						</then>
+					</if>
+					<!-- This set of tests determines whether to send 183 with Answer
+						 or a 180 to the INVITE -->
+					<!-- Step 3 in the Call-Orig-at_UE(DUT) Default Message Flow document. -->
+					<if>
+						<and>
+							<eq>
+								<msg_ref type="extensions">precondition</msg_ref>
+								<expr>require</expr>
+							</eq>
+							<or>
+								<contains>
+									<msg_ref type="sip" hdr_instance="any">Invite.Require</msg_ref>
+									<expr>precondition</expr>
+								</contains>
+								<contains>
+									<msg_ref type="sip" hdr_instance="any">Invite.Supported</msg_ref>
+									<expr>precondition</expr>
+								</contains>
+							</or>
+						</and>
+						<then>
+							<!--Sending 183-Invite with answer-->
+							<send protocol="sip" msgtype="183-Invite"/>
+						</then>
+						<elseif>
+							<eq>
+								<msg_ref type="sip">Request</msg_ref>
+								<expr>Invite</expr>
+							</eq>
+							<then>
+								<!--Sending 180-Invite with SS not supporting precondition.-->
+								<send protocol="sip" msgtype="180-Invite"/>
+							</then>
+						</elseif>
+					</if>
+				</response>
+				<!-- Transitions for UE2Setup state -->
+				<transition to="UE2Alerting" event="INVITE"/>
+			</state>
+			<!-- UE2ALERTING State -->
+			<!-- NOTE: This is were all of the optional message processing before the 
+           session is complete will occur during an originate test call. -->
+			<state ID="UE2Alerting">
+				<response>
+					<!-- Now test to see if the incoming message is a PRACK message because
+							 the system is using reliability -->
+					<!-- Steps 4 and 5 in the Call-Orig-at_UE(DUT) Default Message Flow document. -->
+					<!-- test for need to answer second PRACK -->
+					<!-- Steps 9 and 10 in the Call-Orig-at_UE(DUT) Default Message Flow document. -->
+					<!-- This is same as for steps 4 and 5 -->
+					<if>
+						<and>
+							<eq>
+								<msg_ref type="sip">Request</msg_ref>
+								<expr>PRACK</expr>
+							</eq>
+							<contains>
+								<msg_ref type="sip" msg_instance="last" hdr_instance="any">18x-Invite.Require</msg_ref>
+								<expr>100rel</expr>
+							</contains>
+						</and>
+						<then>
+							<!--Reliablity required for test sending 200-Prack message to peer.-->
+							<send protocol="sip" msgtype="200-PRACK"/>
+						</then>
+					</if>
+					<!-- Now test for an UPDATE message -->
+					<!-- Steps 6 and 7 in the Call-Orig-at_UE(DUT) Default Message Flow document. -->
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>UPDATE</expr>
+						</eq>
+						<then>
+							<!--QoS required or supported sending 200-Update message to peer.-->
+							<send protocol="sip" msgtype="200-Update"/>
+						</then>
+					</if>
+					<!-- Test whether to send 180 -->
+					<!-- Step 8 in the Call-Orig-at_UE(DUT) Default Message Flow document. -->
+					<if>
+						<and>
+							<contains>
+								<msg_ref type="sip" msg_instance="last">18x-Invite.Status-Line.status-code</msg_ref>
+								<expr>183</expr>
+							</contains>
+							<eq>
+								<msg_ref type="sdp">Request.qos-curr-remote.direction</msg_ref>
+								<msg_ref type="sdp">Request.qos-des-remote.direction</msg_ref>
+							</eq>
+						</and>
+						<then>
+							<!--Sending 180 for required preconditions.-->
+							<send protocol="sip" msgtype="180-Invite"/>
+						</then>
+					</if>
+				</response>
+				<!-- Transitions for UE2Alerting state -->
+				<transition to="UE2Alerting" event="PRACK"/>
+				<transition to="UE2Alerting" event="UPDATE"/>
+				<transition to="UE2Answer" event="ALERTING_UAS"/>
+			</state>
+			<!-- UE2ANSWER State -->
+			<state ID="UE2Answer" timer="10000">
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="event"/>
+							<expr>TimerExpired</expr>
+						</eq>
+						<then>
+							<!--Sending 200-Invite-->
+							<send protocol="sip" msgtype="200-INVITE"/>
+						</then>
+					</if>
+					<!-- Now test for an UPDATE message -->
+					<!-- Steps 6 and 7 in the Call-Orig-at_UE(DUT) Default Message Flow document. -->
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>UPDATE</expr>
+						</eq>
+						<then>
+							<!--QoS required or supported sending 200-Update message to peer.-->
+							<send protocol="sip" msgtype="200-Update"/>
+						</then>
+					</if>
+				</response>
+				<!-- Transitions for UE2Answer state -->
+				<transition to="UE2Answer" event="UPDATE"/>
+				<transition to="UE2Answer" event="TimerExpired"/>
+				<transition to="UE2Connected" event="ACK"/>
+			</state>
+			<!-- UE2Connected State -->
+			<state ID="UE2Connected" timer="5000">
+				<postlude>
+					<!-- Step 2 of test case xxxx  - Hook Flash on DUT (UE-B Transferor).-->
+					<send protocol="utility" msgtype="HookFlash"/>
+				</postlude>
+				<!-- Transitions for UE2Connected state -->
+				<transition to="UE2GoOnHold" event="TimerExpired"/>
+			</state>
+			<!-- UE2GoOnHold State -->
+			<state ID="UE2GoOnHold">
+				<!-- Transitions for UE2GoOnHold state -->
+				<transition to="UE2_3WayCall" event="HookFlashComplete"/>
+			</state>
+			<!-- UE2_3WayCall State -->
+			<state ID="UE2_3WayCall">
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>BYE</expr>
+						</eq>
+						<then>
+							<send protocol="sip" msgtype="200-BYE"/>
+							<generate event="SucceedEvent" fsm="UE1"/>
+						</then>
+					</if>
+				</response>
+				<!-- Transitions for UE2_3WayCall state -->
+				<transition to="UE2EndSession" event="BYE"/>
+			</state>
+			<!-- UE2EndSession State -->
+			<state ID="UE2EndSession" ES="True"/>
+		</states>
+	</fsm>
+</pc2xml>

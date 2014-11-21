@@ -1,0 +1,330 @@
+#//
+#// Filename: E-UE-PROV_1-1-3-12.test
+#// Author:   Satish Kumar, Texas Instruments
+#// Creation Date: 28-July-2004
+#// Modified by:  Matthew Forbes
+################################################################################
+#// Description:
+#//     TC1442 TEST CASE E-UE-PROV_1-1-3-12 Verification of the MTA DHCP option-43
+#//
+#// Objective:
+#//     Test that the E-MTA includes all the required sub options in DHCP
+#//	option 43 while sending DHCP DISCOVER and OFFER messages. The sub-options
+#//	in DHCP option 43 are encoded as TLV (Type, Length, Value) format.
+#//
+#// PacketCable DUT:
+#//     MTA
+#//
+#// Test Steps:
+#//     - Initial configuration
+#//     - Start sniffer
+#//     - Reset DUT
+#//     - Check Provisioning state
+#//     - Stop sniffer
+#//     - Invoke parsing tool and validate using Pass/Fail scripts
+#//
+#// Notes:
+#//     - Requires provPrimitives.tcl & tftp_primitives.tcl.
+#//     - Requires the specific config file in $BASE_CFG_FILE_PATH in Provisioning Server.
+#//     - Requires parT.tcl parsing tool to parse data from capture file.
+#//
+################################################################################
+
+global SCRIPT_VERSION
+set SCRIPT_VERSION { # $Id: E-UE-PROV_1-1-3-12.test 7406 2010-07-20 17:17:37Z dthakore $ }
+
+################################################################################
+
+
+DoStep "E-UE-PROV_1-1-3-12_1-1" "Initial configuration" {
+    LogMsg "--- Initial PROV module ---"
+    Init_PROV
+    # ProvCreateConfig 291 $MTA_MAC
+} { PASS_STEP }
+
+
+DoStep "E-UE-PROV_1-1-3-12_3-1" "Configure Provisioning Server" {
+    # No sending message
+    PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122 Device_Level_Secure.cfg
+    PROV_DEPLOY_DHCP
+} { PASS_STEP }
+
+DoStep "E-UE-PROV_1-1-3-12_4-1" "Start sniffer" {
+    LogMsg "--- Start sniffer ---"
+    Init_CONTROLLER_LAN
+    SetupCaptureControllerLan "host $MTA_IP || udp port 67 || host $CM_IP"
+    StartCaptureControllerLan
+} {PASS_STEP}
+
+################ Reset CM and MTA and Verify Provisioning ################
+
+DoStep "E-UE-PROV_1-1-3-12_5-1" "Hard reboot MTA" {
+    set val [SNMPvN_RESET $CM_IP ]
+    LogMsg "Hard reboot of CM and MTA has passed"
+} {
+    IsEqual $val 0
+}
+
+DoStep "E-UE-PROV_1-1-3-12_6-1" "pktcMTADevProvisioningState Content Verification" {
+    # Wait for a minute to let CM/MTA starting to reboot
+    actionWait "Wait for CM/MTA to reboot" 60
+    # Get the OID from the MTA and check it using our previously defined
+    set val [GetProvState 1 600]
+    LogMsg "MTA Provisioning State" 49
+    LogMsg "             - Expected : 1" 49
+    LogMsg "             - Received : $val" 49
+} {
+    IsEqual $val 1
+}
+
+################################################################################
+# Temporary work around for ethereal bug
+################################################################################
+
+# DoStep "E-UE-PROV_1-1-3-12_6-2" "pktcMtaDevCorrelationId Content Verification" {
+    # set val_snmp [SNMP_GET $oid_pktcMtaDevCorrelationId $MTA_IP]
+    # set val_snmp [format %x $val_snmp]
+# } {
+    # verify_signal "The value for the Correlation ID is $val_snmp, does this match the value from the
+    # DHCP DISCOVER Option 43, suboption 32 in the trace(go to view to stop auto roll)?"
+# }
+# 
+DoStep "E-UE-PROV_1-1-3-12_7-1" "Stop sniffer" {
+    LogMsg "--- Stop sniffer ---"
+    StopCaptureControllerLan
+    SaveToFileControllerLan
+} { PASS_STEP }
+
+########################## INVOKE PARSING TOOL ##################################
+
+DoStep "E-UE-PROV_1-1-3-12_8-1" "Analyze flow data" {
+    # Initial PARSER TOOL
+    Init_PART
+    
+    # Set up parser file
+    set PARSERFILE    $ETH_DEFAULT_TXT_FILE
+} { PASS_STEP }
+
+DoStep "E-UE-PROV_1-1-3-12_8-2" "Parse all data into database" {
+    # Parse data
+    set PARAMS_DHCP         "{DHCP {} {} {} {} {} {} {} {}}"
+    set PARAMS_CM_SRC       "{{} {} {} {} $CM_IP {} {} {} {}}"
+    set PARAMS_CM_DST       "{{} {} {} {} {} {} {} $CM_IP {}}"
+    set msgID_CM            [ParseFile $PARSERFILE "$PARAMS_DHCP $PARAMS_CM_SRC $PARAMS_CM_DST"]
+    set PARAMS_MTA_SRC      "{{} {} {} {} $MTA_IP {} {} {} {}}"
+    set PARAMS_MTA_DST      "{{} {} {} {} {} {} {} $MTA_IP {}}"
+    set msgID_MTA           [ParseFile $PARSERFILE "$PARAMS_DHCP $PARAMS_MTA_SRC $PARAMS_MTA_DST"]
+} {
+    if { $::PART_RETURN == 0 } {
+        PASS_STEP
+    } else {
+        FAIL_STEP "Cannot find data"
+    }
+}
+
+##############DHCP DISOVER content verificaton #############
+
+DoStep "E-UE-PROV_1-1-3-12_9-1" "EMTA option in 43.2 Content Verification" {
+    set val EDVA
+} {
+    VerifyValue $msgID_MTA "INANY DHCP DISCOVER OPTION43SUBOPTION2" "IS" "\\\"$val\\\""
+}
+
+
+DoStep "E-UE-PROV_1-1-3-12_9-2" "pktcMtaDevSerialNumber Content Verification" {
+    set val [SNMP_GET $oid_pktcMtaDevSerialNumber $MTA_IP]
+} {
+    VerifyValue $msgID_MTA "INANY DHCP DISCOVER OPTION43SUBOPTION4" "IS" "\\\"$val\\\""
+}
+
+DoStep "E-UE-PROV_1-1-3-12_9-3" "Hardware version" {
+    set SYSDESCR [GetValue $msgID_MTA "INFIRST SNMP SNMP_INFORM SNMP_SYSDESCR"]
+    regexp {.*HW_REV: ([^;]*);.*} $SYSDESCR match val
+} {
+    VerifyValue $msgID_MTA "INANY DHCP DISCOVER OPTION43SUBOPTION5" "IS" "\\\"$val\\\""
+}
+
+DoStep "E-UE-PROV_1-1-3-12_9-4" "pktcMtaDevSwCurrentVers Content Verification" {
+    set val [SNMP_GET $oid_pktcMtaDevSwCurrentVers $MTA_IP]
+} {
+    VerifyValue $msgID_MTA "INANY DHCP DISCOVER OPTION43SUBOPTION6" "IS" "\\\"$val.*\\\""
+}
+
+DoStep "E-UE-PROV_1-1-3-12_9-5" "Boot ROM" {
+    regexp {.*BOOTR: ([^;]*);.*} $SYSDESCR  match val
+} {
+    VerifyValue $msgID_MTA "INANY DHCP DISCOVER OPTION43SUBOPTION7" "IS" "\\\"$val\\\""
+}
+
+DoStep "E-UE-PROV_1-1-3-12_9-6" "Model number" {
+    regexp {.*MODEL: ([^>]*)} $SYSDESCR  match val
+} {
+    VerifyValue $msgID_MTA "INANY DHCP DISCOVER OPTION43SUBOPTION9" "IS" "\\\"$val\\\""
+}
+
+DoStep "E-UE-PROV_1-1-3-12_9-7" "Vendor name" {
+    regexp {.*VENDOR: ([^;]*);.*} $SYSDESCR  match val
+} {
+    VerifyValue $msgID_MTA "INANY DHCP DISCOVER OPTION43SUBOPTION10" "IS" "\\\"$val\\\""
+}
+
+DoStep "E-UE-PROV_1-1-3-12_9-8" "pktcMtaDevMacAddress Content Verification" {
+    # set val [SNMP_GET $oid_pktcMtaDevMacAddress $MTA_IP]
+    # regsub {0x} $val {} val
+    set MTA_MAC_COL [AddColMac $MTA_MAC]
+    set MTA_MAC_COL_UP [string toupper $MTA_MAC_COL]
+} {
+    VerifyValue $msgID_MTA "INANY DHCP DISCOVER OPTION43SUBOPTION31" "IS" "$MTA_MAC_COL_UP"
+}
+
+
+################################################################################
+# Temporary work around for ethereal bug
+################################################################################
+
+################################################################################
+DoStep "E-UE-PROV_1-1-3-12_9-9" "pktcMtaDevCorrelationId Content Verification" {
+    set val_snmp [SNMP_GET $oid_pktcMtaDevCorrelationId $MTA_IP]
+    set MTA_MAC_COL [AddColMac $MTA_MAC]
+    set val_log  [GetValue $msgID_MTA "INANY DHCP DISCOVER OPTION43SUBOPTION32" AND \
+            "OPTIONCLIENTHWADDRESS" "IS" "$MTA_MAC_COL"]
+
+if {($val_snmp != {}) && ($val_log != {})} {
+# Change value to hex in order to get around the problem of negative vs positive intepretation
+    set val_snmp [format %x $val_snmp]
+    set val_log  [format %x $val_log]
+    }
+} {
+if {$val_snmp == $val_log} {
+    PASS_STEP
+} else {
+    FAIL_STEP "Correlation ID is not correct"
+}
+}
+################################################################################
+
+DoStep "E-UE-PROV_1-1-3-12_9-10" "Option43 sub-option 1 & 3 do not exist" {
+} {
+    VerifyNotValue $msgID_MTA "INANY DHCP DISCOVER OPTION43SUBOPTION1" "EXISTS" ""
+    VerifyNotValue $msgID_MTA "INANY DHCP DISCOVER OPTION43SUBOPTION3" "EXISTS" ""
+}
+
+proc VerifyNotSuboption {startSuboption endSuboption} {
+    global msgID_MTA
+        while {$startSuboption <= $endSuboption} {
+            VerifyNotValue $msgID_MTA "INANY DHCP DISCOVER OPTION43SUBOPTION$startSuboption" "EXISTS" ""
+            incr startSuboption
+        }
+}
+
+DoStep "E-UE-PROV_1-1-3-12_9-11" "Option43 sub-options 11-30 do not exist" {
+    VerifyNotSuboption 11 30
+} { PASS_STEP }
+
+DoStep "E-UE-PROV_1-1-3-12_9-12" "Option43 sub-options 33-127 do not exist" {
+    VerifyNotSuboption 33 127
+} { PASS_STEP }
+
+################## DHCP REQUEST content verificaton #############
+
+DoStep "E-UE-PROV_1-1-3-12_10-1" "EMTA option in 43.2 Content Verification" {
+    set val EDVA
+} {
+    VerifyValue $msgID_MTA "INANY DHCP REQUEST OPTION43SUBOPTION2" "IS" "\\\"$val\\\""
+}
+
+
+DoStep "E-UE-PROV_1-1-3-12_10-2" "pktcMtaDevSerialNumber Content Verification" {
+    set val [SNMP_GET $oid_pktcMtaDevSerialNumber $MTA_IP]
+} {
+    VerifyValue $msgID_MTA "INANY DHCP REQUEST OPTION43SUBOPTION4" "IS" "\\\"$val\\\""
+}
+
+DoStep "E-UE-PROV_1-1-3-12_10-3" "Hardware version" {
+    set SYSDESCR [GetValue $msgID_MTA "INFIRST SNMP SNMP_INFORM SNMP_SYSDESCR"]
+    regexp {.*HW_REV: ([^;]*);.*} $SYSDESCR match val
+} {
+    VerifyValue $msgID_MTA "INANY DHCP REQUEST OPTION43SUBOPTION5" "IS" "\\\"$val.*\\\""
+}
+
+DoStep "E-UE-PROV_1-1-3-12_10-4" "pktcMtaDevSwCurrentVers Content Verification" {
+    set val [SNMP_GET $oid_pktcMtaDevSwCurrentVers $MTA_IP]
+} {
+    VerifyValue $msgID_MTA "INANY DHCP REQUEST OPTION43SUBOPTION6" "IS" "\\\"$val.*\\\""
+}
+
+DoStep "E-UE-PROV_1-1-3-12_10-5" "Boot ROM" {
+    regexp {.*BOOTR: ([^;]*);.*} $SYSDESCR  match val
+} {
+    VerifyValue $msgID_MTA "INANY DHCP REQUEST OPTION43SUBOPTION7" "IS" "\\\"$val\\\""
+}
+
+DoStep "E-UE-PROV_1-1-3-12_10-6" "Model number" {
+    regexp {.*MODEL: ([^>]*)} $SYSDESCR  match val
+} {
+    VerifyValue $msgID_MTA "INANY DHCP REQUEST OPTION43SUBOPTION9" "IS" "\\\"$val\\\""
+}
+
+DoStep "E-UE-PROV_1-1-3-12_10-7" "Vendor name" {
+    regexp {.*VENDOR: ([^;]*);.*} $SYSDESCR  match val
+} {
+    VerifyValue $msgID_MTA "INANY DHCP REQUEST OPTION43SUBOPTION10" "IS" "\\\".*$val.*\\\""
+}
+
+DoStep "E-UE-PROV_1-1-3-12_10-8" "pktcMtaDevMacAddress Content Verification" {
+    # set val [SNMP_GET $oid_pktcMtaDevMacAddress $MTA_IP]
+    # regsub {0x} $val {} val
+    set MTA_MAC_COL_UP [string toupper $MTA_MAC_COL]
+} {
+    # VerifyValue $msgID_MTA "INANY DHCP REQUEST OPTION43SUBOPTION31" "IS" "$val"
+    VerifyValue $msgID_MTA "INANY DHCP REQUEST OPTION43SUBOPTION31" "IS" "$MTA_MAC_COL_UP"
+}
+
+
+################################################################################
+DoStep "E-UE-PROV_1-1-3-12_10-9" "pktcMtaDevCorrelationId Content Verification" {
+set val_snmp [SNMP_GET $oid_pktcMtaDevCorrelationId $MTA_IP]
+set val_log  [GetValue $msgID_MTA "INANY DHCP REQUEST OPTION43SUBOPTION32" AND \
+        "OPTIONCLIENTHWADDRESS" "IS" "$MTA_MAC_COL"]
+
+if {($val_snmp != {}) && ($val_log != {})} {
+# Change value to hex in order to get around the problem of negative vs positive intepretation
+    set val_snmp [format %x $val_snmp]
+    set val_log  [format %x $val_log]
+    }
+} {
+if {$val_snmp == $val_log} {
+    PASS_STEP
+} else {
+    FAIL_STEP "Correlation ID is not correct"
+    }
+}
+
+################################################################################
+DoStep "E-UE-PROV_1-1-3-12_10-10" "Option43 sub-option 1 & 3 do not exist" {
+} {
+    VerifyNotValue $msgID_MTA "INANY DHCP REQUEST OPTION43SUBOPTION1" "EXISTS" ""
+    VerifyNotValue $msgID_MTA "INANY DHCP REQUEST OPTION43SUBOPTION3" "EXISTS" ""
+}
+
+proc VerifyNotSuboptionR {startSuboption endSuboption} {
+    global msgID_MTA
+    while {$startSuboption <= $endSuboption} {
+        VerifyNotValue $msgID_MTA "INANY DHCP REQUEST OPTION43SUBOPTION$startSuboption" "EXISTS" ""
+        incr startSuboption
+    }
+}
+
+DoStep "E-UE-PROV_1-1-3-12_10-11" "Option43 sub-options 11-30 do not exist" {
+    VerifyNotSuboptionR 11 30
+} { PASS_STEP }
+
+DoStep "E-UE-PROV_1-1-3-12_10-12" "Option43 sub-options 33-127 do not exist" {
+    VerifyNotSuboptionR 33 127
+} { PASS_STEP }
+
+################################################################################
+# Cleanup
+################################################################################
+Cleanup
+return 0

@@ -1,0 +1,81 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+ Change History: (Author & Date)
+
+-->
+
+
+<!-- Document type and attributes. -->
+<pc2xml version="$Revision: 6076 $"
+        name="E-UE_PROV_1.1.2.20"
+        descrip="E-UE utilizes secondary DHCP server configured in sub-option 2 when
+                 primary DHCP server configured in sub-option 1 not available."
+        number="E-UE_PROV_1.1.2.20">
+
+    <!-- Device reboot; start capture. -->
+    <template file="./templates/EUE_Prov_B_1_1_1.xml" name="SubOption1"/>
+
+    <add_to fsm="SubOption1">
+        <transition from="StartCapture_RebootWait" to="EUEProvisions" event="TimerExpired"/>
+
+        <!-- Verify E/MTA completes initialization. -->
+        <state ID="EUEProvisions">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvState.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">UE0.IP</msg_ref>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="5">
+                    <contains>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>0</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="DHCPCheck" event="SNMPResp"/>
+            <transition to="DHCPCheck" event="SNMPRespFailure"/>
+        </state>
+
+
+       <!-- Step 7. EUE sends at least three SOLICITs,
+                    then sends DHCP REQUEST for the IP Address provided by 2nd DHCP Sever. -->
+        <state ID="DHCPCheck">
+            <prelude once="true">
+                <stop_capture/>
+
+                <parse_capture name="eUE_DHCPv6">
+                    <parser_filter protocol="dhcpv6" clientMAC="DUT.MAC Address"/>
+                </parse_capture>
+
+                <verify step="7">
+                    <and>
+                        <notnull>
+                            <capture_ref type="dhcpv6" name="eUE_DHCPv6" msg_instance="3">Solicit.num</capture_ref>
+                        </notnull>
+                        <eq>
+                            <capture_ref type="dhcpv6" name="eUE_DHCPv6">Request.ipv6.dst_host.show</capture_ref>
+                            <msg_ref type="platform">DUT.DHCP Gateway IP</msg_ref>
+                        </eq>
+                    </and>
+                </verify>
+            	<generate event="SucceedEvent"/>
+            </prelude>
+            <transition to="END" event="SucceedEvent"/>
+        </state>
+    </add_to>
+</pc2xml>

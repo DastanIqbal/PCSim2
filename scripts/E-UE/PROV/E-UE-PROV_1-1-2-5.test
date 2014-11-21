@@ -1,0 +1,230 @@
+################################################################################
+#// Filename: E-UE-PROV_1-1-2-5.test
+#// Author:   Matthew Forbes
+#// Creation Date: February 12, 2009
+#// Modified by:
+################################################################################
+#// Description:
+#//     TC335 TEST CASE E-UE-PROV 1-1-2-5 eUE ablility to implement Option 122 sub option 1 and 2
+#//
+#// Objective:
+#//     This test verifies the eUE ability to properly implement the sub-options for primary 
+#//     and secondary DHCP server addresses required for PacketCable. Usage of these sub-options
+#//     applies to both DHCPv4 and DHCPv6.
+#//
+#// PacketCable DUT:
+#//     MTA
+#//
+#// Test Steps:
+#//     - Initial configuration
+#//     - Reset DUT
+#//     - Check Provisioning state
+#//     - Change MTA policy in server so option 122, sub-option 1 and 2 to DHCP server
+#//       addresses that will not respond to the MTA DHCP DISCOVER messages
+#//     - Start sniffer
+#//     - Reset DUT
+#//     - Allow time for provisioning process, device should not complete provisioning
+#//     - Stop sniffer
+#//     - Invoke parsing tool and validate using Pass/Fail scripts
+#//     - Restore values for options 12 and 15
+#//     - Delete MTA config file
+#//
+#// Notes:
+#//     - Requires provPrimitives.tcl & tftp_primitives.tcl.
+#//     - Requires the specific config file in $BASE_CFG_FILE_PATH in Provisioning Server.
+#//     - Requires parT.tcl parsing tool to parse data from capture file.
+##########################################################################################
+
+global SCRIPT_VERSION
+set SCRIPT_VERSION { # $Id: E-UE-PROV_1-1-2-5.test 7406 2010-07-20 17:17:37Z dthakore $ }
+
+###################### INITIAL CONFIGURATION OF DUT ########################
+
+DoStep "E-UE-PROV_1-1-2-5_1-1" "Initial configuration" {
+    LogMsg "--- Initial PROV module ---"
+    Init_PROV
+    # ProvCreateConfig 291 $MTA_MAC
+    PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122 Device_Level_Secure.cfg
+    PROV_DEPLOY_DHCP
+} { PASS_STEP }
+
+
+################ Reset CM and MTA and Verify Provisioning ################
+
+DoStep "E-UE-PROV_1-1-2-5_2-3" "Reset CM and MTA" {
+    set val [SNMPvN_RESET $CM_IP]
+    LogMsg "Reset of CM and MTA has passed"
+} {
+    IsEqual $val 0
+}
+
+DoStep "E-UE-PROV_1-1-2-5_2-4" "pktcMTADevProvisioningState Content Verification" {
+    # Wait for a minute to let CM/MTA starting to reboot
+    actionWait "Wait 60 seconds for CM/MTA to reboot" 60
+    # Get the OID from the MTA and check it using our previously defined
+    set val [GetProvState 1 600]
+    LogMsg "MTA Provisioning State"
+    LogMsg "             - Expected : 1"
+    LogMsg "             - Received : $val"
+} {
+    IsEqual $val 1
+}
+
+##################### Change Option122, Sub-options 1&2 ##########################
+
+DoStep "E-UE-PROV_1-1-2-5_3-1" "Modify CM policy with option 122, sub-options 1&2 to not respond to MTA" {
+    LogMsg "--- Modify CM Policy and Save ---"
+    # verify_signal "Modify CM policy with option 122, sub-options 1&2 to not respond to MTA(CMTC335)"
+    PROV_MODIFY_DEVICE $CM_MAC CMTC335 
+    PROV_DEPLOY_DHCP
+    LogMsg "--- Options 122, sub-options 1&2 have been modified ---"
+} {PASS_STEP}
+
+
+DoStep "E-UE-PROV_1-1-2-5_4-1" "Start sniffer" {
+    LogMsg "--- Start sniffer ---"
+    Init_CONTROLLER_LAN
+    SetupCaptureControllerLan "host $MTA_IP || host $PROV_DHCP1_IP || host $CM_IP"
+    StartCaptureControllerLan
+} {PASS_STEP}
+
+################## RESET CM and MTA and ALLOW TIME TO PROVISION ####################
+
+DoStep "E-UE-PROV_1-1-2-5_5-1" "Reset MTA" {
+    set val [SNMPvN_RESET $CM_IP]
+    LogMsg "Reset of CM and MTA has passed"
+} {
+    IsEqual $val 0
+}
+
+DoStep "E-UE-PROV_1-1-2-5_6-1" "Allow 3 minutes for MTA to attempt provisioning" {
+    # Wait for 3 minutes to let CM/MTA start to reboot
+    LogMsg "MTA is attempting to reprovision, please wait"
+    actionWait "Wait 3 minutes for CM/MTA to attempt to reboot" 180
+} {PASS_STEP}
+
+DoStep "E-UE-PROV_1-1-2-5_7-1" "Stop sniffer" {
+    LogMsg "--- Stop sniffer ---"
+    StopCaptureControllerLan
+    SaveToFileControllerLan
+} { PASS_STEP }
+
+########################## INVOKE PARSING TOOL ##################################
+
+DoStep "E-UE-PROV_1-1-2-5_8-1" "Analyze flow data" {
+    # Initial PARSER TOOL
+    Init_PART
+    
+    # Set up parser file
+    set PARSERFILE    $ETH_DEFAULT_TXT_FILE
+} { PASS_STEP }
+
+DoStep "E-UE-PROV_1-1-2-5_8-2" "Parse data into database" {
+        # Parse data
+    set PARAMS_DHCP         "{DHCP {} {} {} {} {} {} {} {}}"
+    set PARAMS_CM_SRC       "{{} {} {} {} $CM_IP {} {} {} {}}"
+    set PARAMS_CM_DST       "{{} {} {} {} {} {} {} $CM_IP {}}"
+    set msgID_CM            [ParseFile $PARSERFILE "$PARAMS_DHCP $PARAMS_CM_SRC $PARAMS_CM_DST"]
+    set PARAMS_MTA_SRC      "{{} {} {} {} $MTA_IP {} {} {} {}}"
+    set PARAMS_MTA_DST      "{{} {} {} {} {} {} {} $MTA_IP {}}"
+    set msgID_MTA           [ParseFile $PARSERFILE "$PARAMS_DHCP $PARAMS_MTA_SRC $PARAMS_MTA_DST"]
+} {
+    if { $::PART_RETURN == 0 } {
+        PASS_STEP
+    } else {
+        FAIL_STEP "Cannot find data"
+    }
+}
+
+######################### VERIFY DHCP OFFER OPTION 122, SUB-OPTIONS 1&2 FROM CM  ######################
+
+DoStep "E-UE-PROV_1-1-2-5_8-3" "DHCP OFFER: Sub-options 1&2 exist, but don't respond" {
+    LogMsg "Verify DHCP DHCP OFFER: Sub-options 1&2 exist, but don't respond"
+    set CONTINUE_PAST_STEP_ERROR 1
+    # Find CM MAC with colons
+    set CM_MAC_COL [AddColMac $CM_MAC]
+} {
+    # Verify DHCP OFFER is not from sub-option 1 or 2
+    set dhcp1 [GetValue $msgID_CM "INANY DHCP OFFER OPTION122SUBOPTION1" AND \
+            "OPTIONCLIENTHWADDRESS" "IS" "$CM_MAC_COL"]
+    set dhcp2 [GetValue $msgID_CM "INANY DHCP OFFER OPTION122SUBOPTION2" AND \
+                    "OPTIONCLIENTHWADDRESS" "IS" "$CM_MAC_COL"]
+    VerifyNotValue $msgID_MTA "INANY DHCP OFFER HEADERSRCIP" "IS" "$dhcp1"
+    VerifyNotValue $msgID_MTA "INANY DHCP OFFER HEADERSRCIP" "IS" "$dhcp2"
+}
+
+######################### VERIFY DHCP OFFER EXISTS, HAS DIFFERENT ADDRESS THAN 122.1/2 ###################
+
+DoStep "E-UE-PROV_1-1-2-5_8-4" "DHCP REQUEST: DOES NOT EXIST" {
+    LogMsg "Verify DHCP OFFER: EXISTS, BUT NOT 122.1/2"
+    set MTA_MAC_COL [AddColMac $MTA_MAC]
+} {
+    # Verify DHCP OFFER is not 122.1/2
+    set dhcpoff [GetValue $msgID_MTA "INANY DHCP OFFER HEADERSRCIP" AND \
+            "OPTIONCLIENTHWADDRESS" "IS" "$MTA_MAC_COL"]
+    IsNotEqual $dhcpoff $dhcp1
+    IsNotEqual $dhcpoff $dhcp2
+}
+
+######################### VERIFY THERE IS NO DHCP REQUEST FROM the MTA  ##########################
+
+DoStep "E-UE-PROV_1-1-2-5_8-5" "DHCP REQUEST: DOES NOT EXIST" {
+    LogMsg "Verify DHCP REQUEST: DOES NOT EXIST"
+    set MTA_MAC_COL [AddColMac $MTA_MAC]
+} {
+    # Verify DHCP REQUEST does NOT exist
+    VerifyNotValue $msgID_MTA "INANY DHCP REQUEST OPTION55" "EXISTS" "" AND \
+            "OPTIONCLIENTHWADDRESS" "IS" "$MTA_MAC_COL"
+}
+
+DoStep "E-UE-PROV_1-1-2-5_8-6" "MTA Sequence" {
+    LogMsg "Verify MTA Sequence"
+    
+    # Set MTA SEQUENCE to check REPEAT of MTA DHCP DISCOVERS (5x)
+    set MTA_SEQUENCE "DHCP:DISCOVER,DHCP:OFFER,DHCP:DISCOVER,DHCP:OFFER,\
+            DHCP:DISCOVER,DHCP:OFFER,DHCP:DISCOVER,DHCP:OFFER,DHCP:DISCOVER,DHCP:OFFER"
+    # Remove whitespace
+    regsub -all { } $MTA_SEQUENCE {} MTA_SEQUENCE
+} {
+    VerifyValue $msgID_MTA "SEQUENCE $MTA_SEQUENCE" "" ""
+}
+
+##################### RESTORE VALUE FOR SUBOPTION IN MTA ##########################
+
+DoStep "E-UE-PROV_1-1-2-5_10-1" "Restore values for option 122, sub-options 1&2 in CM policy" {
+    LogMsg "--- Modify CM Policy and Save ---"
+    # verify_signal "Restore values for option 122, sub-options 1&2 in CM policy(CMFORCW_122)"
+    PROV_MODIFY_DEVICE $CM_MAC CMFORCW_122
+    PROV_DEPLOY_DHCP
+    LogMsg "--- Option 122, sub-options 1&2 have been restored ---"
+} {PASS_STEP}
+
+################ Reset CM and MTA and Verify Provisioning ################
+
+DoStep "E-UE-PROV_1-1-2-5_10-2" "Reset CM and MTA" {
+    set val [SNMPvN_RESET $CM_IP]
+    LogMsg "Reset of CM and MTA has passed"
+} {
+    IsEqual $val 0
+}
+
+DoStep "E-UE-PROV_1-1-2-5_10-3" "pktcMTADevProvisioningState Content Verification" {
+    # Wait for a minute to let CM/MTA starting to reboot
+    actionWait "Wait 60 seconds for CM/MTA to reboot" 60
+    # Get the OID from the MTA and check it using our previously defined
+    set val [GetProvState 1 600]
+    LogMsg "MTA Provisioning State"
+    LogMsg "             - Expected : 1"
+    LogMsg "             - Received : $val"
+} {
+    IsEqual $val 1
+}
+
+################################################################################
+# Cleanup
+################################################################################
+Cleanup
+return 0
+
+
+

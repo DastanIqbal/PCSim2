@@ -1,0 +1,117 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+ Change History: (Author & Date)
+
+-->
+
+
+<!-- Document type and attributes. -->
+<pc2xml version="$Revision: 6076 $"
+        name="E-UE_PROV_1.1.2.5"
+        descrip="Sub-options 1 and 2."
+        number="E-UE_PROV_1.1.2.5">
+
+    <!-- Device reboot; start capture. -->
+    <template file="./templates/EUE_Prov_B_1_1_1.xml" name="SubOptions1-2"/>
+
+    <add_to fsm="SubOptions1-2">
+        <transition from="StartCapture_RebootWait" to="ParseFilter" event="TimerExpired"/>
+
+
+        <state ID="ParseFilter">
+			<prelude once="true">
+	            <sleep time="5000"/>
+				<stop_capture/>
+
+				<parse_capture name="eCM_DHCPv6">
+					<parser_filter protocol="dhcpv6" clientMAC="DUT.CM MAC Address"/>
+				</parse_capture>
+                <parse_capture name="eUE_DHCPv6">
+                    <parser_filter protocol="dhcpv6" clientMAC="DUT.MAC Address"/>
+                </parse_capture>
+
+                <generate event="SucceedEvent"/>
+            </prelude>
+            <transition to="CMProvisioned" event="SucceedEvent"/>
+        </state>
+
+
+        <!-- Verify CM initialization steps completed. -->
+        <state ID="CMProvisioned">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>DOCS-CABLE-DEVICE-MIB::docsDevServerBootState.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.CM IP Address</msg_ref>
+                    </mod>
+					<mod modtype="replace" hdr="version">
+						<expr>2c</expr>
+					</mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="8">
+                    <contains>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>1</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="EUEFailsProvision" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+
+        <!-- Verify E/MTA DUT does not complete initialization. -->
+        <state ID="EUEFailsProvision">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvisioningState.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+					<mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="11">
+                    <contains>
+                        <msg_ref type="utility" >SNMPRespFailure.errorString</msg_ref>
+                        <expr>No Response</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="END" event="SNMPResp"/>
+            <transition to="DHCPCheck" event="SNMPRespFailure"/>
+        </state>
+
+
+        <state ID="DHCPCheck">
+            <prelude>
+                <verify step="8">
+					<neq>
+						<capture_ref type="dhcpv6" name="eUE_DHCPv6">Solicit.num</capture_ref>
+						<capture_ref type="dhcpv6" name="eUE_DHCPv6" msg_instance="last">Solicit.num</capture_ref>
+					</neq>
+            </verify>
+			<generate event="SucceedEvent"/>
+            </prelude>
+			<transition to="END" event="SucceedEvent"/>
+        </state>
+    </add_to>
+</pc2xml>

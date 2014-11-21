@@ -1,0 +1,332 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+ Change History: (Author & Date)
+	PCPCIIATP-189: Remove testing of the 20 msec ptime value and verify the packets are approximately 20 
+		msecs apart in the capture file. (ghassler 08/20/2010)
+			
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="CODEC-MEDIA_1.3.1.4" 
+	descrip="UE supports T.38 Version '0' support and default Packetization (UE Originating)" 
+	number="CODEC-MEDIA_1.3.1.4">
+	
+	<template file="./templates/CallOrigAtUETemp.xml" name="UE1"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="OffHook"/>
+		<state ID="Connected"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<state ID="OffHook">
+			<prelude>
+				<log promptUser="true" expr="Connect a fax machine to line 1 of the DUT."/>
+				<start_capture>
+					<filter>
+						<var_expr>
+							<expr>host </expr>
+							<msg_ref type="platform">PCSCF1.IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">UE0.IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">UE1.IP</msg_ref>
+						</var_expr>
+					</filter>
+				</start_capture>
+				<send protocol="utility" msgtype="OffHook"/>
+			</prelude>
+			<transition to="Setup" event="OffHookComplete"/>
+		</state>
+		
+		<state ID="Connected">
+			<prelude once="true">
+				<sleep time="4000"/>
+				<send protocol="sip" msgtype="REINVITE">
+					<mod modtype="delete" hdr="audio"/>
+					<mod modtype="delete" hdr="media-modifier"/>
+					<mod modtype="delete" hdr="TIAS-modifier"/>
+					<mod modtype="delete" hdr="max-packet-rate"/>
+					<mod modtype="delete" hdr="rtpmap"/>
+					<mod modtype="delete" hdr="mode"/>
+					<mod modtype="delete" hdr="ptime"/>
+					<mod modtype="add" hdr="SDP">
+						<var_expr>
+							<expr>m=image </expr>
+							<msg_ref type="platform">Platform.RTP Port2</msg_ref>
+							<expr> udptl t38\r\nb=AS:82\r\nb=TIAS:65600\r\na=maxprate:50\r\n</expr>
+							<expr>a=ptime:20\r\n</expr>
+							<expr>a=T38FaxVersion:2\r\n</expr>
+							<expr>a=T38FaxRateManagement:transferredTCF\r\n</expr>
+							<expr>a=T38FaxMaxDatagram:160\r\n</expr>
+							<expr>a=T38FaxUdpEC:t38UDPRedundancy</expr>
+						</var_expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+						<expr>200</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="ACK"/>
+						<!-- STEP 2 -->
+						<verify step="3" requirements="REQ12557, REQ12558, REQ13334, REQ12562, REQ23635">
+							<and>
+								<gt>
+									<msg_ref type="sdp">200-INVITE.image.port</msg_ref>
+									<expr>0</expr>
+								</gt>
+							<and>
+								<lte>
+									<msg_ref type="sdp">200-INVITE.image.port</msg_ref>
+									<expr>65535</expr>
+								</lte>
+							<and>
+								<eq>
+									<msg_ref type="sdp">200-INVITE.image.protocol</msg_ref>
+									<expr>udptl</expr>
+								</eq>
+								<eq>
+									<msg_ref type="sdp">200-INVITE.image.payload-type</msg_ref>
+									<expr>t38</expr>
+								</eq>
+							</and>
+							</and>
+							</and>
+						</verify>
+						
+						<verify step="3" requirements="REQ12557, REQ12558, REQ13334, REQ12562, REQ23635">
+							<or>
+								<eq>
+									<msg_ref type="sdp">200-INVITE.fax-version.value</msg_ref>
+									<expr>0</expr>
+								</eq>
+							<or>
+								<eq>
+									<msg_ref type="sdp">200-INVITE.fax-version.value</msg_ref>
+									<expr>1</expr>
+								</eq>
+								<eq>
+									<msg_ref type="sdp">200-INVITE.fax-version.value</msg_ref>
+									<expr>2</expr>
+								</eq>
+							</or>
+							</or>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<transition to="Connected" event="100-INVITE"/>
+			<transition to="EndCall1" event="200-INVITE"/>
+		</state>
+			
+		<state ID="EndCall1" ES="true">
+			<transition to="Setup2" event="SessionTerminated"/>
+		</state>
+			
+			
+		<state ID="Setup2">
+			<prelude>
+				<sleep time="10000"/>
+				<send protocol="sip" msgtype="Invite"/>
+			</prelude>
+			<response>
+				<if>
+					<contains>
+						<msg_ref type="sip" hdr_instance="any">18x-Invite.Require</msg_ref>
+						<expr>100rel</expr>
+					</contains>
+					<then>
+						<!--Reliablity required for test sending Prack message to peer.-->
+						<send protocol="sip" msgtype="Prack"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Proceeding2" event="100-INVITE"/>
+			<transition to="Alerting2" event="180-INVITE"/>
+			<transition to="Alerting2" event="183-INVITE"/>
+			<transition to="Connected2" event="200-INVITE"/>
+		</state>
+		
+		<state ID="Proceeding2">
+			<response>
+				<if>
+					<contains>
+						<msg_ref type="sip" hdr_instance="any">18x-Invite.Require</msg_ref>
+						<expr>100rel</expr>
+					</contains>
+					<then>
+						<!--Reliablity required for test sending Prack message to peer.-->
+						<send protocol="sip" msgtype="Prack"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Alerting2" event="180-INVITE"/>
+			<transition to="Alerting2" event="183-INVITE"/>
+			<transition to="Connected2" event="200-INVITE"/>
+		</state>
+			
+		<state ID="Alerting2" timer="12000">
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="event"/>
+						<expr>TimerExpired</expr>
+					</eq>
+					<then>
+						<!--Take DUT phone off hook-->
+						<send protocol="utility" msgtype="OffHook"/>
+					</then>
+				</if>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>UPDATE</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="200-Update"/>
+					</then>
+					<elseif>
+						<and>
+							<eq>
+								<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+								<expr>180</expr>
+							</eq>
+							<contains>
+								<msg_ref type="sip" hdr_instance="any">180-INVITE.Require</msg_ref>
+								<expr>100rel</expr>
+							</contains>
+						</and>
+						<then>
+							<send protocol="sip" msgtype="Prack"/>
+						</then>
+					</elseif>
+				</if>
+			</response>
+			<transition to="Alerting2" event="200-PRACK"/>
+			<transition to="Alerting2" event="UPDATE"/>
+			<transition to="Alerting2" event="18x-INVITE"/>
+			<transition to="Answer2" event="TimerExpired"/>
+			<transition to="Connected2" event="200-INVITE"/>
+		</state>
+			
+		<state ID="Answer2">
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>UPDATE</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="200-Update"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Answer2" event="UPDATE"/>
+			<transition to="Answer2" event="200-PRACK"/>
+			<transition to="Answer2" event="18x-INVITE"/>
+			<transition to="Answer2" event="OffHookComplete"/>
+			<transition to="Connected2" event="200-INVITE"/>
+		</state>
+		
+		<state ID="Connected2">
+			<prelude once="true">
+				<send protocol="sip" msgtype="ACK"/>
+				<sleep time="4000"/>
+				<send protocol="sip" msgtype="REINVITE">
+					<mod modtype="delete" hdr="audio"/>
+					<mod modtype="delete" hdr="media-modifier"/>
+					<mod modtype="delete" hdr="TIAS-modifier"/>
+					<mod modtype="delete" hdr="max-packet-rate"/>
+					<mod modtype="delete" hdr="rtpmap"/>
+					<mod modtype="delete" hdr="mode"/>
+					<mod modtype="delete" hdr="ptime"/>
+					<mod modtype="add" hdr="SDP">
+						<var_expr>
+							<expr>m=image </expr>
+							<msg_ref type="platform">Platform.RTP Port2</msg_ref>
+							<expr> udptl t38\r\nb=AS:82\r\nb=TIAS:65600\r\na=maxprate:50\r\n</expr>
+							<expr>a=T38FaxRateManagement:transferredTCF\r\n</expr>
+							<expr>a=T38FaxMaxDatagram:160\r\n</expr>
+							<expr>a=T38FaxUdpEC:t38UDPRedundancy</expr>
+						</var_expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+						<expr>200</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="ACK"/>
+						
+						<verify step="6" requirements="REQ12561, REQ23635">
+							<and>
+								<gt>
+									<msg_ref type="sdp">200-INVITE.image.port</msg_ref>
+									<expr>0</expr>
+								</gt>
+							<and>
+								<lte>
+									<msg_ref type="sdp">200-INVITE.image.port</msg_ref>
+									<expr>65535</expr>
+								</lte>
+							<and>
+								<eq>
+									<msg_ref type="sdp">200-INVITE.image.protocol</msg_ref>
+									<expr>udptl</expr>
+								</eq>
+								<eq>
+									<msg_ref type="sdp">200-INVITE.image.payload-type</msg_ref>
+									<expr>t38</expr>
+								</eq>
+							</and>
+							</and>
+							</and>
+						</verify>
+						
+						<verify step="6" requirements="REQ12561, REQ23635">
+							<eq>
+								<msg_ref type="sdp">200-INVITE.fax-version.value</msg_ref>
+								<expr>0</expr>
+							</eq>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<transition to="Connected2" event="100-INVITE"/>
+			<transition to="Releasing2" event="200-INVITE"/>
+		</state>
+		
+		<state ID="Releasing2">
+			<prelude>
+				<send protocol="sip" msgtype="Bye"/>
+			</prelude>
+			<transition to="OnHook2" event="200-BYE"/>
+		</state>
+		
+		<state ID="OnHook2">
+			<prelude>
+				<stop_capture/>
+				<send protocol="utility" msgtype="OnHook"/>
+				<log verify="true" step="7" requirements="REQ12554" promptUser="true"
+					expr="Verify in the capture file, the RTP packets were sent approximately every 20 msecs."/>
+			</prelude>
+			<transition to="END" event="OnHookComplete"/>
+		</state>
+	</add_to>
+</pc2xml>

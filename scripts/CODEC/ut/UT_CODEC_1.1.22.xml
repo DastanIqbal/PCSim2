@@ -1,0 +1,27 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+
+
+<pc2xml version="$Revision: 8188 $" name="UT_Codec_1.1.22" 
+	descrip="This is a unit test for the Codec 1.1.22 test script"
+	number="1">
+
+	<template file="$UT_PATH/CODEC/ut/UT_CODEC_1.1.11.xml"/>
+</pc2xml>	

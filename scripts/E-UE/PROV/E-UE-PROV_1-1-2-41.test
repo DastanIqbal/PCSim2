@@ -1,0 +1,196 @@
+#//*****************************************************************************
+#// Filename: E-UE-PROV_1-1-2-41.test
+#// Author:   Matthew Forbes
+#// Creation Date: October 27, 2008
+#// Modified by:
+#//*****************************************************************************
+#// Description:
+#//     TC3247 TEST CASE E-UE-PROV 1-1-2-41 Ability of eUE to Proceed with the
+#//     Provisioning if there is no ToD received by the eCM and the eUE is
+#//     Redirected From the Secure Flow to the BASIC or HYBRID Flow
+#//
+#// Objective:
+#//     To verify the ability of the eUE to not proceed with Secure Provisioning flow
+#//     when no ToD is received by the eCM.
+#//
+#//
+#// PacketCable DUT:
+#//     MTA
+#//
+#// Test Steps:
+#//     - Initial Configuration
+#//     - Set policy for no ToD response
+#//     - Start sniffer
+#//     - Reset DUT
+#//     - Wait for Provisioning of eUE
+#//     - Monitor trace and verify syslog message and return to eUE-1
+#//     - Stop sniffer
+#//     - Restore policy
+#//
+#// Notes:
+#//     - Requires provPrimitives.tcl & tftp_primitives.tcl.
+#//     - Requires the specific config file in $BASE_CFG_FILE_PATH in Provisioning Server.
+#//     - Requires parT.tcl parsing tool to parse data from capture file.
+#//*****************************************************************************
+global SCRIPT_VERSION
+set SCRIPT_VERSION { # $Id: E-UE-PROV_1-1-2-41.test 7455 2010-08-06 15:29:10Z ghassler $ }
+
+DoStep "E-UE-PROV_1-1-2-41-PreStep-1" "Initialize Test Platform" {
+    Init_PROV
+    Init_CONTROLLER_LAN
+    # Initial PARSER TOOL
+    Init_PART
+} { PASS_STEP }
+
+set msgStr "Configure DHCP SERVER: Block ToD port and set up policy"
+DoStep "E-UE-PROV_1-1-2-41_3-1" $msgStr {
+} {
+    PROV_BLOCK_PORT 37 udp 10.32.0.69
+    PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122 Device_Level_Secure.cfg
+    PROV_DEPLOY_DHCP
+}
+
+set msgStr "Start Sniffer"
+DoStep "E-UE-PROV_1-1-2-41_3-1" $msgStr {
+    LogMsg "--- $msgStr ---"
+    SetupCaptureControllerLan "host $MTA_IP || udp port 67 || host $CM_IP"
+    StartCaptureControllerLan
+} {PASS_STEP}
+
+DoStep "E-UE-PROV_1-1-2-41_4-1" "Reset DUT" {
+    set val [SNMPvN_RESET $CM_IP]
+    LogMsg "Hard reboot of CM and MTA has passed"
+} {
+    IsEqual $val 0
+}
+
+
+set msgStr "Monitor Trace: Observe eUE does not go beyond DHCP ACK"
+DoStep "E-UE-PROV_1-1-2-41_7-1" $msgStr {
+} {
+    verify_signal $msgStr
+}
+
+
+set msgStr "Monitor Trace: Observe eUE returns to eUE-1 again (wait 1-2 minutes and watch for repeat)"
+DoStep "E-UE-PROV_1-1-2-41_7-1" $msgStr {
+} {
+    verify_signal $msgStr
+}
+
+set msgStr "Configure DHCP SERVER: configure eUE policy for BASIC provisioning"
+DoStep "E-UE-PROV_1-1-2-40_1-1" $msgStr {
+} {
+    PROV_MODIFY_DEVICE $MTA_MAC BASIC2 Device_Level_Basic.cfg
+    PROV_DEPLOY_DHCP
+}
+
+DoStep "E-UE-PROV_1-1-2-40_2-3" "pktcMTADevProvisioningState Content Verification" {
+    actionWait "Wait 90 seconds for CM/MTA to provision" 90
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMPvN_GET $oid_pktcMtaDevProvisioningState $MTA_IP]
+    LogMsg "MTA Provisioning State" 49
+    LogMsg "             - Expected : 1" 49
+    LogMsg "             - Received : $val" 49
+} {
+    IsEqual $val 1
+}
+
+set msgStr "Stop Sniffer"
+DoStep "E-UE-PROV_1-1-2-41_8-1" $msgStr {
+    LogMsg "--- $msgStr ---"
+    StopCaptureControllerLan
+    SaveToFileControllerLan "_BASIC"
+} {PASS_STEP}
+
+
+set msgStr "Configure DHCP SERVER: configure eUE policy for secure provisioning"
+DoStep "E-UE-PROV_1-1-2-41_3-1" $msgStr {
+} {
+    PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122 Device_Level_Secure.cfg
+    PROV_DEPLOY_DHCP
+}
+
+set msgStr "Start Sniffer"
+DoStep "E-UE-PROV_1-1-2-41_3-1" $msgStr {
+    LogMsg "--- $msgStr ---"
+    SetupCaptureControllerLan "host $MTA_IP || udp port 67 || host $CM_IP"
+    StartCaptureControllerLan
+} {PASS_STEP}
+
+DoStep "E-UE-PROV_1-1-2-41_4-1" "Reset DUT" {
+    set val [SNMPvN_RESET $CM_IP]
+    LogMsg "Hard reboot of CM and MTA has passed"
+} {
+    IsEqual $val 0
+}
+
+
+set msgStr "Monitor Trace: Observe eUE does not go beyond DHCP ACK"
+DoStep "E-UE-PROV_1-1-2-41_7-1" $msgStr {
+} {
+    verify_signal $msgStr
+}
+
+
+set msgStr "Monitor Trace: Observe eUE returns to eUE-1 again (wait 1-2 minutes and watch for repeat)"
+DoStep "E-UE-PROV_1-1-2-41_7-1" $msgStr {
+} {
+    verify_signal $msgStr
+}
+
+set msgStr "Configure DHCP SERVER: configure eUE policy for HYBRID provisioning"
+DoStep "E-UE-PROV_1-1-2-40_1-1" $msgStr {
+} {
+    PROV_MODIFY_DEVICE $MTA_MAC HYBRID2 Device_Level_Hybrid.cfg
+    PROV_DEPLOY_DHCP
+}
+
+DoStep "E-UE-PROV_1-1-2-40_2-3" "pktcMTADevProvisioningState Content Verification" {
+    actionWait "Wait 100 seconds for CM/MTA to provision" 100
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMPvN_GET $oid_pktcMtaDevProvisioningState $MTA_IP]
+    LogMsg "MTA Provisioning State" 49
+    LogMsg "             - Expected : 1" 49
+    LogMsg "             - Received : $val" 49
+} {
+    IsEqual $val 1
+}
+
+set msgStr "Stop Sniffer"
+DoStep "E-UE-PROV_1-1-2-41_8-1" $msgStr {
+    LogMsg "--- $msgStr ---"
+    StopCaptureControllerLan
+    SaveToFileControllerLan "_HYBRID"
+} {PASS_STEP}
+
+################################################################################
+# Cleanup
+################################################################################
+set msgStr "Restore DHCP SERVER: Un block ToD port and change policy and config file"
+DoStep "E-UE-PROV_1-1-2-41-PostStep-1" $msgStr {
+} {
+    PROV_UNBLOCK_PORT 37 udp 10.32.0.69
+    PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122 Device_Level_Secure.cfg
+    PROV_DEPLOY_DHCP
+}
+
+DoStep "E-UE-PROV_1-1-2-41_PostStep-2" "Reset DUT" {
+    set val [SNMPvN_RESET $CM_IP]
+    LogMsg "Hard reboot of CM and MTA has passed"
+} {
+    IsEqual $val 0
+}
+
+DoStep "E-UE-PROV_1-1-2-41_PostStep-3" "pktcMTADevProvisioningState Content Verification" {
+    actionWait "Wait 60 seconds for CM/MTA to provision" 60
+    # Get the OID from the MTA and check it using our previously defined
+    set val [GetProvState 1 600]
+    LogMsg "MTA Provisioning State" 49
+    LogMsg "             - Expected : 1" 49
+    LogMsg "             - Received : $val" 49
+} {
+    IsEqual $val 1
+}
+
+Cleanup

@@ -1,0 +1,122 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	PCPCII-139 : Update the Voicetronix modifiers to use the new values. (ghassler 07/10/2009)
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-UE 1.3.3.3" 
+	descrip="Call Forward on Busy Line with DND" 
+	number="RST-UE 1.3.3.3" inspector="disable">
+	
+	<template file="./templates/CallTermAtUETemp.xml" name="UE1"/>
+	<!-- The Core FSM will handle the CFBL and CW activations -->
+	
+	<fsm name="Core">
+		<models>
+			<session/>
+		</models>
+		<NE sim_type="term" elements="SCSCF1 PCSCF1" targets="*90 *78"/>
+		<states initialstate="Register">
+			
+			<state ID="Register">
+				<transition to="CFBL" event="Registered"/>
+			</state>
+			
+			<state ID="CFBL">
+				<prelude once="true">
+					<send protocol="utility" msgtype="OffHook"/>
+					<!-- Step 3 test case SIP 1.3.3.1 Activate CW on UE - 
+					A by dialing the appropriate VSC -->
+					<send protocol="utility" msgtype="DialDigits">
+						<mod modtype="add" hdr="number">
+							<expr>*78</expr>
+						</mod>
+					</send>
+				</prelude>
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>INVITE</expr>
+						</eq>
+						<then>
+							<send protocol="sip" msgtype="100-INVITE"/>
+							<send protocol="sip" msgtype="200-INVITE"/>
+						</then>
+					</if>
+				</response>
+				<transition to="CFBL" event="OffHookComplete"/>
+				<transition to="CFBL" event="DialDigitsComplete"/>
+				<transition to="CFBL" event="INVITE"/>
+				<transition to="OnHook1" event="ACK"/>
+			</state>
+			
+			<state ID="OnHook1">
+				<prelude>
+					<generate event="Branch1Event" fsm="UE1"/>
+					<send protocol="utility" msgtype="OnHook"/>
+				</prelude>
+				<transition to="EndCore" event="OnHookComplete"/>
+			</state>
+			
+			<state ID="EndCore">
+				<transition to="END" event="Branch2Event"/>
+			</state>
+		</states>
+	</fsm>
+	
+	<remove_from fsm="UE1">
+		<state ID="Register"/>
+		<state ID="Setup"/>
+		<state ID="Proceeding"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<state ID="Register">
+			<transition to="WaitBranch1Event" event="Registered"/>
+		</state>
+		
+		<state ID="WaitBranch1Event">
+			<transition to="Setup" event="Branch1Event"/>
+		</state>
+		
+		<state ID="Setup">
+			<prelude once="true">
+				<send protocol="sip" msgtype="Invite"/>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+						<expr>486</expr>
+					</eq>
+					<then>
+						<verify step="3" requirements="REQ13707">
+							<eq>
+								<msg_ref type="sip">Response</msg_ref>
+								<expr>486-INVITE</expr>
+							</eq>
+						</verify>
+						<generate event="Branch2Event" fsm="Core"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Setup" event="100-INVITE"/>
+			<transition to="END" event="486-INVITE"/>
+		</state>
+	</add_to>
+</pc2xml>

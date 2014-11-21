@@ -1,0 +1,74 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+ Change History: (Author & Date)
+
+-->
+<!-- First are the document type and the attributes for our document -->
+<pc2xml version="$Revision: 8206 $" name="EUE_Prov_1.1.1.5" 
+	descrip="Hybrid Provisioning" 
+	number="EUE_Prov_1.1.1.5">
+
+	<template file="./templates/EUE_Prov_B_2_2_3.xml" name="HybridUE"/>
+	
+	<!--  Remove StartCapture_RebootWait because capture of these messaages not needed. -->
+	<remove_from fsm="HybridUE">
+		<state ID="StartCapture_RebootWait"/>
+	</remove_from>
+
+	<add_to fsm="HybridUE">
+		<!--  Now add transition back into the StartCapture_RebootWait state. -->
+			<state ID="StartCapture_RebootWait" timer="150000">
+				<transition to="END" event="TimerExpired"/>
+			</state>
+		
+		<!-- After the reboot is complete we want to disconnect the RF an reset the device this way. -->
+		<transition from="StartCapture_RebootWait" to="DisconnectRF" event="TimerExpired"/>
+		
+		<!--  Ask the user to disable to the RF connection to the DUT -->
+		<state ID="DisconnectRF">
+			<prelude>
+				<log promptUser="true" 
+					expr="Disconnect RF coax cable from the E-UE or otherwise force the device to lose sync with the CMTS."/>
+				<!--  Now start the capture for the messages we actually want to test for this test case -->
+				<start_capture>
+					<filter>
+						<var_expr>
+							<expr>host </expr>
+							<msg_ref type="platform">DUT.IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.CM IP Address</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.DHCP Gateway IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.DHCP CM Gateway IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.KDC IP Address</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.TFTP Server IP</msg_ref>
+						</var_expr>
+					</filter>
+				</start_capture>
+				<log promptUser="true" 
+					expr="Press OK when the eCM has reset."/>
+				<log promptUser="true" 
+					expr="Reconnect RF coax cable on the E-UE or otherwise enable the device to re-sync with the CMTS."/>
+				<generate event="Branch5Event"/>
+			</prelude>
+			<transition to="WaitForRFReboot" event="Branch5Event"/>
+		</state>
+		
+		<!--  Wait for the DUT to provision again -->
+		<state ID="WaitForRFReboot" timer="150000">
+			<transition to="DHCPServerVerify" event="TimerExpired"/>
+		</state>
+	</add_to>			
+</pc2xml>

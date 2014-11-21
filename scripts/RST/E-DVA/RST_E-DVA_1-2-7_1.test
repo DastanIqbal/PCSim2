@@ -1,0 +1,303 @@
+#//*****************************************************************************
+#// Filename: RST_E-DVA_1-2-7_1.test
+#// Author:   Matthew Forbes
+#//           
+#// Creation Date: November 14, 2008
+#// Modified by: 
+#//*****************************************************************************
+#// Description:
+#//     TC2516 TEST CASE PROV 12.5 Line Voltage Control - Policy-4
+#//
+#// Objective:
+#//     Verify that the E-MTA DUT is capable of implementing Policy-4 (default policy) 
+#//     of the Line Voltage Control.
+#//
+#// PacketCable DUT:
+#//     E-MTA
+#//
+#// Test Steps:
+#//     - Initial configuration
+#//     - Hook up Line Voltage Registration Tool (LVRT) to all lines
+#//     - Hard Reset DUT
+#//     - Check Provisioning state
+#//     - Perform SNMPv3 GET, pktcEnNcsEndPntLVMgmtPolicy MIB Object, default value voltage_based_on_service(4)
+#//     - Check LVRT log and verify voltage is low for all physical lines on DUT from reset until prov. complete
+#//     - Check LVRT log and verify voltage is high for all provisioned lines (line 1) on DUT after prov. complete
+#//     - Modify configuration file of the MTA so that it's status will be 'passWithWarnings(4)'
+#//     - Hard Reset DUT
+#//     - Check Provisioning state
+#//     - Check LVRT log and verify voltage is low for all physical lines on DUT from reset until prov. complete
+#//     - Check LVRT log and verify voltage is high for all provisioned lines (line 1) on DUT after prov. complete
+#//     - Modify configuration file of the MTA so that it will provision another endpoint.
+#//     - Hard Reset DUT
+#//     - Check Provisioning state
+#//     - Check LVRT log and verify voltage is low for all provisioned lines on DUT from reset until prov. complete
+#//     - Check LVRT log and verify voltage is high for all provisioned lines (lines 1&2) on DUT after prov. complete
+#//     - Perform SNMPv3 SET, pktcEnNcsEndPntLVMgmtPolicy MIB Object, a valid value 1,2, or 3
+#//     - Soft reset DUT
+#//     - Perform SNMPv3 GET, pktcEnNcsEndPntLVMgmtPolicy MIB Object, value should be same as set above
+#//
+#// Notes:
+#//     - Requires provPrimitives.tcl & tftp_primitives.tcl.
+#//     - Requires the specific config file in $BASE_CFG_FILE_PATH in Provisioning Server.
+#//     - Requires parT.tcl parsing tool to parse data from capture file.
+#//*****************************************************************************
+global SCRIPT_VERSION
+set SCRIPT_VERSION { # $Id: RST_E-DVA_1-2-7_1.test 7406 2010-07-20 17:17:37Z dthakore $ }
+
+ DoStep "PROV_12-5_1-1" "Initial configuration" {
+    LogMsg "--- Initial PROV module ---"
+    Init_PROV
+    # ProvCreateConfig 291 $MTA_MAC
+ } { PASS_STEP }
+
+ # DoStep "PROV_12-5_1-2" "Initial configuration" {
+    # if {$AUTOCONFIG_INIT} {
+        # AutoCfg_OpenFile $MTA_MAC
+        # # Delete all endpoints except the first line
+        # for {set ln 2 ";set index 10} {$ln <= $MTA1_NUMLINES} {incr ln;incr index} {"
+        # AutoCfg_EditFile delete $CLABS_OID.2.2.2.1.2.1.1.1.$index $MTA_MAC						;# CallAgentId
+        # }
+        # # save config file for MTA
+        # AutoCfg_CloseSaveFile $MTA_MAC
+        # } else {
+            # verify_signal "Modify configuration file to disable all lines except line 1"
+        # }
+    # } {
+        # PASS_STEP
+    # }
+    
+ DoStep "PROV_12-5_1-3" "Configure Provisioning Server" {
+        # PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122 Secure_Flow_BasicCall_DigitMap.cfg
+        PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122 Secure_Flow_BasicCall_DigitMap_CW69_RST_Baseline.cfg
+     PROV_DEPLOY_DHCP
+    } { PASS_STEP }
+    
+  #  Removed this step, not in test MLF 4/28/08
+ DoStep "PROV_12-5_1-4" "Connect LVRT" {
+    verify_signal "Connect all $MTA1_NUMLINES lines to the Line Voltage Registration Tool & start log."
+ } { PASS_STEP }
+    
+    
+  DoStep "PROV_12-5_1-5" "Start sniffer" {
+      LogMsg "--- Start sniffer ---"
+      Init_CONTROLLER_LAN
+      SetupCaptureControllerLan "host $MTA_IP || udp port 67 || host $CM_IP"
+      StartCaptureControllerLan
+  } {PASS_STEP}
+    
+################ Reset CM and MTA and Verify Provisioning ################
+
+    DoStep "PROV_12-5_2-1" "Hard reboot MTA" {
+        verify_signal "Hard reboot the DUT (power cycle)."
+        # set val [SNMPvN_RESET $CM_IP]
+        set valt1 [clock format [clock seconds]]
+        LogMsg "Hard reboot of CM and MTA has passed"
+        LogMsg "--- Voltage should be low(0-20V) now. ---"       
+ } {
+    verify_signal "Voltage should be low on all lines (0-20V)."
+ }
+ 
+ DoStep "PROV_12-5_3-1" "pktcMTADevProvisioningState Content Verification" {
+     # Wait for a minute to let CM/MTA starting to reboot
+     actionWait "Wait for CM/MTA to reboot" 40
+     # Get the OID from the MTA and check it using our previously defined
+        set val [GetProvState 1 600]
+        set valt2 [clock format [clock seconds]]
+     LogMsg "MTA Provisioning State"
+     LogMsg "             - Expected : 1"
+     LogMsg "             - Received : $val"
+     LogMsg "--- Voltage should be high (20-48V) now. ---"
+        verify_signal "Voltage should have remained low and now be high(20-48V) on line 1."
+ } {
+        IsEqual $val 1
+ }
+
+set oid_pktcEnNcsEndPntLVMgmtPolicy .1.3.6.1.4.1.4491.2.2.6.2.1.2.3.1.1.1
+    
+  # DoStep "PROV_12-5_4-1" "SNMP SET pktcEnNcsEndPntLVMgmtPolicy to voltage_at_all_times(1)" {
+        # set type  INTEGER
+        # set newValue 4
+        # set result [SNMP_SET $oid_pktcEnNcsEndPntLVMgmtPolicy $type $newValue $MTA_IP]
+    # } {
+        # IsEqual $result 0 ;# check MIB is writable
+    # }   
+    
+   DoStep "PROV_12-51_4-1" "pktcEnNcsEndPntLVMgmtPolicy Content Verification" {
+       # Get the OID from the MTA and check it using our previously defined
+       set val [SNMP_GET $oid_pktcEnNcsEndPntLVMgmtPolicy $MTA_IP 20]
+       LogMsg "The Value of MTA pktcEnNcsEndPntLVMgmtPolicy is: $val"
+   } {
+       IsEqual $val 4
+   }
+    
+    DoStep "PROV_12-5_5-1" "Verify voltage levels on LVRT" {
+        verify_signal "View LVRT log & verify voltage for all $MTA1_NUMLINES lines is low(0-20v) between the times
+        $valt1 and
+        $valt2."
+    } { PASS_STEP }
+    
+    DoStep "PROV_12-5_6-1" "Verify voltage levels on LVRT" {
+        verify_signal "View LVRT log & verify voltage for line 1 is high(20-48v) after the time
+        $valt2."
+    } { PASS_STEP }
+    
+    # DoStep "PROV_12-5_7-1" "Modify configuration" {
+        # if {$AUTOCONFIG_INIT} {
+            # AutoCfg_OpenFile $MTA_MAC
+            # # Add unknown TLV
+                # AutoCfg_EditFile add -preEncoded "63 00 02 4f ff" $MTA_MAC ;# TLV99 (unknown) value 0x4FFF
+            # # save config file for MTA
+            # AutoCfg_CloseSaveFile $MTA_MAC
+        # } else {
+            # verify_signal "Modify configuration file adding unknown TLV to passWithWarnings(4)"
+        # }
+    # } {
+        # PASS_STEP
+    # }
+
+
+
+    DoStep "PROV_12-5_1-3" "Configure Provisioning Server" {
+        PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122 cfg-3239.bin
+        PROV_DEPLOY_DHCP
+    } { PASS_STEP }
+################ Reset CM and MTA and Verify Provisioning ################
+    
+    DoStep "PROV_12-5_7-2" "Hard reboot MTA" {
+        verify_signal "Hard reboot the DUT (power cycle)."
+        set valt1 [clock format [clock seconds]]
+        LogMsg "--- Voltage should be low(0-20V) now. ---"
+        
+    } {
+        verify_signal "Voltage should be low(0-20V) now on all lines."
+    }
+    
+    DoStep "PROV_12-5_8-1" "pktcMTADevProvisioningState Content Verification" {
+        # Wait for a minute to let CM/MTA starting to reboot
+        actionWait "Wait for CM/MTA to reboot" 30
+        # Get the OID from the MTA and check it using our previously defined
+        set val [GetProvState 4 600]
+        set valt2 [clock format [clock seconds]]
+        LogMsg "MTA Provisioning State"
+        LogMsg "             - Expected : 4"
+        LogMsg "             - Received : $val"
+        LogMsg "--- Voltage should be high (20-48V) now. ---"
+        verify_signal "Voltage should have remained low and now be high(20-48V) on line 1."
+    } {
+        IsEqual $val 4
+    }
+    
+    # DoStep "PROV_12-5_9-1" "Verify voltage levels on LVRT" {
+        # verify_signal "View LVRT log & verify voltage for all $MTA1_NUMLINES lines is low(0-20v) between the times
+        # $valt1 and
+        # $valt2."
+    # } { PASS_STEP }
+    # 
+    # DoStep "PROV_12-5_10-1" "Verify voltage levels on LVRT" {
+        # verify_signal "View LVRT log & verify voltage for line 1 is high(20-48v) after the time
+        # $valt2."
+    # } { PASS_STEP }
+   
+    # DoStep "PROV_12-5_10-1" "Modify configuration" {
+        # LogMsg "--- Modify configuration---"
+        # ProvCreateConfig 291 $MTA_MAC
+    # } { PASS_STEP }
+    # 
+    # DoStep "PROV_12-5_10-2" "Modify configuration" {
+        # if {$AUTOCONFIG_INIT} {
+            # AutoCfg_OpenFile $MTA_MAC
+            # # Delete all endpoints except the first line
+            # "for {set ln 3;set index 11} {$ln <= $MTA1_NUMLINES} {incr ln;incr index} {"
+                # AutoCfg_EditFile delete $CLABS_OID.2.2.2.1.2.1.1.1.$index $MTA_MAC						;# CallAgentId
+            # }
+            # # save config file for MTA
+            # AutoCfg_CloseSaveFile $MTA_MAC
+        # } else {
+            # verify_signal "Modify configuration file not to provision lines except lines 1 & 2"
+        # }
+    # } {
+        # PASS_STEP
+    # }
+    
+    DoStep "PROV_12-5_10-1" "Configure Provisioning Server" {
+        # PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122 Secure_Flow_BasicCall_DigitMap.cfg
+        PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122 Secure_Flow_BasicCall_DigitMap_CW69_RST_Baseline.cfg
+        PROV_DEPLOY_DHCP
+    } { PASS_STEP }
+
+    DoStep "PROV_12-5_10-2" "SNMP RESET" {
+        # SNMP_RESET $MTA_IP
+            SNMP_SET $oid_pktcMtaDevResetNow INTEGER 1 $MTA_IP
+        set valt1 [clock format [clock seconds]]
+            # WaitProvCompletion 30
+            actionWait "Wait for MTA to reboot" 30
+        set valt2 [clock format [clock seconds]]
+        LogMsg "--- Voltage should be high (20-48V) now. ---"
+        verify_signal "Voltage should now be high(20-48V) on line 1 and 2."
+    } {PASS_STEP}
+    
+    DoStep "PROV_12-5_11-1" "pktcMtaDevProvisioningState Content Verification" {
+        # Get the OID from the MTA and check it using our previously defined
+        set val [SNMP_GET $oid_pktcMtaDevProvisioningState $MTA_IP 20]
+        LogMsg "The Value of MTA Provisioning State is: $val"
+    } {
+        IsEqual $val 1
+    }
+    
+     # DoStep "PROV_12-5_13-1" "Verify voltage levels on LVRT" {
+         # verify_signal "View LVRT log & verify voltage for lines 1 and 2 is low between the times
+         # $valt1 and
+         # $valt2."
+     # } { PASS_STEP }
+     
+     # DoStep "PROV_12-5_13-1" "Verify voltage levels on LVRT" {
+         # verify_signal "View LVRT log & verify voltage for lines 1 and 2 is high at the time
+         # $valt2."
+        # } { PASS_STEP }
+        
+     DoStep "PROV_12-5_13-1" "SNMP SET pktcEnNcsEndPntLVMgmtPolicy to voltage_at_all_times(1)" {
+         set type  INTEGER
+         set newValue 1
+         set result [SNMP_SET $oid_pktcEnNcsEndPntLVMgmtPolicy $type $newValue $MTA_IP]
+     } {
+         IsEqual $result 0 ;# check MIB is writable
+     }
+    
+     DoStep "PROV_12-5_14-1" "SNMP RESET" {
+            # SNMP_RESET $MTA_IP
+            SNMP_SET $oid_pktcMtaDevResetNow INTEGER 1 $MTA_IP
+            # WaitProvCompletion 60
+            actionWait "Wait for MTA to reboot" 30
+     } {PASS_STEP}
+        
+     DoStep "PROV_12-5_15-1" "pktcMtaDevProvisioningState Content Verification" {
+         # Get the OID from the MTA and check it using our previously defined
+         set val [SNMP_GET $oid_pktcMtaDevProvisioningState $MTA_IP 20]
+         LogMsg "The Value of MTA Provisioning State is: $val"
+     } {
+         IsEqual $val 1
+     }
+ 
+     DoStep "PROV_12-5_16-1" "pktcEnNcsEndPntLVMgmtPolicy Content Verification" {
+        # Get the OID from the MTA and check it using our previously defined
+         set val [SNMP_GET $oid_pktcEnNcsEndPntLVMgmtPolicy $MTA_IP 20]
+         LogMsg "The Value of MTA pktcEnNcsEndPntLVMgmtPolicy is: $val"
+    } {
+        IsEqual $val 1
+    }
+        
+    DoStep "PROV_12-5_16-2" "Stop sniffer" {
+        LogMsg "--- Stop sniffer ---"
+        StopCaptureControllerLan
+        SaveToFileControllerLan
+    } {PASS_STEP}
+    
+       
+################################################################################
+# Cleanup
+################################################################################
+
+Cleanup
+return 0
+

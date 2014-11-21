@@ -1,0 +1,404 @@
+################################################################################
+#// Filename: E-UE-DATA_1-2-3-6.test (PACT)
+#// Author:   Matthew Forbes
+#//
+#//
+#//
+#// Creation Date: March 3, 2009
+#// Modified by:
+################################################################################
+#// Description:
+#//     TC2752 TEST CASE E-UE-DATA 1.2.3.6 - Ability of eUE to Implement the pktcMtaDevResetNow MIB
+#//
+#//
+#// Objective:
+#//     This test verifies the eUE ability to properly implement the pktcMtaDevResetNow MIB
+#//     defined in CL-PKTC-EUE-PROV-MGMT-MIB. . It also tests the ability of the eUE to gracefully
+#//     terminate services or sessions when the MIB value is set to ‘true.’
+#//
+#//
+#// PacketCable DUT:
+#//     EDVA
+#//
+#// Test Steps:
+#//     - Initial configuration
+#//     - Start sniffer
+#//     - Reset DUT
+#//     - Check Provisioning state
+#//     - Invoke SNMPv3 API and query MIB objects and validate values
+#//     - Stop sniffer
+#//     - Hybrid configuration
+#//     - Start sniffer
+#//     - Reset DUT
+#//     - Check Provisioning state
+#//     - Invoke SNMPv2 API and bulk query MIB objects and validate values
+#//     - Stop sniffer
+#//
+#//
+#// Notes:
+#//     - Requires provPrimitives.tcl
+#//
+#//
+################################################################################
+
+global SCRIPT_VERSION
+set SCRIPT_VERSION { # $Id: E-UE-DATA_1-2-3-6.test 7406 2010-07-20 17:17:37Z dthakore $ }
+
+#set scriptPath [file dirname [info script]]
+#source [file join $scriptPath provPrimitives.tcl]
+#source [file join $scriptPath ping_primitives.tcl]
+
+Init_PROV
+# ProvCreateConfig 291 $MTA_MAC
+# PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122 $MTA_MAC.bin
+PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122 Device_Level_Secure.cfg
+PROV_DEPLOY_DHCP
+
+set test_case E-UE-DATA_1-2-3-6
+set testCaseNumber TC-2752
+set step_num 1
+
+set CM_Ping_State 0
+set MTA_Ping_State 0
+set cm_ping_reply ""
+set mta_ping_reply ""
+
+DoStep ${test_case}[incr step_num] "Start sniffer" {
+    LogMsg "--- Start sniffer ---"
+    Init_CONTROLLER_LAN
+    SetupCaptureControllerLan "host $MTA_IP"
+    StartCaptureControllerLan
+} {PASS_STEP}
+
+DoStep ${test_case}[incr step_num] "$testCaseNumber->pktcMtaDevProvisioningState Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMP_GET $oid_pktcMtaDevProvisioningState $MTA_IP 20]
+    LogMsg "The Value of MTA Provisioning State is: $val" 49
+    if {$val != 1} {
+        puts "pktcMtaDevProvisioningState MIB value is not 1. Please Provision the MTA properly before proceeding" red    }
+} {
+    IsEqual $val 1
+}
+
+#If MTA is not provisioned, Cleanup and return.
+if {$val !=1} {
+    Cleanup
+    return 0
+}
+
+DoStep ${test_case}[incr step_num] "Verify pktcMtaDevResetNow" {
+    LogMsg "--- Verify pktcMtaDevResetNow ---"
+    set val [SNMP_GET $oid_pktcMtaDevResetNow $MTA_IP]
+} {
+    IsEqual $val 2
+}
+
+
+
+# Set up the test time. This is used as to limit the number of Pings i.e., specify "ping -n" option.
+# After "testTime" seconds ping processes will be terminated.
+# Setting up testTime makes it neccessary that test is completed within that time.
+# NOTE : If there is a delay in network and test is taking longer, increase the "testTime variable"
+
+set testTime 60
+set startTime [clock seconds]
+# Open 2 socket for DOS prompt
+set fd_cm [open "| ping  -n $testTime $CM_IP" r+]
+puts "Socket ID for CM : $fd_cm"
+
+set fd_mta [open "| ping  -n $testTime $MTA_IP" r+]
+puts "Socket ID for MTA : $fd_mta"
+
+
+fconfigure $fd_cm -blocking 0 -buffering line
+fileevent $fd_cm readable [list Read_CM $fd_cm]
+
+fconfigure $fd_mta -blocking 0 -buffering line
+fileevent $fd_mta readable [list Read_MTA $fd_mta]
+
+#Check CM/MTA Ping State Initially
+DoStep ${test_case}[incr step_num] "$testCaseNumber->MTA/CM Ping Start-State Check" {
+    set resp [Step_Ping_Start 5]
+    if {$resp == -1} {
+        LogMsg "CM/MTA not responding to ping" 99
+        puts "CM/MTA Ping Start-State Check = $resp"
+    }
+} {IsEqual $resp 0}
+
+
+#Check CM/MTA Ping State Initially
+DoStep ${test_case}[incr step_num] "$testCaseNumber->MTA/CM Ping OK-State Check" {
+    LogMsg "CM/MTA pinging started, checking for ping replies" 99
+    flush stdout
+    set resp [Step_Ping_OK 5]
+    if {$resp == -1} {
+        LogMsg "CM/MTA ping replies not received properly" 99
+        puts "CM/MTA Ping OK-State Check = $resp"
+    }
+} {IsEqual $resp 0}
+
+
+#Do SNMP RESET on MTA
+DoStep ${test_case}[incr step_num] "$testCaseNumber->SNMP RESET" {
+    LogMsg "CM/MTA ping replies received. Resetting the MTA" 99
+    # SNMP_RESET $MTA_IP
+    set resp [ SNMP_SET $oid_pktcMtaDevResetNow INTEGER 1 $MTA_IP ]
+} {PASS_STEP}
+
+if {$resp == 0} {
+    puts "Checking for MTA state after SNMP Reset command"
+}
+
+#Check MTA State after SNMP RESET
+DoStep ${test_case}[incr step_num] "$testCaseNumber->MTA RESET-State Check" {
+    LogMsg "MTA Resetted.Check CM and MTA State" 99
+    LogMsg "    -Current CM/MTA State = $CM_Ping_State  - $MTA_Ping_State" 99
+    set timeleft [expr $testTime-[expr [clock seconds] - $startTime]-30]
+    set resp [Step_MTA_Reset $timeleft]
+    # set resp [Step_MTA_Reset 5]
+    if {$resp == -1} {
+        LogMsg "MTA Reset operation didn't result in desired change in CM/MTA State" 99
+        LogMsg "    - CM/MTA State = $CM_Ping_State  - $MTA_Ping_State"
+        puts "MTA RESET-State Check = $resp"
+    }
+} {IsEqual $resp 0}
+
+#Check for MTA Recovery
+DoStep ${test_case}[incr step_num] "$testCaseNumber->MTA RECOVER-State Check" {
+    LogMsg "Checking for MTA Recovery" 99
+    set timeleft [expr $testTime-[expr [clock seconds] - $startTime]-5]
+    set resp [Step_MTA_Recovered $timeleft]
+    if {$resp == -1} {
+        LogMsg "MTA doesn't recover after SNMP RESET" 99
+        puts "MTA RECOVER-State Check = $resp"
+    }
+} {IsEqual $resp 0}
+
+puts "Closing Sockets. Please wait for [expr $testTime -[expr [clock seconds] -$startTime]] seconds\n" action
+while {1} {
+    set endTime [clock seconds]
+    set diff [expr $endTime - $startTime]
+    #puts "Start Time = $startTime : End Time = $endTime : Diff = $diff"
+    if {$diff  >= $testTime} {break;}
+    #after [expr $testTime-$diff]
+    after 1000
+    puts -nonewline .
+}
+
+DoStep ${test_case}[incr step_num] "$testCaseNumber->pktcMtaDevProvisioningState Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMP_GET $oid_pktcMtaDevProvisioningState $MTA_IP 20]
+    LogMsg "The Value of MTA Provisioning State is: $val" 49
+} {
+    
+    IsEqual $val 1
+}
+
+
+DoStep ${test_case}[incr step_num] "Stop sniffer" {
+    LogMsg "--- Stop sniffer ---"
+    StopCaptureControllerLan
+    SaveToFileControllerLan "_Secure_Prov"
+} {PASS_STEP}
+
+################################################################################
+# Run MIB checks for Hybrid flow type
+################################################################################
+set step_num 1
+
+DoStep ${test_case}[incr step_num]h "Configure Provisioning Server" {
+    PROV_MODIFY_DEVICE $MTA_MAC HYBRID2 Device_Level_Hybrid.cfg
+    PROV_DEPLOY_DHCP
+} { PASS_STEP }
+
+
+DoStep ${test_case}[incr step_num]h_1 "Start sniffer" {
+    LogMsg "--- Start sniffer ---"
+    # Init_CONTROLLER_LAN
+    SetupCaptureControllerLan "host $MTA_IP || udp port 67 || host $CM_IP"
+    StartCaptureControllerLan
+} {PASS_STEP}
+
+############### Reset CM and MTA and Verify Provisioning ################
+
+DoStep ${test_case}${step_num}h_2 "Reset CM/MTA" {
+    set val [SNMPvN_RESET $CM_IP]
+    LogMsg "--- Reset of CM and MTA has passed ---"
+} {
+    IsEqual $val 0
+}
+
+DoStep ${test_case}${step_num}h_3 "pktcMTADevProvisioningState Content Verification" {
+    # Wait for a minute to let CM/MTA starting to reboot
+    actionWait "Wait for CM/MTA to reboot" 120
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMPvN_GET $oid_pktcMtaDevProvisioningState $MTA_IP]
+    LogMsg "MTA Provisioning State"
+    LogMsg "             - Expected : 1"
+    LogMsg "             - Received : $val"
+} {
+    IsEqual $val 1
+}
+
+DoStep ${test_case}[incr step_num]h "Verify pktcMtaDevResetNow" {
+    LogMsg "--- Verify pktcMtaDevResetNow ---"
+    set val [SNMPvN_GET $oid_pktcMtaDevResetNow $MTA_IP]
+} {
+    IsEqual $val 2
+}
+
+DoStep ${test_case}[incr step_num]h "Ping DUT" {
+    LogMsg "Ping DUT, should respond" 99
+        verify_signal "Open command window, ping $MTA_IP."
+} {
+    verify_signal "EDVA should respond."
+}
+
+# set testTime 60
+# set startTime [clock seconds]
+# # Open 2 socket for DOS prompt
+# set fd_cm [open "| ping  -n $testTime $CM_IP" r+]
+# puts "Socket ID for CM : $fd_cm"
+# 
+# set fd_mta [open "| ping  -n $testTime $MTA_IP" r+]
+# puts "Socket ID for MTA : $fd_mta"
+# 
+# 
+# fconfigure $fd_cm -blocking 0 -buffering line
+# fileevent $fd_cm readable [list Read_CM $fd_cm]
+# 
+# fconfigure $fd_mta -blocking 0 -buffering line
+# fileevent $fd_mta readable [list Read_MTA $fd_mta]
+# 
+# #Check CM/MTA Ping State Initially
+# DoStep ${test_case}[incr step_num]h "$testCaseNumber->MTA/CM Ping Start-State Check" {
+    # set resp [Step_Ping_Start 5]
+    # if {$resp == -1} {
+        # LogMsg "CM/MTA not responding to ping" 99
+        # puts "CM/MTA Ping Start-State Check = $resp"
+    # }
+# } {IsEqual $resp 0}
+# 
+# 
+# #Check CM/MTA Ping State Initially
+# DoStep ${test_case}[incr step_num]h "$testCaseNumber->MTA/CM Ping OK-State Check" {
+    # LogMsg "CM/MTA pinging started, checking for ping replies" 99
+    # flush stdout
+    # set resp [Step_Ping_OK 5]
+    # if {$resp == -1} {
+        # LogMsg "CM/MTA ping replies not received properly" 99
+        # puts "CM/MTA Ping OK-State Check = $resp"
+    # }
+# } {IsEqual $resp 0}
+# 
+
+#Do SNMP RESET on MTA
+DoStep ${test_case}[incr step_num]h "$testCaseNumber->SNMP RESET" {
+    LogMsg "SNMP RESET. Resetting the MTA" 99
+    # SNMP_RESET $MTA_IP
+    set resp [ SNMPvN_SET $oid_pktcMtaDevResetNow INTEGER 1 $MTA_IP ]
+} {PASS_STEP}
+
+# if {$resp == 0} {
+    # puts "Checking for MTA state after SNMP Reset command"
+# }
+# 
+# #Check MTA State after SNMP RESET
+# DoStep ${test_case}[incr step_num]h "$testCaseNumber->MTA RESET-State Check" {
+    # LogMsg "MTA Resetted.Check CM and MTA State" 99
+    # LogMsg "    -Current CM/MTA State = $CM_Ping_State  - $MTA_Ping_State" 99
+    # set timeleft [expr $testTime-[expr [clock seconds] - $startTime]-30]
+    # set resp [Step_MTA_Reset $timeleft]
+    # # set resp [Step_MTA_Reset 5]
+    # if {$resp == -1} {
+        # LogMsg "MTA Reset operation didn't result in desired change in CM/MTA State" 99
+        # LogMsg "    - CM/MTA State = $CM_Ping_State  - $MTA_Ping_State"
+        # puts "MTA RESET-State Check = $resp"
+    # }
+# } {IsEqual $resp 0}
+
+# # Check for MTA Recovery
+# DoStep ${test_case}[incr step_num]h "$testCaseNumber->MTA RECOVER-State Check" {
+    # LogMsg "Checking for MTA Recovery" 99
+    # set timeleft [expr $testTime-[expr [clock seconds] - $startTime]-5]
+    # set resp [Step_MTA_Recovered $timeleft]
+    # if {$resp == -1} {
+        # LogMsg "MTA doesn't recover after SNMP RESET" 99
+        # puts "MTA RECOVER-State Check = $resp"
+    # }
+# } {IsEqual $resp 0}
+# 
+# puts "Closing Sockets. Please wait for [expr $testTime -[expr [clock seconds] -$startTime]] seconds\n" action
+# while {1} {
+    # set endTime [clock seconds]
+    # set diff [expr $endTime - $startTime]
+    # #puts "Start Time = $startTime : End Time = $endTime : Diff = $diff"
+    # if {$diff  >= $testTime} {break;}
+    # #after [expr $testTime-$diff]
+    # after 1000
+    # puts -nonewline .
+# }
+
+#Do SNMP RESET on MTA
+DoStep ${test_case}[incr step_num]h "Ping DUT" {
+    LogMsg "Ping DUT, should not respond" 99
+} {
+    verify_signal "Ping $MTA_IP, EDVA should not respond."
+}
+
+DoStep ${test_case}[incr step_num]h "$testCaseNumber->pktcMtaDevProvisioningState Content Verification" {
+    actionWait " Wait 30 seconds for reboot" 30
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMPvN_GET $oid_pktcMtaDevProvisioningState $MTA_IP]
+    LogMsg "The Value of MTA Provisioning State is: $val" 49
+} {
+    
+    IsEqual $val 1
+}
+
+DoStep ${test_case}[incr step_num]h "Verify pktcMtaDevResetNow" {
+    LogMsg "--- Verify pktcMtaDevResetNow ---"
+    set val [SNMPvN_GET $oid_pktcMtaDevResetNow $MTA_IP]
+} {
+    IsEqual $val 2
+}
+
+DoStep ${test_case}[incr step_num]h "Stop Sniffer" {
+    LogMsg "--- Stop Sniffer ---"
+    StopCaptureControllerLan
+    SaveToFileControllerLan "_Hybrid_Prov"
+} { PASS_STEP }
+
+DoStep ${test_case}[incr step_num] "Configure Provisioning Server" {
+    PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122 Device_Level_Secure.cfg
+    PROV_DEPLOY_DHCP
+} { PASS_STEP }
+
+
+############### Reset CM and MTA and Verify Provisioning ################
+
+DoStep ${test_case}[incr step_num] "Reset CM/MTA" {
+    set val [SNMPvN_RESET $CM_IP]
+    LogMsg "--- Reset of CM and MTA has passed ---"
+} {
+    IsEqual $val 0
+}
+
+DoStep ${test_case}[incr step_num] "pktcMTADevProvisioningState Content Verification" {
+    # Wait for a minute to let CM/MTA starting to reboot
+    actionWait "Wait for CM/MTA to reboot" 60
+    # Get the OID from the MTA and check it using our previously defined
+    set val [GetProvState 1 600]
+    LogMsg "MTA Provisioning State"
+    LogMsg "             - Expected : 1"
+    LogMsg "             - Received : $val"
+} {
+    IsEqual $val 1
+}
+
+
+################################################################################
+# Cleanup
+################################################################################
+set CONTINUE_PAST_STEP_ERROR 0
+Cleanup

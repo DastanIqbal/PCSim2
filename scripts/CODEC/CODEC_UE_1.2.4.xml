@@ -1,0 +1,71 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+ Change History: (Author & Date)
+	PCPCII-140 - Update the script to match all of the changes made to the D09 version of the
+		ATP. (ghassler 08/04/2009)
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="CODEC-MEDIA_1.2.4" 
+	descrip="FAX Transmission using (G.711)  " 
+	number="CODEC-MEDIA_1.2.4">
+	
+	<template file="./templates/Proxy.xml" name="SCSCF1"/>
+	<remove_from fsm="SCSCF1">
+		<state ID="Connected"/>
+		<state ID="OffHook"/>
+	</remove_from>
+	<add_to fsm="SCSCF1">
+		<state ID="OffHook">
+			<prelude>
+				<send protocol="utility" msgtype="OffHook"/>
+				<start_capture>
+					<filter>
+						<var_expr>
+							<expr>host </expr>
+							<msg_ref type="platform">PCSCF1.IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">UE0.IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">UE1.IP</msg_ref>
+						</var_expr>
+					</filter>
+				</start_capture>
+			</prelude>
+			<transition to="Setup" event="OffHookComplete"/>
+		</state>
+		
+		<state ID="Connected">
+			<prelude>
+				<!-- Step - 1 test case Appendix B.4 Common Test Procedures -->
+				<log expr="Insert page to be faxed into the fax machine attached to the DUT and press send."/>
+				<!-- Step - 2 test case Appendix B.4 Common Test Procedures -->
+				<log step="2" requirements="REQ12544" 
+					promptUser="True" yesExpected="True" verify="True" 
+					expr="On UE1, verify the fax has no distortions on the received page."/>
+				
+				<!-- Step - 3 test case Appendix B.4 Common Test Procedures -->
+				<log expr="Insert page to be faxed into the fax machine attached to the UE1 and press send."/>
+				
+				<!-- Step - 3 test case Appendix B.4 Common Test Procedures -->
+				<log step="3" requirements="REQ12544" 
+					promptUser="True" yesExpected="True" verify="True" 
+					expr="On UE1, verify the fax has no distortions on the received page."/>
+				<generate event="SucceedEvent"/>
+			</prelude>
+			<transition to="OnHook" event="SucceedEvent"/>
+		</state>
+	</add_to>
+</pc2xml>

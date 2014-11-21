@@ -1,0 +1,104 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+
+<pc2xml version="$Revision: 8188 $" name="UT_UE_1.6.2.2" descrip="This is a unit test script for testing the UE_1.6.2.2 test script." number="1">
+	<template name="UE0" file="$UT_PATH/Templates/ut/Orig_DUT.xml"/>
+	<remove_from fsm="UE0">
+		<state ID="Connected"/>
+		<state ID="Setup" sub="prelude"/>
+	</remove_from>
+	<add_to fsm="UE0">
+		<states initialstate="Register"/>
+		<state ID="Setup" sub="prelude">
+			<sleep time="3000"/>
+			<send protocol="sip" msgtype="Invite" target="UE1" originator="DUT"/>
+		</state>
+		<!-- CONNECTED State -->
+		<state ID="Connected" timer="21000">
+			<prelude>
+				<send protocol="sip" msgtype="ACK" target="UE1" originator="DUT"/>
+			</prelude>
+			<transition to="Bye" event="TimerExpired"/>
+		</state>
+		<state ID="Bye" timer="450">
+			<prelude>
+				<send protocol="sip" msgtype="BYE" target="UE1" originator="DUT"/>
+			</prelude>
+			<transition to="Bye2" event="TimerExpired"/>
+			<transition to="Fail" event="200-BYE"/>
+		</state>
+		<state ID="Bye2" timer="450">
+			<prelude>
+				<retransmit protocol="sip" msgtype="BYE"/>
+			</prelude>
+			<transition to="Bye3" event="TimerExpired"/>
+			<transition to="Fail" event="200-BYE"/>
+		</state>
+		<state ID="Bye3" timer="1000">
+			<prelude>
+				<retransmit protocol="sip" msgtype="BYE"/>
+			</prelude>
+			<transition to="Bye4" event="TimerExpired"/>
+			<transition to="Fail" event="200-BYE"/>
+		</state>
+		<state ID="Bye4" timer="2000">
+			<prelude>
+				<retransmit protocol="sip" msgtype="BYE"/>
+			</prelude>
+			<transition to="Bye5" event="TimerExpired"/>
+			<transition to="Fail" event="200-BYE"/>
+		</state>
+		<state ID="Bye5" timer="3950">
+			<prelude>
+				<retransmit protocol="sip" msgtype="BYE"/>
+			</prelude>
+			<transition to="Bye6" event="TimerExpired"/>
+			<transition to="Fail" event="200-BYE"/>
+		</state>
+		<state ID="Bye6" timer="7900">
+			<prelude>
+				<retransmit protocol="sip" msgtype="BYE"/>
+			</prelude>
+			<transition to="Bye7" event="TimerExpired"/>
+			<transition to="Fail" event="200-BYE"/>
+		</state>
+		<state ID="Bye7" timer="15900">
+			<prelude>
+				<retransmit protocol="sip" msgtype="BYE"/>
+			</prelude>
+			<transition to="Bye8" event="TimerExpired"/>
+			<transition to="Fail" event="200-BYE"/>
+		</state>
+		<state ID="Bye8">
+			<prelude>
+				<retransmit protocol="sip" msgtype="BYE"/>
+			</prelude>
+			<transition to="END" event="200-BYE"/>
+		</state>
+		<state ID="Fail">
+			<prelude>
+				<fail/>
+				<generate event="FailEvent"/>
+			</prelude>
+			<!-- Transitions for Fail state -->
+			<transition to="END" event="FailEvent"/>
+		</state>
+	</add_to>
+</pc2xml>

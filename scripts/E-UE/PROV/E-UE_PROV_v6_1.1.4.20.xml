@@ -1,0 +1,108 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+ Change History: (Author & Date)
+
+
+
+-->
+<!-- First are the document type and the attributes for our document -->
+<pc2xml version="$Revision: 7768 $" name="EUE Prov 1.1.4.20" 
+		descrip="Verify Proper eUE Behavior When a DSS_ID is Present in Sub-Option 2 of the DHCPv6 Advertise" 
+		number="EUE Prov 1.1.4.20">
+
+	<!-- Next we define the each of state machines -->
+	<template file="./templates/EUE_Prov_B_1_1_1.xml" name="RebootCM"/>
+	
+	<add_to fsm="RebootCM">
+		<transition from="StartCapture_RebootWait" to="VerifyProvState" event="TimerExpired"/>
+	
+		<state ID="VerifyProvState">
+			<prelude once="true">
+				<send protocol="utility" msgtype="SNMPGet">
+					<mod modtype="add" hdr="oids">
+						<expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvisioningState.0</expr>
+					</mod>
+					<mod modtype="replace" hdr="version">
+						<expr>3</expr>
+					</mod>
+				</send>
+				<stop_capture/>
+				<parse_capture name="eCM_DHCPc6">
+					<parser_filter protocol="dhcpv6" clientMAC="DUT.CM MAC Address"/>
+				</parse_capture>
+				<parse_capture name="eUE_DHCPc6">
+					<parser_filter protocol="dhcpv6" clientMAC="DUT.MAC Address"/>
+				</parse_capture>
+					<parse_capture name="eUE_Prov">
+					<parser_filter ip="DUT.IP"/>
+				</parse_capture>
+			</prelude>
+			<response>
+				<verify step="1">
+					<neq>
+						<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+						<expr>1</expr>
+					</neq>
+				</verify>
+				
+			</response>
+			<transition to="VerifyCMDSSID" event="SNMPResp"/>
+			<transition to="VerifyCMDSSID" event="SNMPRespFailure"/>
+		</state>
+		
+		<state ID="VerifyCMDSSID">
+			<prelude once="true">
+				<send protocol="utility" msgtype="SNMPGet">
+					<mod modtype="add" hdr="oids">
+						<expr>DOCS-CABLE-DEVICE-MIB::docsDevServerDhcp.0</expr>
+					</mod>
+					<mod modtype="replace" hdr="version">
+						<expr>3</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="3">
+					<eq>
+						<capture_ref type="dhcpv6" name="eCM_DHCPc6" substring="32">Offer.Option123.suboption1</capture_ref>
+						<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+					</eq>
+				</verify>
+			</response>
+			<transition to="VerifyUEDSSID" event="SNMPResp"/>
+			<transition to="VerifyUEDSSID" event="SNMPRespFailure"/>
+		</state>
+		
+		<state ID="VerifyUEDSSID">
+			<prelude once="true">
+				<send protocol="utility" msgtype="SNMPGet">
+					<mod modtype="add" hdr="oids">
+						<expr>CL-PKTC-EUE-PROV-MGMT-MIB::pktcEUEDhcpv6ServerId1.0</expr>
+					</mod>
+					<mod modtype="replace" hdr="version">
+						<expr>3</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="5">
+					<eq>
+						<capture_ref type="dhcpv6" name="eUE_DHCPc6" substring="32">Advertise.Option2171.suboption1</capture_ref>
+						<msg_ref type="utility" index="0 0 2" >SNMPResp.varBind</msg_ref>
+					</eq>
+				</verify>
+			</response>
+			<transition to="END" event="SNMPResp"/>
+			<transition to="END" event="SNMPRespFailure"/>
+		</state>
+	</add_to>
+</pc2xml>

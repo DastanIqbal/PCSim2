@@ -1,0 +1,692 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+ Change History: (Author & Date)
+-->
+<!-- Document type and attributes. -->
+<pc2xml version="$Revision: 6076 $"
+        name="E-UE_PROV_1.2.1.5"
+        descrip="eUE implements pktcEUEDevBSFTable defined in CL-PKTC-EUE-DEV-MIB."
+        number="E-UE_PROV_1.2.1.5">
+
+
+    <!-- Reset UE; start capture. -->
+    <template file="./templates/EUE_Prov_B_1_1_1.xml" name="EUEDevOpTable"/>
+
+    <add_to fsm="EUEDevOpTable">
+        <transition from="StartCapture_RebootWait" to="EUEProvisions1" event="TimerExpired"/>
+
+
+<!-- vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv -->
+<!-- ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ -->
+        <!-- If eUE supports IPv6, continue with Step 15. -->
+        <!-- 15 Reset. E-UE DUT provisions successfully and becomes operational. -->
+        <state ID="EUEProvisions1">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>DOCS-CABLE-DEVICE-MIB::docsDevServerBootState.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="15">
+                    <contains>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>1</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="SNMPGet1" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+
+        <!-- 16 Using proper SNMPv3 manager repeat Steps 3 - 9 above. -->
+        <!-- 16-3 SNMPv3 Get pktcEUECBSupport.
+                  eUE returns one of two following values
+                      True (1) = device supports certificate bootstrapping
+                      False (2) = device does not support certificate bootstrapping -->
+        <state ID="SNMPGet1">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>CL-PKTC-EUE-DEV-MIB::pktcEUECBSupport.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="16-3">
+                    <or>
+                        <eq>
+                            <msg_ref type="utility" index="0 0 0">SNMPResp.varBind</msg_ref>
+                            <expr>1</expr>
+                        </eq>
+                        <eq>
+                            <msg_ref type="utility" index="0 0 0">SNMPResp.varBind</msg_ref>
+                            <expr>2</expr>
+                        </eq>
+                    </or>
+                </verify>
+                <var name="cbSupport">
+                    <msg_ref type="utility" index="0 0 0">SNMPResp.varBind</msg_ref>
+                </var>
+            </response>
+            <transition to="SNMPSet1" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+
+        <!-- 16-4 SNMPv3 Set pktcEUECBSupport to another valid value different than Step 3.
+                  eUE must reject Set operation on this object. -->
+        <state ID="SNMPSet1" timer="10000">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPSet">
+                    <mod modtype="add" hdr="array">
+                        <var_expr>
+                            <expr>varBind 1 1 3 \r\n ][ , </expr>
+                            <expr>CL-PKTC-EUE-DEV-MIB::pktcEUECBSupport.0,INTEGER,0][\r\n</expr>
+                        </var_expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+                    <mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPRespFailure</expr>
+                    </eq>
+                <then>
+                    <fail/>
+                </then>
+                </if>
+
+                <!-- NonWritable(17) -->
+                <verify step="16-4">
+                    <eq>
+                        <msg_ref type="utility" index="0 0 3">SNMPResp.varBind</msg_ref>
+                        <expr>17</expr>
+                    </eq>
+                </verify>
+            </response>
+            <transition to="SNMPGet2" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+
+        <!-- 16-5 SNMPv3 Get pktcEUECBEnable object.
+                  eUE must return value of false (2). -->
+        <state ID="SNMPGet2">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>CL-PKTC-EUE-DEV-MIB::pktcEUECBSupport.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="16-5">
+                    <eq>
+                        <msg_ref type="utility" index="0 0 0">SNMPResp.varBind</msg_ref>
+                        <expr>2</expr>
+                    </eq>
+                </verify>
+            </response>
+            <transition to="SNMPSet2" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+
+        <!-- 16-6 SNMPv3 Set pktcEUECBData to something other than syntactically correct HTTP URI value.
+                  eUE must reject Set operation on this object. -->
+        <state ID="SNMPSet2" timer="10000">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPSet">
+                    <mod modtype="add" hdr="array">
+                        <var_expr>
+                            <expr>varBind 1 1 3 \r\n ][ , </expr>
+                            <expr>CL-PKTC-EUE-DEV-MIB::pktcEUECBData.0,INTEGER,xxxxxxxxxxxxx][\r\n</expr>
+                        </var_expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+                    <mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPRespFailure</expr>
+                    </eq>
+                <then>
+                    <fail/>
+                </then>
+                </if>
+
+                <!-- NonWritable(17) -->
+                <verify step="16-6">
+                    <eq>
+                        <msg_ref type="utility" index="0 0 0">SNMPResp.varBind</msg_ref>
+                        <expr>17</expr>
+                    </eq>
+                </verify>
+            </response>
+            <transition to="SNMPSet3" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+
+        <!-- 16-7 SNMPv3 Set pktcEUECBData to syntactically correct HTTP URI value.
+                  eUE must accept Set operation on this object and update value in MIB. -->
+        <state ID="SNMPSet3" timer="10000">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPSet">
+                    <mod modtype="add" hdr="array">
+                        <var_expr>
+                            <expr>varBind 1 1 3 \r\n ][ , </expr>
+                            <expr>CL-PKTC-EUE-DEV-MIB::pktcEUECBData.0,INTEGER,http://cablelabs.com][\r\n</expr>
+                        </var_expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+                    <mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPRespFailure</expr>
+                    </eq>
+                <then>
+                    <fail/>
+                </then>
+                </if>
+                <verify step="16-7">
+                    <eq>
+                        <msg_ref type="utility" index="0 0 0">SNMPResp.varBind</msg_ref>
+                        <expr>1</expr>
+                    </eq>
+                </verify>
+            </response>
+            <transition to="SNMPSet4" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+
+        <!-- 16-8 SNMPv3 Set pktcEUECBEnable to true (1).
+                  eUE must accept Set operation on this object.  -->
+        <state ID="SNMPSet4" timer="10000">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPSet">
+                    <mod modtype="add" hdr="array">
+                        <var_expr>
+                            <expr>varBind 1 1 3 \r\n ][ , </expr>
+                            <expr>CL-PKTC-EUE-DEV-MIB::pktcEUECBEnable.0,INTEGER,1][\r\n</expr>
+                        </var_expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+                    <mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPRespFailure</expr>
+                    </eq>
+                <then>
+                    <fail/>
+                </then>
+                </if>
+                <verify step="16-8">
+                    <eq>
+                        <msg_ref type="utility" index="0 0 0">SNMPResp.varBind</msg_ref>
+                        <expr>1</expr>
+                    </eq>
+                </verify>
+            </response>
+            <transition to="VerifySetOp1" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+
+        <!-- 16-9 If value returned for pktcEUECBSupport object in Step 3 was false (2)
+                  then eUE must reject Set operation.
+                  If the value returned for the pktcEUECBSupport object in Step 3 was true (1)
+                  then verify eUE subsequently sends an HTTP Get request to URI set in Step 8. -->
+        <state ID="VerifySetOp1" timer="10000">
+            <response>
+                <if>
+                    <eq>
+                        <var_ref name="cbSupport"/>
+                        <expr>1</expr>
+                    </eq>
+                <then>
+                    <verify step="16-9">
+                        <null>
+                            <msg_ref type="utility" index="0 0 0">SNMPResp.varBind</msg_ref>
+                        </null>
+                    </verify>
+                </then>
+                <elseif>
+                    <eq>
+                        <var_ref name="cbSupport"/>
+                        <expr>2</expr>
+                    </eq>
+                <then>
+                    <verify step="16-9">
+                        <notnull>
+                            <msg_ref type="utility" index="0 0 0">SNMPResp.varBind</msg_ref>
+                        </notnull>
+                    </verify>
+                </then>
+                </elseif>
+                </if>
+            </response>
+
+            <!-- 17 Stop IP capture and save trace file. -->
+            <postlude>
+                <stop_capture/>
+                <generate event="SucceedEvent"/>
+            </postlude>
+            <transition to="ReConfigure2" event="SucceedEvent"/>
+        </state>
+
+
+<!-- vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv -->
+<!-- ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ -->
+        <!-- 17 Configure. -->
+        <state ID="ReConfigure2"
+               provFile="E-UE_PROV_v6_2.1.2.1_2.bin"
+               policyFile="MTAFORCW122_test"
+               nextState="Reset2"/>
+
+        <!-- 18 E-UE DUT provisions successfully and becomes operational. -->
+        <state ID="Reset2" timer="120000">
+            <prelude once="true">
+                <start_capture>
+                    <filter>
+                        <var_expr>
+                            <expr>host </expr>
+                            <msg_ref type="platform">DUT.IP</msg_ref>
+                        </var_expr>
+                    </filter>
+                </start_capture>
+
+                <send protocol="utility" msgtype="SNMPSet">
+                    <mod modtype="add" hdr="array">
+                        <var_expr>
+                            <expr>varBind 1 1 3 \r\n ][ , </expr>
+                            <expr>DOCS-CABLE-DEVICE-MIB::pktcMtaDevResetNow.0,INTEGER,1][\r\n</expr>
+                        </var_expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP Address</msg_ref>
+                    </mod>
+                    <mod modtype="replace" hdr="version">
+                        <expr>2c</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPRespFailure</expr>
+                    </eq>
+                    <then>
+                        <fail/>
+                    </then>
+                </if>
+                <if>
+                    <or>
+                        <eq>
+                            <msg_ref type="sip">REGISTER.Contact.expires</msg_ref>
+                            <expr>0</expr>
+                        </eq>
+                        <eq>
+                            <msg_ref type="sip">REGISTER.Expires.value</msg_ref>
+                            <expr>0</expr>
+                        </eq>
+                    </or>
+                    <then>
+                        <send protocol="sip" msgtype="200-REGISTER"/>
+                    </then>
+                </if>
+            </response>
+            <transition to="EUEProvisions2" event="TimerExpired"/>
+            <transition to="Reset2" event="SNMPResp"/>
+            <transition to="Reset2" event="REGISTER"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+        <!-- 18b. -->
+        <state ID="EUEProvisions2">
+            <prelude once="true">
+                <stop_capture/>
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>DOCS-CABLE-DEVICE-MIB::docsDevServerBootState.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="18">
+                    <contains>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>1</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="SNMPGet3" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+
+        <!-- 19 Using proper SNMPv3 manager repeat Steps 3 - 9 above. -->
+        <!-- 19-3 SNMPv3 Get pktcEUECBSupport.
+                  eUE returns one of two following values
+                      True (1) = device supports certificate bootstrapping
+                      False (2) = device does not support certificate bootstrapping -->
+        <state ID="SNMPGet3">
+            <prelude once="true">
+                <stop_capture/>
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>CL-PKTC-EUE-DEV-MIB::pktcEUECBSupport.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="19-3">
+                    <or>
+                        <eq>
+                            <msg_ref type="utility" index="0 0 0">SNMPResp.varBind</msg_ref>
+                            <expr>1</expr>
+                        </eq>
+                        <eq>
+                            <msg_ref type="utility" index="0 0 0">SNMPResp.varBind</msg_ref>
+                            <expr>2</expr>
+                        </eq>
+                    </or>
+                </verify>
+                <var name="cbSupport">
+                    <msg_ref type="utility" index="0 0 0">SNMPResp.varBind</msg_ref>
+                </var>
+            </response>
+            <transition to="SNMPSet5" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+
+        <!-- 19-4 SNMPv3 Set pktcEUECBSupport to another valid value different than Step 3.
+                  eUE must reject Set operation on this object. -->
+        <state ID="SNMPSet5" timer="10000">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPSet">
+                    <mod modtype="add" hdr="array">
+                        <var_expr>
+                            <expr>varBind 1 1 3 \r\n ][ , </expr>
+                            <expr>CL-PKTC-EUE-DEV-MIB::pktcEUECBSupport.0,INTEGER,0][\r\n</expr>
+                        </var_expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+                    <mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPRespFailure</expr>
+                    </eq>
+                <then>
+                    <fail/>
+                </then>
+                </if>
+
+                <!-- NonWritable(17) -->
+                <verify step="19-4">
+                    <eq>
+                        <msg_ref type="utility" index="0 0 3">SNMPResp.varBind</msg_ref>
+                        <expr>17</expr>
+                    </eq>
+                </verify>
+            </response>
+            <transition to="SNMPGet4" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+
+        <!-- 19-5 SNMPv3 Get pktcEUECBEnable object.
+                  eUE must return value of false (2). -->
+        <state ID="SNMPGet4">
+            <prelude once="true">
+                <stop_capture/>
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>CL-PKTC-EUE-DEV-MIB::pktcEUECBSupport.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="19-5">
+                    <eq>
+                        <msg_ref type="utility" index="0 0 0">SNMPResp.varBind</msg_ref>
+                        <expr>2</expr>
+                    </eq>
+                </verify>
+            </response>
+            <transition to="SNMPSet6" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+
+        <!-- 19-6 SNMPv3 Set pktcEUECBData to something other than syntactically correct HTTP URI value.
+                  eUE must reject Set operation on this object. -->
+        <state ID="SNMPSet6" timer="10000">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPSet">
+                    <mod modtype="add" hdr="array">
+                        <var_expr>
+                            <expr>varBind 1 1 3 \r\n ][ , </expr>
+                            <expr>CL-PKTC-EUE-DEV-MIB::pktcEUECBData.0,INTEGER,xxxxxxxxxxxxx][\r\n</expr>
+                        </var_expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+                    <mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPRespFailure</expr>
+                    </eq>
+                <then>
+                    <fail/>
+                </then>
+                </if>
+
+                <!-- NonWritable(17) -->
+                <verify step="19-6">
+                    <eq>
+                        <msg_ref type="utility" index="0 0 0">SNMPResp.varBind</msg_ref>
+                        <expr>17</expr>
+                    </eq>
+                </verify>
+            </response>
+            <transition to="SNMPSet7" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+
+        <!-- 19-7 SNMPv3 Set pktcEUECBData to syntactically correct HTTP URI value.
+                  eUE must accept Set operation on this object and update value in MIB. -->
+        <state ID="SNMPSet7" timer="10000">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPSet">
+                    <mod modtype="add" hdr="array">
+                        <var_expr>
+                            <expr>varBind 1 1 3 \r\n ][ , </expr>
+                            <expr>CL-PKTC-EUE-DEV-MIB::pktcEUECBData.0,INTEGER,http://cablelabs.com][\r\n</expr>
+                        </var_expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+                    <mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPRespFailure</expr>
+                    </eq>
+                <then>
+                    <fail/>
+                </then>
+                </if>
+                <verify step="19-7">
+                    <eq>
+                        <msg_ref type="utility" index="0 0 0">SNMPResp.varBind</msg_ref>
+                        <expr>1</expr>
+                    </eq>
+                </verify>
+            </response>
+            <transition to="SNMPSet8" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+
+        <!-- 19-8 SNMPv3 Set pktcEUECBEnable to true (1).
+                  eUE must accept Set operation on this object.  -->
+        <state ID="SNMPSet8" timer="10000">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPSet">
+                    <mod modtype="add" hdr="array">
+                        <var_expr>
+                            <expr>varBind 1 1 3 \r\n ][ , </expr>
+                            <expr>CL-PKTC-EUE-DEV-MIB::pktcEUECBEnable.0,INTEGER,1][\r\n</expr>
+                        </var_expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+                    <mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPRespFailure</expr>
+                    </eq>
+                <then>
+                    <fail/>
+                </then>
+                </if>
+                <verify step="19-8">
+                    <eq>
+                        <msg_ref type="utility" index="0 0 0">SNMPResp.varBind</msg_ref>
+                        <expr>1</expr>
+                    </eq>
+                </verify>
+            </response>
+            <transition to="VerifySetOp2" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+
+        <!-- 19-9 If value returned for pktcEUECBSupport object in Step 3 was false (2)
+                  then eUE must reject Set operation.
+                  If the value returned for the pktcEUECBSupport object in Step 3 was true (1)
+                  then verify eUE subsequently sends an HTTP Get request to URI set in Step 8. -->
+        <state ID="VerifySetOp2" timer="10000">
+            <response>
+                <if>
+                    <eq>
+                        <var_ref name="cbSupport"/>
+                        <expr>1</expr>
+                    </eq>
+                <then>
+                    <verify step="19-9">
+                        <null>
+                            <msg_ref type="utility" index="0 0 0">SNMPResp.varBind</msg_ref>
+                        </null>
+                    </verify>
+                </then>
+                <elseif>
+                    <eq>
+                        <var_ref name="cbSupport"/>
+                        <expr>2</expr>
+                    </eq>
+                <then>
+                    <verify step="19-9">
+                        <notnull>
+                            <msg_ref type="utility" index="0 0 0">SNMPResp.varBind</msg_ref>
+                        </notnull>
+                    </verify>
+                </then>
+                </elseif>
+                </if>
+            </response>
+        </state>
+    </add_to>
+</pc2xml>

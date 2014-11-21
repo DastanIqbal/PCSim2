@@ -1,0 +1,157 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+ Change History: (Author & Date)
+	PCPCII-131 : Update the script to match the changes defined in D09 of the ATP. (ghassler 06/11/2009)
+	PCPCII-139 : Update the Voicetronix modifiers to use the new values. (ghassler 07/10/2009)
+	PCPCII-499 : Send the REINVITE in step 3 instead of receiving it. (ghassler 07/06/2010)
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-UE 1.9.5.5" 
+	descrip="termination of the session upon network hold time expiry during ringback " 
+	number="RST-UE 1.9.5.5" inspector="disable">
+	
+	<template file="./templates/CallOrigAtUETemp.xml" name="UE1"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Setup" sub="prelude"/>
+		<state ID="OnHook"/>
+		<state ID="Connected"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<NE targets="service:sos"/>
+		
+		<state ID="Setup" sub="prelude" once="true">
+			<!-- Step 1 test case SIP 1.9.5.5 - Initiate an emergency call session from the .-->
+			<send protocol="utility" msgtype="DialDigits">
+				<mod modtype="add" hdr="number">
+					<expr>911</expr>
+				</mod>
+			</send>
+		</state>
+		
+		<state ID="Connected" timer="8000">
+			<transition to="OnHook" event="TimerExpired"/>
+		</state>
+		
+		<state ID="OnHook">
+			<prelude once="true">
+				<!-- Step 2 test case SIP 1.9.5.5 - Place the UE on network hold by 
+					putting the phone on-hook. This will initiate the network hold timer.-->
+				<send protocol="utility" msgtype="OnHook"/>
+				<sleep time="5000"/>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>REINVITE</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="100-INVITE"/>
+						<send protocol="sip" msgtype="200-INVITE"/>
+					</then>
+				</if>
+			</response>
+			<transition to="OnHook" event="OnHookComplete"/>
+			<transition to="OnHook" event="REINVITE"/>
+			<transition to="WaitNATO" event="ACK"/>
+		</state>
+		
+		<state ID="WaitNATO" timer="50000">
+			<prelude once="true">
+				<!-- Step 3- Sending REINVITE -->
+				<send protocol="sip" msgtype="REINVITE">
+					<mod modtype="add" hdr="Priority">
+						<expr>emergency</expr>
+					</mod>
+					<mod modtype="add" hdr="Alert-Info">
+						<expr>file:///PacketCableRST/rg</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<or>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>BYE</expr>
+						</eq>
+						<eq>
+							<msg_ref type="event"/>
+							<expr>TimerExpired</expr>
+						</eq>
+					</or>
+					<then>
+						<verify step="3" requirements="REQ23445, REQ23446">
+							<and>
+								<eq>
+									<msg_ref type="event"/>
+									<expr>TimerExpired</expr>
+								</eq>
+								<neq>
+									<msg_ref type="sip">Request</msg_ref>
+									<expr>BYE</expr>
+								</neq>
+							</and>
+						</verify>
+					</then>
+				</if>
+				<if>
+					<and>
+						<gte>
+							<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+							<expr>300</expr>
+						</gte>
+						<lte>
+							<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+							<expr>699</expr>
+						</lte>
+					</and>
+					<then>
+						<send protocol="sip" msgtype="ACK"/>
+					</then>
+				</if>	
+			</response>
+			<transition to="OnHold" event="TimerExpired"/>
+			<transition to="WaitNATO" event="1xx-INVITE"/>
+			<transition to="WaitNATO" event="3xx-INVITE"/>
+			<transition to="WaitNATO" event="4xx-INVITE"/>
+			<transition to="WaitNATO" event="6xx-INVITE"/>
+			<transition to="WaitNATO" event="5xx-INVITE"/>
+		</state>
+			
+		<state ID="OnHold" timer="10000">
+			<response>
+				<verify step="4" requirements="REQ14091">
+					<and>
+						<neq>
+							<msg_ref type="event"/>
+							<expr>TimerExpired</expr>
+						</neq>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>BYE</expr>
+						</eq>
+					</and>
+					<then>
+						<send protocol="sip" msgtype="200-BYE"/>
+					</then>
+				</verify>
+			</response>
+			<transition to="END" event="BYE"/>
+			<transition to="END" event="TimerExpired"/>
+		</state>
+	</add_to>
+</pc2xml>

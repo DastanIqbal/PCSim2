@@ -1,0 +1,81 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+ Change History: (Author & Date)
+
+
+
+-->
+<!-- First are the document type and the attributes for our document -->
+<pc2xml version="$Revision: 7768 $" name="EUE Prov 2.1.2.7" 
+		descrip="Ability of eUE to Reject a Configuration File When the Wrong Value of the Encryption Key is Supplied to the Device in IPv6" 
+		number="EUE Prov 2.1.2.7">
+
+	<!-- Next we define the each of state machines -->
+	<template file="./templates/EUE_Prov_B_1_1_1.xml" name="RebootCM"/>
+	
+	<add_to fsm="RebootCM">
+		<transition from="StartCapture_RebootWait" to="VerifyBootState" event="TimerExpired"/>
+	
+		<state ID="VerifyBootState">
+			<prelude once="true">
+				<send protocol="utility" msgtype="SNMPGet">
+					<mod modtype="add" hdr="oids">
+						<expr>DOCS-CABLE-DEVICE-MIB::docsDevServerBootState.0</expr>
+					</mod>
+					<mod modtype="replace" hdr="agentip">
+						<msg_ref type="platform">DUT.CM IP Address</msg_ref>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="2">
+					<contains>
+						<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+						<expr>1</expr>
+					</contains>
+				</verify>
+				
+			</response>
+			<postlude>
+				<stop_capture/>
+			</postlude>
+			<transition to="VerifyInvalidEncrypKey" event="SNMPResp"/>
+			<transition to="VerifyInvalidEncrypKey" event="SNMPRespFailure"/>
+		</state>
+		
+		<state ID="VerifyInvalidEncrypKey">
+			<prelude>
+			<send protocol="utility" msgtype="SNMPGet">
+					<mod modtype="add" hdr="oids">
+						<expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvisioningState.0</expr>
+					</mod>
+					<mod modtype="replace" hdr="version">
+						<expr>3</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="3">
+					<eq>
+						<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+						<expr>3</expr>
+					</eq>
+				</verify>
+			</response>
+			<postlude>
+				<stop_capture/>
+			</postlude>
+			<transition to="END" event="SNMPResp"/>
+			<transition to="END" event="SNMPRespFailure"/>
+		</state>
+	</add_to>
+</pc2xml>

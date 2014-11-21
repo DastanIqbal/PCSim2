@@ -1,0 +1,224 @@
+###############################################################################
+#// Filename: E-UE-PROV_2-1-2-5.test
+#// Author:  Matthew Forbes
+#//   
+#//
+#//
+#// Creation Date: November 02, 2008
+#// Modified by:
+#//        Created new config file in PACT to automate script MLF 9/26/08
+################################################################################
+#// Description:
+#//     TC2833 TEST CASE E-UE-PROV 2-1-2-5 Ability of the eUE to reject a Configuration File
+#//            that can not be authenticated by its corresponding hash value
+#//
+#// Objective:
+#//     To test the Capability of the eUE DUT to discard the Configuration File,
+#//     which cannot be authenticated by the corresponding hash value.
+#//
+#// PacketCable DUT:
+#//     MTA
+#//
+#// Test Steps:
+#//     - Initial configuration
+#//     - Reset DUT
+#//     - Check Provisioning state
+#//     - Modify TLV properties with a faulty hash value
+#//     - Start sniffer
+#//     - Reset DUT
+#//     - Check Provisioning state
+#//     - Stop sniffer
+#//     - Invoke parsing tool and validate using Pass/Fail scripts
+#//     - Restore TLV properties
+#//     - Delete MTA config file
+#//
+#// Notes:
+#//     - Requires provPrimitives .tcl & tftp_primitives.tcl.
+#//     - Requires the specific config file in $BASE_CFG_FILE_PATH in Provisioning Server.
+#//     - Requires parT.tcl parsing tool to parse data from capture file.
+##########################################################################################
+
+global SCRIPT_VERSION
+set SCRIPT_VERSION { # $Id: E-UE-PROV_2-1-2-5.test 7406 2010-07-20 17:17:37Z dthakore $ }
+
+###################### INITIAL CONFIGURATION OF DUT ########################
+
+DoStep "E-UE-PROV_2-1-2-5_1-1" "Initial configuration" {
+    LogMsg "--- Initial PROV module ---"
+    Init_PROV
+    # ProvCreateConfig 291 $MTA_MAC
+    PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122 Device_Level_Secure.cfg
+    PROV_DEPLOY_DHCP
+} { PASS_STEP }
+
+
+################ RESET CM and MTA and VERIFY PROVISIONING STATE ################
+
+DoStep "E-UE-PROV_2-1-2-5_2-3" "Reset MTA" {
+    set val [SNMPvN_RESET $CM_IP]
+    LogMsg "Reset of CM and MTA has passed"
+} {
+    IsEqual $val 0
+}
+
+DoStep "E-UE-PROV_2-1-2-5_2-4" "pktcMTADevProvisioningState Content Verification" {
+    # Wait for a minute to let CM/MTA starting to reboot
+    actionWait "Wait for CM/MTA to reboot" 60
+    # Get the OID from the MTA and check it using our previously defined
+    set val [GetProvState 1 600]
+    LogMsg "MTA Provisioning State"
+    LogMsg "             - Expected : 1"
+    LogMsg "             - Received : $val"
+} {
+    IsEqual $val 1
+}
+
+############### GET CORRECT HASH VALUE FOR LATER VERIFICATION #################
+
+DoStep "E-UE-PROV_2-1-2-5_2-5" "pktcMtaDevProvConfigHash Content Verification" {
+    set oidval [SNMP_GET $oid_pktcMtaDevProvConfigHash $MTA_IP]
+} { PASS_STEP }
+
+############# MODIFY HASH SO IT DOES NOT CORRESPOND TO CONFIG FILE #############
+
+DoStep "E-UE-PROV_2-1-2-5_3-1" "Create faulty hash value in TLV properties" {
+    LogMsg "--- Create faulty hash value in TLV properties ---"
+    # verify_signal "Set ECRYPTION = true (Go to SNMPv3 and privacy protocol to DES and save)"
+    # verify_signal "Create a faulty hash value(Go to List Files and copy the hash value for cfg-611 and then open cfg-291 &
+    # in device specific parameters select custom hash and paste the hash value copied from the list then click
+    # Save to PROV & TFTP Put.)"
+    # Created new config file in PACT to automate script MLF 9/26/08
+    # PROV_MODIFY_DEVICE $MTA_MAC {} cfg-291.bin
+    PROV_MODIFY_DEVICE $MTA_MAC {} cfg-2833.bin
+    PROV_DEPLOY_DHCP
+     LogMsg "--- Hash value in TLV properties has been changed ---"
+} {PASS_STEP}
+
+################################# START SNIFFER ###############################
+
+DoStep "E-UE-PROV_2-1-2-5_4-1" "Start sniffer" {
+    LogMsg "--- Start sniffer ---"
+    Init_CONTROLLER_LAN
+    SetupCaptureControllerLan "host $MTA_IP || udp port 67 || host $CM_IP"
+    StartCaptureControllerLan
+} {PASS_STEP}
+
+################ RESET CM and MTA and VERIFY PROVISIONING STATE ################
+
+DoStep "E-UE-PROV_2-1-2-5_5-1" "Reset MTA" {
+    set val [SNMPvN_RESET $CM_IP]
+    LogMsg "Reset of CM and MTA has passed"
+} {
+    IsEqual $val 0
+}
+
+DoStep "E-UE-PROV_2-1-2-5_6-1" "Waiting for Enrollment Inform from DUT" {
+    # Step from CTP, no action
+} { PASS_STEP }
+
+    DoStep "E-UE-PROV_2-1-2-5_6-2" "pktcMTADevProvisioningState Content Verification" {
+        # Wait for a minute to let CM/MTA starting to reboot
+        actionWait "Waiting for CM and MTA to reboot" 60
+        # Get the OID from the MTA and check it using our previously defined
+        set val [GetProvState 3 600]
+        LogMsg "MTA Provisioning State"
+        LogMsg "             - Expected : 3"
+        LogMsg "             - Received : $val"
+    } {
+        IsEqual $val 3
+    }
+
+##################### STOP SNIFFER AND SAVE CAPTURE FILES #####################
+
+DoStep "E-UE-PROV_2-1-2-5_7-2" "Stop sniffer" {
+    LogMsg "--- Stop sniffer ---"
+    StopCaptureControllerLan
+    SaveToFileControllerLan
+} { PASS_STEP }
+
+############################## INVOKE PARSING TOOL #############################
+
+DoStep "E-UE-PROV_2-1-2-5_8-1" "Analyze flow data" {
+    # Initial PARSER TOOL
+    Init_PART
+    
+    # Set up parser file
+    set PARSERFILE    $ETH_DEFAULT_TXT_FILE
+} { PASS_STEP }
+
+DoStep "E-UE-PROV_2-1-2-5_8-2" "Parse all data into database" {
+    # Parse data
+    set PARAMS_DHCP         "{DHCP {} {} {} {} {} {} {} {}}"
+    set PARAMS_CM_SRC       "{{} {} {} {} $CM_IP {} {} {} {}}"
+    set PARAMS_CM_DST       "{{} {} {} {} {} {} {} $CM_IP {}}"
+    set msgID_CM            [ParseFile $PARSERFILE "$PARAMS_DHCP $PARAMS_CM_SRC $PARAMS_CM_DST"]
+    set PARAMS_MTA_SRC      "{{} {} {} {} $MTA_IP {} {} {} {}}"
+    set PARAMS_MTA_DST      "{{} {} {} {} {} {} {} $MTA_IP {}}"
+    set msgID_MTA           [ParseFile $PARSERFILE "$PARAMS_DHCP $PARAMS_MTA_SRC $PARAMS_MTA_DST"]
+} {
+    if { $::PART_RETURN == 0 } {
+        PASS_STEP
+    } else {
+        FAIL_STEP "Cannot find data"
+    }
+}
+
+######################### VALIDATE USING PASS/FAIL SCRIPTS ######################
+
+DoStep "E-UE-PROV_2-1-2-5_8-3" "DHCP OFFER: OPTION 122 SUBOPTION 3 IDENTIFIES THE PROVISIONING SERVER" {
+    LogMsg "Verify DHCP OFFER: OPTION 122 SUBOPTION 3 IDENTIFIES THE PROVISIONING SERVER"
+    set CONTINUE_PAST_STEP_ERROR 1
+        # Find MTA MAC with colons
+        set MTA_MAC_COL [AddColMac $MTA_MAC]
+} {
+    # Verify OPTION OPTION 122, SUBOPTIONS 3 VALUE IS THE PROVISIONING SERVER FQDN
+    #Pong-change $PROV_SNMP_ENTITY to $TFTP_NAME with new TclSim version
+    VerifyValue $msgID_MTA "INANY DHCP OFFER OPTION122SUBOPTION3" "IS" "$PROV_SNMP_ENTITY.*" AND \
+            "OPTIONCLIENTHWADDRESS" "IS" "$MTA_MAC_COL"
+}
+
+
+DoStep "E-UE-PROV_2-1-2-5_8-4" "Verify SNMP Enrollment INFORM from DUT to Provisioning Server" {
+    LogMsg "Verify SNMP INFORM Software Current Version"
+} {
+    # Verify SNMP Enrollment INFORM
+    VerifyValue $msgID_MTA "INFIRST SNMP SNMP_INFORM HEADERSRCIP" "IS" "$MTA_IP" AND \
+            "HEADERDSTIP" "IS" "$PROV_DHCP1_IP"
+}
+
+DoStep "E-UE-PROV_2-1-2-5_8-5" "Verify that the Hash value has changed " {
+    set curval [SNMP_GET $oid_pktcMtaDevProvConfigHash $MTA_IP]
+    puts "Original hash value is $oidval"
+    puts "Current hash value is $curval"
+} {
+    IsNotEqual $curval $oidval
+} 
+
+DoStep "E-UE-PROV_2-1-2-5_8-6" "Verify pktcMtaDevConfigFile " {
+    set fileval1 [SNMP_GET $oid_pktcMtaDevConfigFile $MTA_IP]
+    set MTAMAC [string tolower $MTA_MAC]
+    # set fileval2 "tftp://$TFTP_FQDN/cfg-291.bin"
+    # Created new config file in PACT to automate script MLF 9/26/08
+    set fileval2 "tftp://$TFTP_FQDN/cfg-2833.bin"
+} {
+    IsEqual $fileval2 $fileval1
+}
+
+############# RESTORE TLV PROPERTIES TO ORIGINAL CONFIGURATION #############
+
+DoStep "E-UE-PROV_2-1-2-5_9-1" "Restore TLV properties" {
+    LogMsg "--- Restore TLV properties ---"
+    # verify_signal "Set ECRYPTION = false (Go to SNMPv3 and privacy protocol to NULL and save)"
+    # verify_signal "Restore the hash value(Go to List Files & open cfg-291 and remove the custom hash then clickSave to PROV & TFTP Put.)"
+    # ProvCreateConfig 291 $MTA_MAC
+    PROV_MODIFY_DEVICE $MTA_MAC {} Device_Level_Secure.cfg
+    PROV_DEPLOY_DHCP
+LogMsg "--- TLV properties have been restored ---"
+} {PASS_STEP}
+
+#################################################################################
+# Cleanup
+#################################################################################
+set CONTINUE_PAST_STEP_ERROR 0
+Cleanup
+return 0

@@ -1,0 +1,213 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+ Change History: (Author & Date)
+
+-->
+
+<pc2xml version="$Revision: 8188 $" name="RST_E-UE_PROV 3.1.3.15"
+		descrip="Ability of RST eUE to Implement the Busy Line Verify Feature Table"
+		number="RST_E-UE_PROV 3.1.3.15">
+
+	<!-- Next we define the each of state machines -->
+	<template file="./templates/EUE_Prov_B_1_1_1.xml" name="RebootCM"/>
+
+	<add_to fsm="RebootCM">
+		<transition from="StartCapture_RebootWait" to="Provisioned3" event="TimerExpired"/>
+		
+		<state ID="Provisioned3">	
+			<prelude>
+				<send protocol="utility" msgtype="SNMPGet">
+					<mod modtype="add" hdr="oids">
+						<expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvisioningState.0</expr>
+					</mod>
+					<mod modtype="replace" hdr="version">
+						<expr>3</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="8">
+					<eq>
+						<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+						<expr>1</expr>
+					</eq>
+				</verify>
+			</response>
+			<transition to="GetNfBusyLineVTable3" event="SNMPResp"/>
+			<transition to="GetNfBusyLineVTable3" event="SNMPRespFailure"/>
+		</state>
+		
+		<state ID="GetNfBusyLineVTable3">
+			<prelude>
+				<send protocol="utility" msgtype="SNMPGetTable">
+					<mod modtype="add" hdr="oids">
+						<expr>CL-PKTC-EUE-RST-MIB::pktcEUERSTNfBusyLineVTable</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="9-3">
+					<and>
+						<!-- Test for pktcEUERSTNfBLVOperId  -->
+						<eq>
+							<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+							<expr>CableLabs</expr>
+						</eq>
+						<!-- Test for pktcEUERSTNfBLVStatus  -->
+						<eq>
+							<msg_ref type="utility" index="0 1 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					</and>
+				</verify>
+			</response>
+			<postlude>
+				<stop_capture/>
+			</postlude>
+			<transition to="EDVAIPv6Hybrid" event="SNMPResp"/>
+			<transition to="EDVAIPv6Hybrid" event="SNMPRespFailure"/>
+		</state>
+		
+		<!-- <state ID="EDVAIPv6Hybrid" provFile="MAC_H.bin" 
+				policyFile="3basic.cfg" nextState="Reboot4"/> -->
+				
+		<state ID="EDVAIPv6Hybrid">
+			<prelude>
+				<log promptUser="true" expr="Configure the device with Bin File: v6.C.1.1.25_Hybrid.bin and Policy: X_eUEv6_RST_Hybrid, Save, Deploy DHCPv6 and click OK."/>
+				<generate event="Branch1Event"/>
+			</prelude>
+			<transition to="Reboot4" event="Branch1Event"/>
+			<!-- <transition to="END" event="Branch1Event"/> -->
+		</state>
+				
+		<state ID="Reboot4" timer="120000">
+			<prelude once="true">
+				<start_capture>
+					<filter>
+						<var_expr>
+							<expr>host </expr>
+							<msg_ref type="platform">DUT.IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.CM IP Address</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.DHCP Server IP</msg_ref>
+						</var_expr>
+					</filter>
+				</start_capture>
+				<send protocol="utility" msgtype="SNMPSet">
+					<mod modtype="add" hdr="array">
+						<var_expr>
+								<expr>varBind 1 1 3 \r\n ][ , </expr>
+								<expr>DOCS-CABLE-DEVICE-MIB::docsDevResetNow.0,INTEGER,1][\r\n</expr>
+						</var_expr>
+					</mod>
+					<mod modtype="replace" hdr="agentip">
+						<msg_ref type="platform">DUT.CM IP Address</msg_ref>
+					</mod>
+					<!-- Always use version 2 for a CM reset -->
+					<mod modtype="replace" hdr="version">
+						<expr>2c</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="utility">Response</msg_ref>
+						<expr>SNMPRespFailure</expr>
+					</eq>
+					<then>
+						<fail/>
+					</then>
+				</if>
+				<if>
+					<or>
+						<eq>
+							<msg_ref type="sip">REGISTER.Contact.expires</msg_ref>
+							<expr>0</expr>
+						</eq>
+						<eq>
+							<msg_ref type="sip">REGISTER.Expires.value</msg_ref>
+							<expr>0</expr>
+						</eq>
+					</or>
+					<then>
+						<send protocol="sip" msgtype="200-REGISTER"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Reboot4" event="SNMPResp"/>
+			<transition to="Provisioned4" event="TimerExpired"/>
+			<transition to="END" event="SNMPRespFailure"/>
+			<transition to="Reboot4" event="REGISTER"/>
+		</state>
+		
+		<state ID="Provisioned4">	
+			<prelude>
+				<send protocol="utility" msgtype="SNMPGet">
+					<mod modtype="add" hdr="oids">
+						<expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvisioningState.0</expr>
+					</mod>
+					<!-- Always use version 2c for Hybrid mode -->
+					<mod modtype="replace" hdr="version">
+						<expr>2c</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="11">
+					<eq>
+						<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+						<expr>1</expr>
+					</eq>
+				</verify>
+			</response>
+			<transition to="GetNfBusyLineVTable4" event="SNMPResp"/>
+			<transition to="GetNfBusyLineVTable4" event="SNMPRespFailure"/>
+		</state>
+		
+		<state ID="GetNfBusyLineVTable4">
+			<prelude>
+				<send protocol="utility" msgtype="SNMPGetTable">
+					<mod modtype="add" hdr="oids">
+						<expr>CL-PKTC-EUE-RST-MIB::pktcEUERSTNfBusyLineVTable</expr>
+					</mod>
+					<!-- Always use version 2c for Hybrid mode -->
+					<mod modtype="replace" hdr="version">
+						<expr>2c</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="12-3">
+					<and>
+						<!-- Test for pktcEUERSTNfBLVOperId  -->
+						<eq>
+							<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+							<expr>CableLabs</expr>
+						</eq>
+						<!-- Test for pktcEUERSTNfBLVStatus  -->
+						<eq>
+							<msg_ref type="utility" index="0 1 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					</and>
+				</verify>
+			</response>
+			<postlude>
+				<stop_capture/>
+			</postlude>
+			<transition to="END" event="SNMPResp"/>
+			<transition to="END" event="SNMPRespFailure"/>
+		</state>
+	</add_to>
+</pc2xml>

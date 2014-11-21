@@ -1,0 +1,415 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+ Change History: (Author & Date)
+
+
+
+-->
+
+
+<!-- First are the document type and the attributes for our document -->
+<pc2xml version="$Revision: 7768 $" 
+		name="E-UE_DATA_1.2.3.6"
+		descrip="Ability of eUE to implement the pktcMtaDevResetNow MIB" 
+		number="E-UE_DATA_1.2.3.6">
+
+	<!-- Step 1 -->
+	<template file="./templates/EUE_Prov_B_1_1_1.xml" name="ResetMIB"/>
+
+	<add_to fsm="ResetMIB">
+		<transition from="StartCapture_RebootWait" to="EUEProvision1" event="TimerExpired"/>
+
+		<states initialstate="Note">
+		
+		<state ID="Note">
+			<prelude>
+				<log promptUser="true" expr="To verify operational status, this test case requires a phone to be connected to the DUT. Click OK when ready."/>
+				<generate event="Branch1Event"/>
+			</prelude>
+			<transition to="Reboot" event="Branch1Event"/>
+		</state>
+		
+		<!-- Step 12 The E-UE DUT provisions successfully and becomes operational. -->
+        <state ID="EUEProvision1">
+            <prelude once="true">				
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvisioningState.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+					<mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="12">
+                    <contains>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>1</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="VerifyDevReset" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+		
+		<!-- Step 13-3, 4. Using the proper SNMPv3 manager,perform an SNMP Get on the pktcMtaDevResetNow object. -->
+		<state ID="VerifyDevReset">
+			<prelude once="true">
+				<send protocol="utility" msgtype="SNMPGet">
+					<mod modtype="add" hdr="oids">
+						<expr>PKTC-IETF-MTA-MIB::pktcMtaDevResetNow.0</expr>
+					</mod>
+					<mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+					<mod modtype="replace" hdr="version">
+						<expr>3</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="utility">Response</msg_ref>
+						<expr>SNMPResp</expr>
+					</eq>
+					<then>
+						<verify step="13-3">
+							<eq>
+								<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+								<expr>2</expr>
+							</eq>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<postlude>
+				<log promptUser="true" yesExpected="True" verify="True" step="13-4"
+				expr="Go offhook on the phone connected to the DUT and verify there is dial tone. DO NOT GO ONHOOK, YET."/>
+			</postlude>
+			<transition to="EUEReset" event="SNMPRespFailure" />
+			<transition to="EUEReset" event="SNMPResp" />
+		</state>
+
+        <!-- Step 13-5  -->
+
+        <state ID="EUEReset" timer="30000">
+			<prelude once="true">
+			    <send protocol="utility" msgtype="SNMPSet">
+                    <mod modtype="add" hdr="array">
+                        <var_expr>
+                            <expr>varBind 1 1 3 \r\n ][ , </expr>
+                            <expr>PKTC-IETF-MTA-MIB::pktcMtaDevResetNow.0,INTEGER,1][\r\n</expr>
+                        </var_expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+                    <!-- Always use version 2c for a CM reset -->
+					<mod modtype="replace" hdr="version">
+						<expr>3</expr>
+					</mod>
+                </send>
+
+            </prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="utility">Response</msg_ref>
+						<expr>SNMPResp</expr>
+					</eq>
+					<then>
+						<verify step="13-5">
+							<eq>
+								<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+								<expr>1</expr>
+							</eq>
+						</verify>
+						<log promptUser="true" yesExpected="True" verify="True" step="13-5"
+						expr="Verify dial tone is lost."/>
+						<log promptUser="true" expr="Go onhook."/>
+					</then>
+				</if>
+			</response>		
+			<transition to="END" event="SNMPRespFailure" />
+			<transition to="EUEReset" event="SNMPResp" />
+			<transition to="VerifyDevReset_1" event="TimerExpired" />			
+        </state>
+        
+		
+        <!-- Step 13-6 Using the proper SNMPv3 manager,perform an SNMP Get on the pktcMtaDevResetNow object. -->
+		<state ID="VerifyDevReset_1">
+			<prelude once="true">
+				<send protocol="utility" msgtype="SNMPGet">
+					<mod modtype="add" hdr="oids">
+						<expr>PKTC-IETF-MTA-MIB::pktcMtaDevResetNow.0</expr>
+					</mod>
+					<mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+					<mod modtype="replace" hdr="version">
+						<expr>3</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="utility">Response</msg_ref>
+						<expr>SNMPResp</expr>
+					</eq>
+					<then>
+						<verify step="13-6">
+							<eq>
+								<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+								<expr>2</expr>
+							</eq>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<postlude>
+				<stop_capture/>
+			</postlude>
+			<transition to="ReConfigure" event="SNMPRespFailure" />
+			<transition to="ReConfigure" event="SNMPResp" />
+		</state>
+        
+        <!-- Step 14 -->
+        <state ID="ReConfigure"
+			   provFile="v6.C.1.2.3_Hybrid.bin"
+               policyFile="X_eUEv6_Hybrid"
+               nextState="Reset2"/>
+        
+        <!-- Step 15 -->
+        <state ID="Reset2" timer="120000">
+            <prelude once="true">
+                <start_capture>
+                    <filter>
+                        <var_expr>
+							<expr>host </expr>
+							<msg_ref type="platform">DUT.IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.CM IP Address</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.DHCP Server IP</msg_ref>
+						</var_expr>
+                    </filter>
+                </start_capture>
+
+                <send protocol="utility" msgtype="SNMPSet">
+                    <mod modtype="add" hdr="array">
+                        <var_expr>
+                            <expr>varBind 1 1 3 \r\n ][ , </expr>
+                            <expr>DOCS-CABLE-DEVICE-MIB::docsDevResetNow.0,INTEGER,1][\r\n</expr>
+                        </var_expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.CM IP Address</msg_ref>
+                    </mod>
+                    <!-- Always use version 2c for a CM reset -->
+					<mod modtype="replace" hdr="version">
+						<expr>2c</expr>
+					</mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPRespFailure</expr>
+                    </eq>
+                    <then>
+                        <fail/>
+                    </then>
+                </if>
+                <if>
+                    <or>
+                        <eq>
+                            <msg_ref type="sip">REGISTER.Contact.expires</msg_ref>
+                            <expr>0</expr>
+                        </eq>
+                        <eq>
+                            <msg_ref type="sip">REGISTER.Expires.value</msg_ref>
+                            <expr>0</expr>
+                        </eq>
+                    </or>
+                    <then>
+                        <send protocol="sip" msgtype="200-REGISTER"/>
+                    </then>
+                </if>
+            </response>
+            <transition to="EUEProvision2" event="TimerExpired"/>
+            <transition to="Reset2" event="SNMPResp"/>
+            <transition to="Reset2" event="REGISTER"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+		
+        <!-- 15 The E-UE DUT provisions successfully and becomes operational.-->
+        <state ID="EUEProvision2">
+            <prelude once="true">				
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvisioningState.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+					<mod modtype="replace" hdr="version">
+                        <expr>2c</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="15">
+                    <contains>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>1</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="VerifyDevReset_2" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+		
+		<!-- Step 16-3  -->
+		<state ID="VerifyDevReset_2">
+			<prelude once="true">
+				<send protocol="utility" msgtype="SNMPGet">
+					<mod modtype="add" hdr="oids">
+						<expr>PKTC-IETF-MTA-MIB::pktcMtaDevResetNow.0</expr>
+					</mod>
+					<mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+					<mod modtype="replace" hdr="version">
+						<expr>2c</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="utility">Response</msg_ref>
+						<expr>SNMPResp</expr>
+					</eq>
+					<then>
+						<verify step="16-3">
+							<eq>
+								<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+								<expr>2</expr>
+								<!-- false -->
+							</eq>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<postlude>
+				<log promptUser="true" yesExpected="True" verify="True" step="16-4"
+				expr="Go offhook on the phone connected to the DUT and verify there is dial tone. DO NOT GO ONHOOK, YET."/>
+			</postlude>
+			<transition to="EUEReset2" event="SNMPRespFailure" />
+			<transition to="EUEReset2" event="SNMPResp" />
+		</state>
+		
+        <!-- Step 16-5  -->
+
+        <state ID="EUEReset2" timer="30000">
+			<prelude once="true">
+			    <send protocol="utility" msgtype="SNMPSet">
+                    <mod modtype="add" hdr="array">
+                        <var_expr>
+                            <expr>varBind 1 1 3 \r\n ][ , </expr>
+                            <expr>PKTC-IETF-MTA-MIB::pktcMtaDevResetNow.0,INTEGER,1][\r\n</expr>
+                        </var_expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+                    <!-- Always use version 2c for a CM reset -->
+					<mod modtype="replace" hdr="version">
+						<expr>2c</expr>
+					</mod>
+                </send>
+	
+            </prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="utility">Response</msg_ref>
+						<expr>SNMPResp</expr>
+					</eq>
+					<then>
+						<verify step="16-5">
+							<eq>
+								<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+								<expr>1</expr>
+							</eq>
+						</verify>
+						<log promptUser="true" yesExpected="True" verify="True" step="16-5"
+						expr="Verify dial tone is lost."/>
+						<log promptUser="true" expr="Go onhook."/>	
+					</then>
+				</if>
+			</response>
+			<transition to="END" event="SNMPRespFailure" />
+			<transition to="EUEReset2" event="SNMPResp" />
+			<transition to="VerifyDevReset_3" event="TimerExpired" />			
+        </state>
+        
+		
+        <!-- Step 16-6 Using the proper SNMPv3 manager,perform an SNMP Get on the pktcMtaDevResetNow object. -->
+		<state ID="VerifyDevReset_3">
+			<prelude once="true">
+				<send protocol="utility" msgtype="SNMPGet">
+					<mod modtype="add" hdr="oids">
+						<expr>PKTC-IETF-MTA-MIB::pktcMtaDevResetNow.0</expr>
+					</mod>
+					<mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+					<mod modtype="replace" hdr="version">
+						<expr>2c</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="utility">Response</msg_ref>
+						<expr>SNMPResp</expr>
+					</eq>
+					<then>
+						<verify step="16-6">
+							<eq>
+								<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+								<expr>2</expr>
+								<!-- false -->
+							</eq>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<postlude>
+				<stop_capture/>
+			</postlude>
+			<transition to="END" event="SNMPRespFailure" />
+			<transition to="END" event="SNMPResp" />
+		</state> 
+		</states>		
+	</add_to>
+</pc2xml>

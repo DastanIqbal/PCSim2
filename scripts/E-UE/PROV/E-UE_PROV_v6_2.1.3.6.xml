@@ -1,0 +1,78 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+Change History: (Author & Date)
+
+
+-->
+<!-- Document type and attributes. -->
+<pc2xml version="$Revision: 6076 $"
+        name="E-UE_PROV_2.1.3.6"
+        descrip="eUE reports provisioning pass status when the TLV 38.2 sub-type omitted
+                 from configuration containing TLV 38 parameters. eUE must use default
+                 port 162 for providing SNMP notifications to specified notify receiver."
+        number="E-UE_PROV_2.1.3.6">
+
+
+    <!-- Reset UE; start capture. -->
+    <template file="./templates/EUE_Prov_B_1_1_1.xml" name="SNMPVersions"/>
+
+    <add_to fsm="SNMPVersions">
+        <transition from="StartCapture_RebootWait" to="CMProvisioned" event="TimerExpired"/>
+
+        <state ID="CMProvisioned">
+            <prelude>
+                <parse_capture name="eUE_Prov">
+                    <parser_filter protocol="snmp" msgtype="Inform Request" ip="DUT.DHCP Server IP"/>
+                </parse_capture>
+                <parse_capture name="otherReceiver">
+                    <parser_filter protocol="snmp" ip="Platform.SNMP Server2 IP"/>
+                </parse_capture>
+                <generate event="SucceedEvent"/>
+            </prelude>
+            <transition to="EDVAProvisions" event="SucceedEvent"/>
+        </state>
+
+        <!-- E/MTA DUT reports provisioning pass code (1) to provisioning service (SNMP Entity). -->
+        <state ID="EDVAProvisions">
+            <prelude once="true">
+		<verify step="PC-1.5, Step 6">
+			<eq>
+				<capture_ref type="snmp" name="eUE_Prov" msg_instance="3">Inform Request.msgData.plaintext.data.informRequest.variable_bindings.1-3-6-1-2-1-140-1-1-8-0.int.show</capture_ref>
+				<expr>1</expr>
+			</eq>
+                </verify>
+
+                <!--  MTA DUT Sends the SNMPv2c "pktcMtaDevProvisioningStatus" INFORM to the IP Address "IP1", UDP port 162. -->
+                <verify step="PC-1.5, Step 7">
+			<and>
+				<eq>
+					<capture_ref type="snmp" name="otherReceiver">Inform Request.data.informRequest.variable_bindings.1-3-6-1-2-1-140-1-1-8-0.int.show</capture_ref>
+					<expr>1</expr>
+				</eq>
+				<and>
+					<eq>
+						<capture_ref type="snmp" name="otherReceiver">Inform Request.ipv6.src.show</capture_ref>
+						<msg_ref type="platform">DUT.IP</msg_ref>
+					</eq>
+					<eq>
+						<capture_ref type="snmp" name="otherReceiver">Inform Request.udp.dstport.show</capture_ref>
+						<expr>162</expr>
+					</eq>
+				</and>
+			</and>
+                </verify>
+		<generate event="SucceedEvent"/>
+            </prelude>
+	    <transition to="END" event="SucceedEvent"/>
+        </state>
+    </add_to>
+</pc2xml>

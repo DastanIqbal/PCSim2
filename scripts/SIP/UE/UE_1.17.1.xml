@@ -1,0 +1,140 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="SIP-UE 1.17.1" 
+	descrip="Support for GRUU in REGISTER requests" 
+	number="SIP-UE 1.17.1">
+	
+	<template file="./templates/UERegTemp.xml" name="Registrar"/>
+	<remove_from fsm="Registrar">
+		<state ID="PendingRegistration"/>
+		<state ID="Authorization"/>
+		<state ID="Registered"/>
+	</remove_from>
+	<add_to fsm="Registrar">
+		<state ID="PendingRegistration">
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>REGISTER</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="401-REGISTER"/>
+						<verify step="1" requirements="REQ16855">
+							<and>
+								<contains>
+									<msg_ref type="sip">REGISTER.Contact</msg_ref>
+									<expr>sip.instance=</expr>
+								</contains>
+								<contains>
+									<msg_ref type="sip">REGISTER.Contact</msg_ref>
+									<expr>urn:uuid</expr>
+								</contains>
+							</and>
+						</verify>
+						<verify step="2" requirements="REQ16867">
+							<contains>
+								<msg_ref type="sip" hdr_instance="any">REGISTER.Supported</msg_ref>
+								<expr>gruu</expr>
+							</contains>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<transition to="Authorization" event="REGISTER"/>
+		</state>
+		
+		<state ID="Authorization">
+			<response>
+				<if>
+					<or>
+						<eq>
+							<msg_ref type="event"/>
+							<expr>AuthenticateSucceed</expr>
+						</eq>
+						<eq>
+							<msg_ref type="event"/>
+							<expr>AuthenticateFailed</expr>
+						</eq>
+					</or>
+					<then>
+						<!-- this is to prevent the AuthenticateFailed from being forwarded
+								to the next state on the AuthenticateSucceed -->
+					</then>
+					<elseif>
+						<and>
+							<eq>
+								<msg_ref type="sip">Request</msg_ref>
+								<expr>REGISTER</expr>
+							</eq>
+							<and>
+								<contains>
+									<msg_ref type="sip">REGISTER</msg_ref>
+									<expr>Authorization</expr>
+								</contains>
+								<digest/>
+							</and>
+						</and>
+						<then>
+							<verify step="3" requirements="REQ16855">
+								<and>
+									<contains>
+										<msg_ref type="sip">REGISTER.Contact</msg_ref>
+										<expr>sip.instance=</expr>
+									</contains>
+									<contains>
+										<msg_ref type="sip">REGISTER.Contact</msg_ref>
+										<expr>urn:uuid</expr>
+									</contains>
+								</and>
+							</verify>
+							<verify step="4" requirements="REQ16867">
+								<contains>
+									<msg_ref type="sip" hdr_instance="any">REGISTER.Supported</msg_ref>
+									<expr>gruu</expr>
+								</contains>
+							</verify>
+							<generate event="AuthenticateSucceed"/>
+						</then>
+						<else>
+							<generate event="AuthenticateFailed"/>
+							<send protocol="sip" msgtype="503-Register"/>
+						</else>
+					</elseif>
+				</if>
+			</response>
+			<transition to="Registered" event="AuthenticateSucceed"/>
+			<transition to="END" event="AuthenticateFailed"/>
+			<transition to="Authorization" event="REGISTER"/>
+		</state>
+		<state ID="Registered">
+			<prelude>
+				<send protocol="sip" msgtype="200-Register">
+					<!--Step 6 test case SIP 1.17.1 - SS transmits a 200-REGISTER 
+						per step 4 [UE Registration case] with the following modification -->
+					<mod modtype="replace" hdr="Contact" param="expires">
+						<expr>60</expr>
+					</mod>
+				</send>
+			</prelude>
+			<transition to="END" event="REGISTER"/>
+		</state>
+	</add_to>
+</pc2xml>

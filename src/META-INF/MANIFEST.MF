@@ -1,0 +1,15 @@
+Manifest-Version: 1.0
+Main-Class: com.cablelabs.parser.TSReader
+Created-By: 1.0-alpha (Cable Television Laboratories - PacketCable 2.0)
+Class-Path: ./lib/log4j-1.2.13.jar 
+ ./lib/poi-2.5.1-final-20040804.jar 
+ ./lib/poi-contrib-2.5.1-final-20040804.jar 
+ ./lib/poi-scratchpad-2.5.1-final-20040804.jar
+
+Name: com/cablelabs/parser/
+Specification-Title: PacketCable 2.0
+Specification-Version: 1.0-alpha
+Specification-Vendor: CableLabs
+Implementation-Title: com.cablelabs.parser
+Implementation-Version: 3302
+Implementation-Vendor: Cablelabs

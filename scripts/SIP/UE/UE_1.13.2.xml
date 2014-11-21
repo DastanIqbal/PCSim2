@@ -1,0 +1,136 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="SIP-UE 1.13.2" 
+	descrip="Upon receiving a 421 response" 
+	number="SIP-UE 1.13.2">
+	
+	<template file="./templates/CallOrigAtUETemp.xml" name="UE1"/>
+	
+	<add_to fsm="UE1">
+		<NE ext_require="precondition 100rel"/>
+		<transition from="OffHook" to="FirstInvite" event="OffHookComplete"/>
+		<state ID="FirstInvite">
+			<prelude once="true">
+				<send protocol="utility" msgtype="DialDigits">
+					<mod modtype="add" hdr="number">
+						<msg_ref type="platform">UE1.phone number 1</msg_ref>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="utility">Response</msg_ref>
+						<expr>DialDigitsComplete</expr>
+					</eq>
+					<then>
+						<!-- Do nothing. This is to prevent us going into the precondition test below. -->
+					</then>
+					<elseif>
+						<or>
+							<contains>
+								<msg_ref type="sip" hdr_instance="any">INVITE.Require</msg_ref>
+								<expr>precondition</expr>
+							</contains>
+							<contains>
+								<msg_ref type="sip" hdr_instance="any">INVITE.Supported</msg_ref>
+								<expr>precondition</expr>
+							</contains>
+						</or>
+						<then>
+							<fail/>
+						</then>
+						<else>
+							<send protocol="sip" msgtype="421-INVITE">
+								<mod modtype="add" hdr="Require">
+									<expr>precondition</expr>
+								</mod>
+							</send>
+						</else>
+					</elseif>
+				</if>
+			</response>
+			<transition to="Setup" event="DialDigitsComplete"/>
+			<transition to="WaitAck" event="INVITE"/>
+		</state>
+		
+		<state ID="WaitAck">
+			<transition to="WaitAck" event="DialDigitsComplete"/>
+			<transition to="Setup2" event="ACK"/>
+		</state>
+		
+		<state ID="Setup2">
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip" msg_instance="last">Request.CSeq.method</msg_ref>
+						<expr>INVITE</expr>
+					</eq>
+					<then>
+						<verify step="2" requirements="REQ17106, REQ17107, RFC1486, RFC1487, RFC1488, RFC1512, RFC1513">
+							<contains>
+								<msg_ref type="sip" hdr_instance="any">Invite.Require</msg_ref>
+								<expr>100rel</expr>
+							</contains>
+						</verify>
+						<verify step="2" requirements="REQ17106, REQ17107, RFC1486, RFC1487, RFC1488, RFC1512, RFC1513">
+							<contains>
+								<msg_ref type="sip" hdr_instance="any">Invite.Allow</msg_ref>
+								<expr>PRACK</expr>
+							</contains>
+						</verify>
+						<verify step="2" requirements="REQ17106, REQ17107, RFC1486, RFC1487, RFC1488, RFC1512, RFC1513">
+							<contains>
+								<msg_ref type="sip" hdr_instance="any">Invite.Allow</msg_ref>
+								<expr>UPDATE</expr>
+							</contains>
+						</verify>
+						<verify step="2" requirements="REQ17106, REQ17107, RFC1486, RFC1487, RFC1488, RFC1512, RFC1513">
+							<eq>
+								<msg_ref type="sdp">Invite.qos-des-local.strength</msg_ref>
+								<expr>mandatory</expr>
+							</eq>
+						</verify>
+						<verify step="2" requirements="REQ17106, REQ17107, RFC1486, RFC1487, RFC1488, RFC1512, RFC1513">
+							<eq>
+								<msg_ref type="sdp">Invite.qos-des-remote.strength</msg_ref>
+								<expr>mandatory</expr>
+							</eq>
+						</verify>
+						<verify step="2" requirements="REQ17106, REQ17107, RFC1486, RFC1487, RFC1488, RFC1512, RFC1513">
+							<eq>
+								<msg_ref type="sdp">Invite.qos-des-local.direction</msg_ref>
+								<expr>sendrecv</expr>
+							</eq>
+						</verify>
+						<verify step="2" requirements="REQ17106, REQ17107, RFC1486, RFC1487, RFC1488, RFC1512, RFC1513">
+							<eq>
+								<msg_ref type="sdp">Invite.qos-des-remote.direction</msg_ref>
+								<expr>sendrecv</expr>
+							</eq>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<transition to="END" event="INVITE"/>
+		</state>
+	</add_to>
+</pc2xml>

@@ -1,0 +1,1029 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+ Change History: (Author & Date)
+-->
+<!-- Document type and attributes. -->
+<pc2xml version="$Revision: 6076 $"
+        name="E-UE_DATA_1.2.3.1"
+        descrip="eUE implements pktcEUEUsrIMPITable defined in CL-PKTC-EUE-USER-MIB."
+        number="E-UE_DATA_1.2.3.1">
+
+
+    <!-- Reset UE; start capture. -->
+    <template file="./templates/EUE_Prov_B_1_1_1.xml" name="EUEDevOpTable"/>
+
+    <add_to fsm="EUEDevOpTable">
+        <transition from="StartCapture_RebootWait" to="EUEProvisions1" event="TimerExpired"/>
+
+        <!--
+            pktcEUEDhcpv6ServerId1         Octet String    DSS_ID as per sub-option 1           Read-only
+            pktcEUEDhcpv6ServerId2         Octet String    DSS_ID as per sub-option 2           Read-only
+            pktcEUEDhcpv6ServerAddressType Unsigned32      Ipv6(2)                              Read-only
+            pktcEUEDhcpv6ServerAddress     InetAddress     IP address of pktcEUEDhcpv6ServerId1
+                                                                      or pktcEUEDhcpv6ServerId2 Read-only
+            pktcEUEDnsv6ServerAddressType  InetAddressType Ipv6(2)                              Read-only
+
+            pktcEUEDnsv6ServerAddress1     InetAddress     Value obtained via DHCPv6            Read-write
+            pktcEUEDnsv6ServerAddress2     InetAddress     Value obtained via DHCPv6            Read-write
+        -->
+
+
+        <!-- vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv -->
+        <!-- ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ -->
+        <!-- 2 The E-UE DUT provisions successfully and becomes operational. -->
+        <state ID="EUEProvisions1">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvisioningState.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="2">
+                    <contains>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>1</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="MIBWalk1" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+        <!-- 3 SNMPv3 Walk pktcEUEProvMgmtObjects.
+               eUE returns following table of objects and values shown for each object.
+               Note: There must be one index shown for each user. -->
+                    <!-- pktcEUEDhcpv6ServerId1 = abcd -->
+                    <!-- pktcEUEDhcpv6ServerId2 =  00 00 00 00 -->
+                    <!-- pktcEUEDhcpv6ServerAddressType = Ipv6(2) -->
+                    <!-- pktcEUEDhcpv6ServerAddress = IP address of pktcEUEDhcpv6ServerId1 OR pktcEUEDhcpv6ServerId2 -->
+                    <!-- pktcEUEDnsv6ServerAddressType = Ipv6(2) -->
+                    <!-- pktcEUEDnsv6ServerAddress1 = Value obtained via DHCPv6 -->
+                    <!-- pktcEUEDnsv6ServerAddress2 = Value obtained via DHCPv6 -->
+					
+        <state ID="MIBWalk1">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPGetTable">
+                    <mod modtype="add" hdr="oids">
+                        <expr>CL-PKTC-EUE-PROV-MGMT-MIB::pktcEUEProvMgmtObjects</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+                    <mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPRespFailure</expr>
+                    </eq>
+                <then>
+                    <fail/>
+                </then>
+                </if>
+                <verify step="3">
+                    <and>
+                        <!-- pktcEUEDhcpv6ServerId1 = abcd -->
+                        <contains>
+                            <msg_ref type="utility" index="0 1 2">SNMPResp.varBind</msg_ref>
+                            <expr>abcd</expr>
+                        </contains>
+                    <and>
+                        <!-- pktcEUEDhcpv6ServerId2 =  00 00 00 00 -->
+                        <contains>
+                            <msg_ref type="utility" index="0 2 2">SNMPResp.varBind</msg_ref>
+                            <expr>00 00 00 00</expr>
+                        </contains>
+                    <and>
+                        <!-- pktcEUEDhcpv6ServerAddressType = Ipv6(2) -->
+                        <eq>
+                            <msg_ref type="utility" index="0 3 2">SNMPResp.varBind</msg_ref>
+                            <expr>2</expr>
+                        </eq>
+                    <and>
+                        <!-- pktcEUEDhcpv6ServerAddress = IP address of pktcEUEDhcpv6ServerId1 OR pktcEUEDhcpv6ServerId2 -->
+						<or>
+						<eq>
+							<msg_ref type="utility" index="0 4 2">SNMPResp.varBind</msg_ref>
+							<msg_ref type="platform">DUT.DHCP Server IP Hex</msg_ref>
+						</eq>
+						<eq>
+							<msg_ref type="utility" index="0 4 2">SNMPResp.varBind</msg_ref>
+							 <expr>00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00</expr>
+						</eq>
+						</or>
+                    <and>
+                        <!-- pktcEUEDnsv6ServerAddressType = Ipv6(2) -->
+                        <eq>
+                            <msg_ref type="utility" index="0 5 2">SNMPResp.varBind</msg_ref>
+						    <expr>2</expr>
+                        </eq>
+                    <and>
+                        <!-- pktcEUEDnsv6ServerAddress1 = Value obtained via DHCPv6 -->
+                        <eq>
+                        <msg_ref type="utility" index="0 6 2">SNMPResp.varBind</msg_ref>
+                        <msg_ref type="platform">DUT.DNS Server IP Hex</msg_ref>
+						</eq>
+					    <!-- pktcEUEDnsv6ServerAddress2 = Value obtained via DHCPv6 -->
+                        <contains>
+                            <msg_ref type="utility" index="0 7 2">SNMPResp.varBind</msg_ref>
+                            <expr>00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00</expr>
+                        </contains>
+                    </and>
+                    </and>
+                    </and>
+                    </and>
+                    </and>
+                    </and>
+                </verify>
+            </response>
+            <transition to="SNMPSet1" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+		
+		<!-- 4 SNMPv3 Set on read-only objects in table above to syntactically correct value.
+               eUE returns a "NonWritable(17)" error. -->
+
+        <state ID="SNMPSet1" timer="10000">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPSet">
+                    <mod modtype="add" hdr="array">
+                        <var_expr>
+                            <expr>varBind 1 1 3 \r\n ][ , </expr>
+                            <expr>CL-PKTC-EUE-PROV-MGMT-MIB::pktcEUEDhcpv6ServerId1.0,STRING,1][\r\n</expr>
+                        </var_expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+                    <mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPResp</expr>
+                    </eq>
+                <then>
+                    <fail/>
+                </then>
+                </if>
+                <verify step="4-1">
+                    <contains>
+                        <msg_ref type="utility">SNMPRespFailure.errorString</msg_ref>
+                        <expr>notWritable</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="SNMPSet2" event="SNMPRespFailure"/>
+            <transition to="END" event="SNMPResp"/>
+        </state>
+
+        <state ID="SNMPSet2" timer="10000">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPSet">
+                    <mod modtype="add" hdr="array">
+                        <var_expr>
+                            <expr>varBind 1 1 3 \r\n ][ , </expr>
+                            <expr>CL-PKTC-EUE-PROV-MGMT-MIB::pktcEUEDhcpv6ServerId2.0,STRING,1][\r\n</expr>
+                        </var_expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+                    <mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPResp</expr>
+                    </eq>
+                <then>
+                    <fail/>
+                </then>
+                </if>
+                <verify step="4-2">
+                    <contains>
+                        <msg_ref type="utility">SNMPRespFailure.errorString</msg_ref>
+                        <expr>notWritable</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="SNMPSet3" event="SNMPRespFailure"/>
+            <transition to="END" event="SNMPResp"/>
+        </state>
+
+        <state ID="SNMPSet3" timer="10000">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPSet">
+                    <mod modtype="add" hdr="array">
+                        <var_expr>
+                            <expr>varBind 1 1 3 \r\n ][ , </expr>
+                            <expr>CL-PKTC-EUE-PROV-MGMT-MIB::pktcEUEDhcpv6ServerAddressType.0,INTEGER,1][\r\n</expr>
+                        </var_expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+                    <mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPResp</expr>
+                    </eq>
+                <then>
+                    <fail/>
+                </then>
+                </if>
+                <verify step="4-3">
+                    <contains>
+                        <msg_ref type="utility">SNMPRespFailure.errorString</msg_ref>
+                        <expr>notWritable</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="SNMPSet4" event="SNMPRespFailure"/>
+            <transition to="END" event="SNMPResp"/>
+        </state>
+
+        <state ID="SNMPSet4" timer="10000">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPSet">
+                    <mod modtype="add" hdr="array">
+                        <var_expr>
+                            <expr>varBind 1 1 3 \r\n ][ , </expr>
+                            <expr>CL-PKTC-EUE-PROV-MGMT-MIB::pktcEUEDhcpv6ServerAddress.0,STRING,1][\r\n</expr>
+                        </var_expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+                    <mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPResp</expr>
+                    </eq>
+                <then>
+                    <fail/>
+                </then>
+                </if>
+                <verify step="4-4">
+                    <contains>
+                        <msg_ref type="utility">SNMPRespFailure.errorString</msg_ref>
+                        <expr>notWritable</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="SNMPSet5" event="SNMPRespFailure"/>
+            <transition to="END" event="SNMPResp"/>
+        </state>
+
+        <state ID="SNMPSet5" timer="10000">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPSet">
+                    <mod modtype="add" hdr="array">
+                        <var_expr>
+                            <expr>varBind 1 1 3 \r\n ][ , </expr>
+                            <expr>CL-PKTC-EUE-PROV-MGMT-MIB::pktcEUEDnsv6ServerAddressType.0,INTEGER,1][\r\n</expr>
+                        </var_expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+                    <mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPResp</expr>
+                    </eq>
+                <then>
+                    <fail/>
+                </then>
+                </if>
+                <verify step="4-5">
+                    <contains>
+                        <msg_ref type="utility">SNMPRespFailure.errorString</msg_ref>
+                        <expr>notWritable</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="SNMPSet6" event="SNMPRespFailure"/>
+            <transition to="END" event="SNMPResp"/>
+        </state>
+
+        <!-- 5 SNMPv3 SNMP Set on read-write objects in table above to syntactically correct value. -->
+               <!-- SNMPv3 Get verifcation of values just written.
+                   pktcEUEDnsv6ServerAddress1
+                   pktcEUEDnsv6ServerAddress2 -->
+
+        <state ID="SNMPSet6" timer="10000">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPSet">
+                    <mod modtype="add" hdr="array">
+                        <var_expr>
+                            <expr>varBind 1 1 3 \r\n ][ , </expr>
+                            <expr>CL-PKTC-EUE-PROV-MGMT-MIB::pktcEUEDnsv6ServerAddress1.0,Hex-STRING,00 01 02 03 04 05 06 07 08 09 0A 0B 0C 0D 0E 0F][\r\n</expr>
+                        </var_expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+                    <mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPRespFailure</expr>
+                    </eq>
+                <then>
+                    <fail/>
+                </then>
+                </if>
+                <verify step="5-1">
+                    <contains>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>00 01 02 03 04 05 06 07 08 09 0A 0B 0C 0D 0E 0F</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="SNMPSet7" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+        <state ID="SNMPSet7" timer="10000">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPSet">
+                    <mod modtype="add" hdr="array">
+                        <var_expr>
+                            <expr>varBind 1 1 3 \r\n ][ , </expr>
+                            <expr>CL-PKTC-EUE-PROV-MGMT-MIB::pktcEUEDnsv6ServerAddress2.0,Hex-STRING,00 01 02 03 04 05 06 07 08 09 0A 0B 0C 0D 0E 0F][\r\n</expr>
+                        </var_expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+                    <mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPRespFailure</expr>
+                    </eq>
+                <then>
+                    <fail/>
+                </then>
+                </if>
+                <verify step="5-2">
+                    <contains>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>00 01 02 03 04 05 06 07 08 09 0A 0B 0C 0D 0E 0F</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="SNMPGet6" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+        <state ID="SNMPGet6">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>CL-PKTC-EUE-PROV-MGMT-MIB::pktcEUEDnsv6ServerAddress1.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="5-3">
+                    <contains>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>00 01 02 03 04 05 06 07 08 09 0A 0B 0C 0D 0E 0F</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="SNMPGet7" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+        <state ID="SNMPGet7">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>CL-PKTC-EUE-PROV-MGMT-MIB::pktcEUEDnsv6ServerAddress2.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="5-4">
+                    <contains>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>00 01 02 03 04 05 06 07 08 09 0A 0B 0C 0D 0E 0F</expr>
+                    </contains>
+                </verify>
+            </response>
+			<postlude>
+                <stop_capture/>
+            </postlude>
+            <transition to="ReConfigure2" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+
+<!-- vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv -->
+<!-- ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ -->
+        <!-- Stop IP capture and save trace file. -->
+        <!-- 6 Configure. -->
+        <!-- 7 Reset. E-UE DUT provisions successfully and becomes operational. -->
+        <state ID="ReConfigure2"
+               provFile="v6.C.1.2.3_Hybrid.bin"
+               policyFile="X_eUEv6_Hybrid"
+               nextState="Reset2"/>
+        <!-- Indexed values pktcEUEUsrIMPUId reflect modifications in Step 8. -->
+
+		<!--state ID="ReConfigure2">
+			<prelude>
+				<log promptUser="true" expr="Section 2: Configure the device with Bin File: v6.C.1.2.3_Hybrid.bin and Policy: X_eUEv6_Hybrid, Save, Deploy DHCPv6 and click OK."/>
+				<generate event="Branch1Event"/>
+			</prelude>
+			<transition to="Reset2" event="Branch1Event"/>
+		</state--> 
+				   
+        <state ID="Reset2" timer="120000">
+            <prelude once="true">
+                <start_capture>
+                    <filter>
+                        <var_expr>
+							<expr>host </expr>
+							<msg_ref type="platform">DUT.IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.CM IP Address</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.DHCP Server IP</msg_ref>
+						</var_expr>
+                    </filter>
+                </start_capture>
+
+                <send protocol="utility" msgtype="SNMPSet">
+                    <mod modtype="add" hdr="array">
+                        <var_expr>
+                            <expr>varBind 1 1 3 \r\n ][ , </expr>
+                            <expr>DOCS-CABLE-DEVICE-MIB::docsDevResetNow.0,INTEGER,1][\r\n</expr>
+                        </var_expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.CM IP Address</msg_ref>
+                    </mod>
+                    <!-- Always use version 2c for a CM reset -->
+					<mod modtype="replace" hdr="version">
+						<expr>2c</expr>
+					</mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPRespFailure</expr>
+                    </eq>
+                    <then>
+                        <fail/>
+                    </then>
+                </if>
+                <if>
+                    <or>
+                        <eq>
+                            <msg_ref type="sip">REGISTER.Contact.expires</msg_ref>
+                            <expr>0</expr>
+                        </eq>
+                        <eq>
+                            <msg_ref type="sip">REGISTER.Expires.value</msg_ref>
+                            <expr>0</expr>
+                        </eq>
+                    </or>
+                    <then>
+                        <send protocol="sip" msgtype="200-REGISTER"/>
+                    </then>
+                </if>
+            </response>
+            <transition to="EUEProvisions2" event="TimerExpired"/>
+            <transition to="Reset2" event="SNMPResp"/>
+            <transition to="Reset2" event="REGISTER"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+        <!-- 7h-2. -->
+        <state ID="EUEProvisions2">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvisioningState.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+					<!-- Always use version 2c for Hybrid Mode -->
+					<mod modtype="replace" hdr="version">
+						<expr>2c</expr>
+					</mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="7-2">
+                    <contains>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>1</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="MIBWalk2" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+		<!-- 8 Repeat Step 3 above. -->
+        <!-- 8-3 SNMPv3 Walk pktcEUEProvMgmtObjects.
+               eUE returns following table of objects and values shown for each object.
+               Note: There must be one index shown for each user. -->
+                    <!-- pktcEUEDhcpv6ServerId1 = abcd -->
+                    <!-- pktcEUEDhcpv6ServerId2 =  00 00 00 00 -->
+                    <!-- pktcEUEDhcpv6ServerAddressType = Ipv6(2) -->
+                    <!-- pktcEUEDhcpv6ServerAddress = IP address of pktcEUEDhcpv6ServerId1 OR pktcEUEDhcpv6ServerId2 -->
+                    <!-- pktcEUEDnsv6ServerAddressType = Ipv6(2) -->
+                    <!-- pktcEUEDnsv6ServerAddress1 = Value obtained via DHCPv6 -->
+                    <!-- pktcEUEDnsv6ServerAddress2 = Value obtained via DHCPv6 -->
+					
+        <state ID="MIBWalk2">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPGetTable">
+                    <mod modtype="add" hdr="oids">
+                        <expr>CL-PKTC-EUE-PROV-MGMT-MIB::pktcEUEProvMgmtObjects</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+                    <!-- Always use version 2c for Hybrid Mode -->
+					<mod modtype="replace" hdr="version">
+						<expr>2c</expr>
+					</mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPRespFailure</expr>
+                    </eq>
+                <then>
+                    <fail/>
+                </then>
+                </if>
+                <verify step="8-3">
+                    <and>
+                        <!-- pktcEUEDhcpv6ServerId1 = abcd -->
+                        <contains>
+                            <msg_ref type="utility" index="0 1 2">SNMPResp.varBind</msg_ref>
+                            <expr>abcd</expr>
+                        </contains>
+                    <and>
+                        <!-- pktcEUEDhcpv6ServerId2 =  00 00 00 00 -->
+                        <contains>
+                            <msg_ref type="utility" index="0 2 2">SNMPResp.varBind</msg_ref>
+                            <expr>00 00 00 00</expr>
+                        </contains>
+                    <and>
+                        <!-- pktcEUEDhcpv6ServerAddressType = Ipv6(2) -->
+                        <eq>
+                            <msg_ref type="utility" index="0 3 2">SNMPResp.varBind</msg_ref>
+                            <expr>2</expr>
+                        </eq>
+                    <and>
+                        <!-- pktcEUEDhcpv6ServerAddress = IP address of pktcEUEDhcpv6ServerId1 OR pktcEUEDhcpv6ServerId2 -->
+						<or>
+						<eq>
+							<msg_ref type="utility" index="0 4 2">SNMPResp.varBind</msg_ref>
+							<msg_ref type="platform">DUT.DHCP Server IP Hex</msg_ref>
+						</eq>
+						<eq>
+							<msg_ref type="utility" index="0 4 2">SNMPResp.varBind</msg_ref>
+							 <expr>00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00</expr>
+						</eq>
+						</or>
+                    <and>
+                        <!-- pktcEUEDnsv6ServerAddressType = Ipv6(2) -->
+                        <eq>
+                            <msg_ref type="utility" index="0 5 2">SNMPResp.varBind</msg_ref>
+						    <expr>2</expr>
+                        </eq>
+                    <and>
+                        <!-- pktcEUEDnsv6ServerAddress1 = Value obtained via DHCPv6 -->
+                        <eq>
+                        <msg_ref type="utility" index="0 6 2">SNMPResp.varBind</msg_ref>
+                        <msg_ref type="platform">DUT.DNS Server IP Hex</msg_ref>
+						</eq>
+					    <!-- pktcEUEDnsv6ServerAddress2 = Value obtained via DHCPv6 -->
+                        <contains>
+                            <msg_ref type="utility" index="0 7 2">SNMPResp.varBind</msg_ref>
+                            <expr>00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00</expr>
+                        </contains>
+                    </and>
+                    </and>
+                    </and>
+                    </and>
+                    </and>
+                    </and>
+                </verify>
+            </response>
+            <transition to="SNMPSet1h" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+        		<!-- 8-4 SNMPv3 Set on read-only objects in table above to syntactically correct value.
+               eUE returns a "NonWritable(17)" error. -->
+
+        <state ID="SNMPSet1h" timer="10000">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPSet">
+                    <mod modtype="add" hdr="array">
+                        <var_expr>
+                            <expr>varBind 1 1 3 \r\n ][ , </expr>
+                            <expr>CL-PKTC-EUE-PROV-MGMT-MIB::pktcEUEDhcpv6ServerId1.0,STRING,1][\r\n</expr>
+                        </var_expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+                    <!-- Always use version 2c for Hybrid Mode -->
+					<mod modtype="replace" hdr="version">
+						<expr>2c</expr>
+					</mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPResp</expr>
+                    </eq>
+                <then>
+                    <fail/>
+                </then>
+                </if>
+                <verify step="8-4-1">
+                    <contains>
+                        <msg_ref type="utility">SNMPRespFailure.errorString</msg_ref>
+                        <expr>notWritable</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="SNMPSet2h" event="SNMPRespFailure"/>
+            <transition to="END" event="SNMPResp"/>
+        </state>
+
+        <state ID="SNMPSet2h" timer="10000">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPSet">
+                    <mod modtype="add" hdr="array">
+                        <var_expr>
+                            <expr>varBind 1 1 3 \r\n ][ , </expr>
+                            <expr>CL-PKTC-EUE-PROV-MGMT-MIB::pktcEUEDhcpv6ServerId2.0,STRING,1][\r\n</expr>
+                        </var_expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+                    <!-- Always use version 2c for Hybrid Mode -->
+					<mod modtype="replace" hdr="version">
+						<expr>2c</expr>
+					</mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPResp</expr>
+                    </eq>
+                <then>
+                    <fail/>
+                </then>
+                </if>
+                <verify step="8-4-2">
+                    <contains>
+                        <msg_ref type="utility">SNMPRespFailure.errorString</msg_ref>
+                        <expr>notWritable</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="SNMPSet3h" event="SNMPRespFailure"/>
+            <transition to="END" event="SNMPResp"/>
+        </state>
+
+        <state ID="SNMPSet3h" timer="10000">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPSet">
+                    <mod modtype="add" hdr="array">
+                        <var_expr>
+                            <expr>varBind 1 1 3 \r\n ][ , </expr>
+                            <expr>CL-PKTC-EUE-PROV-MGMT-MIB::pktcEUEDhcpv6ServerAddressType.0,INTEGER,1][\r\n</expr>
+                        </var_expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+                    <!-- Always use version 2c for Hybrid Mode -->
+					<mod modtype="replace" hdr="version">
+						<expr>2c</expr>
+					</mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPResp</expr>
+                    </eq>
+                <then>
+                    <fail/>
+                </then>
+                </if>
+                <verify step="8-4-3">
+                    <contains>
+                        <msg_ref type="utility">SNMPRespFailure.errorString</msg_ref>
+                        <expr>notWritable</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="SNMPSet4h" event="SNMPRespFailure"/>
+            <transition to="END" event="SNMPResp"/>
+        </state>
+
+        <state ID="SNMPSet4h" timer="10000">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPSet">
+                    <mod modtype="add" hdr="array">
+                        <var_expr>
+                            <expr>varBind 1 1 3 \r\n ][ , </expr>
+                            <expr>CL-PKTC-EUE-PROV-MGMT-MIB::pktcEUEDhcpv6ServerAddress.0,STRING,1][\r\n</expr>
+                        </var_expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+                    <!-- Always use version 2c for Hybrid Mode -->
+					<mod modtype="replace" hdr="version">
+						<expr>2c</expr>
+					</mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPResp</expr>
+                    </eq>
+                <then>
+                    <fail/>
+                </then>
+                </if>
+                <verify step="8-4-4">
+                    <contains>
+                        <msg_ref type="utility">SNMPRespFailure.errorString</msg_ref>
+                        <expr>notWritable</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="SNMPSet5h" event="SNMPRespFailure"/>
+            <transition to="END" event="SNMPResp"/>
+        </state>
+
+        <state ID="SNMPSet5h" timer="10000">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPSet">
+                    <mod modtype="add" hdr="array">
+                        <var_expr>
+                            <expr>varBind 1 1 3 \r\n ][ , </expr>
+                            <expr>CL-PKTC-EUE-PROV-MGMT-MIB::pktcEUEDnsv6ServerAddressType.0,INTEGER,1][\r\n</expr>
+                        </var_expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+                    <!-- Always use version 2c for Hybrid Mode -->
+					<mod modtype="replace" hdr="version">
+						<expr>2c</expr>
+					</mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPResp</expr>
+                    </eq>
+                <then>
+                    <fail/>
+                </then>
+                </if>
+                <verify step="8-4-5">
+                    <contains>
+                        <msg_ref type="utility">SNMPRespFailure.errorString</msg_ref>
+                        <expr>notWritable</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="SNMPSet6h" event="SNMPRespFailure"/>
+            <transition to="END" event="SNMPResp"/>
+        </state>
+
+        <!-- 8-5 SNMPv3 SNMP Set on read-write objects in table above to syntactically correct value. -->
+               <!-- SNMPv3 Get verifcation of values just written.
+                   pktcEUEDnsv6ServerAddress1
+                   pktcEUEDnsv6ServerAddress2 -->
+
+        <state ID="SNMPSet6h" timer="10000">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPSet">
+                    <mod modtype="add" hdr="array">
+                        <var_expr>
+                            <expr>varBind 1 1 3 \r\n ][ , </expr>
+                            <expr>CL-PKTC-EUE-PROV-MGMT-MIB::pktcEUEDnsv6ServerAddress1.0,Hex-STRING,00 01 02 03 04 05 06 07 08 09 0A 0B 0C 0D 0E 0F][\r\n</expr>
+                        </var_expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+                    <!-- Always use version 2c for Hybrid Mode -->
+					<mod modtype="replace" hdr="version">
+						<expr>2c</expr>
+					</mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPRespFailure</expr>
+                    </eq>
+                <then>
+                    <fail/>
+                </then>
+                </if>
+                <verify step="8-5-1">
+                    <contains>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>00 01 02 03 04 05 06 07 08 09 0A 0B 0C 0D 0E 0F</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="SNMPSet7h" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+        <state ID="SNMPSet7h" timer="10000">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPSet">
+                    <mod modtype="add" hdr="array">
+                        <var_expr>
+                            <expr>varBind 1 1 3 \r\n ][ , </expr>
+                            <expr>CL-PKTC-EUE-PROV-MGMT-MIB::pktcEUEDnsv6ServerAddress2.0,Hex-STRING,00 01 02 03 04 05 06 07 08 09 0A 0B 0C 0D 0E 0F][\r\n</expr>
+                        </var_expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+                    <!-- Always use version 2c for Hybrid Mode -->
+					<mod modtype="replace" hdr="version">
+						<expr>2c</expr>
+					</mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPRespFailure</expr>
+                    </eq>
+                <then>
+                    <fail/>
+                </then>
+                </if>
+                <verify step="8-5-2">
+                    <contains>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>00 01 02 03 04 05 06 07 08 09 0A 0B 0C 0D 0E 0F</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="SNMPGet6h" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+        <state ID="SNMPGet6h">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>CL-PKTC-EUE-PROV-MGMT-MIB::pktcEUEDnsv6ServerAddress1.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+					<!-- Always use version 2c for Hybrid Mode -->
+					<mod modtype="replace" hdr="version">
+						<expr>2c</expr>
+					</mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="8-5-3">
+                    <contains>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>00 01 02 03 04 05 06 07 08 09 0A 0B 0C 0D 0E 0F</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="SNMPGet7h" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+        <state ID="SNMPGet7h">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>CL-PKTC-EUE-PROV-MGMT-MIB::pktcEUEDnsv6ServerAddress2.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+					<!-- Always use version 2c for Hybrid Mode -->
+					<mod modtype="replace" hdr="version">
+						<expr>2c</expr>
+					</mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="8-5-4">
+                    <contains>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>00 01 02 03 04 05 06 07 08 09 0A 0B 0C 0D 0E 0F</expr>
+                    </contains>
+                </verify>
+            </response>
+			<postlude>
+                <stop_capture/>
+            </postlude>
+            <transition to="END" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+    </add_to>
+</pc2xml>

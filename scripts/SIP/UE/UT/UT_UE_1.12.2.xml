@@ -1,0 +1,68 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+
+<!-- First are the document type and the attributes for our document -->
+<pc2xml version="$Revision: 8188 $" name="UT_SIP-UE 1.12.1" descrip="Reception of a second UPDATE before generating a response to a previous UPDATE (After Session Establishment)" number="UT_SIP-UE 1.12.1">
+	<template name="UT_SIP-UE 1.12.1" file="./templates/ut/Term_DUT.xml"/>
+	<remove_from fsm="UT_SIP-UE 1.12.1">
+		<state ID="Connected"/>
+	</remove_from>
+	<add_to fsm="UT_SIP-UE 1.12.1">
+		<!-- SETUP State -->
+		<state ID="Connected">
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>UPDATE</expr>
+					</eq>
+					<then>
+						<!--QoS required or supported sending 200-Update message to peer.-->
+						<send protocol="sip" msgtype="200-Update" target="UE1" originator="DUT"/>
+						<generate event="SucceedEvent"/>
+					</then>
+				</if>
+			</response>
+			<!-- Transitions for Setup state -->
+			<transition to="Update2" event="SucceedEvent"/>
+		</state>
+		<state ID="Update2">
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>UPDATE</expr>
+					</eq>
+					<then>
+						<!--QoS required or supported sending 200-Update message to peer.-->
+						<send protocol="sip" msgtype="500-Update" target="UE1" originator="DUT">
+							<mod modtype="replace" hdr="Retry-After" param="value">
+								<expr>5</expr>
+							</mod>
+						</send>
+						<generate event="SucceedEvent"/>
+					</then>
+				</if>
+			</response>
+			<!-- Transitions for Setup state -->
+			<transition to="END" event="SucceedEvent"/>
+		</state>
+	</add_to>
+</pc2xml>

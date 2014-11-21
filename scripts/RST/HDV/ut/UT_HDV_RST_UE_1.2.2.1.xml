@@ -1,0 +1,82 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+
+<!-- First are the document type and the attributes for our document -->
+<pc2xml version="$Revision: 6076 $" name="UT_HDV_RST-UE 1.2.2.1" descrip="No P-Asserted Identity Header" number="UT_HDV_RST-UE 1.2.2.1">
+	<fsm name="UE0">
+		<models>
+			<session/>
+		</models>
+		<NE sim_type="term" elements="DUT" targets="UE0 DUT"/>
+		<states initialstate="PendingRegister">
+			<state ID="PendingRegister" timer="500">
+				<transition to="Setup" event="Registered"/>
+				<transition to="Register" event="TimerExpired"/>
+			</state>
+			<!-- REGISTER State -->
+			<state ID="Register">
+				<prelude>
+					<send protocol="sip" msgtype="Register" target="PCSCF1" originator="DUT"/>
+				</prelude>
+				<transition to="Digest" event="401-Register"/>
+				<transition to="Setup" event="200-Register"/>
+			</state>
+			<state ID="Digest">
+				<prelude>
+					<send protocol="sip" msgtype="Register" target="PCSCF1" originator="DUT"/>
+				</prelude>
+				<transition to="Setup" event="200-Register"/>
+			</state>
+			<!-- SETUP STATE -->
+			<state ID="Setup">
+				<!-- Step 1 from the Default Message Flow Call-Term-at-UE(DUT) Sequence Diagram -
+               Test 18x response for reliability for possible Prack message- send Invite -->
+				<prelude>
+					<sleep time="3000"/>
+					<send protocol="sip" msgtype="Invite" target="UE1" originator="DUT">
+						<mod modtype="replace" hdr="Privacy" param="value">
+							<expr>id</expr>
+						</mod>
+					</send>
+				</prelude>
+				<postlude>
+					<send protocol="sip" msgtype="Ack" target="UE1" originator="DUT"/>
+				</postlude>
+				<!-- Transitions for Setup state -->
+				<transition to="Setup2" event="500-INVITE"/>
+			</state>
+			<state ID="Setup2">
+				<prelude>
+					<sleep time="3000"/>
+					<send protocol="sip" msgtype="Invite" target="UE1" originator="DUT">
+						<mod modtype="replace" hdr="Privacy">
+							<expr>id</expr>
+						</mod>
+					</send>
+				</prelude>
+				<postlude>
+					<send protocol="sip" msgtype="Ack" target="UE1" originator="DUT"/>
+				</postlude>
+				
+				<transition to="END" event="500-INVITE"/>
+			</state>	
+		</states>
+	</fsm>
+</pc2xml>

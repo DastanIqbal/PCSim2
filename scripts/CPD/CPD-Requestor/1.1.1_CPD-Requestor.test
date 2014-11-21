@@ -1,0 +1,138 @@
+###########################################################
+#   Author: Vikas Sarawat (CableLabs)
+#   Date :   06/22/07  
+#   DUT:     CPD-Requestor
+#   Title   : TEST CASE CPD-Requestor 1.1.1 CPD Request Message Details
+#   Objective: Verify the CPD request message is fomatted correctly and contains the correct values
+#
+##
+###########################################################
+
+set procNum 1
+set stepNum 0
+
+set mod cpd
+set cpd ::$mod\::
+
+set str "InitModule CPD"
+DoStep "Step $procNum.[incr stepNum]" $str {
+    # Doc: InitModule CPD (Source-Link Plugin-Module & Open Socket)
+    set isOk [set soc [ InitModule $mod ] ]
+} { if {$isOk == -1 } {FAIL_STEP $str } else {PASS_STEP} }
+
+set str "Rx CPD Request Msg"
+DoStep "Step $procNum.[incr stepNum]" $str {
+    # Doc: Rx 1st Message
+    set rxData_Req [ $cpd\MsgRx 30 ]
+
+    set flags [$cpd\MsgGetVal $rxData_Req Hdr flags ]
+    if {[expr $flags & 0x0001] == 1} { 
+        LogMsg "!!HOP-BY-HOP is set in the response"; set isOk -1
+    } else {
+        LogMsg "HOP-BY-HOP is NOT set in the response"
+    }
+    if {[expr $flags & 0x0002] == 2} { 
+        LogMsg "!!BUILD-ROUTE is set in the response"; set isOk -1
+    } else {
+        LogMsg "BUILD-ROUTE is NOT set in the response"
+    }
+    if {[expr $flags & 0x0004] == 4} { 
+        LogMsg "!!TEARDOWN is set in the response"; set isOk -1
+    } else {
+        LogMsg "TEARDOWN is NOT set in the response"
+    }
+    if {[expr $flags & 0x0020] == 32} { 
+       LogMsg "!!BIDIRECTIONAL is set in the response"; set isOk -1
+    } else {
+       LogMsg "BIDIRECTIONAL is NOT set in the response"
+    }
+
+} { if {$isOk == -1 } {FAIL_STEP $str } else {PASS_STEP} }
+
+
+
+set str "Verify CPD request for CRType"
+DoStep "Step $procNum.[incr stepNum]" $str {
+        #CR TYPE = CR TYPE# CR ID = CR ID
+        #Flow-ID = Flow ID# Transaction ID = Transaction ID
+        set isOk 1
+        set crTypeRx [ $cpd\MsgGetVal $rxData_Req AppPayload crType]
+
+        if {!($crTypeRx == 1 || $crTypeRx == 2 || $crTypeRx == 3) } { 
+           LogMsg "!!crTypeRx = $crTypeRx"; set isOk -1
+        } else {
+           LogMsg "crTypeRx = $crTypeRx"
+        }
+} { if {$isOk == -1 } {FAIL_STEP $str } else {PASS_STEP} }
+
+set str "Verify CPD request was received in port 7549"
+DoStep "Step $procNum.[incr stepNum]" $str {
+} { if {$rxData_Req == -1 } {FAIL_STEP $str } else {PASS_STEP} }
+
+set str "Verify CPD request for CR Type and CR ID"
+DoStep "Step $procNum.[incr stepNum]" $str {
+        #CR TYPE = CR TYPE# CR ID = CR ID
+        #Flow-ID = Flow ID# Transaction ID = Transaction ID
+        set isOk 1
+        set crTypeRx [ $cpd\MsgGetVal $rxData_Req AppPayload crType]
+        set crIdRx [ $cpd\MsgGetVal $rxData_Req AppPayload crId]
+
+        if {$crTypeRx == 1} { 
+           LogMsg "crTypeRx == $crTypeRx";
+           if {$crIdRx == 1 || $crIdRx == 2 || $crIdRx == 3 || $crIdRx == 4 ||\
+               $crIdRx == 5 || $crIdRx == 6} {
+               LogMsg "crIdRx = $crIdRx"
+           } else {
+               LogMsg "!!crIdRx = $crIdRx"; set isOk -1
+           }
+        } elseif {$crTypeRx == 2 || $crTypeRx == 3} { 
+           LogMsg "crTypeRx == crTypeRx";
+           if {$crIdRx == 1} {
+               LogMsg "crIdRx = $crIdRx"
+           } else {
+               LogMsg "!!crIdRx = $crIdRx"; set isOk -1
+           }
+        } else {
+           LogMsg "!!crTypeRx = $crTypeRx"; set isOk -1
+        }
+    
+} { if {$isOk == -1 } {FAIL_STEP $str } else {PASS_STEP} }
+
+set str "Verify CPD request for CR ID is a 16 bit field"
+DoStep "Step $procNum.[incr stepNum]" $str {
+    set isOk 1
+   # This is done in the platform at the time of parsing the message 
+} { if {$isOk == -1 } {FAIL_STEP $str } else {PASS_STEP} }
+
+
+set str "Verify CPD request for CR ID is a 32 bit field"
+DoStep "Step $procNum.[incr stepNum]" $str {
+    set isOk 1
+   # This is done in the platform at the time of parsing the message 
+} { if {$isOk == -1 } {FAIL_STEP $str } else {PASS_STEP} }
+
+
+set str "Build & Tx CPD Response Msg"
+DoStep "Step $procNum.[incr stepNum]" $str {
+    # Doc: Instantiate New Message
+    set txData_Rep [ $cpd\MsgNew Response ]
+    
+    # Turn around CPD hdr.flowId 
+    set results [ $cpd\MsgSetVal $txData_Rep Hdr flowId \
+            [ $cpd\MsgGetVal $rxData_Req Hdr flowId ] ]
+    # Turn around CPD AppPayload.transactionId
+    set results [ $cpd\MsgSetVal $txData_Rep AppPayload transactionId \
+            [ $cpd\MsgGetVal $rxData_Req AppPayload transactionId ] ]
+    # Set AppPayload cpdMessageType
+    set results [ $cpd\MsgSetVal $txData_Rep AppPayload cpdMessageType 2 ]
+    
+    # Set AppPayload IPv6 Address ???
+    set results [ $cpd\MsgSetVal $txData_Rep AppPayload controlPointIpAddress0 $gCPD_CONTROL_POINT_IP]
+    
+    # Doc: Build & Tx Message to DstIp, DstPort
+    set msgLen [ $cpd\MsgTx [ $cpd\MsgBuild $txData_Rep ] $soc $::gCPD_REMOTE_IP $::gCPD_REMOTE_PORT ]
+    
+} { if {$isOk == -1 } {FAIL_STEP $str } else {PASS_STEP} }
+
+Cleanup
+

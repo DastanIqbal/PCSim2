@@ -1,0 +1,45 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+
+<!-- First are the document type and the attributes for our document -->
+<pc2xml version="$Revision: 8188 $" name="UT_SIP-UE 1.2.2.2" descrip="UAS Error Response with out-of-sequence re-INVITE" number="UT_SIP-UE 1.2.2.2">
+	<template name="UT_SIP-UE 1.2.2.2" file="./templates/ut/Term_Reinvite_DUT.xml"/>
+	<remove_from fsm="UT_SIP-UE 1.2.2.2">
+		<state ID="ChangeMedia"/>
+	</remove_from>
+	<add_to fsm="UT_SIP-UE 1.2.2.2">
+		<state ID="ChangeMedia">
+			<response>
+				<if>>
+							<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>Invite</expr>
+					</eq>
+					<then>
+						<!--Reliablity required for test sending 200-Prack message to peer.-->
+						<send protocol="sip" msgtype="200-Invite" target="UE1" originator="DUT"/>
+					</then>
+				</if>
+			</response>
+			<!-- Transitions for Setup state -->
+			<transition to="MediaResponse" event="Invite"/>
+		</state>
+	</add_to>
+</pc2xml>

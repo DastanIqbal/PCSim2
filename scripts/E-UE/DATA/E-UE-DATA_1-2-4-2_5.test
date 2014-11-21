@@ -1,0 +1,420 @@
+#//********************************************************************
+#// Filename: E-UE-DATA_1-2-4-2_5.test
+#// Author: Matthew Forbes
+#// Creation Date: 11/10/2008
+#// Modified by:
+#//
+#//
+#//********************************************************************
+#// Description:
+#//    TC1589 Test Case E-UE-DATA_1-2-4-2_5 pktcDevEventDescrText Content Verification
+#//
+#//
+#// Objective:
+#//    To verify the content of the MIB object pktcDevEventDescrText
+#//
+#// PacketCable DUT:
+#//    MTA
+#//
+#// Test Steps:
+#//    - Initial configuration
+#//    - Start sniffer
+#//    - TFTP GET MTA config file
+#//    - TFTP PUT and SNMP RESET
+#//    - Check Provisioning state
+#//    - Perform mib check
+#//    - Stop sniffer
+#//    - Delete MTA config file
+#//    
+#//
+#// Notes:
+#//    - Requires the specific config file in $BASE_CFG_FILE_PATH in Provisioning Server.
+#//************************************************************************
+global SCRIPT_VERSION
+set SCRIPT_VERSION { # $Id: E-UE-DATA_1-2-4-2_5.test 7406 2010-07-20 17:17:37Z dthakore $ }
+
+set test_case E-UE-DATA_1-2-4-2_5-
+set step_num 1
+
+## Build TopLevel Window so user can select if MTA Device supports nvram storage
+set storage "NO"
+set waitvar 0
+toplevel .storages
+focus -force .storages
+label .storages.question -text "Please select whether MTA supports Battery Powering Events"
+radiobutton .storages.yes -text YES -variable storage -value YES
+radiobutton .storages.no -text NO -variable storage -value NO
+button .storages.ok -text "OK" -width 15 -command {destroy .storages ; set waitvar 1}
+grid .storages.question -sticky w -pady 5
+grid .storages.no -sticky w -pady 5
+grid .storages.yes -sticky w -pady 5
+grid .storages.ok -sticky we -pady 5
+vwait waitvar
+#######################################################
+DoStep ${test_case}${step_num} "Initial Configuration" {
+    LogMsg "--- Init PROV module ---"
+    Init_PROV
+    # ProvCreateConfig 291 $MTA_MAC
+    PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122 Device_Level_Secure.cfg
+    PROV_DEPLOY_DHCP
+    
+} {PASS_STEP}
+
+
+DoStep ${test_case}[incr step_num] "Start sniffer" {
+    LogMsg "--- Start sniffer ---"
+    Init_CONTROLLER_LAN
+    SetupCaptureControllerLan "host $MTA_IP || udp port 67"
+    StartCaptureControllerLan 
+} {PASS_STEP}
+
+DoStep ${test_case}[incr step_num] "SNMP RESET" {
+    SNMP_SET $oid_pktcMtaDevResetNow INTEGER 1 $MTA_IP
+    actionWait "Wait for MTA to reboot" 60
+} {PASS_STEP}
+
+DoStep ${test_case}[incr step_num] "pktcMtaDevProvisioningState Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMP_GET $oid_pktcMtaDevProvisioningState $MTA_IP 20]
+    LogMsg "The Value of MTA Provisioning State is: $val"
+} {IsEqual $val 1}
+
+DoStep ${test_case}[incr step_num] "Stop sniffer" {
+    LogMsg "--- Stop sniffer ---"
+    StopCaptureControllerLan
+    SaveToFileControllerLan 
+} {PASS_STEP}
+
+set CONTINUE_PAST_STEP_ERROR 1
+
+DoStep ${test_case}[incr step_num] "pktcDevEventDescrText.4000950100 Content Verification" {
+    set type STRING
+    set default_value "Waiting for DNS Resolution of Provisioning Realm Name"
+    set set_list [list "Different_Value"]
+} {SnmpRWVerify ${oid_pktcDevEventDescrText}.4000950100.4491 $MTA_IP $type $default_value $set_list 1}
+
+DoStep ${test_case}[incr step_num] "pktcDevEventDescrText.4000950101 Content Verification" {
+    set type STRING
+    set default_value "Provisioning Realm Name unknown to the DNS Server"
+    set set_list [list "Different_Value"]
+} {SnmpRWVerify ${oid_pktcDevEventDescrText}.4000950101.4491 $MTA_IP $type $default_value $set_list 1}
+
+
+DoStep ${test_case}[incr step_num] "pktcDevEventDescrText.4000950200 Content Verification" {
+    set type STRING
+    set default_value "Waiting for DNS resolution of MSO/Provisioning KDC FQDN"
+    set set_list [list "Different_Value"]
+} {SnmpRWVerify ${oid_pktcDevEventDescrText}.4000950200.4491 $MTA_IP $type $default_value $set_list 1}
+
+DoStep ${test_case}[incr step_num] "pktcDevEventDescrText.4000950201 Content Verification" {
+    set type STRING
+    set default_value "MSO/Provisioning KDC FQDN unknown to the DNS Server"
+    set set_list [list "Different_Value"]
+} {SnmpRWVerify ${oid_pktcDevEventDescrText}.4000950201.4491 $MTA_IP $type $default_value $set_list 1}
+
+DoStep ${test_case}[incr step_num] "pktcDevEventDescrText.4000950202 Content Verification" {
+    set type STRING
+    set default_value "Waiting for DNS resolution of Provisioning Server FQDN"
+    set set_list [list "Different_Value"]
+} {SnmpRWVerify ${oid_pktcDevEventDescrText}.4000950202.4491 $MTA_IP $type $default_value $set_list 1}
+
+DoStep ${test_case}[incr step_num] "pktcDevEventDescrText.4000950203 Content Verification" {
+    set type STRING
+    set default_value "Provisioning Server FQDN unknown to the DNS Server"
+    set set_list [list "Different_Value"]
+} {SnmpRWVerify ${oid_pktcDevEventDescrText}.4000950203.4491 $MTA_IP $type $default_value $set_list 1}
+
+DoStep ${test_case}[incr step_num] "pktcDevEventDescrText.4000950300 Content Verification" {
+    set type STRING
+    set default_value "Waiting For MSO/Provisioning KDC AS Reply"
+    set set_list [list "Different_Value"]
+} {SnmpRWVerify ${oid_pktcDevEventDescrText}.4000950300.4491 $MTA_IP $type $default_value $set_list 1}
+
+DoStep ${test_case}[incr step_num] "pktcDevEventDescrText.4000950301 Content Verification" {
+    set type STRING
+    set default_value "MSO/Provisioning KDC did not accept AS Request"
+    set set_list [list "Different_Value"]
+} {SnmpRWVerify ${oid_pktcDevEventDescrText}.4000950301.4491 $MTA_IP $type $default_value $set_list 1}
+
+DoStep ${test_case}[incr step_num] "pktcDevEventDescrText.4000950400 Content Verification" {
+    set type STRING
+    set default_value "Waiting For MSO/Provisioning KDC TGS Reply"
+    set set_list [list "Different_Value"]
+} {SnmpRWVerify ${oid_pktcDevEventDescrText}.4000950400.4491 $MTA_IP $type $default_value $set_list 1}
+
+DoStep ${test_case}[incr step_num] "pktcDevEventDescrText.4000950401 Content Verification" {
+    set type STRING
+    set default_value "MSO/Provisioning KDC did not accept AS Request"
+    set set_list [list "Different_Value"]
+} {SnmpRWVerify ${oid_pktcDevEventDescrText}.4000950401.4491 $MTA_IP $type $default_value $set_list 1}
+
+DoStep ${test_case}[incr step_num] "pktcDevEventDescrText.4000950500 Content Verification" {
+    set type STRING
+    set default_value "Waiting for Provisioning Server AP Reply"
+    set set_list [list "Different_Value"]
+} {SnmpRWVerify ${oid_pktcDevEventDescrText}.4000950500.4491 $MTA_IP $type $default_value $set_list 1}
+
+DoStep ${test_case}[incr step_num] "pktcDevEventDescrText.4000950501 Content Verification" {
+    set type STRING
+    set default_value "Provisioning Server/SNMP Entity rejected the Provisioning AP Request"
+    set set_list [list "Different_Value"]
+} {SnmpRWVerify ${oid_pktcDevEventDescrText}.4000950501.4491 $MTA_IP $type $default_value $set_list 1}
+
+DoStep ${test_case}[incr step_num] "pktcDevEventDescrText.4000950600 Content Verification" {
+    set type STRING
+    set default_value "SNMPv3 INFORM transmitted; Waiting for SNMPv3 GET and/or SNMPv3 SET messages"
+    set set_list [list "Different_Value"]
+} {SnmpRWVerify ${oid_pktcDevEventDescrText}.4000950600.4491 $MTA_IP $type $default_value $set_list 1}
+
+DoStep ${test_case}[incr step_num] "pktcDevEventDescrText.4000950601 Content Verification" {
+    set type STRING
+    set default_value "SNMPv2c INFORM transmitted; Waiting for SNMPv2c GET and/or SNMPv2c SET messages"
+    set set_list [list "Different_Value"]
+} {SnmpRWVerify ${oid_pktcDevEventDescrText}.4000950601.4491 $MTA_IP $type $default_value $set_list 1}
+
+# DoStep ${test_case}[incr step_num] "pktcDevEventDescrText.4000950700 Content Verification" {
+    # set type STRING
+    # set default_value "Waiting For Snmp SetInfo"
+    # set set_list [list "Different_Value"]
+# } {SnmpRWVerify ${oid_pktcDevEventDescrText}.4000950700.4491 $MTA_IP $type $default_value $set_list 1}
+
+DoStep ${test_case}[incr step_num] "pktcDevEventDescrText.4000950800 Content Verification" {
+    set type STRING
+    set default_value "Waiting For DNS Resolution of TFTP FQDN"
+    set set_list [list "Different_Value"]
+} {SnmpRWVerify ${oid_pktcDevEventDescrText}.4000950800.4491 $MTA_IP $type $default_value $set_list 1}
+
+DoStep ${test_case}[incr step_num] "pktcDevEventDescrText.4000950801 Content Verification" {
+    set type STRING
+    set default_value "TFTP FQDN unknown to the DNS Server"
+    set set_list [list "Different_Value"]
+} {SnmpRWVerify ${oid_pktcDevEventDescrText}.4000950801.4491 $MTA_IP $type $default_value $set_list 1}
+
+DoStep ${test_case}[incr step_num] "pktcDevEventDescrText.4000950900 Content Verification" {
+    set type STRING
+    set default_value "Waiting for TFTP Response"
+    set set_list [list "Different_Value"]
+} {SnmpRWVerify ${oid_pktcDevEventDescrText}.4000950900.4491 $MTA_IP $type $default_value $set_list 1}
+
+DoStep ${test_case}[incr step_num] "pktcDevEventDescrText.4000950901 Content Verification" {
+    set type STRING
+    set default_value "Configuration File Error.*-.*Bad Authentication"
+    set set_list [list "Different_Value"]
+} {SnmpRWVerify ${oid_pktcDevEventDescrText}.4000950901.4491 $MTA_IP $type $default_value $set_list 1}
+
+DoStep ${test_case}[incr step_num] "pktcDevEventDescrText.4000950902 Content Verification" {
+    set type STRING
+    set default_value "Configuration File Error.*-.*Bad Privacy"
+    set set_list [list "Different_Value"]
+} {SnmpRWVerify ${oid_pktcDevEventDescrText}.4000950902.4491 $MTA_IP $type $default_value $set_list 1}
+
+DoStep ${test_case}[incr step_num] "pktcDevEventDescrText.4000950903 Content Verification" {
+    set type STRING
+    set default_value "Configuration File Error.*-.*Bad Format"
+    set set_list [list "Different_Value"]
+} {SnmpRWVerify ${oid_pktcDevEventDescrText}.4000950903.4491 $MTA_IP $type $default_value $set_list 1}
+
+DoStep ${test_case}[incr step_num] "pktcDevEventDescrText.4000950904 Content Verification" {
+    set type STRING
+    set default_value "Configuration File Error.*-.*Missing Parameter"
+    set set_list [list "Different_Value"]
+} {SnmpRWVerify ${oid_pktcDevEventDescrText}.4000950904.4491 $MTA_IP $type $default_value $set_list 1}
+
+DoStep ${test_case}[incr step_num] "pktcDevEventDescrText.4000950905 Content Verification" {
+    set type STRING
+    set default_value "Configuration File Error.*-.*Bad Parameter"
+    set set_list [list "Different_Value"]
+} {SnmpRWVerify ${oid_pktcDevEventDescrText}.4000950905.4491 $MTA_IP $type $default_value $set_list 1}
+
+DoStep ${test_case}[incr step_num] "pktcDevEventDescrText.4000950906 Content Verification" {
+    set type STRING
+    set default_value "Configuration File Error.*-.*Bad Linkage"
+    set set_list [list "Different_Value"]
+} {SnmpRWVerify ${oid_pktcDevEventDescrText}.4000950906.4491 $MTA_IP $type $default_value $set_list 1}
+
+DoStep ${test_case}[incr step_num] "pktcDevEventDescrText.4000950907 Content Verification" {
+    set type STRING
+    set default_value "Configuration File Error.*-.*Misc."
+    set set_list [list "Different_Value"]
+} {SnmpRWVerify ${oid_pktcDevEventDescrText}.4000950907.4491 $MTA_IP $type $default_value $set_list 1}
+
+# DoStep ${test_case}[incr step_num] "pktcDevEventDescrText.4000951200 Content Verification" {
+    # set type STRING
+    # set default_value "Telephony KDC did not accept AS Request"
+    # set set_list [list "Different_Value"]
+# } {SnmpRWVerify ${oid_pktcDevEventDescrText}.4000951200.4491 $MTA_IP $type $default_value $set_list 1}
+# 
+# DoStep ${test_case}[incr step_num] "pktcDevEventDescrText.4000951201 Content Verification" {
+    # set type STRING
+    # set default_value "Waiting for Telephony KDC AS Reply"
+    # set set_list [list "Different_Value"]
+# } {SnmpRWVerify ${oid_pktcDevEventDescrText}.4000951201.4491 $MTA_IP $type $default_value $set_list 0}
+# 
+# DoStep ${test_case}[incr step_num] "pktcDevEventDescrText.4000951300 Content Verification" {
+    # set type STRING
+    # set default_value "Waiting For Telephony KDC TGS Reply"
+    # set set_list [list "Different_Value"]
+# } {SnmpRWVerify ${oid_pktcDevEventDescrText}.4000951300.4491 $MTA_IP $type $default_value $set_list 0}
+# 
+# DoStep ${test_case}[incr step_num] "pktcDevEventDescrText.4000951301 Content Verification" {
+    # set type STRING
+    # set default_value "Telephony KDC did not accept TGS Request"
+    # set set_list [list "Different_Value"]
+# } {SnmpRWVerify ${oid_pktcDevEventDescrText}.4000951301.4491 $MTA_IP $type $default_value $set_list 1}
+# 
+# DoStep ${test_case}[incr step_num] "pktcDevEventDescrText.4000951400 Content Verification" {
+    # set type STRING
+    # set default_value "Waiting for CMS AP Reply"
+    # set set_list [list "Different_Value"]
+# } {SnmpRWVerify ${oid_pktcDevEventDescrText}.4000951400.4491 $MTA_IP $type $default_value $set_list 0}
+# 
+# DoStep ${test_case}[incr step_num] "pktcDevEventDescrText.4000951401 Content Verification" {
+    # set type STRING
+    # set default_value "CMS rejected the AP Request \\\(IPSec\\\)"
+    # set set_list [list "Different_Value"]
+# } {SnmpRWVerify ${oid_pktcDevEventDescrText}.4000951401.4491 $MTA_IP $type $default_value $set_list 1}
+
+DoStep ${test_case}[incr step_num] "pktcDevEventDescrText.4000951500 Content Verification" {
+    set type STRING
+    set default_value "Provisioning Complete"
+    set set_list [list "Different_Value"]
+} {SnmpRWVerify ${oid_pktcDevEventDescrText}.4000951500.4491 $MTA_IP $type $default_value $set_list 1}
+
+DoStep ${test_case}[incr step_num] "pktcDevEventDescrText.4000951501 Content Verification" {
+    set type STRING
+    set default_value "Provisioning Complete - Warnings"
+    set set_list [list "Different_Value"]
+} {SnmpRWVerify ${oid_pktcDevEventDescrText}.4000951501.4491 $MTA_IP $type $default_value $set_list 1}
+
+DoStep ${test_case}[incr step_num] "pktcDevEventDescrText.4000951502 Content Verification" {
+    set type STRING
+    set default_value "Provisioning Complete - Fail"
+    set set_list [list "Different_Value"]
+} {SnmpRWVerify ${oid_pktcDevEventDescrText}.4000951502.4491 $MTA_IP $type $default_value $set_list 1}
+
+DoStep ${test_case}[incr step_num] "pktcDevEventDescrText.4000960000 Content Verification" {
+    set type STRING
+    set default_value "Registration did not comply with SigSecurity configuration for user <user IMPU>"
+    set set_list [list "Different_Value"]
+} {SnmpRWVerify ${oid_pktcDevEventDescrText}.4000960000.4491 $MTA_IP $type $default_value $set_list 1}
+
+DoStep ${test_case}[incr step_num] "pktcDevEventDescrText.4000960001 Content Verification" {
+    set type STRING
+    set default_value "Registration failed for user IMPU=<user IMPU>; IMPI=<user IMPI>; reason <reason>"
+    # set default_value "Registration failed for user IMPU=<user %s>; IMPI=<user %s>; reason=<%d>"
+    set set_list [list "Different_Value"]
+} {SnmpRWVerify ${oid_pktcDevEventDescrText}.4000960001.4491 $MTA_IP $type $default_value $set_list 1}
+
+DoStep ${test_case}[incr step_num] "pktcDevEventDescrText.4000960002 Content Verification" {
+    set type STRING
+    set default_value "Certificate Bootstrapping Success"
+    set set_list [list "Different_Value"]
+} {SnmpRWVerify ${oid_pktcDevEventDescrText}.4000960002.4491 $MTA_IP $type $default_value $set_list 1}
+
+DoStep ${test_case}[incr step_num] "pktcDevEventDescrText.4000960003 Content Verification" {
+    set type STRING
+    set default_value "Certificate Bootstrapping Failure"
+    set set_list [list "Different_Value"]
+} {SnmpRWVerify ${oid_pktcDevEventDescrText}.4000960003.4491 $MTA_IP $type $default_value $set_list 1}
+
+DoStep ${test_case}[incr step_num] "pktcDevEventDescrText.4000960004 Content Verification" {
+    set type STRING
+    set default_value "Time unavailable from the ToD Server - Secure flow"
+    set set_list [list "Different_Value"]
+} {SnmpRWVerify ${oid_pktcDevEventDescrText}.4000960004.4491 $MTA_IP $type $default_value $set_list 1}
+
+DoStep ${test_case}[incr step_num] "pktcDevEventDescrText.4000960005 Content Verification" {
+    set type STRING
+    set default_value "Time unavailable from the ToD Server - Basic or Hybrid flow."
+    set set_list [list "Different_Value"]
+} {SnmpRWVerify ${oid_pktcDevEventDescrText}.4000960005.4491 $MTA_IP $type $default_value $set_list 1}
+
+DoStep ${test_case}[incr step_num] "pktcDevEventDescrText.4000960006 Content Verification" {
+    set type STRING
+    set default_value "New time has been retrieved from ToD server."
+    set set_list [list "Different_Value"]
+} {SnmpRWVerify ${oid_pktcDevEventDescrText}.4000960006.4491 $MTA_IP $type $default_value $set_list 1}
+
+DoStep ${test_case}[incr step_num] "pktcDevEventDescrText.4000960007 Content Verification" {
+    set type STRING
+    set default_value "Certificate Bootstrapping XML instance does not comply with the supported XML Schema"
+    set set_list [list "Different_Value"]
+} {SnmpRWVerify ${oid_pktcDevEventDescrText}.4000960007.4491 $MTA_IP $type $default_value $set_list 1}
+
+DoStep ${test_case}[incr step_num] "pktcDevEventDescrText.4000960008 Content Verification" {
+    set type STRING
+    set default_value "Certificate Bootstrapping XML instance document is compliant, but contains errors"
+    set set_list [list "Different_Value"]
+} {SnmpRWVerify ${oid_pktcDevEventDescrText}.4000960008.4491 $MTA_IP $type $default_value $set_list 1}
+
+DoStep ${test_case}[incr step_num] "pktcDevEventDescrText.4000960009 Content Verification" {
+    set type STRING
+    set default_value "Warning Inconsistency in Table <X>."
+    set set_list [list "Different_Value"]
+} {SnmpRWVerify ${oid_pktcDevEventDescrText}.4000960009.4491 $MTA_IP $type $default_value $set_list 1}
+
+DoStep ${test_case}[incr step_num] "pktcDevEventDescrText.4000960010 Content Verification" {
+    set type STRING
+    set default_value "Info Inconsistency in Table <X>."
+    set set_list [list "Different_Value"]
+} {SnmpRWVerify ${oid_pktcDevEventDescrText}.4000960010.4491 $MTA_IP $type $default_value $set_list 1}
+
+
+if {$storage == "YES"} {
+#Check the Powering Events only for MTA that supports this
+DoStep ${test_case}[incr step_num] "pktcDevEventDescrText.4000850100 Content Verification" {
+    set type STRING
+    set default_value "On Battery"
+    set set_list [list "Different_Value"]
+} {SnmpRWVerify ${oid_pktcDevEventDescrText}.4000850100.4491 $MTA_IP $type $default_value $set_list 1}
+
+DoStep ${test_case}[incr step_num] "pktcDevEventDescrText.4000850200 Content Verification" {
+    set type STRING
+    set default_value "AC Restored"
+    set set_list [list "Different_Value"]
+} {SnmpRWVerify ${oid_pktcDevEventDescrText}.4000850200.4491 $MTA_IP $type $default_value $set_list 1}
+
+DoStep ${test_case}[incr step_num] "pktcDevEventDescrText.4000850300 Content Verification" {
+    set type STRING
+    set default_value "Battery Bad"
+    set set_list [list "Different_Value"]
+} {SnmpRWVerify ${oid_pktcDevEventDescrText}.4000850300.4491 $MTA_IP $type $default_value $set_list 1}
+
+DoStep ${test_case}[incr step_num] "pktcDevEventDescrText.4000850400 Content Verification" {
+    set type STRING
+    set default_value "Battery Good"
+    set set_list [list "Different_Value"]
+} {SnmpRWVerify ${oid_pktcDevEventDescrText}.4000850400.4491 $MTA_IP $type $default_value $set_list 1}
+
+DoStep ${test_case}[incr step_num] "pktcDevEventDescrText.4000850500 Content Verification" {
+    set type STRING
+    set default_value "Battery Missing"
+    set set_list [list "Different_Value"]
+} {SnmpRWVerify ${oid_pktcDevEventDescrText}.4000850500.4491 $MTA_IP $type $default_value $set_list 1}
+
+DoStep ${test_case}[incr step_num] "pktcDevEventDescrText.4000850600 Content Verification" {
+    set type STRING
+    set default_value "Battery Present"
+    set set_list [list "Different_Value"]
+} {SnmpRWVerify ${oid_pktcDevEventDescrText}.4000850600.4491 $MTA_IP $type $default_value $set_list 1}
+
+DoStep ${test_case}[incr step_num] "pktcDevEventDescrText.4000850700 Content Verification" {
+    set type STRING
+    set default_value "Depleted Battery"
+    set set_list [list "Different_Value"]
+} {SnmpRWVerify ${oid_pktcDevEventDescrText}.4000850700.4491 $MTA_IP $type $default_value $set_list 1}
+
+DoStep ${test_case}[incr step_num] "pktcDevEventDescrText.4000850800 Content Verification" {
+    set type STRING
+    set default_value "Battery Charging"
+    set set_list [list "Different_Value"]
+} {SnmpRWVerify ${oid_pktcDevEventDescrText}.4000850800.4491 $MTA_IP $type $default_value $set_list 1}
+
+}
+
+DoStep ${test_case}[incr step_num] "SNMP RESET" {
+    SNMP_SET $oid_pktcMtaDevResetNow INTEGER 1 $MTA_IP
+    actionWait "Wait for MTA to reboot" 60
+} {PASS_STEP}
+
+Cleanup

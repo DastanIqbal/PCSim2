@@ -1,0 +1,313 @@
+#//*****************************************************************************
+#// Filename: E-UE-PROV_1-1-2-16.test
+#// Author:   Dan Smith
+#// Creation Date: August 5, 2004
+#// Modified by:  Matthew Forbes
+#//*****************************************************************************
+#// Description:
+#//     TC1178 TEST CASE PROV 5.45 Required Suboptions are not supplied to the MTA
+#//
+#// Objective:
+#//     Test ability of MTA to reject DHCP OFFER if the "Required" sub-options
+#//     are absent from the DHCP OFFER.
+#//
+#// PacketCable DUT:
+#//     MTA
+#//
+#// Test Steps:
+#//     - Initial configuration and policy omitting sub-option 3
+#//     - Start sniffer
+#//     - Reset DUT
+#//     - Wait 60 seconds and Check Provisioning state
+#//     - Stop sniffer
+#//     - Invoke parsing tool and validate using Pass/Fail scripts
+#//     - Reapeat steps above omitting sub-option 6
+#//     - Delete MTA config file
+#//
+#// Notes:
+#//     - Requires provPrimitives.tcl & tftp_primitives.tcl.
+#//     - Requires the specific config file in $BASE_CFG_FILE_PATH in Provisioning Server.
+#//     - Requires parT.tcl parsing tool to parse data from capture file.
+#//*****************************************************************************
+
+global SCRIPT_VERSION
+set SCRIPT_VERSION { # $Id: E-UE-PROV_1-1-2-16.test 7406 2010-07-20 17:17:37Z dthakore $ }
+
+########################## Initial Configuration ###########################
+
+DoStep "E-UE-PROV_1-1-2-16_1-1" "Initial configuration" {
+    LogMsg "--- Initial PROV module ---"
+    Init_PROV
+    # ProvCreateConfig 291 $MTA_MAC
+} { PASS_STEP }
+
+
+#################### CONFIGURE POLICY FOR DHCP SERVER ################
+
+DoStep "E-UE-PROV_1-1-2-16_1-4" "Configure DHCP Server" {
+    # No sending message
+} {
+    # verify_signal "Configure DHCP Server to omit sub-option 3 in the MTA policy (MTATC1178 w/o SO3)"
+    PROV_MODIFY_DEVICE $MTA_MAC MTATC1178_NOSO3
+    PROV_DEPLOY_DHCP
+}
+
+########################### START SNIFFER ##############################
+
+DoStep "E-UE-PROV_1-1-2-16_2-1" "Start sniffer" {
+    LogMsg "--- Start sniffer ---"
+    Init_CONTROLLER_LAN
+    SetupCaptureControllerLan "host $MTA_IP || udp port 67 || host $CM_IP"
+    StartCaptureControllerLan
+} {PASS_STEP}
+
+#################### Reset CM / MTA #######################################
+
+DoStep "E-UE-PROV_1-1-2-16_3-1" "Reset CM/MTA" {
+    set val [SNMPvN_RESET $CM_IP]
+    LogMsg "--- Reset CM/MTA ---"
+} {
+    IsEqual $val 0
+}
+
+#################### WAIT FOR MTA TO PROVISION ################
+
+DoStep "E-UE-PROV_1-1-2-16_4-1" "Wait 90 seconds for CM/MTA to reboot" {
+    # Wait for 80 seconds to let CM/MTA starting to reboot
+    actionWait "Wait for CM/MTA to reboot" 100
+} { PASS_STEP }
+
+#################### STOP SNIFFER ##################################
+
+DoStep "E-UE-PROV_1-1-2-16_5-1" "Stop sniffer" {
+    LogMsg "--- Stop sniffer ---"
+    StopCaptureControllerLan
+    SaveToFileControllerLan "_No-122.3"
+} { PASS_STEP }
+
+#################### INVOKE PARSING TOOL ##################################
+
+DoStep "E-UE-PROV_1-1-2-16_6-1" "Analyze flow data" {
+    # Initial PARSER TOOL
+    Init_PART
+
+    # Set up parser file
+    set PARSERFILE    $ETH_DEFAULT_TXT_FILE
+} { PASS_STEP }
+
+#################### Parse Frames to ParT DataStore ##################################
+
+DoStep "E-UE-PROV_1-1-2-16_6-2" "Parse all data into database" {
+    # Parse data
+    set PARAMS_DHCP         "{DHCP {} {} {} {} {} {} {} {}}"
+       
+    set PARAMS_MTA_SRC      "{{} {} {} {} $MTA_IP {} {} {} {}}"
+    set PARAMS_MTA_DST      "{{} {} {} {} {} {} {} $MTA_IP {}}"
+    set msgID_MTA           [ParseFile $PARSERFILE "$PARAMS_DHCP $PARAMS_MTA_SRC $PARAMS_MTA_DST"]
+    
+} {
+    if { $::PART_RETURN == 0 } {
+        PASS_STEP
+    } else {
+        FAIL_STEP "Failed ParT ParseFile operation."
+    }
+}
+
+#################### ParT Verify MTA Frames ################################
+
+DoStep "E-UE-PROV_1-1-2-16_6-3" "Verify MTA does not send SNMP-INFORM Enroll or Status to ProvServ (SNMP Entity)" {
+    LogMsg "--- Verify MTA does not send SNMP-INFORM Enroll or Status to ProvServ (SNMP Entity) ---"
+
+    # Set within first DoStep after ParT ParseFile
+    set CONTINUE_PAST_STEP_ERROR 1
+} {
+    VerifyNotValue $msgID_MTA "INANY SNMP SNMP_INFORM SNMP_SYSDESCR" "EXISTS" ""
+}
+
+DoStep "E-UE-PROV_1-1-2-16_6-4" "Verify MTA DHCP Offer exists and contains 122.6" {
+    LogMsg "--- Verify MTA DHCP Offer exists and contains 122.6 ---"
+
+    # Find CM MAC with colons
+    set MTA_MAC_COL [AddColMac $MTA_MAC]
+} {
+    VerifyValue $msgID_MTA "INANY DHCP OFFER OPTION122SUBOPTION6" "EXISTS" "" AND \
+				"OPTIONCLIENTHWADDRESS" "IS" "$MTA_MAC_COL"
+}
+
+DoStep "E-UE-PROV_1-1-2-16_6-5" "Verify MTA DHCP Offer exists and does NOT contain 122.3" {
+    LogMsg "--- Verify MTA DHCP Offer exists and does NOT contain 122.3 ---"
+} {
+    VerifyNotValue $msgID_MTA "INANY DHCP OFFER OPTION122SUBOPTION3" "EXISTS" "" AND \
+				"OPTIONCLIENTHWADDRESS" "IS" "$MTA_MAC_COL"
+}
+
+DoStep "E-UE-PROV_1-1-2-16_6-6" "Verify MTA sends DHCP Discover" {
+    LogMsg "--- Verify MTA sends DHCP Discover ---"
+} {
+    VerifyValue $msgID_MTA "INANY DHCP DISCOVER OPTION53" "EXISTS" "" AND \
+				"OPTIONCLIENTHWADDRESS" "IS" "$MTA_MAC_COL"
+}
+
+# PONG-change- Future ParT Release: SEQUENCE-I API
+
+DoStep "E-UE-PROV_1-1-2-16_6-7" "Verify multiple MTA DHCP:DISCOVERs in Sequence" {
+    LogMsg "--- Verify multiple MTA DHCP:DISCOVERs in Sequence ---"
+
+    # Set SEQUENCE to check
+    set MTA_SEQUENCE "DHCP:DISCOVER,DHCP:OFFER,DHCP:DISCOVER,DHCP:OFFER,DHCP:DISCOVER,DHCP:OFFER"
+
+    # Remove whitespace
+    regsub -all { } $MTA_SEQUENCE {} MTA_SEQUENCE
+} {
+    # Verify Sequence
+    VerifyValue $msgID_MTA "SEQUENCE $MTA_SEQUENCE" "" ""
+}
+
+DoStep "E-UE-PROV_1-1-2-16_6-8" "Verify MTA does NOT send DHCP Request" {
+    LogMsg "--- Verify MTA does NOT send DHCP Request ---"
+} {
+    VerifyNotValue $msgID_MTA "INANY DHCP REQUEST OPTION53" "EXISTS" "" AND \
+				"OPTIONCLIENTHWADDRESS" "IS" "$MTA_MAC_COL"
+}
+
+#################### Repeat with no Suboption 6 #######################
+#################### Repeat with no Suboption 6 #######################
+#################### Repeat with no Suboption 6 #######################
+
+#################### CONFIGURE POLICY FOR DHCP SERVER ################
+
+DoStep "E-UE-PROV_1-1-2-16_7-1" "Configure DHCP Server" {
+    # verify_signal "Configure DHCP Server to omit sub-option 6 in the MTA policy (MTATC1178 w/o SO6)"
+    PROV_MODIFY_DEVICE $MTA_MAC MTATC1178_NOSO6
+    PROV_DEPLOY_DHCP
+} { PASS_STEP }
+
+########################### START SNIFFER ##############################
+
+DoStep "E-UE-PROV_1-1-2-16_8-1" "Start sniffer" {
+    LogMsg "--- Start sniffer ---"
+    # Init_CONTROLLER_LAN
+    
+    #################### Error ParT Tool ##################################
+    #
+    # - Must not Init_CONTROLLER_LAN a second time (before close)!
+    #
+    #################### Error ParT Tool ##################################
+    SetupCaptureControllerLan "host $MTA_IP || udp port 67 || host $CM_IP"
+    StartCaptureControllerLan
+} {PASS_STEP}
+
+#################### Reset CM / MTA #######################################
+
+DoStep "E-UE-PROV_1-1-2-16_9-1" "Reset CM/MTA" {
+    set val [SNMPvN_RESET $CM_IP]
+    LogMsg "--- Reset CM/MTA ---"
+} {
+    IsEqual $val 0
+}
+
+#################### Verify MTA does NOT become Operational ################
+
+DoStep "E-UE-PROV_1-1-2-16_10-1" "Wait 90 seconds for CM/MTA To reboot" {
+    # Wait for 80 seconds to let CM/MTA starting to reboot
+    actionWait "Wait for CM/MTA to reboot" 100
+} { PASS_STEP }
+
+#################### Stop Sniffer ##################################
+
+set msgStr "Stop sniffer"
+DoStep "E-UE-PROV_1-1-2-16_11-1" $msgStr {
+    LogMsg "--- $msgStr ---"
+    StopCaptureControllerLan
+    SaveToFileControllerLan "_No-122.6"
+} { PASS_STEP }
+
+#################### INVOKE PARSING TOOL ##################################
+
+
+#################### Parse Frames to ParT DataStore ##################################
+
+DoStep "E-UE-PROV_1-1-2-16_12-1" "Parse all data into database" {
+    # Parse data
+    set PARAMS_DHCP         "{DHCP {} {} {} {} {} {} {} {}}"
+    
+    set PARAMS_MTA_SRC      "{{} {} {} {} $MTA_IP {} {} {} {}}"
+    set PARAMS_MTA_DST      "{{} {} {} {} {} {} {} $MTA_IP {}}"
+    set msgID_MTA           [ParseFile $PARSERFILE "$PARAMS_DHCP $PARAMS_MTA_SRC $PARAMS_MTA_DST"]
+    
+} {
+    if { $::PART_RETURN == 0 } {
+        PASS_STEP
+    } else {
+        FAIL_STEP "Failed ParT ParseFile operation."
+    }
+}
+
+#################### ParT Verify MTA Frames ################################
+
+DoStep "E-UE-PROV_1-1-2-16_12-2" "Verify MTA does NOT send SNMP-INFORM Enroll or Status to ProvServ (SNMP Entity)" {
+    LogMsg "--- Verify MTA does NOT send SNMP-INFORM Enroll or Status to ProvServ (SNMP Entity) ---"
+} {
+    VerifyNotValue $msgID_MTA "INANY SNMP SNMP_INFORM SNMP_SYSDESCR" "EXISTS" ""
+}
+
+DoStep "E-UE-PROV_1-1-2-16_12-3" "Verify MTA DHCP Offer exists and contains 122.3" {
+    LogMsg "--- Verify MTA DHCP Offer exists and contains 122.3 ---"
+} {
+    VerifyValue $msgID_MTA "INANY DHCP OFFER OPTION122SUBOPTION3" "EXISTS" "" AND \
+				"OPTIONCLIENTHWADDRESS" "IS" "$MTA_MAC_COL"
+}
+
+DoStep "E-UE-PROV_1-1-2-16_12-4" "Verify MTA DHCP Offer exists and does NOT contain 122.6" {
+    LogMsg "--- Verify MTA DHCP Offer exists and does NOT contain 122.6 ---"
+} {
+    VerifyNotValue $msgID_MTA "InAny DHCP OFFER OPTION122SUBOPTION6" "EXISTS" "" AND \
+				"OPTIONCLIENTHWADDRESS" "IS" "$MTA_MAC_COL"
+}
+
+DoStep "E-UE-PROV_1-1-2-16_12-5" "Verify MTA sends DHCP Discover" {
+    LogMsg "--- Verify MTA sends DHCP Discover ---"
+} {
+    VerifyValue $msgID_MTA "INANY DHCP DISCOVER OPTION53" "EXISTS" "" AND \
+				"OPTIONCLIENTHWADDRESS" "IS" "$MTA_MAC_COL"
+}
+
+    #PONG-change-Future ParT Release: SEQUENCE-I API
+DoStep "E-UE-PROV_1-1-2-16_12-6" "Verify MTA sends multiple DHCP:DISCOVERs from Sequence" {
+    LogMsg "--- Verify multiple MTA DHCP:DISCOVERs in Sequence ---"
+
+    # Set SEQUENCE to check
+    set MTA_SEQUENCE "DHCP:DISCOVER,DHCP:OFFER,DHCP:DISCOVER,DHCP:OFFER,DHCP:DISCOVER,DHCP:OFFER"
+
+    # Remove whitespace
+    regsub -all { } $MTA_SEQUENCE {} MTA_SEQUENCE
+} {
+    # Verify Sequence
+    VerifyValue $msgID_MTA "SEQUENCE $MTA_SEQUENCE" "" ""
+}
+
+DoStep "E-UE-PROV_1-1-2-16_12-7" "Verify MTA does NOT send DHCP Request" {
+    LogMsg "--- Verify MTA does NOT send DHCP Request ---"
+} {
+    VerifyNotValue $msgID_MTA "InAny DHCP REQUEST OPTION53" "EXISTS" "" AND \
+				"OPTIONCLIENTHWADDRESS" "IS" "$MTA_MAC_COL"
+}
+
+################################################################################
+# Cleanup
+################################################################################
+
+####################### RESTORE DEFAULT POLICY IN DHCP SERVER ##################
+
+DoStep "E-UE-PROV_1-1-2-16_12-8" "Restore DHCP Policy in server" {
+    # verify_signal "Restore MTA policy in DHCP server(MTAFORCW_122)"
+    PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122
+    PROV_DEPLOY_DHCP
+} { PASS_STEP }
+
+# Clear
+set CONTINUE_PAST_STEP_ERROR 0
+
+Cleanup
+
+return 0

@@ -1,0 +1,57 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	PCPCII-139 : Update the Voicetronix modifiers to use the new values. (ghassler 07/10/2009)
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-UE 1.9.4.10" 
+	descrip="Emergency call with minimal config" 
+	number="RST-UE 1.9.4.10" inspector="disable">
+
+	<template file="./templates/CallOrigAtUETemp.xml" name="UE1"/>
+
+	<remove_from fsm="UE1">
+		<state ID="Setup"/>
+	</remove_from>
+
+	<add_to fsm="UE1">
+		<NE targets="service:sos"/>
+		
+		<state ID="Setup">
+			<prelude once="true">
+				<sleep time="5000"/>
+				<!-- Step 1 test case SIP 1.9.4.10 Initiate an emergency call session 
+					(by dialing 911 on the phone) from  -->
+				<send protocol="utility" msgtype="DialDigits">
+					<mod modtype="add" hdr="number">
+						<expr>911</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="2" requirements="REQ14050, REQ14051">
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>INVITE</expr>
+					</eq>
+				</verify>
+			</response>
+			<transition to="Setup" event="DialDigitsComplete"/>
+			<transition to="END" event="INVITE"/>
+		</state>
+	</add_to>
+</pc2xml>

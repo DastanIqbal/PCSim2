@@ -1,0 +1,1489 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+ Change History: (Author & Date)
+
+-->
+
+<pc2xml version="$Revision: 8188 $" name="RST_E-UE_PROV 3.1.3.6"
+		descrip="Ability of RST eUE to Implement the User and Network Announcement Call Feature Tables"
+		number="RST_E-UE_PROV 3.1.3.6">
+
+	<!-- Next we define the each of state machines -->
+	<template file="./templates/EUE_Prov_B_1_1_1.xml" name="RebootCM"/>
+
+	<add_to fsm="RebootCM">
+		<transition from="StartCapture_RebootWait" to="VerifyProvision" event="TimerExpired"/>
+		
+		<state ID="VerifyProvision">
+			<prelude>
+				<send protocol="utility" msgtype="SNMPGet">
+					<mod modtype="add" hdr="oids">
+						<expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvisioningState.0</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="2">
+					<eq>
+						<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+						<expr>1</expr>
+					</eq>
+				</verify>
+			</response>
+			<transition to="GetCIDPPSTable" event="SNMPResp"/>
+			<transition to="GetCIDPPSTable" event="SNMPRespFailure"/>
+		</state>
+		
+		<state ID="GetCIDPPSTable">
+			<prelude>
+				<send protocol="utility" msgtype="SNMPGetTable">
+					<mod modtype="add" hdr="oids">
+						<expr>CL-PKTC-EUE-RST-MIB::pktcEUERSTCIDTable</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="3">
+					<and>
+						<!-- Test for pktcEUERSTCIDPPS  -->
+						<eq>
+							<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+							<expr>2</expr>
+						</eq>
+						<!-- Test for pktcEUERSTCIDStatus  -->
+						<eq>
+							<msg_ref type="utility" index="0 1 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					</and>	
+				</verify>
+			</response>
+			<transition to="GetCIDDisTable" event="SNMPResp"/>
+			<transition to="GetCIDDisTable" event="SNMPRespFailure"/>
+		</state>
+		
+		<state ID="GetCIDDisTable">
+			<prelude>
+				<send protocol="utility" msgtype="SNMPGetTable">
+					<mod modtype="add" hdr="oids">
+						<expr>CL-PKTC-EUE-RST-MIB::pktcEUERSTCIDDisTable</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="4">
+					<and>
+						<!-- Test for pktcEUERSTCIDDisCNDActStat    -->
+						<eq>
+							<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					<and>
+						<!--  Test for pktcEUERSTCIDDisCNAMDActStat   -->
+						<eq>
+							<msg_ref type="utility" index="0 1 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					<and>
+						<!--  Test for pktcEUERSTCIDDisDefCountry    -->
+						<eq>
+							<msg_ref type="utility" index="0 2 2">SNMPResp.varBind</msg_ref>
+							<expr>123</expr>
+						</eq>
+					<and>
+						<!--  Test for pktcEUERSTCIDDisStatus   -->
+						<eq>
+							<msg_ref type="utility" index="0 3 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+						<!-- Test for pktcEUERSTCIDDisCIDCWActStat   -->
+						<eq>
+							<msg_ref type="utility" index="0 4 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					</and>
+					</and>
+					</and>
+					</and>
+				</verify>
+			</response>
+			<transition to="GetCallBlkTable" event="SNMPResp"/>
+			<transition to="GetCallBlkTable" event="SNMPRespFailure"/>
+		</state>
+		
+		<state ID="GetCallBlkTable">
+			<prelude>
+				<send protocol="utility" msgtype="SNMPGetTable">
+					<mod modtype="add" hdr="oids">
+						<expr>CL-PKTC-EUE-RST-MIB::pktcEUERSTCallBlkTable</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="5">
+					<and>
+						<!-- Test for pktcEUERSTCIDCBlkConfTone   -->
+						<eq>
+							<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+							<expr>file:///>PacketCableRST/ct</expr>
+						</eq>
+					<and>
+						<!--  Test for pktcEUERSTCIDCBlkErrTone  -->
+						<eq>
+							<msg_ref type="utility" index="0 1 2">SNMPResp.varBind</msg_ref>
+							<expr>file:///PacketCableRST/ro</expr>
+						</eq>
+						<!-- Test for pktcEUERSTCIDCBlkStatus   -->
+						<eq>
+							<msg_ref type="utility" index="0 2 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					</and>
+					</and>
+				</verify>
+			</response>
+			<transition to="GetCallDelTable" event="SNMPResp"/>
+			<transition to="GetCallDelTable" event="SNMPRespFailure"/>
+		</state>
+		
+		<state ID="GetCallDelTable">
+			<prelude>
+				<send protocol="utility" msgtype="SNMPGetTable">
+					<mod modtype="add" hdr="oids">
+						<expr>CL-PKTC-EUE-RST-MIB::pktcEUERSTCallDelTable</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="6">
+					<and>
+						<!-- Test for pktcEUERSTCIDDelConfTone    -->
+						<eq>
+							<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+							<expr>file:///PacketCableRST/ct</expr>
+						</eq>
+					<and>
+						<!--  Test for pktcEUERSTCIDDelErrTone   -->
+						<eq>
+							<msg_ref type="utility" index="0 1 2">SNMPResp.varBind</msg_ref>
+							<expr>file:///PacketCableRST/ro</expr>
+						</eq>
+						<!-- Test for pktcEUERSTCIDDelStatus   -->
+						<eq>
+							<msg_ref type="utility" index="0 2 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					</and>
+					</and>
+				</verify>
+			</response>
+			<transition to="GetCIDDisTimeAdj" event="SNMPResp"/>
+			<transition to="GetCIDDisTimeAdj" event="SNMPRespFailure"/>
+		</state>
+		
+		<state ID="GetCIDDisTimeAdj">
+			<prelude>
+				<send protocol="utility" msgtype="SNMPGet">
+					<mod modtype="add" hdr="oids">
+						<expr>CL-PKTC-EUE-RST-MIB::pktcEUERSTCIDDisTimeAdj.0</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="7">
+					<eq>
+						<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+						<expr>3</expr>
+					</eq>
+				</verify>
+			</response>
+			<transition to="GetCIDDisDSTFlag" event="SNMPResp"/>
+			<transition to="GetCIDDisDSTFlag" event="SNMPRespFailure"/>
+		</state>
+		
+		<state ID="GetCIDDisDSTFlag">
+			<prelude>
+				<send protocol="utility" msgtype="SNMPGet">
+					<mod modtype="add" hdr="oids">
+						<expr>CL-PKTC-EUE-RST-MIB::pktcEUERSTCIDDisDSTFlag.0</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="7">
+					<eq>
+						<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+						<expr>1</expr>
+					</eq>
+				</verify>
+			</response>
+			<transition to="GetCIDDisDSTInfo" event="SNMPResp"/>
+			<transition to="GetCIDDisDSTInfo" event="SNMPRespFailure"/>
+		</state>
+		
+		<state ID="GetCIDDisDSTInfo">
+			<prelude>
+				<send protocol="utility" msgtype="SNMPGet">
+					<mod modtype="add" hdr="oids">
+						<expr>CL-PKTC-EUE-RST-MIB::pktcEUERSTCIDDisDSTInfo.0</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="7">
+					<notnull>
+						<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+					</notnull>
+				</verify>
+			</response>
+			<transition to="SetCIDDisTimeAdj" event="SNMPResp"/>
+			<transition to="SetCIDDisTimeAdj" event="SNMPRespFailure"/>
+		</state>
+		
+		<state ID="SetCIDDisTimeAdj">
+			<prelude>
+				<send protocol="utility" msgtype="SNMPSet">
+					<mod modtype="add" hdr="array">
+						<var_expr>
+								<expr>varBind 1 1 3 \r\n ][ , </expr>
+								<expr>CL-PKTC-EUE-RST-MIB::pktcEUERSTCIDDisTimeAdj.0,INTEGER,1][\r\n</expr>
+						</var_expr>
+					</mod>
+					<mod modtype="replace" hdr="version">
+						<expr>3</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="8">
+					<eq>
+						<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+						<expr>1</expr>
+					</eq>
+				</verify>
+			</response>
+			<transition to="SetCIDDisDSTFlag" event="SNMPResp"/>
+			<transition to="SetCIDDisDSTFlag" event="SNMPRespFailure"/>
+		</state>
+		
+		<state ID="SetCIDDisDSTFlag">
+			<prelude>
+				<send protocol="utility" msgtype="SNMPSet">
+					<mod modtype="add" hdr="array">
+						<var_expr>
+								<expr>varBind 1 1 3 \r\n ][ , </expr>
+								<expr>CL-PKTC-EUE-RST-MIB::pktcEUERSTCIDDisDSTFlag.0,INTEGER,3][\r\n</expr>
+						</var_expr>
+					</mod>
+					<mod modtype="replace" hdr="version">
+						<expr>3</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="8">
+					<eq>
+						<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+						<expr>3</expr>
+					</eq>
+				</verify>
+			</response>
+			<transition to="SetCIDDisDSTInfo" event="SNMPResp"/>
+			<transition to="SetCIDDisDSTInfo" event="SNMPRespFailure"/>
+		</state>
+		
+		<state ID="SetCIDDisDSTInfo">
+			<prelude>
+					<send protocol="utility" msgtype="SNMPSet">
+					<mod modtype="add" hdr="array">
+						<var_expr>
+								<expr>varBind 1 1 3 \r\n ][ , </expr>
+								<expr>CL-PKTC-EUE-RST-MIB::pktcEUERSTCIDDisDSTInfo.0,STRING,EST][\r\n</expr>
+						</var_expr>
+					</mod>
+					<mod modtype="replace" hdr="version">
+						<expr>3</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="8">
+					<eq>
+						<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+						<expr>EST</expr>
+					</eq>
+				</verify>
+			</response>
+			<postlude>
+				<stop_capture/>
+			</postlude>
+			<transition to="EDVAIPv4Hybrid" event="SNMPResp"/>
+			<transition to="EDVAIPv4Hybrid" event="SNMPRespFailure"/>
+		</state>
+		
+		<state ID="EDVAIPv4Hybrid" provFile="MAC_H.bin" 
+				policyFile="3basic.cfg" nextState="Reboot2"/>
+				
+		<state ID="Reboot2" timer="10000">
+			<prelude once="true">
+				<start_capture>
+					<filter>
+						<var_expr>
+							<expr>host </expr>
+							<msg_ref type="platform">DUT.IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.CM IP Address</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.DHCP Gateway IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.DHCP CM Gateway IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.KDC IP Address</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.TFTP Server IP</msg_ref>
+						</var_expr>
+					</filter>
+				</start_capture>
+				<send protocol="utility" msgtype="SNMPSet">
+					<mod modtype="add" hdr="array">
+						<var_expr>
+								<expr>varBind 1 1 3 \r\n ][ , </expr>
+								<expr>DOCS-CABLE-DEVICE-MIB::docsDevResetNow.0,INTEGER,1][\r\n</expr>
+						</var_expr>
+					</mod>
+					<mod modtype="replace" hdr="agentip">
+						<msg_ref type="platform">DUT.CM IP Address</msg_ref>
+					</mod>
+					<!-- Always use version 2 for a CM reset -->
+					<mod modtype="replace" hdr="version">
+						<expr>2c</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="utility">Response</msg_ref>
+						<expr>SNMPRespFailure</expr>
+					</eq>
+					<then>
+						<fail/>
+					</then>
+				</if>
+				<if>
+					<or>
+						<eq>
+							<msg_ref type="sip">REGISTER.Contact.expires</msg_ref>
+							<expr>0</expr>
+						</eq>
+						<eq>
+							<msg_ref type="sip">REGISTER.Expires.value</msg_ref>
+							<expr>0</expr>
+						</eq>
+					</or>
+					<then>
+						<send protocol="sip" msgtype="200-REGISTER"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Reboot2" event="SNMPResp"/>
+			<transition to="Register2" event="TimerExpired"/>
+			<transition to="END" event="SNMPRespFailure"/>
+			<transition to="Reboot2" event="REGISTER"/>
+		</state>
+		
+		<state ID="Register2">
+			<transition to="Provisioned2" event="Registered"/>
+		</state>
+		
+		<state ID="Provisioned2">	
+			<prelude>
+				<send protocol="utility" msgtype="SNMPGet">
+					<mod modtype="add" hdr="oids">
+						<expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvisioningState.0</expr>
+					</mod>
+					<mod modtype="replace" hdr="version">
+						<expr>3</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="10">
+					<eq>
+						<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+						<expr>1</expr>
+					</eq>
+				</verify>
+			</response>
+			<transition to="GetCIDPPSTable2" event="SNMPResp"/>
+			<transition to="GetCIDPPSTable2" event="SNMPRespFailure"/>
+		</state>
+		
+		<state ID="GetCIDPPSTable2">
+			<prelude>
+				<send protocol="utility" msgtype="SNMPGetTable">
+					<mod modtype="add" hdr="oids">
+						<expr>CL-PKTC-EUE-RST-MIB::pktcEUERSTCIDTable</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="11-3">
+					<and>
+						<!-- Test for pktcEUERSTCIDPPS  -->
+						<eq>
+							<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+							<expr>2</expr>
+						</eq>
+						<!-- Test for pktcEUERSTCIDStatus  -->
+						<eq>
+							<msg_ref type="utility" index="0 1 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					</and>	
+				</verify>
+			</response>
+			<transition to="GetCIDDisTable2" event="SNMPResp"/>
+			<transition to="GetCIDDisTable2" event="SNMPRespFailure"/>
+		</state>
+		
+		<state ID="GetCIDDisTable2">
+			<prelude>
+				<send protocol="utility" msgtype="SNMPGetTable">
+					<mod modtype="add" hdr="oids">
+						<expr>CL-PKTC-EUE-RST-MIB::pktcEUERSTCIDDisTable</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="11-4">
+					<and>
+						<!-- Test for pktcEUERSTCIDDisCNDActStat    -->
+						<eq>
+							<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					<and>
+						<!--  Test for pktcEUERSTCIDDisCNAMDActStat   -->
+						<eq>
+							<msg_ref type="utility" index="0 1 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					<and>
+						<!--  Test for pktcEUERSTCIDDisDefCountry    -->
+						<eq>
+							<msg_ref type="utility" index="0 2 2">SNMPResp.varBind</msg_ref>
+							<expr>123</expr>
+						</eq>
+					<and>
+						<!--  Test for pktcEUERSTCIDDisStatus   -->
+						<eq>
+							<msg_ref type="utility" index="0 3 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+						<!-- Test for pktcEUERSTCIDDisCIDCWActStat   -->
+						<eq>
+							<msg_ref type="utility" index="0 4 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					</and>
+					</and>
+					</and>
+					</and>
+				</verify>
+			</response>
+			<transition to="GetCallBlkTable2" event="SNMPResp"/>
+			<transition to="GetCallBlkTable2" event="SNMPRespFailure"/>
+		</state>
+		
+		<state ID="GetCallBlkTable2">
+			<prelude>
+				<send protocol="utility" msgtype="SNMPGetTable">
+					<mod modtype="add" hdr="oids">
+						<expr>CL-PKTC-EUE-RST-MIB::pktcEUERSTCallBlkTable</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="11-5">
+					<and>
+						<!-- Test for pktcEUERSTCIDCBlkConfTone   -->
+						<eq>
+							<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+							<expr>file:///PacketCableRST/ct</expr>
+						</eq>
+					<and>
+						<!--  Test for pktcEUERSTCIDCBlkErrTone  -->
+						<eq>
+							<msg_ref type="utility" index="0 1 2">SNMPResp.varBind</msg_ref>
+							<expr>file:///PacketCableRST/ro</expr>
+						</eq>
+						<!-- Test for pktcEUERSTCIDCBlkStatus   -->
+						<eq>
+							<msg_ref type="utility" index="0 2 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					</and>
+					</and>
+				</verify>
+			</response>
+			<transition to="GetCallDelTable2" event="SNMPResp"/>
+			<transition to="GetCallDelTable2" event="SNMPRespFailure"/>
+		</state>
+		
+		<state ID="GetCallDelTable2">
+			<prelude>
+				<send protocol="utility" msgtype="SNMPGetTable">
+					<mod modtype="add" hdr="oids">
+						<expr>CL-PKTC-EUE-RST-MIB::pktcEUERSTCallDelTable</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="11-6">
+					<and>
+						<!-- Test for pktcEUERSTCIDDelConfTone    -->
+						<eq>
+							<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+							<expr>file:///PacketCableRST/ct</expr>
+						</eq>
+					<and>
+						<!--  Test for pktcEUERSTCIDDelErrTone   -->
+						<eq>
+							<msg_ref type="utility" index="0 1 2">SNMPResp.varBind</msg_ref>
+							<expr>file:///PacketCableRST/ro</expr>
+						</eq>
+						<!-- Test for pktcEUERSTCIDDelStatus   -->
+						<eq>
+							<msg_ref type="utility" index="0 2 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					</and>
+					</and>
+				</verify>
+			</response>
+			<transition to="GetCIDDisTimeAdj2" event="SNMPResp"/>
+			<transition to="GetCIDDisTimeAdj2" event="SNMPRespFailure"/>
+		</state>
+		
+		<state ID="GetCIDDisTimeAdj2">
+			<prelude>
+				<send protocol="utility" msgtype="SNMPGet">
+					<mod modtype="add" hdr="oids">
+						<expr>CL-PKTC-EUE-RST-MIB::pktcEUERSTCIDDisTimeAdj.0</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="11-7">
+					<eq>
+						<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+						<expr>3</expr>
+					</eq>
+				</verify>
+			</response>
+			<transition to="GetCIDDisDSTFlag2" event="SNMPResp"/>
+			<transition to="GetCIDDisDSTFlag2" event="SNMPRespFailure"/>
+		</state>
+		
+		<state ID="GetCIDDisDSTFlag2">
+			<prelude>
+				<send protocol="utility" msgtype="SNMPGet">
+					<mod modtype="add" hdr="oids">
+						<expr>CL-PKTC-EUE-RST-MIB::pktcEUERSTCIDDisDSTFlag.0</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="11-7">
+					<eq>
+						<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+						<expr>1</expr>
+					</eq>
+				</verify>
+			</response>
+			<transition to="GetCIDDisDSTInfo2" event="SNMPResp"/>
+			<transition to="GetCIDDisDSTInfo2" event="SNMPRespFailure"/>
+		</state>
+		
+		<state ID="GetCIDDisDSTInfo2">
+			<prelude>
+				<send protocol="utility" msgtype="SNMPGet">
+					<mod modtype="add" hdr="oids">
+						<expr>CL-PKTC-EUE-RST-MIB::pktcEUERSTCIDDisDSTInfo.0</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="11-7">
+					<notnull>
+						<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+					</notnull>
+				</verify>
+			</response>
+			<transition to="SetCIDDisTimeAdj2" event="SNMPResp"/>
+			<transition to="SetCIDDisTimeAdj2" event="SNMPRespFailure"/>
+		</state>
+		
+		<state ID="SetCIDDisTimeAdj2">
+			<prelude>
+				<send protocol="utility" msgtype="SNMPSet">
+					<mod modtype="add" hdr="array">
+						<var_expr>
+								<expr>varBind 1 1 3 \r\n ][ , </expr>
+								<expr>CL-PKTC-EUE-RST-MIB::pktcEUERSTCIDDisTimeAdj.0,INTEGER,1][\r\n</expr>
+						</var_expr>
+					</mod>
+					<mod modtype="replace" hdr="version">
+						<expr>2c</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="11-8">
+					<eq>
+						<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+						<expr>1</expr>
+					</eq>
+				</verify>
+			</response>
+			<transition to="SetCIDDisDSTFlag2" event="SNMPResp"/>
+			<transition to="SetCIDDisDSTFlag2" event="SNMPRespFailure"/>
+		</state>
+		
+		<state ID="SetCIDDisDSTFlag2">
+			<prelude>
+				<send protocol="utility" msgtype="SNMPSet">
+					<mod modtype="add" hdr="array">
+						<var_expr>
+								<expr>varBind 1 1 3 \r\n ][ , </expr>
+								<expr>CL-PKTC-EUE-RST-MIB::pktcEUERSTCIDDisDSTFlag.0,INTEGER,3][\r\n</expr>
+						</var_expr>
+					</mod>
+					<mod modtype="replace" hdr="version">
+						<expr>2c</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="11-8">
+					<eq>
+						<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+						<expr>3</expr>
+					</eq>
+				</verify>
+			</response>
+			<transition to="SetCIDDisDSTInfo2" event="SNMPResp"/>
+			<transition to="SetCIDDisDSTInfo2" event="SNMPRespFailure"/>
+		</state>
+		
+		<state ID="SetCIDDisDSTInfo2">
+			<prelude>
+					<send protocol="utility" msgtype="SNMPSet">
+					<mod modtype="add" hdr="array">
+						<var_expr>
+								<expr>varBind 1 1 3 \r\n ][ , </expr>
+								<expr>CL-PKTC-EUE-RST-MIB::pktcEUERSTCIDDisDSTInfo.0,STRING,EST][\r\n</expr>
+						</var_expr>
+					</mod>
+					<mod modtype="replace" hdr="version">
+						<expr>2c</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="11-8">
+					<eq>
+						<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+						<expr>EST</expr>
+					</eq>
+				</verify>
+			</response>
+			<postlude>
+				<stop_capture/>
+			</postlude>
+			<transition to="EDVAIPv6Secure" event="SNMPResp"/>
+			<transition to="EDVAIPv6Secure" event="SNMPRespFailure"/>
+		</state>
+		
+		<state ID="EDVAIPv6Secure" provFile="MAC_S.bin" 
+				policyFile="3basic.cfg" nextState="Reboot3"/>
+				
+		<state ID="Reboot3" timer="10000">
+			<prelude once="true">
+				<start_capture>
+					<filter>
+						<var_expr>
+							<expr>host </expr>
+							<msg_ref type="platform">DUT.IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.CM IP Address</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.DHCP Gateway IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.DHCP CM Gateway IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.KDC IP Address</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.TFTP Server IP</msg_ref>
+						</var_expr>
+					</filter>
+				</start_capture>
+				<send protocol="utility" msgtype="SNMPSet">
+					<mod modtype="add" hdr="array">
+						<var_expr>
+								<expr>varBind 1 1 3 \r\n ][ , </expr>
+								<expr>DOCS-CABLE-DEVICE-MIB::docsDevResetNow.0,INTEGER,1][\r\n</expr>
+						</var_expr>
+					</mod>
+					<mod modtype="replace" hdr="agentip">
+						<msg_ref type="platform">DUT.CM IP Address</msg_ref>
+					</mod>
+					<!-- Always use version 2 for a CM reset -->
+					<mod modtype="replace" hdr="version">
+						<expr>2c</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="utility">Response</msg_ref>
+						<expr>SNMPRespFailure</expr>
+					</eq>
+					<then>
+						<fail/>
+					</then>
+				</if>
+				<if>
+					<or>
+						<eq>
+							<msg_ref type="sip">REGISTER.Contact.expires</msg_ref>
+							<expr>0</expr>
+						</eq>
+						<eq>
+							<msg_ref type="sip">REGISTER.Expires.value</msg_ref>
+							<expr>0</expr>
+						</eq>
+					</or>
+					<then>
+						<send protocol="sip" msgtype="200-REGISTER"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Reboot3" event="SNMPResp"/>
+			<transition to="Register3" event="TimerExpired"/>
+			<transition to="END" event="SNMPRespFailure"/>
+			<transition to="Reboot3" event="REGISTER"/>
+		</state>
+		
+		<state ID="Register3">
+			<transition to="Provisioned3" event="Registered"/>
+		</state>
+		
+		<state ID="Provisioned3">	
+			<prelude>
+				<send protocol="utility" msgtype="SNMPGet">
+					<mod modtype="add" hdr="oids">
+						<expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvisioningState.0</expr>
+					</mod>
+					<mod modtype="replace" hdr="version">
+						<expr>3</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="13">
+					<eq>
+						<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+						<expr>1</expr>
+					</eq>
+				</verify>
+			</response>
+			<transition to="GetCIDPPSTable3" event="SNMPResp"/>
+			<transition to="GetCIDPPSTable3" event="SNMPRespFailure"/>
+		</state>
+		
+		<state ID="GetCIDPPSTable3">
+			<prelude>
+				<send protocol="utility" msgtype="SNMPGetTable">
+					<mod modtype="add" hdr="oids">
+						<expr>CL-PKTC-EUE-RST-MIB::pktcEUERSTCIDTable</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="14-3">
+					<and>
+						<!-- Test for pktcEUERSTCIDPPS  -->
+						<eq>
+							<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+							<expr>2</expr>
+						</eq>
+						<!-- Test for pktcEUERSTCIDStatus  -->
+						<eq>
+							<msg_ref type="utility" index="0 1 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					</and>	
+				</verify>
+			</response>
+			<transition to="GetCIDDisTable3" event="SNMPResp"/>
+			<transition to="GetCIDDisTable3" event="SNMPRespFailure"/>
+		</state>
+		
+		<state ID="GetCIDDisTable3">
+			<prelude>
+				<send protocol="utility" msgtype="SNMPGetTable">
+					<mod modtype="add" hdr="oids">
+						<expr>CL-PKTC-EUE-RST-MIB::pktcEUERSTCIDDisTable</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="14-4">
+					<and>
+						<!-- Test for pktcEUERSTCIDDisCNDActStat    -->
+						<eq>
+							<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					<and>
+						<!--  Test for pktcEUERSTCIDDisCNAMDActStat   -->
+						<eq>
+							<msg_ref type="utility" index="0 1 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					<and>
+						<!--  Test for pktcEUERSTCIDDisDefCountry    -->
+						<eq>
+							<msg_ref type="utility" index="0 2 2">SNMPResp.varBind</msg_ref>
+							<expr>123</expr>
+						</eq>
+					<and>
+						<!--  Test for pktcEUERSTCIDDisStatus   -->
+						<eq>
+							<msg_ref type="utility" index="0 3 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+						<!-- Test for pktcEUERSTCIDDisCIDCWActStat   -->
+						<eq>
+							<msg_ref type="utility" index="0 4 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					</and>
+					</and>
+					</and>
+					</and>
+				</verify>
+			</response>
+			<transition to="GetCallBlkTable3" event="SNMPResp"/>
+			<transition to="GetCallBlkTable3" event="SNMPRespFailure"/>
+		</state>
+		
+		<state ID="GetCallBlkTable3">
+			<prelude>
+				<send protocol="utility" msgtype="SNMPGetTable">
+					<mod modtype="add" hdr="oids">
+						<expr>CL-PKTC-EUE-RST-MIB::pktcEUERSTCallBlkTable</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="14-5">
+					<and>
+						<!-- Test for pktcEUERSTCIDCBlkConfTone   -->
+						<eq>
+							<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+							<expr>file:///PacketCableRST/ct</expr>
+						</eq>
+					<and>
+						<!--  Test for pktcEUERSTCIDCBlkErrTone  -->
+						<eq>
+							<msg_ref type="utility" index="0 1 2">SNMPResp.varBind</msg_ref>
+							<expr>file:///PacketCableRST/ro</expr>
+						</eq>
+						<!-- Test for pktcEUERSTCIDCBlkStatus   -->
+						<eq>
+							<msg_ref type="utility" index="0 2 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					</and>
+					</and>
+				</verify>
+			</response>
+			<transition to="GetCallDelTable3" event="SNMPResp"/>
+			<transition to="GetCallDelTable3" event="SNMPRespFailure"/>
+		</state>
+		
+		<state ID="GetCallDelTable3">
+			<prelude>
+				<send protocol="utility" msgtype="SNMPGetTable">
+					<mod modtype="add" hdr="oids">
+						<expr>CL-PKTC-EUE-RST-MIB::pktcEUERSTCallDelTable</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="14-6">
+					<and>
+						<!-- Test for pktcEUERSTCIDDelConfTone    -->
+						<eq>
+							<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+							<expr>file:///PacketCableRST/ct</expr>
+						</eq>
+					<and>
+						<!--  Test for pktcEUERSTCIDDelErrTone   -->
+						<eq>
+							<msg_ref type="utility" index="0 1 2">SNMPResp.varBind</msg_ref>
+							<expr>file:///PacketCableRST/ro</expr>
+						</eq>
+						<!-- Test for pktcEUERSTCIDDelStatus   -->
+						<eq>
+							<msg_ref type="utility" index="0 2 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					</and>
+					</and>
+				</verify>
+			</response>
+			<transition to="GetCIDDisTimeAdj3" event="SNMPResp"/>
+			<transition to="GetCIDDisTimeAdj3" event="SNMPRespFailure"/>
+		</state>
+		
+		<state ID="GetCIDDisTimeAdj3">
+			<prelude>
+				<send protocol="utility" msgtype="SNMPGet">
+					<mod modtype="add" hdr="oids">
+						<expr>CL-PKTC-EUE-RST-MIB::pktcEUERSTCIDDisTimeAdj.0</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="14-7">
+					<eq>
+						<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+						<expr>3</expr>
+					</eq>
+				</verify>
+			</response>
+			<transition to="GetCIDDisDSTFlag3" event="SNMPResp"/>
+			<transition to="GetCIDDisDSTFlag3" event="SNMPRespFailure"/>
+		</state>
+		
+		<state ID="GetCIDDisDSTFlag3">
+			<prelude>
+				<send protocol="utility" msgtype="SNMPGet">
+					<mod modtype="add" hdr="oids">
+						<expr>CL-PKTC-EUE-RST-MIB::pktcEUERSTCIDDisDSTFlag.0</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="14-7">
+					<eq>
+						<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+						<expr>1</expr>
+					</eq>
+				</verify>
+			</response>
+			<transition to="GetCIDDisDSTInfo3" event="SNMPResp"/>
+			<transition to="GetCIDDisDSTInfo3" event="SNMPRespFailure"/>
+		</state>
+		
+		<state ID="GetCIDDisDSTInfo3">
+			<prelude>
+				<send protocol="utility" msgtype="SNMPGet">
+					<mod modtype="add" hdr="oids">
+						<expr>CL-PKTC-EUE-RST-MIB::pktcEUERSTCIDDisDSTInfo.0</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="14-7">
+					<notnull>
+						<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+					</notnull>
+				</verify>
+			</response>
+			<transition to="SetCIDDisTimeAdj3" event="SNMPResp"/>
+			<transition to="SetCIDDisTimeAdj3" event="SNMPRespFailure"/>
+		</state>
+		
+		<state ID="SetCIDDisTimeAdj3">
+			<prelude>
+				<send protocol="utility" msgtype="SNMPSet">
+					<mod modtype="add" hdr="array">
+						<var_expr>
+								<expr>varBind 1 1 3 \r\n ][ , </expr>
+								<expr>CL-PKTC-EUE-RST-MIB::pktcEUERSTCIDDisTimeAdj.0,INTEGER,1][\r\n</expr>
+						</var_expr>
+					</mod>
+					<mod modtype="replace" hdr="version">
+						<expr>3</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="14-8">
+					<eq>
+						<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+						<expr>1</expr>
+					</eq>
+				</verify>
+			</response>
+			<transition to="SetCIDDisDSTFlag3" event="SNMPResp"/>
+			<transition to="SetCIDDisDSTFlag3" event="SNMPRespFailure"/>
+		</state>
+		
+		<state ID="SetCIDDisDSTFlag3">
+			<prelude>
+				<send protocol="utility" msgtype="SNMPSet">
+					<mod modtype="add" hdr="array">
+						<var_expr>
+								<expr>varBind 1 1 3 \r\n ][ , </expr>
+								<expr>CL-PKTC-EUE-RST-MIB::pktcEUERSTCIDDisDSTFlag.0,INTEGER,3][\r\n</expr>
+						</var_expr>
+					</mod>
+					<mod modtype="replace" hdr="version">
+						<expr>3</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="14-8">
+					<eq>
+						<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+						<expr>3</expr>
+					</eq>
+				</verify>
+			</response>
+			<transition to="SetCIDDisDSTInfo3" event="SNMPResp"/>
+			<transition to="SetCIDDisDSTInfo3" event="SNMPRespFailure"/>
+		</state>
+		
+		<state ID="SetCIDDisDSTInfo3">
+			<prelude>
+					<send protocol="utility" msgtype="SNMPSet">
+					<mod modtype="add" hdr="array">
+						<var_expr>
+								<expr>varBind 1 1 3 \r\n ][ , </expr>
+								<expr>CL-PKTC-EUE-RST-MIB::pktcEUERSTCIDDisDSTInfo.0,STRING,EST][\r\n</expr>
+						</var_expr>
+					</mod>
+					<mod modtype="replace" hdr="version">
+						<expr>3</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="14-8">
+					<eq>
+						<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+						<expr>EST</expr>
+					</eq>
+				</verify>
+			</response>
+			<postlude>
+				<stop_capture/>
+			</postlude>
+			<transition to="EDVAIPv6Hybrid" event="SNMPResp"/>
+			<transition to="EDVAIPv6Hybrid" event="SNMPRespFailure"/>
+		</state>
+		
+		<state ID="EDVAIPv6Hybrid" provFile="MAC_H.bin" 
+				policyFile="3basic.cfg" nextState="Reboot4"/>
+				
+		<state ID="Reboot4" timer="10000">
+			<prelude once="true">
+				<start_capture>
+					<filter>
+						<var_expr>
+							<expr>host </expr>
+							<msg_ref type="platform">DUT.IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.CM IP Address</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.DHCP Gateway IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.DHCP CM Gateway IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.KDC IP Address</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.TFTP Server IP</msg_ref>
+						</var_expr>
+					</filter>
+				</start_capture>
+				<send protocol="utility" msgtype="SNMPSet">
+					<mod modtype="add" hdr="array">
+						<var_expr>
+								<expr>varBind 1 1 3 \r\n ][ , </expr>
+								<expr>DOCS-CABLE-DEVICE-MIB::docsDevResetNow.0,INTEGER,1][\r\n</expr>
+						</var_expr>
+					</mod>
+					<mod modtype="replace" hdr="agentip">
+						<msg_ref type="platform">DUT.CM IP Address</msg_ref>
+					</mod>
+					<!-- Always use version 2 for a CM reset -->
+					<mod modtype="replace" hdr="version">
+						<expr>2c</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="utility">Response</msg_ref>
+						<expr>SNMPRespFailure</expr>
+					</eq>
+					<then>
+						<fail/>
+					</then>
+				</if>
+				<if>
+					<or>
+						<eq>
+							<msg_ref type="sip">REGISTER.Contact.expires</msg_ref>
+							<expr>0</expr>
+						</eq>
+						<eq>
+							<msg_ref type="sip">REGISTER.Expires.value</msg_ref>
+							<expr>0</expr>
+						</eq>
+					</or>
+					<then>
+						<send protocol="sip" msgtype="200-REGISTER"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Reboot4" event="SNMPResp"/>
+			<transition to="Register4" event="TimerExpired"/>
+			<transition to="END" event="SNMPRespFailure"/>
+			<transition to="Reboot4" event="REGISTER"/>
+		</state>
+		
+		<state ID="Register4">
+			<transition to="Provisioned4" event="Registered"/>
+		</state>
+		
+		<state ID="Provisioned4">	
+			<prelude>
+				<send protocol="utility" msgtype="SNMPGet">
+					<mod modtype="add" hdr="oids">
+						<expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvisioningState.0</expr>
+					</mod>
+					<mod modtype="replace" hdr="version">
+						<expr>3</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="16">
+					<eq>
+						<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+						<expr>1</expr>
+					</eq>
+				</verify>
+			</response>
+			<transition to="GetCIDPPSTable4" event="SNMPResp"/>
+			<transition to="GetCIDPPSTable4" event="SNMPRespFailure"/>
+		</state>
+		
+		<state ID="GetCIDPPSTable4">
+			<prelude>
+				<send protocol="utility" msgtype="SNMPGetTable">
+					<mod modtype="add" hdr="oids">
+						<expr>CL-PKTC-EUE-RST-MIB::pktcEUERSTCIDTable</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="17-3">
+					<and>
+						<!-- Test for pktcEUERSTCIDPPS  -->
+						<eq>
+							<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+							<expr>2</expr>
+						</eq>
+						<!-- Test for pktcEUERSTCIDStatus  -->
+						<eq>
+							<msg_ref type="utility" index="0 1 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					</and>	
+				</verify>
+			</response>
+			<transition to="GetCIDDisTable4" event="SNMPResp"/>
+			<transition to="GetCIDDisTable4" event="SNMPRespFailure"/>
+		</state>
+		
+		<state ID="GetCIDDisTable4">
+			<prelude>
+				<send protocol="utility" msgtype="SNMPGetTable">
+					<mod modtype="add" hdr="oids">
+						<expr>CL-PKTC-EUE-RST-MIB::pktcEUERSTCIDDisTable</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="17-4">
+					<and>
+						<!-- Test for pktcEUERSTCIDDisCNDActStat    -->
+						<eq>
+							<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					<and>
+						<!--  Test for pktcEUERSTCIDDisCNAMDActStat   -->
+						<eq>
+							<msg_ref type="utility" index="0 1 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					<and>
+						<!--  Test for pktcEUERSTCIDDisDefCountry    -->
+						<eq>
+							<msg_ref type="utility" index="0 2 2">SNMPResp.varBind</msg_ref>
+							<expr>123</expr>
+						</eq>
+					<and>
+						<!--  Test for pktcEUERSTCIDDisStatus   -->
+						<eq>
+							<msg_ref type="utility" index="0 3 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+						<!-- Test for pktcEUERSTCIDDisCIDCWActStat   -->
+						<eq>
+							<msg_ref type="utility" index="0 4 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					</and>
+					</and>
+					</and>
+					</and>
+				</verify>
+			</response>
+			<transition to="GetCallBlkTable4" event="SNMPResp"/>
+			<transition to="GetCallBlkTable4" event="SNMPRespFailure"/>
+		</state>
+		
+		<state ID="GetCallBlkTable4">
+			<prelude>
+				<send protocol="utility" msgtype="SNMPGetTable">
+					<mod modtype="add" hdr="oids">
+						<expr>CL-PKTC-EUE-RST-MIB::pktcEUERSTCallBlkTable</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="17-5">
+					<and>
+						<!-- Test for pktcEUERSTCIDCBlkConfTone   -->
+						<eq>
+							<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+							<expr>file:///PacketCableRST/ct</expr>
+						</eq>
+					<and>
+						<!--  Test for pktcEUERSTCIDCBlkErrTone  -->
+						<eq>
+							<msg_ref type="utility" index="0 1 2">SNMPResp.varBind</msg_ref>
+							<expr>file:///PacketCableRST/ro</expr>
+						</eq>
+						<!-- Test for pktcEUERSTCIDCBlkStatus   -->
+						<eq>
+							<msg_ref type="utility" index="0 2 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					</and>
+					</and>
+				</verify>
+			</response>
+			<transition to="GetCallDelTable4" event="SNMPResp"/>
+			<transition to="GetCallDelTable4" event="SNMPRespFailure"/>
+		</state>
+		
+		<state ID="GetCallDelTable4">
+			<prelude>
+				<send protocol="utility" msgtype="SNMPGetTable">
+					<mod modtype="add" hdr="oids">
+						<expr>CL-PKTC-EUE-RST-MIB::pktcEUERSTCallDelTable</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="17-6">
+					<and>
+						<!-- Test for pktcEUERSTCIDDelConfTone    -->
+						<eq>
+							<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+							<expr>file:///PacketCableRST/ct</expr>
+						</eq>
+					<and>
+						<!--  Test for pktcEUERSTCIDDelErrTone   -->
+						<eq>
+							<msg_ref type="utility" index="0 1 2">SNMPResp.varBind</msg_ref>
+							<expr>file:///PacketCableRST/ro</expr>
+						</eq>
+						<!-- Test for pktcEUERSTCIDDelStatus   -->
+						<eq>
+							<msg_ref type="utility" index="0 2 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					</and>
+					</and>
+				</verify>
+			</response>
+			<transition to="GetCIDDisTimeAdj4" event="SNMPResp"/>
+			<transition to="GetCIDDisTimeAdj4" event="SNMPRespFailure"/>
+		</state>
+		
+		<state ID="GetCIDDisTimeAdj4">
+			<prelude>
+				<send protocol="utility" msgtype="SNMPGet">
+					<mod modtype="add" hdr="oids">
+						<expr>CL-PKTC-EUE-RST-MIB::pktcEUERSTCIDDisTimeAdj.0</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="17-7">
+					<eq>
+						<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+						<expr>3</expr>
+					</eq>
+				</verify>
+			</response>
+			<transition to="GetCIDDisDSTFlag4" event="SNMPResp"/>
+			<transition to="GetCIDDisDSTFlag4" event="SNMPRespFailure"/>
+		</state>
+		
+		<state ID="GetCIDDisDSTFlag4">
+			<prelude>
+				<send protocol="utility" msgtype="SNMPGet">
+					<mod modtype="add" hdr="oids">
+						<expr>CL-PKTC-EUE-RST-MIB::pktcEUERSTCIDDisDSTFlag.0</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="17-7">
+					<eq>
+						<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+						<expr>1</expr>
+					</eq>
+				</verify>
+			</response>
+			<transition to="GetCIDDisDSTInfo4" event="SNMPResp"/>
+			<transition to="GetCIDDisDSTInfo4" event="SNMPRespFailure"/>
+		</state>
+		
+		<state ID="GetCIDDisDSTInfo4">
+			<prelude>
+				<send protocol="utility" msgtype="SNMPGet">
+					<mod modtype="add" hdr="oids">
+						<expr>CL-PKTC-EUE-RST-MIB::pktcEUERSTCIDDisDSTInfo.0</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="17-7">
+					<notnull>
+						<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+					</notnull>
+				</verify>
+			</response>
+			<transition to="SetCIDDisTimeAdj4" event="SNMPResp"/>
+			<transition to="SetCIDDisTimeAdj4" event="SNMPRespFailure"/>
+		</state>
+		
+		<state ID="SetCIDDisTimeAdj4">
+			<prelude>
+				<send protocol="utility" msgtype="SNMPSet">
+					<mod modtype="add" hdr="array">
+						<var_expr>
+								<expr>varBind 1 1 3 \r\n ][ , </expr>
+								<expr>CL-PKTC-EUE-RST-MIB::pktcEUERSTCIDDisTimeAdj.0,INTEGER,1][\r\n</expr>
+						</var_expr>
+					</mod>
+					<!-- Always use version 2 for a CM reset -->
+					<mod modtype="replace" hdr="version">
+						<expr>2c</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="17-8">
+					<eq>
+						<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+						<expr>1</expr>
+					</eq>
+				</verify>
+			</response>
+			<transition to="SetCIDDisDSTFlag4" event="SNMPResp"/>
+			<transition to="SetCIDDisDSTFlag4" event="SNMPRespFailure"/>
+		</state>
+		
+		<state ID="SetCIDDisDSTFlag4">
+			<prelude>
+				<send protocol="utility" msgtype="SNMPSet">
+					<mod modtype="add" hdr="array">
+						<var_expr>
+								<expr>varBind 1 1 3 \r\n ][ , </expr>
+								<expr>CL-PKTC-EUE-RST-MIB::pktcEUERSTCIDDisDSTFlag.0,INTEGER,3][\r\n</expr>
+						</var_expr>
+					</mod>
+					<mod modtype="replace" hdr="version">
+						<expr>2c</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="17-8">
+					<eq>
+						<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+						<expr>3</expr>
+					</eq>
+				</verify>
+			</response>
+			<transition to="SetCIDDisDSTInfo4" event="SNMPResp"/>
+			<transition to="SetCIDDisDSTInfo4" event="SNMPRespFailure"/>
+		</state>
+		
+		<state ID="SetCIDDisDSTInfo4">
+			<prelude>
+					<send protocol="utility" msgtype="SNMPSet">
+					<mod modtype="add" hdr="array">
+						<var_expr>
+								<expr>varBind 1 1 3 \r\n ][ , </expr>
+								<expr>CL-PKTC-EUE-RST-MIB::pktcEUERSTCIDDisDSTInfo.0,STRING,EST][\r\n</expr>
+						</var_expr>
+					</mod>
+					<mod modtype="replace" hdr="version">
+						<expr>3</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="17-8">
+					<eq>
+						<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+						<expr>EST</expr>
+					</eq>
+				</verify>
+			</response>
+			<postlude>
+				<stop_capture/>
+			</postlude>
+			<transition to="END" event="SNMPResp"/>
+			<transition to="END" event="SNMPRespFailure"/>
+		</state>
+	</add_to>
+</pc2xml>

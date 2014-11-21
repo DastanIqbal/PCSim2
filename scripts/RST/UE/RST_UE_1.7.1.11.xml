@@ -1,0 +1,172 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+
+<!-- First are the document type and the attributes for our document -->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-UE 1.7.1.11" 
+	descrip="Auto-Recall Maximum Number of Subscriptions " 
+	number="RST-UE 1.7.1.11" inspector="disable">
+	
+	<template file="./templates/CallTermAtUETemp.xml" name="UE1"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Connected"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<states initialstate="SetMSS"/>
+		<state ID="SetMSS">
+			<prelude>
+				<log promptUser="True" 
+					expr="Set the Max Simultaneous Subscriptions parameter to 1 on the DUT"/>
+				<generate event="Branch1Event"/>
+			</prelude>
+			<transition to="Register" event="Branch1Event"/>
+		</state>
+		
+		<state ID="Connected">
+			<prelude once="true">
+				<send protocol="sip" msgtype="ACK"/>
+				<generate event="Branch1Event" fsm="UE2"/>
+				<generate event="Branch1Event" fsm="UE3"/>
+			</prelude>
+			<transition to="Connected" event="OffHookComplete"/>
+			<transition to="Subscribe1Complete" event="Branch2Event"/>
+		</state>
+		
+		<state ID="Subscribe1Complete">
+			<transition to="OnHook" event="Branch3Event"/>
+		</state>
+		
+		<transition from="OnHook" to="Releasing" event="OnHookComplete"/>
+		
+		<transition from="Releasing" to="EndUE1Call" event="BYE"/>
+		
+		<state ID="EndUE1Call" ES="true"/>
+	</add_to>
+
+	<fsm name="UE2">
+		<models>
+			<session/>
+		</models>
+		
+		<NE sim_type="orig" elements="UE2 SCSCF1 PCSCF1" targets="UE2"/>
+		
+		<states initialstate="WaitCall">
+			<state ID="WaitCall">
+				<transition to="DialogSubscribe" event="Branch1Event"/>
+			</state>
+			
+			<state ID="DialogSubscribe">
+				<prelude>
+					<send protocol="sip" msgtype="SUBSCRIBE" subscribeType="dialog"/>
+				</prelude>
+				<transition to="Notification" event="200-SUBSCRIBE"/>
+			</state>
+			
+			<state ID="Notification">
+				<response>
+					<verify step="3" requirements="REQ13989">
+						<and>
+							<contains>
+								<msg_ref type="sip">NOTIFY.Event</msg_ref>
+								<expr>dialog</expr>
+							</contains>
+							<notnull>
+								<msg_ref type="dialog-info+xml" msg_instance="last" 
+									xml_value="true">NOTIFY.dialog</msg_ref>
+							</notnull>
+						</and>
+						<then>
+							<send protocol="sip" msgtype="200-NOTIFY"/>
+							<generate event="Branch2Event" fsm="UE3"/>
+							<generate event="Branch2Event" fsm="UE1"/>
+						</then>
+					</verify>
+				</response>
+				<transition to="WaitSubscribeFailure" event="NOTIFY"/>
+			</state>
+			<state ID="WaitSubscribeFailure">
+				<transition to="VerifyIdle" event="Branch3Event"/>
+			</state>
+			
+			<state ID="VerifyIdle">
+				<response>
+					<verify step="5" requirements="REQ13991">
+						<and>
+							<contains>
+								<msg_ref type="sip">NOTIFY.Event</msg_ref>
+								<expr>dialog</expr>
+							</contains>
+							<null>
+								<msg_ref type="dialog-info+xml" msg_instance="last" 
+									xml_value="true">NOTIFY.dialog</msg_ref>
+							</null>
+						</and>
+						<then>
+							<send protocol="sip" msgtype="200-NOTIFY"/>
+						</then>
+					</verify>
+				</response>
+				<transition to="END" event="NOTIFY"/>
+			</state>
+		</states>
+	</fsm>
+
+	<fsm name="UE3">
+		<models>
+			<session/>
+		</models>
+		
+		<NE sim_type="orig" elements="UE3 SCSCF1 PCSCF1" targets="UE3"/>
+		
+		<states initialstate="WaitCall">
+			<state ID="WaitCall">
+				<transition to="WaitSubscriberUE2" event="Branch1Event"/>
+			</state>
+			
+			<state ID="WaitSubscriberUE2">
+				<transition to="Subscribe" event="Branch2Event"/>
+			</state>
+			
+			<state ID="Subscribe">
+				<prelude>
+					<send protocol="sip" msgtype="SUBSCRIBE" subscribeType="dialog"/>
+				</prelude>
+				<response>
+					<verify step="4" requirements="REQ13990">
+						<!-- Step 4 test case SIP 1.7.1.11  -->
+						<eq>
+							<msg_ref type="sip">Response</msg_ref>
+							<expr>480-SUBSCRIBE</expr>
+						</eq>
+						<then>
+							<generate event="Branch3Event" fsm="UE1"/>
+							<generate event="Branch3Event" fsm="UE2"/>
+						</then>
+					</verify>
+				</response>
+				<transition to="EndSession1" event="480-SUBSCRIBE"/>
+			</state>
+			
+			<state ID="EndSession1" ES="True"/>
+		</states>
+	</fsm>
+</pc2xml>

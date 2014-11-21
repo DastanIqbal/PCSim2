@@ -1,0 +1,221 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	PCPCII-174 : Update the script to the D11 version of the ATP (ghassler 01/26/2010)
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-UE 1.5.2.6" 
+	descrip="Call Waiting –Disconnect " 
+	number="RST-UE 1.5.2.6" inspector="disable">
+	
+	<template file="./templates/CallOrigAtUETemp.xml" name="UE1"/>
+	<template file="./templates/CallTermAtUETemp.xml" name="UE2"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Connected"/>
+		<state ID="Releasing"/>
+		<state ID="OnHook"/>
+	</remove_from>
+	
+	<remove_from fsm="UE2">
+		<NE elements="UE1" targets="UE1"/>
+		<state ID="Setup"/>
+		<state ID="Proceeding"/>
+		<state ID="Alerting"/>
+		<state ID="OnHook"/>
+		<state ID="Releasing"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<state ID="Connected">
+			<prelude>
+				<!-- Step 2 of test case 1.5.2.6  - Place a call to the UE-A (DUT) from UE-C as -->
+				<sleep time="3000"/>
+				<generate event="SucceedEvent" fsm="UE2"/>
+			</prelude>
+			<transition to="OnHook" event="SucceedEvent"/>
+		</state>
+		
+		<state ID="OnHook">
+			<prelude>
+				<send protocol="utility" msgtype="OnHook"/>
+			</prelude>
+			<transition to="RecvBye" event="OnHookComplete"/>
+		</state>
+		
+		<state ID="RecvBye">
+			<response>
+				<verify step="3" requirements="REQ13789">
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>BYE</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="200-BYE"/>
+					</then>
+				</verify>
+			</response>
+			<postlude>
+				<generate event="SucceedEvent" fsm="UE2"/>
+			</postlude>
+			<transition to="EndSession" event="BYE"/>
+		</state>
+		<state ID="EndSession" ES="True"/>
+	</add_to>
+	
+	<add_to fsm="UE2">
+		<NE elements="UE2" targets="UE2"/>
+		<transition from="Register" to="WaitState" event="Registered"/>
+		<state ID="WaitState">
+			<transition to="Setup" event="SucceedEvent"/>
+		</state>
+		
+		<state ID="Setup">
+			<prelude>
+				<sleep time="10000"/>
+				<send protocol="sip" msgtype="Invite">
+					<mod modtype="add" hdr="Alert-Info">
+						<expr>&lt;file:///PacketCableRST/r3&gt;</expr>
+					</mod>
+				</send>
+			</prelude>
+			<!-- Expected responses are 100, 180, 183 or 200 -->
+			<response>
+				<if>
+					<contains>
+						<msg_ref type="sip" msg_instance="last" hdr_instance="any">18x-Invite.Require</msg_ref>
+						<expr>100rel</expr>
+					</contains>
+					<then>
+						<!--Reliability required for test sending Prack message to peer.-->
+						<send protocol="sip" msgtype="Prack"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Proceeding" event="100-INVITE"/>
+			<transition to="Alerting" event="180-INVITE"/>
+			<transition to="Alerting" event="183-INVITE"/>
+			<transition to="AlertingUac" event="ALERTING_UAC"/>
+		</state>
+		
+		<state ID="Proceeding">
+			<!-- Expected responses are 180, 183 or 200 -->
+			<response>
+				<if>
+					<contains>
+						<msg_ref type="sip" msg_instance="last" hdr_instance="any">18x-Invite.Require</msg_ref>
+						<expr>100rel</expr>
+					</contains>
+					<then>
+						<!--Reliability required for test sending Prack message to peer.-->
+						<send protocol="sip" msgtype="Prack"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Alerting" event="180-INVITE"/>
+			<transition to="Alerting" event="183-INVITE"/>
+			<transition to="AlertingUac" event="ALERTING_UAC"/>
+		</state>
+		
+
+		<state ID="Alerting" timer="12000">
+            <prelude once="true">
+                <log step="2"
+                     promptUser="True" yesExpected="True" verify="True"
+                     expr="Is the DUT alerting the user according to the pattern carried\nin the Alert-Info header parameter?"/>
+            </prelude>
+			<response>
+				<!-- Expected responses are 180, 183, PRACK, UPDATE, or 200 -->
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>UPDATE</expr>
+					</eq>
+					<then>
+						<!--QoS required for test, sending a 200-OK to Update message to peer.-->
+						<send protocol="sip" msgtype="200-Update"/>
+					</then>
+					<elseif>
+						<and>
+							<eq>
+								<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+								<expr>180</expr>
+							</eq>
+							<contains>
+								<msg_ref type="sip" hdr_instance="any">180-INVITE.Require</msg_ref>
+								<expr>100rel</expr>
+							</contains>
+						</and>
+						<then>
+							<!--Reliability required for test, sending Prack message to peer.-->
+							<send protocol="sip" msgtype="Prack"/>
+						</then>
+					</elseif>
+				</if>
+			</response>
+			<transition to="Alerting" event="200-PRACK"/>
+			<transition to="Alerting" event="UPDATE"/>
+			<transition to="Alerting" event="18x-INVITE"/>
+			<transition to="AlertingUac" event="ALERTING_UAC"/>
+		</state>
+		
+		<state ID="AlertingUac">
+			<prelude>
+				<generate event="SucceedEvent" fsm="UE1"/>
+			</prelude>
+			<transition to="Ringing" event="SucceedEvent"/>
+		</state>
+		
+		<state ID="Ringing">
+			<prelude>
+				<send protocol="utility" msgtype="VerifyRing"/>
+			</prelude>
+			<response>
+				<verify step="4" requirements="REQ13790">
+					<eq>
+						<msg_ref type="utility">Response</msg_ref>
+						<expr>VerifyRingComplete</expr>
+					</eq>
+				</verify>
+			</response>
+			<transition to="OffHook1" event="VerifyRingComplete"/>
+			<transition to="OffHook1" event="VerifyRingError"/>
+		</state>
+		
+		<state ID="OffHook1">
+			<prelude>
+				<send protocol="utility" msgtype="OffHook"/>
+			</prelude>
+			<transition to="Answer" event="OffHookComplete"/>
+		</state>
+		<transition from="Connected" to="OnHook" event="TimerExpired"/>
+		
+		<state ID="OnHook">
+			<prelude>
+				<send protocol="utility" msgtype="OnHook"/>
+			</prelude>
+			<transition to="Releasing" event="OnHookComplete"/>
+		</state>
+		
+		<state ID="Releasing">
+			<postlude>
+				<send protocol="sip" msgtype="200-Bye"/>
+			</postlude>
+			<transition to="END" event="BYE"/>
+		</state>
+	</add_to>
+</pc2xml>

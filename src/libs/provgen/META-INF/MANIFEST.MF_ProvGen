@@ -1,0 +1,12 @@
+Manifest-Version: 1.0
+Created-By:  1.0-beta (Cable Television Laboratories - PacketCable 2.0)
+Main-Class: com.cablelabs.provgen.ProvGen
+Class-Path: ../lib/bns_common.jar ../lib/bns_logger.jar  ../lib/log4j-1.2.15.jar
+ 
+Name: com/cablelabs/provgen/
+Specification-Title: PacketCable 2.0
+Specification-Version: 0.1.0-beta
+Specification-Vendor: CableLabs
+Implementation-Title: com.cablelabs.provgen
+Implementation-Version: 6617
+Implementation-Vendor: Cablelabs

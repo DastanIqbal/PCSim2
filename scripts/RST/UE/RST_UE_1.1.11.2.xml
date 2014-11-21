@@ -1,0 +1,217 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	PCPCII-139 : Update the Voicetronix modifiers to use the new values. (ghassler 07/10/2009)
+
+
+
+
+-->
+<pc2xml version="$Revision: 8310 $" 
+	name="RST-UE 1.1.11.2" 
+	descrip="Terminating a Call in IPv6 mode" 
+	number="RST-UE 1.1.11.2">
+	
+	<template file="./templates/Proxy_Term_At_DUT.xml" name="Proxy"/>
+	
+	<remove_from fsm="Proxy">
+		<state ID="OffHook"/>
+		<state ID="Connected"/>
+		<state ID="Alerting"/>
+	</remove_from>
+	
+	<add_to fsm="Proxy">
+		<state ID="OffHook">
+			<prelude>
+				<send protocol="utility" msgtype="OffHook">
+					<mod modtype="replace" hdr="voiceport">
+						<msg_ref type="platform">Platform.voiceport1</msg_ref>
+					</mod>
+				</send>
+			</prelude>
+			<transition to="VerifyDialTone" event="OffHookComplete"/>
+		</state>
+		
+		<state ID="VerifyDialTone">
+			<prelude>
+				<send protocol="utility" msgtype="VerifyDialTone">
+					<mod modtype="replace" hdr="voiceport">
+						<msg_ref type="platform">Platform.voiceport1</msg_ref>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="1" requirements="REQ13429, REQ14450, REQ13433, REQ16726, REQ16727">
+					<eq>
+						<msg_ref type="utility">Response</msg_ref>
+						<expr>VerifyDialToneComplete</expr>
+					</eq>
+				</verify>
+			</response>
+			<transition to="Setup" event="VerifyDialToneComplete"/>
+		</state>
+		
+		<state ID="Alerting" timer="6000">
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+						<expr>200</expr>
+					</eq>
+					<then>
+						<verify step="2" requirements="REQ13438, REQ16726, REQ16727">
+							<eq>
+								<msg_ref type="sip">Response</msg_ref>
+								<expr>200-INVITE</expr>
+							</eq>
+						</verify>
+						<verify step="2" requirements="REQ13438, REQ16726, REQ16727">
+							<and>
+								<ipv6>
+									<msg_ref type="sip">200-INVITE.Via.sent-by</msg_ref>
+								</ipv6>
+								<eq>
+									<msg_ref type="sip">200-INVITE.Via.sent-by</msg_ref>
+									<msg_ref type="platform">DUT.IP</msg_ref>
+								</eq>
+							</and>
+						</verify>
+						<verify step="2" requirements="REQ13438, REQ16726, REQ16727">
+							<and>
+								<ipv6>
+									<msg_ref type="sip">200-INVITE.Router.domain</msg_ref>
+								</ipv6>
+								<eq>
+									<msg_ref type="sip">200-INVITE.Router.domain</msg_ref>
+									<msg_ref type="platform">DUT.IP</msg_ref>
+								</eq>
+							</and>
+						</verify>
+						<verify step="2" requirements="REQ13438, REQ16726, REQ16727">
+							<and>
+								<ipv6>
+									<msg_ref type="sip">200-INVITE.To.domain</msg_ref>
+								</ipv6>
+								<eq>
+									<msg_ref type="sip">200-INVITE.To.domain</msg_ref>
+									<msg_ref type="platform">DUT.IP</msg_ref>
+								</eq>
+							</and>
+						</verify>
+						<verify step="2" requirements="REQ13438, REQ16726, REQ16727">
+							<and>
+								<ipv6>
+									<msg_ref type="sip">200-INVITE.From.domain</msg_ref>
+								</ipv6>
+								<eq>
+									<msg_ref type="sip">200-INVITE.From.domain</msg_ref>
+									<msg_ref type="platform">DUT.IP</msg_ref>
+								</eq>
+							</and>
+						</verify>
+						<verify step="2" requirements="REQ13438, REQ16726, REQ16727">
+							<and>
+								<ipv6>
+									<msg_ref type="sip">200-INVITE.Contact.domain</msg_ref>
+								</ipv6>
+								<eq>
+									<msg_ref type="sip">200-INVITE.Contact.domain</msg_ref>
+									<msg_ref type="platform">DUT.IP</msg_ref>
+								</eq>
+							</and>
+						</verify>
+					</then>
+				</if>
+				<if>
+					<or>
+						<eq>
+							<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+							<msg_ref type="platform">UE1.IP</msg_ref>
+						</eq>
+						<eq>
+							<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+							<msg_ref type="platform">UE1.IP</msg_ref>
+						</eq>
+					</or>
+					<then>
+						<proxy target="UE0"/>
+					</then>
+					<elseif>
+						<or>
+							<eq>
+								<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE0.IP</msg_ref>
+							</eq>
+							<eq>
+								<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE0.IP</msg_ref>
+							</eq>
+						</or>
+						<then>
+							<proxy target="UE1"/>
+						</then>
+					</elseif>
+				</if>
+				<if>
+					<eq>
+						<msg_ref type="event"/>
+						<expr>TimerExpired</expr>
+					</eq>
+					<then>
+						<send protocol="utility" msgtype="OffHook">
+							<mod modtype="replace" hdr="voiceport">
+								<msg_ref type="platform">Platform.voiceport1</msg_ref>
+							</mod>
+						</send>
+					</then>
+				</if>
+			</response>
+			<transition to="Alerting" event="INVITE"/>
+			<transition to="Alerting" event="OPTIONS"/>
+			<transition to="Alerting" event="200-OPTIONS"/>
+			<transition to="Alerting" event="PRACK"/>
+			<transition to="Alerting" event="200-PRACK"/>
+			<transition to="Alerting" event="UPDATE"/>
+			<transition to="Alerting" event="200-UPDATE"/>
+			<transition to="Alerting" event="xxx-INVITE"/>
+			<transition to="Alerting" event="OffHookComplete"/>
+			<transition to="Connected" event="ACK"/>
+		</state>
+		
+		<state ID="Connected" timer="10000">
+			<transition to="VerifyVoicePath2Way" event="TimerExpired"/>
+		</state>
+		
+		<state ID="VerifyVoicePath2Way">
+			<prelude>
+				<send protocol="utility" msgtype="VerifyVoicePath2Way">
+					<mod modtype="replace" hdr="from voiceport">
+						<msg_ref type="platform">Platform.voiceport0</msg_ref>
+					</mod>
+					<mod modtype="replace" hdr="to voiceport">
+						<msg_ref type="platform">Platform.voiceport1</msg_ref>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="3" requirements="REQ14451, REQ16726, REQ16727">
+					<eq>
+						<msg_ref type="utility">Response</msg_ref>
+						<expr>VERIFYVOICEPATH2WAYCOMPLETE</expr>
+					</eq>
+				</verify>
+			</response>
+			<transition to="OnHook" event="VERIFYVOICEPATH2WAYCOMPLETE"/>
+		</state>
+	</add_to>
+</pc2xml>

@@ -1,0 +1,152 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+
+<pc2xml version="$Revision: 8188 $" name="UT_UE_1.15.8" descrip="This is a unit test script for the UE_1.15.8 test script." number="1">
+	<template name="RegUE0" file="$UT_PATH/Templates/ut/RegSub_DUT.xml"/>
+	<template name="UE0" file="$UT_PATH/Templates/ut/Orig_DUT.xml"/>
+	<remove_from fsm="RegUE0">
+		<state ID="RecvNotify"/>
+	</remove_from>
+	<add_to fsm="RegUE0">
+		<state ID="RecvNotify">
+			<response>
+				<if>
+					<and>
+						<eq>
+							<msg_ref type="reginfo+xml">NOTIFY.registration.state</msg_ref>
+							<expr>terminated</expr>
+						</eq>
+						<eq>
+							<msg_ref type="reginfo+xml">NOTIFY.contact.event</msg_ref>
+							<expr>deactivated</expr>
+						</eq>
+					</and>
+					<then>
+						<send protocol="sip" msgtype="200-Notify" target="PCSCF1" originator="DUT"/>
+					</then>
+					<else>
+						<fail/>
+					</else>
+				</if>
+			</response>
+			<transition to="ReRegister" event="NOTIFY"/>
+		</state>
+		<state ID="ReRegister">
+			<prelude>
+				<send protocol="sip" msgtype="Register" target="PCSCF1" originator="DUT"/>
+			</prelude>
+			<transition to="ReAuth" event="401-Register"/>
+			<transition to="Subscribe2" event="200-Register"/>
+		</state>
+		<state ID="ReAuth">
+			<prelude>
+				<send protocol="sip" msgtype="Register" target="PCSCF1" originator="DUT"/>
+			</prelude>
+			<transition to="Subscribe2" event="200-Register"/>
+		</state>
+		<state ID="Subscribe2">
+			<prelude>
+				<send protocol="sip" msgtype="Subscribe" target="PCSCF1" originator="DUT"/>
+			</prelude>
+			<transition to="RecvNotify2" event="200-Subscribe"/>
+		</state>
+		<state ID="RecvNotify2">
+			<postlude>
+				<send protocol="sip" msgtype="200-Notify" target="PCSCF1" originator="DUT"/>
+			</postlude>
+			<transition to="Registered" event="NOTIFY"/>
+		</state>
+		<state ID="Registered">
+			<prelude>
+				<generate event="Registered" fsm="UE0"/>
+			</prelude>
+			<transition to="CallEst" event="SucceedEvent"/>
+		</state>
+		<state ID="CallEst">
+			<response>
+				<if>
+					<or>
+						<neq>
+							<msg_ref type="reginfo+xml">NOTIFY.registration.state</msg_ref>
+							<expr>terminated</expr>
+						</neq>
+						<neq>
+							<msg_ref type="reginfo+xml">NOTIFY.contact.event</msg_ref>
+							<expr>rejected</expr>
+						</neq>
+					</or>
+					<then>
+						<fail/>
+					</then>
+				</if>
+			</response>
+			<transition to="EndCall" event="NOTIFY"/>
+		</state>
+		<state ID="EndCall">
+			<prelude>
+				<send protocol="sip" msgtype="200-Notify" target="PCSCF1" originator="DUT"/>
+				<sleep time="100"/>
+				<generate event="RegistrationLost" fsm="UE0"/>
+			</prelude>
+			<transition to="END" event="SucceedEvent"/>
+		</state>
+	</add_to>
+	<add_to fsm="UE0">
+		<state ID="WaitRegistration">
+			<transition to="Setup" event="Registered"/>
+		</state>
+		<states initialstate="WaitRegistration"/>
+	</add_to>
+	<remove_from fsm="UE0">
+		<state ID="Setup" sub="prelude"/>
+		<state ID="PendingRegister"/>
+		<state ID="Register"/>
+		<state ID="Digest"/>
+		<state ID="Connected"/>
+	</remove_from>
+	<add_to fsm="UE0">
+		<state ID="Setup" sub="prelude">
+			<sleep time="3000"/>
+			<send protocol="sip" msgtype="Invite" target="UE1" originator="DUT"/>
+		</state>
+		<!-- CONNECTED State -->
+		<state ID="Connected">
+			<prelude>
+				<generate event="SucceedEvent" fsm="RegUE0"/>
+				<send protocol="sip" msgtype="ACK" target="UE1" originator="DUT"/>
+			</prelude>
+			<postlude>
+				
+			</postlude>
+			<transition to="EndCall" event="RegistrationLost"/>
+		</state>
+		<state ID="EndCall">
+			<prelude>
+				<send protocol="sip" msgtype="BYE" target="UE1" originator="DUT"/>
+			</prelude>
+			<transition to="CallComplete" event="200-BYE"/>
+		</state>
+		<state ID="CallComplete" ES="true">
+			<prelude>
+				<generate event="SucceedEvent" fsm="RegUE0"/>
+			</prelude>
+		</state>
+	</add_to>
+</pc2xml>

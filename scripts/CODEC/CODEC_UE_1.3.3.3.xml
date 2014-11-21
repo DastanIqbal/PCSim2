@@ -1,0 +1,89 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="CODEC-MEDIA_1.3.3.3" 
+	descrip="Failed VBD session with improper 'gpmd' attribute" 
+	number="CODEC-MEDIA_1.3.3.3">
+	
+	<template file="./templates/CallTermAtUETemp.xml" name="UE1"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Connected"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<state ID="Connected">
+			<prelude once="true">
+				<send protocol="sip" msgtype="ACK"/>
+				<sleep time="5000"/>
+				<send protocol="sip" msgtype="REINVITE">
+					<mod modtype="delete" hdr="audio"/>
+					<mod modtype="delete" hdr="media-modifier"/>
+					<mod modtype="delete" hdr="TIAS-modifier"/>
+					<mod modtype="delete" hdr="max-packet-rate"/>
+					<mod modtype="delete" hdr="rtpmap"/>
+					<mod modtype="delete" hdr="mode"/>
+					<mod modtype="delete" hdr="ptime"/>
+					<mod modtype="add" hdr="SDP">
+						<var_expr>
+							<expr>m=audio </expr>
+							<msg_ref type="platform">UE1.SDPPort2</msg_ref>
+							<expr> RTP/AVP 0 101\r\na=rtpmap:101 RED/8000\r\na=gpmd:101 BoGuS\r\na=fmtp:101 0/0</expr>
+						</var_expr>
+					</mod>
+					<mod modtype="replace" hdr="s" param="name">
+						<expr>VoiceFax</expr>
+					</mod>
+				</send>
+				
+			</prelude>
+			<response>
+				<if>
+					<or>
+						<gte>
+							<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+							<expr>400</expr>
+						</gte>
+						<gte>
+							<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+							<expr>599</expr>
+						</gte>
+					</or>
+					<then>
+						<verify step="2" requirements="REQ12621">
+							<or>
+								<gte>
+									<msg_ref type="sip">xxx-INVITE.Status-Line.status-code</msg_ref>
+									<expr>400</expr>
+								</gte>
+								<gte>
+									<msg_ref type="sip">xxx-INVITE.Status-Line.status-code</msg_ref>
+									<expr>599</expr>
+								</gte>
+							</or>
+							<send protocol="sip" msgtype="ACK"/>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<transition to="Connected" event="OffHookComplete"/>
+			<transition to="Releasing" event="xxx-INVITE"/>
+		</state>
+	</add_to>
+</pc2xml>

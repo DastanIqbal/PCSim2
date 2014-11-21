@@ -1,0 +1,202 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History:
+ 	2011-11-02	prosenberg-watt - Initial version
+	2011-11-15	Seung Lee - final versionfor
+
+-->
+
+
+<pc2xml version="$Revision: 1 $" 
+	name="ESG 1.10.1.1" 
+	descrip="SIP Digest Authentication for Registration" 
+	number="ESG 1.10.1.1">
+
+	<fsm name="UE0">
+		<models>
+			<registrar/>
+		</models>
+		<!-- Next we define all of the network elements-->
+		<!--NE sim_type="term" elements="SCSCF1 PCSCF1" targets="SCSCF1"/-->
+		<NE sim_type="term" elements="SCSCF1 PCSCF1" targets="SCSCF1 PCSCF1 3033920001 3034090001"/>
+		<!-- All of the states for the test. References to "Step x" from the
+		Default Message Flow - UE Registration (DUT) Sequence Diagram -->
+		<states initialstate="Reboot">
+		
+			<state ID="Reboot" >
+				<prelude once="true">
+					<log expr="Verify ability of ESG to enable/disable SIP digest." step="1" promptUser="true" verify="true" yesExpected="true"/>
+					<log expr="Disable SIP digest on ESG. Restart the ESG, then Click OK" promptUser="true" requirements="REQ24035"/>
+					<generate event="Branch1Event"/>
+				</prelude>
+				
+				<postlude>
+					<start_capture>
+						<filter>
+							<var_expr>
+								<expr>host </expr>
+								<msg_ref type="platform">UE0.IP</msg_ref>
+								<expr> || host </expr>
+								<msg_ref type="platform">UE0.IP2</msg_ref>
+								<expr> || host </expr>
+								<msg_ref type="platform">PCSCF1.IP</msg_ref>
+								<expr> || host </expr>
+								<msg_ref type="platform">UE1.IP</msg_ref>
+							</var_expr>
+						</filter>
+					</start_capture>
+				</postlude>
+				<transition to="PendingRegistration" event="Branch1Event"/>
+				<transition to="Reboot" event="Register"/>
+			</state>
+		
+			<state ID="PendingRegistration" timer="60000">
+				<response>
+					<verify step="3" requirements="REQ REQ ">
+						<dnc>
+							<msg_ref type="sip">REGISTER</msg_ref>
+							<expr>Authorization</expr>
+						</dnc>
+					</verify>
+
+				</response>
+				<postlude>
+					<send protocol="sip" msgtype="200-Register"/>
+					<generate event="Registered"/>
+				</postlude>
+				<transition to="RegisteredNoAuth" event="Registered"/>
+				<transition to="RegisteredNoAuth" event="Register"/>
+			</state>
+			
+			<state ID="RegisteredNoAuth" timer="10000">
+				<response>
+					<verify step="3" requirements="REQ REQ ">
+						<neq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>REGISTER</expr>
+						</neq>
+					</verify>
+				</response>
+				<transition to="RegisteredNoAuth" event="REGISTER"/>
+				<transition to="2ndReboot" event="TimerExpired"/>
+			</state>
+			
+			<state ID="2ndReboot">
+				<prelude once="true">
+					<log expr="Reconfigure the ESG to enable the SIP Digest authentication. (Reconfigure the SIP-PBX as well, if necessary.)" promptUser="true"/>
+					<log expr="Reboot or restart the ESG, then clck OK." promptUser="true"/>
+					<generate event="SucceedEvent"/>
+				</prelude>
+				<transition to="2ndPendingRegistration" event="SucceedEvent"/>
+				<transition to="2ndReboot" event="REGISTER"/>
+			</state>
+		
+			<state ID="2ndPendingRegistration">
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>REGISTER</expr>
+						</eq>
+						<then>
+							<send protocol="sip" msgtype="401-REGISTER"/>
+						</then>
+					</if>
+				</response>
+				<transition to="Authorization" event="REGISTER"/>
+			</state>
+		
+			<state ID="Authorization">		
+				<response>
+					<if>
+						<or>
+							<eq>
+								<msg_ref type="event"/>
+								<expr>AuthenticateSucceed</expr>
+							</eq>
+							<eq>
+								<msg_ref type="event"/>
+								<expr>AuthenticateFailed</expr>
+							</eq>
+						</or>
+						<then>
+							<!-- this is to prevent the AuthenticateFailed from being forwarded
+									to the next state on the AuthenticateSucceed -->
+						</then>
+						<elseif>
+							<and>
+								<eq>
+									<msg_ref type="sip">Request</msg_ref>
+									<expr>REGISTER</expr>
+								</eq>
+								<and>
+									<contains>
+										<msg_ref type="sip">REGISTER</msg_ref>
+										<expr>Authorization</expr>
+									</contains>
+									<digest/>
+								</and>
+							</and>
+							<then>
+								<generate event="AuthenticateSucceed"/>
+							</then>
+							<else>
+								<generate event="AuthenticateFailed"/>
+								<send protocol="sip" msgtype="503-Register"/>
+							</else>
+						</elseif>
+					</if>
+				</response>
+				<postlude once="True">
+					<verify step="6" requirements="REQ REQ ">
+						<and>
+							<eq>
+								<msg_ref type="sip">Request</msg_ref>
+								<expr>REGISTER</expr>
+							</eq>
+							<and>
+								<contains>
+									<msg_ref type="sip">REGISTER</msg_ref>
+									<expr>Authorization</expr>
+								</contains>
+								<digest/>
+							</and>
+						</and>
+					</verify>
+				</postlude>
+
+				<transition to="Registered" event="AuthenticateSucceed"/>
+				<transition to="END" event="AuthenticateFailed"/>
+				<transition to="Authorization" event="REGISTER"/>
+			</state>
+		
+			<state ID="Registered">
+				<!-- Step  4 from the Default Message Flow - 
+					UE Registration (DUT) Sequence Diagram - 
+					received REGISTER message-  
+					send 200-REGISTER upon AuthenticateSucceed event-->
+				<prelude>
+					<send protocol="sip" msgtype="200-Register"/>
+					<generate event="RegEventSucceed"/>
+				</prelude>
+
+				<postlude>
+					<stop_capture/>	
+				</postlude>
+				<!-- Transitions for Registered state -->
+				<transition to="Registered" event="REGISTER"/>
+				<transition to="END" event="RegEventSucceed"/>
+			</state>
+		</states>
+	</fsm>
+</pc2xml>

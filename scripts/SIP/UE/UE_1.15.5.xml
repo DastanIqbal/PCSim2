@@ -1,0 +1,154 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	PCPCII-135 : Update the script to accommodate a de-register message during the reboot. (ghassler 06/24/2009)
+	PCPCII-173 : Update the requirement numbers for the steps and test the Contact header's addr-spec 
+		(ghassler 01/26/2010)
+	PCPCII-369 : Increase the No Response Time out value to 180 from 90 seconds. (ghassler 06/19/2010)
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="SIP-UE 1.15.5" 
+	descrip="Re-authentication via the Registration-State Event Package " 
+	number="SIP-UE 1.15.5">
+	
+	<template file="./templates/UERegAndSubTemp.xml" name="Registrar"/>
+	
+	<configure name="No Response Timeout" value="180000"/>
+	
+	<remove_from fsm="Registrar">
+		<state ID="Registered"/>
+	</remove_from>
+	
+	<add_to fsm="Registrar">
+		<state ID="Registered">
+			<prelude>
+				<send protocol="sip" msgtype="200-Register"/>
+			</prelude>
+			<response>
+				<if>
+					<and>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>SUBSCRIBE</expr>
+						</eq>
+						<contains>
+							<msg_ref type="sip">SUBSCRIBE.Event</msg_ref>
+							<expr>reg</expr>
+						</contains>
+					</and>
+					<then>
+						<send protocol="sip" msgtype="200-SUBSCRIBE"/>
+						<send protocol="sip" msgtype="NOTIFY">
+							<!-- Step  4 from test case SIP-UE 1.15.5 - 
+							reg-event-body→
+							reginfo→registration→contact→expires = 60 seconds.
+							reg-event-body→
+							reginfo→registration→contact→event = shortened.-->
+							<mod modtype="replace" hdr="contact" param="event" body="reginfo+xml">
+								<expr>shortened</expr>
+							</mod>
+							<mod modtype="add" hdr="contact" param="expires" body="reginfo+xml">
+								<expr>60</expr>
+							</mod>
+						</send>
+					</then>
+				</if>
+			</response>
+			<transition to="Wait200Notify" event="Subscribe"/>
+		</state>
+		
+		<state ID="Wait200Notify">
+			<transition to="WaitRegister" event="200-NOTIFY"/>
+		</state>
+		
+		<state ID="WaitRegister" timer="30500">
+			<!-- Step  4 from test case SIP-UE 1.15.5 - 
+			NOTIFY→reg-event-body→ reginfo→registration→...-->
+			<response>
+				<if>
+					<neq>
+						<msg_ref type="event"/>
+						<expr>TimerExpired</expr>
+					</neq>
+					<then>
+						<verify step="3" requirements="REQ16970, REQ16971, REQ16972, REQ16973, REQ16974, REQ16975">
+							<or>
+								<contains>
+									<msg_ref type="sip">REGISTER.Contact.addr-spec</msg_ref>
+									<msg_ref type="platform">DUT.IP</msg_ref>
+								</contains>
+								<contains>
+									<msg_ref type="sip">REGISTER.Contact.addr-spec</msg_ref>
+									<msg_ref type="platform">DUT.FQDN</msg_ref>
+								</contains>
+							</or>
+							<then>
+								<send protocol="sip" msgtype="401-REGISTER"/>
+							</then>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<!-- Transitions for WaitRegister state -->
+			<transition to="Re-Authorization" event="REGISTER"/>
+		</state>
+		
+		<!-- Step  4 from test case SIP-UE 1.15.5 - UE sends  a REGISTER request in 30 seconds as part of re-registration/re-authentication-->
+		<state ID="Re-Authorization">
+			<response>
+				<if>
+					<or>
+						<eq>
+							<msg_ref type="event"/>
+							<expr>AuthenticateSucceed</expr>
+						</eq>
+						<eq>
+							<msg_ref type="event"/>
+							<expr>AuthenticateFailed</expr>
+						</eq>
+					</or>
+					<then>
+						<!-- this is to prevent the AuthenticateFailed from being forwarded
+								to the next state on the AuthenticateSucceed -->
+					</then>
+					<elseif>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>REGISTER</expr>
+						</eq>
+						<then>
+							<verify step="4" requirements="REQ16970, REQ16971, REQ16972, REQ16973, REQ16974, REQ16976">
+								<contains>
+									<msg_ref type="sip">REGISTER</msg_ref>
+									<expr>Authorization</expr>
+								</contains>
+								<digest/>
+								<then>
+									<send protocol="sip" msgtype="200-Register"/>
+								</then>
+								<else>
+									<send protocol="sip" msgtype="503-Register"/>
+								</else>
+							</verify>
+						</then>
+					</elseif>
+				</if>
+			</response>
+			<transition to="END" event="REGISTER"/>
+		</state>
+	</add_to>
+</pc2xml>

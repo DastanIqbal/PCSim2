@@ -1,0 +1,66 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="SIP-UE 1.6.1.6" 
+	descrip="2xx Response in the Proceeding State " 
+	number="SIP-UE 1.6.1.6">
+	
+	<template file="./templates/CallOrigAtUETemp.xml" name="UE1"/>
+	<configure name="FSM Process Duplicate Messages" value="true"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Connected"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<state ID="Connected" timer="20000">
+			<prelude>
+				<sleep time="2000"/>
+				<!-- Steps 4 from test case SIP 1.6.1.6  - 
+				The SS sends a 404 to INVITE “Not Found response�?.-->
+				<send protocol="sip" msgtype="404-INVITE"/>
+			</prelude>
+			<response>
+				<if>
+					<neq>
+						<msg_ref type="event"/>
+						<expr>DIALOG_CONFIRMED_UAS</expr>
+					</neq>
+					<then>
+						<verify step="2" requirements="RFC979, RFC981">
+							<and>
+								<eq>
+									<msg_ref type="event"/>
+									<expr>TimerExpired</expr>
+								</eq>
+								<neq>
+									<msg_ref type="sip">Request</msg_ref>
+									<expr>ACK</expr>
+								</neq>
+							</and>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<transition to="END" event="ACK"/>
+			<transition to="END" event="TimerExpired"/>
+		</state>
+	</add_to>
+</pc2xml>

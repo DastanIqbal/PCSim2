@@ -1,0 +1,132 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+ 	2011-09-20	Matthew Forbes - Initial version
+	2011-11-15	Seung Lee - final version
+
+
+
+
+-->
+<pc2xml version="$Revision: 1 $" 
+	name="SIP-PBX 1.3.6.1" 
+	descrip="Emergency Service" 
+	number="SIP-PBX 1.3.6.1" >
+
+	<fsm name="UE1">
+		<models>
+			<session/>
+		</models>
+		<NE sim_type="term" elements="UE1 SCSCF1 PCSCF1" 
+		targets="UE1 911"/>
+		
+		<states initialstate="Register">
+			<state ID="Register">
+				<prelude>
+					<start_capture>
+						<filter>
+							<var_expr>
+								<expr>host </expr>
+								<msg_ref type="platform">UE0.IP</msg_ref>
+								<expr> || host </expr>
+								<msg_ref type="platform">UE0.IP2</msg_ref>
+								<expr> || host </expr>
+								<msg_ref type="platform">PCSCF1.IP</msg_ref>
+								<expr> || host </expr>
+								<msg_ref type="platform">UE1.IP</msg_ref>
+							</var_expr>
+						</filter>
+					</start_capture>
+				</prelude>
+				<postlude>
+					<sleep time="3000"></sleep>
+				</postlude>
+				<transition to="OffHook" event="Registered"/>
+			</state>
+			
+				<!-- CALL -->
+			<state ID="OffHook">
+				<prelude>
+					<!-- Step 1 test case SIP-PBX 1.3.6.1-->
+					<!-- We provide 1 sec gap between OnHook and OffHook-->
+					<sleep time="1000"/>
+					<send protocol="utility" msgtype="OffHook"/>
+				</prelude>
+				<transition to="Call" event="OffHookComplete"/>
+			</state>
+			
+			<!-- Call State -->
+			<state ID="Call">
+				<prelude once="true">
+					
+					<send protocol="utility" msgtype="DialDigits">
+						<mod modtype="add" hdr="number">
+							<expr>911</expr>
+						</mod>
+					</send>
+				</prelude>
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>INVITE</expr>
+						</eq>
+						<then>	
+							<!-- Step 1 test case SIP-PBX 1.3.6.1-->
+							<verify step="1" requirements="REQ24261, REQ24262, REQ24263, REQ24264, REQ24265">
+								<var name="header1">
+									<var_expr>	
+											<expr>sip:911@</expr>
+											<msg_ref type="platform">UE0.domain</msg_ref>
+									</var_expr>
+								</var>
+								<var name="header2">
+									<var_expr>	
+											<expr>&lt;sip:+1</expr>
+											<msg_ref type="platform">UE0.phone number 1</msg_ref>
+											<expr>@</expr>
+											<msg_ref type="platform">UE0.domain</msg_ref>
+											<expr>;user=phone&gt;</expr>
+									</var_expr>
+								</var>
+								<and>
+									<eq>
+										<msg_ref type="sip">Invite.Request-Line.Request-URI</msg_ref>
+										<var_ref name="header1"/>
+									</eq>
+									<and>
+										<notnull>
+											<msg_ref type="sip">Invite.P-Asserted-Identity</msg_ref>
+										</notnull>
+										<contains>
+											<msg_ref type="sip">Invite.P-Asserted-Identity</msg_ref>
+											<var_ref name="header2"/>	
+										</contains>
+									</and>	
+								</and>
+							</verify>	
+						</then>
+					</if>
+				</response>
+				
+				<postlude>
+					<stop_capture/>
+				</postlude>
+				<transition to="Call" event="DialDigitsComplete"/>
+				<transition to="EndCall" event="Invite"/>
+				<transition to="END" event="Invite"/>
+				</state>
+			<state ID="EndCall" ES="true"/>
+		</states>
+	</fsm>
+</pc2xml>	

@@ -1,0 +1,179 @@
+# The format for this file is the following:
+# The Logger to configure, currently ALL, CONSOLE, APP, TEST
+# The category to log
+# The subcategory to log
+# The level of logging to perform OFF, ALL, FATAL, ERROR, WARN, INFO, DEBUG, and TRACE
+#
+# An example if logging for the SIP Distributor should be set to TRACE for the 
+# TEST Logger only would appear as
+# TEST SIP Distributor TRACE
+# 
+# When you select a level of INFO, this will include all logging 
+# at that level and above (ie INFO, WARN, ERROR and FATAL).
+
+# The FSM Category controls logging within the FSM defined in the
+# XML document(s) read into the system while they are executing 
+# events. 
+#
+# Currently there are no subCategories defined for this category.
+#
+ALL FSM * INFO
+
+# The Examiner Category controls logging within the <if> and <verify> tags
+# of the XML document(s) read into the system. It provides logging
+# about the information it gathers to conduct the if logic as
+# well as details about the results of its processing.
+#
+# This category has the following subCategories:
+#      DATEUTILS
+#     
+# General logging from the examiner is placed under *
+# DATEUTILS has logging about date parsing
+# 
+ALL Examiner * INFO
+ALL PCSim2 DATEUTILS INFO
+
+# The Inspector is the class that implements the requirements of
+# the SIP-UE ATP's Appendix B Common Procedures. Its' logic is only
+# valid when testing a DUT that is a UE or E-DVA. It provides logging
+# about the comparisons it is making and the results it is generating
+#
+# Currently there are no subCategories defined for this category.
+# 
+ALL SIP Inspector INFO 
+
+# The PCSim2 is the main application which controls the creation
+# of all of the components of the system. Logging for this category
+# provides details about the creation of classes that control protocol
+# stacks and the overall systems behavior.
+#
+# Currently there are no subCategories defined for this category.
+# 
+ALL PCSim2 * INFO
+
+# The MsgQueue category controls the logging of the storage container
+# for all events processed by each FSM during a test. It provides
+# details about what events are stored and what information is
+# being retrieved from it.
+#
+# Currently there are no subCategories defined for this category.
+# 
+ALL MsgQueue * INFO
+
+# The Model category provides logging details about the internal 
+# logic used in a specific model. The type of model is defined in
+# the XML document. 
+#
+# Each model type is a subCategory for the model category:
+#	SESSION, REGISTRAR, REGISTER, and STUN
+#
+# See the PC2_XML_Syntax.doc file for details about each of the 
+# models.
+ALL Model * INFO
+
+# The Diameter category controls the logging withint the Diameter
+# protocol stack. 
+#
+# This category has the following subCategories:
+#	Tables, AVP, Locator, Distributor and Stack
+#
+# The Tables are internal mappings between names, AVP codes, AVP
+#     formats, etc.
+# The AVP is the internal process performed within any AVP.
+# The Locator is the tool that locates any information that the
+#     Examiner or when a script has a modification to a message
+#     to be made.
+# The Distributor is the tool that receives messages from the 
+#     protocol stack and delivers the event to the appropriate
+#     FSM. It also receives "Actions" from the FSM for the 
+#     specific protocol it controls.
+# The Stack is the actual component that performs the parsing
+#     and delivery of the specific protocol.
+#
+ALL Diameter * INFO
+
+# The SIP category controls the logging within the SIP protcol 
+# stack.
+#
+# This category has the following subCategories:
+#       Distributor, Locator, Stack, Streams, and RTP
+#
+# The Locator is the tool that locates any information that the
+#     Examiner or when a script has a modification to a message
+#     to be made.
+# The Distributor is the tool that receives messages from the 
+#     protocol stack and delivers the event to the appropriate
+#     FSM. It also receives "Actions" from the FSM for the 
+#     specific protocol it controls.
+# The Stack is the actual component that performs the parsing
+#     and delivery of the specific protocol.
+#
+ALL SIP Distributor INFO
+ALL SIP Locator INFO
+ALL SIP Stack INFO
+ALL SIP Streams INFO 
+ALL SIP RTP INFO
+
+# The STUN category controls the logging within the STUN protcol 
+# stack.
+#
+# This category has the following subCategories:
+#       Distributor, Locator and Stack
+#
+# The Locator is the tool that locates any information that the
+#     Examiner or when a script has a modification to a message
+#     to be made.
+# The Distributor is the tool that receives messages from the 
+#     protocol stack and delivers the event to the appropriate
+#     FSM. It also receives "Actions" from the FSM for the 
+#     specific protocol it controls.
+# The Stack is the actual component that performs the parsing
+#     and delivery of the specific protocol.
+#
+ALL STUN Stack INFO 
+ALL STUN Distributor INFO
+
+# The Settings category controls the logging of the internal
+# processing of the configuration files and the systems
+# retrieval of this data.
+#
+# Currently there are no subCategories defined for this category.
+# 
+ALL Settings * INFO 
+
+# The Parser category controls the logging of the processing
+# performed by the platform when it reads any of the PC2.0
+# XML documents into the system.
+#
+# Currently there is one subCategory defined for this category.
+# The subCategory is PDML. This is the format of the messages
+# converted by Wireshark.
+# 
+ALL Parser * INFO 
+ALL Parser PDML INFO
+
+# The platform includes a tool to test if an XML document can
+# be parsed and understood (well-formed) without actually executing
+# it. The Reader is the application that performs this operation
+# and its' logging is controlled by the Reader category.
+#
+# Currently there are no subCategories defined for this category.
+# 
+ALL Reader * INFO 
+
+# The UI category controls the logging of the graphical user interface
+# and its internal operations with the processing of the application
+# the PCSim2 category.
+#
+# Currently there are no subCategories defined for this category.
+# 
+ALL UI * INFO 
+
+# The UTILITY category controls the CableLabs proprietary UTILITY 
+# protocol stack's logging information.
+#
+# Currently there are no subCategories defined for this category.
+# 
+ALL UTILITY * INFO 
+
+

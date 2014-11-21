@@ -1,0 +1,71 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="SIP-UE 1.6.3.3" 
+	descrip="UAS Handling of an ACK to an Error Response" 
+	number="SIP-UE 1.6.3.3">
+	
+	<template file="./templates/CallTermAtUETemp.xml" name="UE1"/>
+	<configure name="FSM Process Duplicate Messages" value="true"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Setup"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<state ID="Setup">
+			<prelude>
+				<send protocol="sip" msgtype="Invite">
+					<!-- Step 1 from the test case SIP 1.6.3.3 - Start a SIP 
+					session from the SS by executing step 1 of [UE terminating case] 
+					with the following exception: -->
+					<mod modtype="replace" hdr="Request-Line" param="username">
+						<expr>UE2</expr>
+					</mod>
+				</send>
+			</prelude>
+			<postlude>
+				<!-- Step 2 from the test case SIP 1.6.3.3 - Send an ACK to the UE. -->
+				<send protocol="sip" msgtype="ACK"/>
+			</postlude>
+			<transition to="Wait" event="404-INVITE"/>
+		</state>
+		
+		<state ID="Wait" timer="4000">
+			<response>
+				<verify step="3" requirements="RFC1012">
+					<or>
+						<eq>
+							<msg_ref type="event"/>
+							<expr>TimerExpired</expr>
+						</eq>
+						<neq>
+							<msg_ref type="sip">Response</msg_ref>
+							<expr>404-INVITE</expr>
+						</neq>
+					</or>
+				</verify>
+			</response>
+			<!-- Step 3 from the test case SIP 1.6.3.3 - 
+				Verify the 404 is NOT retransmitted again. -->
+			<transition to="END" event="TimerExpired"/>
+		</state>
+	</add_to>
+</pc2xml>

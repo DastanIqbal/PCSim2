@@ -1,0 +1,248 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	PCPCII-135 : Update the script to accommodate a de-register message during the reboot. (ghassler 06/24/2009)
+	PCPCII-358 : Set the subscription state to terminated in the Subscribe sent in step 8. (ghassler 06/09/2010)
+    PCPCII-370 : Increase the No Response Time out value to 180 from 90 seconds. (ghassler 06/19/2010)
+	PCPCII-535 : Allow the device to send the new Registration in step 4 before sending the 200-NOTIFY from step 3. (ghassler 09/15/2010)
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="SIP-UE 1.15.8" 
+	descrip=" Network Initiated Deregistration When The Reg-Event Message Body Registration Element State Attribute Is Equal to Terminated " 
+	number="SIP-UE 1.15.8" inspector="disable">
+	
+	<template file="./templates/UERegAndSubTemp.xml" name="Registrar"/>
+	<template file="./templates/CallOrigAtUETemp.xml" name="UE1"/>
+	
+	<configure name="No Response Timeout" value="180000"/>
+	
+	<remove_from fsm="Registrar">
+		<state ID="Registered"/>
+		<state ID="NotificationComplete"/>
+	</remove_from>
+	
+	<add_to fsm="Registrar">
+		<state ID="Registered">
+			<prelude>
+				<send protocol="sip" msgtype="200-Register"/>
+			</prelude>
+			<response>
+				<if>
+					<contains>
+						<msg_ref type="sip">SUBSCRIBE.Event</msg_ref>
+						<expr>reg</expr>
+					</contains>
+					<then>
+						<send protocol="sip" msgtype="200-SUBSCRIBE"/>
+						<sleep time="100"/>
+						<send protocol="sip" msgtype="NOTIFY"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Notification" event="SUBSCRIBE"/>
+		</state>
+		
+		<state ID="NotificationComplete">
+			<prelude once="true">
+				<!-- Step 3 from test case SIP-UE 1.5.8 - 
+					UE completes initial registration.
+					reg-event-body-> 
+						reginfo->registration->state= terminated.
+					reg-event-body->
+						reginfo->registration->contact->event=deactivated.-->
+				<send protocol="sip" msgtype="NOTIFY">
+					<mod modtype="replace" hdr="registration" param="state" body="reginfo+xml">
+						<expr>terminated</expr>
+					</mod>
+					<mod modtype="replace" hdr="contact" param="event" body="reginfo+xml">
+						<expr>deactivated</expr>
+					</mod>
+					<mod modtype="replace" hdr="Subscription-State">
+						<expr>terminated</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>REGISTER</expr>
+					</eq>
+					<then>
+						<verify step="4" requirements="REQ17021, REQ17024, REQ17025, REQ17022">
+							<eq>
+								<msg_ref type="sip">Request</msg_ref>
+								<expr>REGISTER</expr>
+							</eq>
+							<then>
+								<send protocol="sip" msgtype="401-REGISTER"/>
+							</then>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<transition to="NotificationComplete" event="200-NOTIFY"/>
+			<transition to="ReAuthorize" event="REGISTER"/>
+		</state>
+		
+		<state ID="ReAuthorize">
+			<response>
+				<if>
+					<or>
+						<eq>
+							<msg_ref type="event"/>
+							<expr>AuthenticateSucceed</expr>
+						</eq>
+						<eq>
+							<msg_ref type="event"/>
+							<expr>AuthenticateFailed</expr>
+						</eq>
+					</or>
+					<then>
+						<!-- this is to prevent the AuthenticateFailed from being forwarded
+								to the next state on the AuthenticateSucceed -->
+					</then>
+					<elseif>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>REGISTER</expr>
+						</eq>
+						<then>
+							<verify step="5" requirements="REQ17025">
+								<and>
+									<contains>
+										<msg_ref type="sip">REGISTER</msg_ref>
+										<expr>Authorization</expr>
+									</contains>
+									<digest/>
+								</and>
+								<then>
+									<generate event="AuthenticateSucceed"/>
+								</then>
+								<else>
+									<generate event="AuthenticateFailed"/>
+									<send protocol="sip" msgtype="503-Register"/>
+								</else>
+							</verify>
+						</then>
+					</elseif>
+				</if>
+			</response>
+			<transition to="ReRegistered" event="AuthenticateSucceed"/>
+			<transition to="END" event="AuthenticateFailed"/>
+			<transition to="ReAuthorize" event="REGISTER"/>
+			<!-- This is add in case the device sends the REGISTER message before responding with a 200-NOTIFY -->
+			<transition to="ReAuthorize" event="200-NOTIFY"/>
+		</state>
+		
+		<state ID="ReRegistered">
+			<prelude>
+				<send protocol="sip" msgtype="200-Register"/>
+			</prelude>
+			<response>
+				<if>
+					<and>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>SUBSCRIBE</expr>
+						</eq>
+						<contains>
+							<msg_ref type="sip">SUBSCRIBE.Event</msg_ref>
+							<expr>reg</expr>
+						</contains>
+					</and>
+					<then>
+						<send protocol="sip" msgtype="200-SUBSCRIBE"/>
+						<sleep time="100"/>
+						<send protocol="sip" msgtype="NOTIFY"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Notification2" event="SUBSCRIBE"/>
+		</state>
+		
+		<state ID="Notification2">
+			<transition to="NotificationComplete2" event="200-NOTIFY"/>
+		</state>
+		
+		<state ID="NotificationComplete2">
+			<prelude>
+				<!-- Step 5 fron test case 1.5.8 - 
+					Allow call to begin.-->
+				<generate event="Registered" fsm="UE1"/>
+			</prelude>
+			<transition to="TerminateSub" event="SucceedEvent"/>
+		</state>
+		
+		<state ID="TerminateSub">
+			<prelude>
+				<generate event="RegistrationLost" fsm="UE1"/>
+				<send protocol="sip" msgtype="NOTIFY">
+					<mod modtype="replace" hdr="registration" param="state" body="reginfo+xml">
+						<expr>terminated</expr>
+					</mod>
+					<mod modtype="replace" hdr="contact" param="event" body="reginfo+xml">
+						<expr>rejected</expr>
+					</mod>
+					<mod modtype="replace" hdr="Subscription-State">
+						<expr>terminated</expr>
+					</mod>
+				</send>
+			</prelude>
+			<transition to="END" event="200-NOTIFY"/>
+		</state>
+	</add_to>
+	
+	<remove_from fsm="UE1">
+		<state ID="Connected"/>
+		<state ID="Releasing"/>
+		<state ID="OnHook"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<state ID="Connected">
+			<prelude>
+				<sleep time="5000"/>
+				<generate event="SucceedEvent" fsm="Registrar"/>
+			</prelude>
+			<response>
+				<if>
+					<neq>
+						<msg_ref type="event"/>
+						<expr>DIALOG_CONFIRMED_UAS</expr>
+					</neq>
+					<then>
+						<verify step="9" requirements="REQ17026">
+							<eq>
+								<msg_ref type="sip">Request</msg_ref>
+								<expr>BYE</expr>
+							</eq>
+							<then>
+								<send protocol="sip" msgtype="200-BYE"/>
+							</then>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<transition to="CallComplete" event="BYE"/>
+		</state>
+		
+		<state ID="CallComplete" ES="true">
+			<prelude>
+				<generate event="SucceedEvent" fsm="Registrar"/>
+			</prelude>
+		</state>
+	</add_to>
+</pc2xml>

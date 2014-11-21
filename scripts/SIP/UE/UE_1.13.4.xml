@@ -1,0 +1,77 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="SIP-UE 1.13.4" 
+	descrip="INVITE with preconditions and the reservation is required" 
+	number="SIP-UE 1.13.4">
+	
+	<template file="./templates/CallTermAtUETemp.xml" name="UE1"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Setup"/>
+		<state ID="Proceeding"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<NE ext_disable="precondition"/>
+		
+		<state ID="Setup">
+			<prelude once="true">
+				<send protocol="sip" msgtype="Invite"/>
+			</prelude>
+			<!-- Expected responses are 100, 180, 183 or 200 -->
+			<response>
+				<if>
+					<or>
+						<eq>
+							<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+							<expr>180</expr>
+						</eq>
+						<eq>
+							<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+							<expr>183</expr>
+						</eq>
+					</or>
+					<then>
+						<verify step="1" requirements="REQ17113, REQ17115">
+							<or>
+								<and>
+									<contains>
+										<msg_ref type="sip">Response</msg_ref>
+										<expr>Require: </expr>
+									</contains>
+									<dnc>
+										<msg_ref type="sip" hdr_instance="any">Response.Require</msg_ref>
+										<expr>precondition</expr>
+									</dnc>
+								</and>
+								<dnc>
+									<msg_ref type="sip" hdr_instance="any">Response</msg_ref>
+									<expr>Require: </expr>
+								</dnc>
+							</or>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<transition to="Setup" event="100-INVITE"/>
+			<transition to="END" event="18x-INVITE"/>
+		</state>
+	</add_to>
+</pc2xml>

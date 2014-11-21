@@ -1,0 +1,162 @@
+#//*****************************************************************************
+#// Filename: E-UE-PROV_1-1-3-10.test
+#// Author:   Matthew Forbes
+#// Creation Date: November 1, 2004
+#// Modified by:  
+#//*****************************************************************************
+#// Description:
+#//     TC963 TEST CASE E-UE-PROV 1-1-3-10 Verify Ability of MTA to not Provision when Option 122
+#//     Suboption 1 contains Value of 0.0.0.0
+#//     
+#// Objective:
+#//     To verify the ability of the MTA component of the EMTA to not provision when
+#//     sub-option 1 is set to 0.0.0.0. Them CM must still function as a data only
+#//     device, and populate the esafe MIB status.
+#//
+#// PacketCable DUT:
+#//     MTA
+#//
+#// Test Steps:
+#//     - Initial Configuration: Cfg. 291, Configure DHCP server to have 0.0.0.0 in 
+#//       option 122.1 and a valid server address in option 122.2.
+#//     - Start sniffer
+#//     - Reset DUT
+#//     - Wait for Provisioning of MTA
+#//     - Stop sniffer
+#//     - Invoke parsing tool and validate using Pass/Fail scripts
+#//     - Delete MTA config file
+#//
+#// Notes:
+#//     - Requires provPrimitives.tcl & tftp_primitives.tcl.
+#//     - Requires the specific config file in $BASE_CFG_FILE_PATH in Provisioning Server.
+#//     - Requires parT.tcl parsing tool to parse data from capture file.                
+#//*****************************************************************************
+global SCRIPT_VERSION
+set SCRIPT_VERSION { # $Id: E-UE-PROV_1-1-3-10.test 7406 2010-07-20 17:17:37Z dthakore $ }
+
+DoStep "E-UE-PROV_1-1-3-10-PreStep-1" "Initialize Test Platform" {
+    Init_PROV
+    Init_CONTROLLER_LAN
+    # Initial PARSER TOOL
+    Init_PART
+} { PASS_STEP }
+
+DoStep "E-UE-PROV_1-1-3-10_1-1" "Initial configuration" {
+    LogMsg "--- Initial configuration ---"
+    # ProvCreateConfig 291 $MTA_MAC
+    PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122 Device_Level_Secure.cfg
+} { PASS_STEP }
+
+
+set msgStr "Configure DHCP SERVER: \n\
+        Option 122.1 is set to 0.0.0.0 and 122.2 to a valid dhcp server IP (CMTC963)"
+DoStep "E-UE-PROV_1-1-3-10_3-1" $msgStr {
+} {
+    # verify_signal $msgStr
+    PROV_MODIFY_DEVICE $CM_MAC CMTC963 
+    PROV_DEPLOY_DHCP
+}
+
+set msgStr "Start Sniffer"
+DoStep "E-UE-PROV_1-1-3-10_3-1" $msgStr {
+    LogMsg "--- $msgStr ---"
+    SetupCaptureControllerLan "host $MTA_IP || udp port 67 || host $CM_IP"
+    StartCaptureControllerLan
+} {PASS_STEP}
+
+DoStep "E-UE-PROV_1-1-3-10_4-1" "Reset DUT" {
+    set val [SNMPvN_RESET $CM_IP]
+    LogMsg "Hard reboot of CM and MTA has passed"
+} {
+    IsEqual $val 0
+}
+
+DoStep "E-UE-PROV_1-1-3-10_5-1" "Verify Cable Modem Prov" {
+    # Wait for a minute to let CM/MTA starting to reboot
+    actionWait "Wait for CM/MTA to begin reboot" 60
+    set timeout 60
+    while {$timeout > 0} {
+        if {![regexp -nocase timeout [SNMPvN_GET .1.3.6.1.2.1.1.1.0 $CM_IP]]} {break}
+        after 1000
+        incr timeout -1
+    }
+    #If able to obtain SysDescr mib, then CM provisioned otherwise timeout=0
+} {
+    IsNotEqual $timeout 0
+}
+
+set msgStr "Stop Sniffer"
+DoStep "E-UE-PROV_1-1-3-10_5-2" $msgStr {    
+    LogMsg "--- $msgStr ---"
+    StopCaptureControllerLan
+    SaveToFileControllerLan
+} {PASS_STEP}
+
+########################## INVOKE PARSING TOOL ##################################
+
+DoStep "E-UE-PROV_1-1-3-10_6-1" "Analyze flow data" {
+    # Set up parser file
+    set PARSERFILE    $ETH_DEFAULT_TXT_FILE
+} { PASS_STEP }
+
+DoStep "E-UE-PROV_1-1-3-10_6-2" "Parse all data into database" {
+    # Parse data
+set PARAMS_DHCP         "{DHCP {} {} {} {} {} {} {} {}}"
+set PARAMS_CM_SRC       "{{} {} {} {} $CM_IP {} {} {} {}}"
+set PARAMS_CM_DST       "{{} {} {} {} {} {} {} $CM_IP {}}"
+set msgID_CM            [ParseFile $PARSERFILE "$PARAMS_DHCP $PARAMS_CM_SRC $PARAMS_CM_DST"]
+set PARAMS_MTA_SRC      "{{} {} {} {} $MTA_IP {} {} {} {}}"
+set PARAMS_MTA_DST      "{{} {} {} {} {} {} {} $MTA_IP {}}"
+set msgID_MTA           [ParseFile $PARSERFILE "$PARAMS_DHCP $PARAMS_MTA_SRC $PARAMS_MTA_DST"]
+} {
+if { $::PART_RETURN == 0 } {
+    PASS_STEP
+    } else {
+        FAIL_STEP "Cannot find data"
+    }
+}
+
+set msgStr "DHCP DISCOVER: Does NOT EXIST"
+DoStep "E-UE-PROV_1-1-3-10_6-3" $msgStr {
+    LogMsg "--- $msgStr ---"
+    # Find MTA MAC with colons
+    set MTA_MAC_COL [AddColMac $MTA_MAC]
+} {
+    # Verify OPTION 60 EXISTS
+    VerifyNotValue $msgID_MTA "INANY DHCP DISCOVER OPTION60" "EXISTS" "" AND \
+            "OPTIONCLIENTHWADDRESS" "IS" "$MTA_MAC_COL"
+}
+
+DoStep "E-UE-PROV_1-1-3-10_7-1" "Verify Cable Modem Still Operational" {
+    set timeout 2
+    while {$timeout > 0} {
+        if {![regexp -nocase timeout [SNMPvN_GET .1.3.6.1.2.1.1.3.0 $CM_IP]]} {break}
+        after 1000
+        incr timeout -1
+    }
+    #If able to obtain SysDescr mib, then CM operational otherwise timeout=0
+} {
+    IsNotEqual $timeout 0
+}
+
+DoStep "E-UE-PROV_1-1-3-10_8-1" "Verify Cable Modem Still Operational" {
+    set esafe [SNMPvN_GET .1.3.6.1.4.1.4491.2.1.14.1.1.1.1.1.16 $CM_IP]
+} {
+    IsEqual $esafe 1
+}
+
+
+################################################################################
+# Cleanup
+################################################################################
+set msgStr "Restore DHCP server policy(CMFORCW122)"
+DoStep "E-UE-PROV_1-1-3-10-PostStep-1" $msgStr {
+} {
+    # verify_signal $msgStr
+    PROV_MODIFY_DEVICE $CM_MAC CMFORCW_122
+    PROV_DEPLOY_DHCP
+    SNMPvN_RESET $CM_IP
+    actionWait "Wait 60 seconds for reset" 60
+}
+
+Cleanup

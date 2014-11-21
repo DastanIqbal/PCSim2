@@ -1,0 +1,542 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+ Change History: (Author & Date)
+
+
+
+-->
+
+
+<!-- First are the document type and the attributes for our document -->
+<pc2xml version="$Revision: 7768 $" 
+		name="E-UE_DATA_1.2.3.7"
+		descrip="Ability of eUE to implement the pktcMtaDevEnabled MIB" 
+		number="E-UE_DATA_1.2.3.7">
+
+	<!-- Step 1 -->
+	<template file="./templates/EUE_Prov_B_1_1_1.xml" name="MtaDevEnabled"/>
+
+	<add_to fsm="MtaDevEnabled">
+        <transition from="StartCapture_RebootWait" to="EUEProvision1" event="TimerExpired"/>
+		<states initialstate="Note">
+		
+		<state ID="Note">
+			<prelude>
+				<log promptUser="true" expr="To verify operational status, this test case requires a phone to be connected to the DUT. Click OK when ready."/>
+				<generate event="Branch1Event"/>
+			</prelude>
+			<transition to="Reboot" event="Branch1Event"/>
+		</state>
+
+        <!-- Step 13 The E-UE DUT provisions successfully and becomes operational. -->
+        <state ID="EUEProvision1" timer="10000">
+            <prelude once="true">				
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvisioningState.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+					<mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="13">
+                    <contains>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>1</expr>
+                    </contains>
+                </verify>
+            </response>
+			<postlude>
+				<log promptUser="true" yesExpected="True" verify="True" step="13"
+				expr="Go offhook on the phone connected to the DUT and verify there is dial tone. DO NOT GO ONHOOK, YET."/>
+			</postlude>
+            <transition to="VerifyEnabled" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+        
+        <!-- Step 14-3 -->
+        <state ID="VerifyEnabled" timer="10000">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>PKTC-IETF-MTA-MIB::pktcMtaDevEnabled.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+					<mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPResp</expr>
+                    </eq>
+                    <then>
+                        <verify step="14-3">
+                            <eq>
+                                <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                                <expr>1</expr>
+                            </eq>
+                        </verify>
+                    </then>
+                </if>
+                <transition to="END" event="SNMPRespFailure" />
+                <transition to="SetEnabledFalse1" event="SNMPResp" />
+            </response>
+        </state>
+        
+        <!-- Step 14-4, 5 -->
+        <state ID="SetEnabledFalse1" timer="10000">
+            <prelude>
+                <send protocol="utility" msgtype="SNMPSet">
+                    <mod modtype="add" hdr="array">
+                        <var_expr>
+                            <expr>varBind 1 1 3 \r\n ][ , </expr>
+                            <expr>PKTC-IETF-MTA-MIB::pktcMtaDevEnabled.0,INTEGER,2][\r\n</expr>
+                        </var_expr>
+                    </mod>
+                    <mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="14-4">
+                    <eq>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>2</expr>
+                    </eq>
+                </verify>
+            </response>
+			<postlude>
+				<log promptUser="true" yesExpected="True" verify="True" step="14-5"
+				expr="Verify dial tone is lost."/>
+				<log promptUser="true" expr="Go onhook."/>
+			</postlude>
+            <transition to="Reset2" event="SNMPResp"/>
+            <transition to="Reset2" event="SNMPRespFailure"/>
+        </state>
+		
+        <!-- Step 14-6 The E-UE DUT provisions successfully and becomes operational. -->
+        <state ID="Reset2" timer="120000">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPSet">
+                    <mod modtype="add" hdr="array">
+                        <var_expr>
+                            <expr>varBind 1 1 3 \r\n ][ , </expr>
+                            <expr>DOCS-CABLE-DEVICE-MIB::docsDevResetNow.0,INTEGER,1][\r\n</expr>
+                        </var_expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.CM IP Address</msg_ref>
+                    </mod>
+                    <!-- Always use version 2c for a CM reset -->
+					<mod modtype="replace" hdr="version">
+						<expr>2c</expr>
+					</mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPRespFailure</expr>
+                    </eq>
+                    <then>
+                        <fail/>
+                    </then>
+                </if>
+                <if>
+                    <or>
+                        <eq>
+                            <msg_ref type="sip">REGISTER.Contact.expires</msg_ref>
+                            <expr>0</expr>
+                        </eq>
+                        <eq>
+                            <msg_ref type="sip">REGISTER.Expires.value</msg_ref>
+                            <expr>0</expr>
+                        </eq>
+                    </or>
+                    <then>
+                        <send protocol="sip" msgtype="200-REGISTER"/>
+                    </then>
+                </if>
+            </response>
+            <transition to="EUEProvision2" event="TimerExpired"/>
+            <transition to="Reset2" event="SNMPResp"/>
+            <transition to="Reset2" event="REGISTER"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+   
+        <state ID="EUEProvision2" timer="10000">
+            <prelude once="true">				
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvisioningState.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+					<mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="14-6">
+                    <contains>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>1</expr>
+                    </contains>
+                </verify>
+            </response>
+			<postlude>
+				<log promptUser="true" yesExpected="True" verify="True" step="14-6"
+				expr="Go offhook on the phone connected to the DUT and verify there is dial tone."/>
+				<log promptUser="true" expr="Go onhook."/>
+			</postlude>
+            <transition to="VerifyEnabled2" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>   
+		
+        <!-- Step 14-7 -->
+        <state ID="VerifyEnabled2" timer="10000">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>PKTC-IETF-MTA-MIB::pktcMtaDevEnabled.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+					<mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="7">
+					<eq>
+						<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+						<expr>1</expr><!-- true -->
+					</eq>
+                </verify>
+                <transition to="END" event="SNMPRespFailure" />
+                <transition to="ReConfigure2" event="SNMPResp" />
+            </response>
+			<postlude>
+				<stop_capture/>
+			</postlude>
+        </state>
+        
+		<!-- vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv -->
+        <!-- ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ -->
+		<!-- Hybrid Mode -->
+        <!-- Step 15 -->
+		
+        <state ID="ReConfigure2"
+			   provFile="v6.C.1.2.3_Hybrid.bin"
+               policyFile="X_eUEv6_Hybrid"
+               nextState="Reset3"/>
+            
+        <state ID="Reset3" timer="120000">
+            <prelude once="true">
+			    <start_capture>
+                    <filter>
+                        <var_expr>
+							<expr>host </expr>
+							<msg_ref type="platform">DUT.IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.CM IP Address</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.DHCP Server IP</msg_ref>
+						</var_expr>
+                    </filter>
+                </start_capture>
+				
+                <send protocol="utility" msgtype="SNMPSet">
+                    <mod modtype="add" hdr="array">
+                        <var_expr>
+                            <expr>varBind 1 1 3 \r\n ][ , </expr>
+                            <expr>DOCS-CABLE-DEVICE-MIB::docsDevResetNow.0,INTEGER,1][\r\n</expr>
+                        </var_expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.CM IP Address</msg_ref>
+                    </mod>
+                    <!-- Always use version 2c for a CM reset -->
+					<mod modtype="replace" hdr="version">
+						<expr>2c</expr>
+					</mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPRespFailure</expr>
+                    </eq>
+                    <then>
+                        <fail/>
+                    </then>
+                </if>
+                <if>
+                    <or>
+                        <eq>
+                            <msg_ref type="sip">REGISTER.Contact.expires</msg_ref>
+                            <expr>0</expr>
+                        </eq>
+                        <eq>
+                            <msg_ref type="sip">REGISTER.Expires.value</msg_ref>
+                            <expr>0</expr>
+                        </eq>
+                    </or>
+                    <then>
+                        <send protocol="sip" msgtype="200-REGISTER"/>
+                    </then>
+                </if>
+            </response>
+            <transition to="EUEProvision3" event="TimerExpired"/>
+            <transition to="Reset3" event="SNMPResp"/>
+            <transition to="Reset3" event="REGISTER"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+        <!-- Step 16 The E-UE DUT provisions successfully and becomes operational. -->
+        <state ID="EUEProvision3" timer="10000">
+            <prelude once="true">				
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvisioningState.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+					<mod modtype="replace" hdr="version">
+                        <expr>2c</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="16">
+                    <contains>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>1</expr>
+                    </contains>
+                </verify>
+            </response>
+			<postlude>
+				<log promptUser="true" yesExpected="True" verify="True" step="16"
+				expr="Go offhook on the phone connected to the DUT and verify there is dial tone. DO NOT GO ONHOOK, YET."/>
+			</postlude>
+            <transition to="VerifyEnabled3" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state> 
+        
+		
+		<!-- Step 17-3 -->
+        <state ID="VerifyEnabled3" timer="10000">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>PKTC-IETF-MTA-MIB::pktcMtaDevEnabled.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+					<mod modtype="replace" hdr="version">
+                        <expr>2c</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPResp</expr>
+                    </eq>
+                    <then>
+                        <verify step="17-3">
+                            <eq>
+                                <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                                <expr>1</expr><!-- true -->
+                            </eq>
+                        </verify>
+                    </then>
+                </if>
+                <transition to="END" event="SNMPRespFailure" />
+                <transition to="SetEnabledFalse2" event="SNMPResp" />
+            </response>
+        </state>		
+        
+        <!-- Step 17-4, 5 -->
+        <state ID="SetEnabledFalse2" timer="10000">
+            <prelude>
+                <send protocol="utility" msgtype="SNMPSet">
+                    <mod modtype="add" hdr="array">
+                        <var_expr>
+                            <expr>varBind 1 1 3 \r\n ][ , </expr>
+                            <expr>PKTC-IETF-MTA-MIB::pktcMtaDevEnabled.0,INTEGER,2][\r\n</expr>
+                        </var_expr>
+                    </mod>
+                    <mod modtype="replace" hdr="version">
+                        <expr>2c</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="17-4">
+                    <eq>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>2</expr>
+                    </eq>
+                </verify>
+            </response>
+			<postlude>
+				<log promptUser="true" yesExpected="True" verify="True" step="17-5"
+				expr="Verify dial tone is lost."/>
+				<log promptUser="true" expr="Go onhook."/>
+			</postlude>
+            <transition to="Reset4" event="SNMPResp"/>
+            <transition to="Reset4" event="SNMPRespFailure"/>
+        </state>
+		
+		<!-- Step 17-6 -->
+        <state ID="Reset4" timer="120000">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPSet">
+                    <mod modtype="add" hdr="array">
+                        <var_expr>
+                            <expr>varBind 1 1 3 \r\n ][ , </expr>
+                            <expr>DOCS-CABLE-DEVICE-MIB::docsDevResetNow.0,INTEGER,1][\r\n</expr>
+                        </var_expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.CM IP Address</msg_ref>
+                    </mod>
+                    <!-- Always use version 2c for a CM reset -->
+					<mod modtype="replace" hdr="version">
+						<expr>2c</expr>
+					</mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPRespFailure</expr>
+                    </eq>
+                    <then>
+                        <fail/>
+                    </then>
+                </if>
+                <if>
+                    <or>
+                        <eq>
+                            <msg_ref type="sip">REGISTER.Contact.expires</msg_ref>
+                            <expr>0</expr>
+                        </eq>
+                        <eq>
+                            <msg_ref type="sip">REGISTER.Expires.value</msg_ref>
+                            <expr>0</expr>
+                        </eq>
+                    </or>
+                    <then>
+                        <send protocol="sip" msgtype="200-REGISTER"/>
+                    </then>
+                </if>
+            </response>
+            <transition to="EUEProvision4" event="TimerExpired"/>
+            <transition to="Reset4" event="SNMPResp"/>
+            <transition to="Reset4" event="REGISTER"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+        <state ID="EUEProvision4" timer="10000">
+            <prelude once="true">				
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvisioningState.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+					<mod modtype="replace" hdr="version">
+                        <expr>2c</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="17-6">
+                    <contains>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>1</expr>
+                    </contains>
+                </verify>
+            </response>
+			<postlude>
+				<log promptUser="true" yesExpected="True" verify="True" step="17-6"
+				expr="Go offhook on the phone connected to the DUT and verify there is dial tone."/>
+				<log promptUser="true" expr="Go onhook."/>				
+			</postlude>
+            <transition to="VerifyEnabled4" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>        
+
+		<state ID="VerifyEnabled4" timer="10000">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>PKTC-IETF-MTA-MIB::pktcMtaDevEnabled.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+					<mod modtype="replace" hdr="version">
+                        <expr>2c</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPResp</expr>
+                    </eq>
+                    <then>
+                        <verify step="17-3">
+                            <eq>
+                                <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                                <expr>1</expr>
+                            </eq>
+                        </verify>
+                    </then>
+                </if>
+                <transition to="END" event="SNMPRespFailure" />
+                <transition to="END" event="SNMPResp" />
+            </response>
+			<postlude>
+				<stop_capture/>
+			</postlude>			
+        </state>	
+		</states>
+    </add_to>
+</pc2xml>

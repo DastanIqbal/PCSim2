@@ -1,0 +1,909 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	PCPCII-139 : Update the Voicetronix modifiers to use the new values. (ghassler 07/10/2009)
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-UE 1.6.3.3" 
+	descrip="Local tones playback " 
+	number="RST-UE 1.6.3.3" inspector="disable">
+
+	<template file="./templates/CallOrigAtUETemp.xml" name="UE1"/>
+
+	<remove_from fsm="UE1">
+		<state ID="Setup"/>
+	</remove_from>
+
+	<add_to fsm="UE1">
+		<state ID="Setup">
+			<prelude once="true">
+				<send protocol="utility" msgtype="DialDigits">
+					<mod modtype="add" hdr="number">
+						<msg_ref type="platform">UE1.phone number 1</msg_ref>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>Invite</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="486-INVITE">
+							<mod modtype="add" hdr="Alert-Info">
+								<expr>&lt;file:///PacketCableRST/bz&gt;</expr>
+							</mod>
+						</send>
+					</then>
+				</if>
+			</response>
+			<transition to="Setup" event="DialDigitsComplete"/>
+			<transition to="WaitAck" event="INVITE"/>
+		</state>
+		
+		<state ID="WaitAck">
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>ACK</expr>
+					</eq>
+					<then>
+						<log step="1" requirements="REQ16733" promptUser="true" verify="true"
+							expr="Can you hear the busy tone specified by the PacketCableRST/bz file?"/>
+					</then>
+				</if>
+			</response>
+			<transition to="WaitAck" event="DialDigitsComplete"/>
+			<transition to="EndTheCall" event="ACK"/>
+		</state>
+		
+		<state ID="EndTheCall" ES="true">
+			<transition to="Setup1" event="SessionTerminated"/>
+		</state>
+	
+		<!--  STEP 3 -->
+		<state ID="Setup1">
+			<prelude>
+				<sleep time="8000"/>
+				<send protocol="sip" msgtype="Invite">
+					<mod modtype="add" hdr="Alert-Info">
+						<expr>&lt;file:///PacketCableRST/r0&gt;</expr>
+					</mod>
+				</send>
+			</prelude>
+			<!-- Expected responses are 100, 180, 183 or 200 -->
+			<response>
+				<if>
+					<contains>
+						<msg_ref type="sip" hdr_instance="any">18x-Invite.Require</msg_ref>
+						<expr>100rel</expr>
+					</contains>
+					<then>
+						<!--Reliability required for test sending Prack message to peer.-->
+						<send protocol="sip" msgtype="Prack"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Proceeding1" event="100-INVITE"/>
+			<transition to="Alerting1" event="180-INVITE"/>
+			<transition to="Alerting1" event="183-INVITE"/>
+			<transition to="VerifyTone1" event="ALERTING_UAC"/>
+		</state>
+		
+		<state ID="Proceeding1">
+			<!-- Expected responses are 180, 183 or 200 -->
+			<response>
+				<if>
+					<contains>
+						<msg_ref type="sip" hdr_instance="any">18x-Invite.Require</msg_ref>
+						<expr>100rel</expr>
+					</contains>
+					<then>
+						<!--Reliabiity required for test sending Prack message to peer.-->
+						<send protocol="sip" msgtype="Prack"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Alerting1" event="180-INVITE"/>
+			<transition to="Alerting1" event="183-INVITE"/>
+			<transition to="VerifyTone1" event="ALERTING_UAC"/>
+		</state>
+		
+		<state ID="Alerting1" timer="12000">
+			<response>
+				<!-- Expected responses are 180, 183, PRACK, UPDATE, or 200 -->
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>UPDATE</expr>
+					</eq>
+					<then>
+						<!--QoS required for test, sending a 200-OK to Update message to peer.-->
+						<send protocol="sip" msgtype="200-Update"/>
+					</then>
+					<elseif>
+						<and>
+							<eq>
+								<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+								<expr>180</expr>
+							</eq>
+							<contains>
+								<msg_ref type="sip" hdr_instance="any">180-INVITE.Require</msg_ref>
+								<expr>100rel</expr>
+							</contains>
+						</and>
+						<then>
+							<!--Reliability required for test, sending Prack message to peer.-->
+							<send protocol="sip" msgtype="Prack"/>
+						</then>
+					</elseif>
+				</if>
+			</response>
+			<transition to="Alerting1" event="200-PRACK"/>
+			<transition to="Alerting1" event="UPDATE"/>
+			<transition to="Alerting1" event="18x-INVITE"/>
+			<transition to="VerifyTone1" event="ALERTING_UAC"/>
+		</state>
+		
+		<state ID="VerifyTone1" timer="5000">
+			<prelude>
+				<log step="3" requirements="REQ16733" 
+					promptUser="True" verify="True" 
+					expr="Verify that the UE plays the ringing(r0).\n Note: The tone may vary between vendors and so,\n finding the standard ringing tone is vital for the verification."/>
+			</prelude>
+			<transition to="EndTheCall1" event="TimerExpired"/>
+		</state>
+		
+		<!-- STEP 4 -->
+		<state ID="EndTheCall1" ES="true">
+			<transition to="Setup2" event="SessionTerminated"/>
+		</state>
+		
+		<!-- STEP 5 -->
+		<state ID="Setup2">
+			<prelude>
+				<sleep time="8000"/>
+				<send protocol="sip" msgtype="Invite">
+					<mod modtype="add" hdr="Alert-Info">
+						<expr>&lt;file:///PacketCableRST/r1&gt;</expr>
+					</mod>
+				</send>
+			</prelude>
+			<!-- Expected responses are 100, 180, 183 or 200 -->
+			<response>
+				<if>
+					<contains>
+						<msg_ref type="sip" hdr_instance="any">18x-Invite.Require</msg_ref>
+						<expr>100rel</expr>
+					</contains>
+					<then>
+						<!--Reliablity required for test sending Prack message to peer.-->
+						<send protocol="sip" msgtype="Prack"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Proceeding2" event="100-INVITE"/>
+			<transition to="Alerting2" event="180-INVITE"/>
+			<transition to="Alerting2" event="183-INVITE"/>
+			<transition to="VerifyTone2" event="ALERTING_UAC"/>
+		</state>
+		
+		<state ID="Proceeding2">
+			<!-- Expected responses are 180, 183 or 200 -->
+			<response>
+				<if>
+					<contains>
+						<msg_ref type="sip" hdr_instance="any">18x-Invite.Require</msg_ref>
+						<expr>100rel</expr>
+					</contains>
+					<then>
+						<!--Reliability required for test sending Prack message to peer.-->
+						<send protocol="sip" msgtype="Prack"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Alerting2" event="180-INVITE"/>
+			<transition to="Alerting2" event="183-INVITE"/>
+			<transition to="VerifyTone2" event="ALERTING_UAC"/>
+		</state>
+		
+		<state ID="Alerting2" timer="12000">
+			<response>
+				<!-- Expected responses are 180, 183, PRACK, UPDATE, or 200 -->
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>UPDATE</expr>
+					</eq>
+					<then>
+						<!--QoS required for test, sending a 200-OK to Update message to peer.-->
+						<send protocol="sip" msgtype="200-Update"/>
+					</then>
+					<elseif>
+						<and>
+							<eq>
+								<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+								<expr>180</expr>
+							</eq>
+							<contains>
+								<msg_ref type="sip" hdr_instance="any">180-INVITE.Require</msg_ref>
+								<expr>100rel</expr>
+							</contains>
+						</and>
+						<then>
+							<!--Reliability required for test, sending Prack message to peer.-->
+							<send protocol="sip" msgtype="Prack"/>
+						</then>
+					</elseif>
+				</if>
+			</response>
+			<transition to="Alerting2" event="200-PRACK"/>
+			<transition to="Alerting2" event="UPDATE"/>
+			<transition to="Alerting2" event="18x-INVITE"/>
+			<transition to="VerifyTone2" event="ALERTING_UAC"/>
+		</state>
+		
+		<state ID="VerifyTone2" timer="5000">
+			<prelude>
+				<log step="5" requirements="REQ16733" 
+					promptUser="True" verify="True" 
+					expr="Verify that the UE plays the ringing(r1).\n Note: The tone may vary between vendors and so,\n finding the standard ringing tone is vital for the verification."/>
+			</prelude>
+			<transition to="EndTheCall2" event="TimerExpired"/>
+		</state>
+		
+		<!-- STEP 6 -->
+		<state ID="EndTheCall2" ES="true">
+			<transition to="Setup3" event="SessionTerminated"/>
+		</state>
+		
+		<!-- STEP 7 -->
+		<state ID="Setup3">
+			<prelude>
+				<sleep time="8000"/>
+				<send protocol="sip" msgtype="Invite">
+					<mod modtype="add" hdr="Alert-Info">
+						<expr>&lt;file:///PacketCableRST/r2&gt;</expr>
+					</mod>
+				</send>
+			</prelude>
+			<!-- Expected responses are 100, 180, 183 or 200 -->
+			<response>
+				<if>
+					<contains>
+						<msg_ref type="sip" hdr_instance="any">18x-Invite.Require</msg_ref>
+						<expr>100rel</expr>
+					</contains>
+					<then>
+						<!--Reliability required for test sending Prack message to peer.-->
+						<send protocol="sip" msgtype="Prack"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Proceeding3" event="100-INVITE"/>
+			<transition to="Alerting3" event="180-INVITE"/>
+			<transition to="Alerting3" event="183-INVITE"/>
+			<transition to="VerifyTone3" event="ALERTING_UAC"/>
+		</state>
+		
+		<state ID="Proceeding3">
+			<!-- Expected responses are 180, 183 or 200 -->
+			<response>
+				<if>
+					<contains>
+						<msg_ref type="sip" hdr_instance="any">18x-Invite.Require</msg_ref>
+						<expr>100rel</expr>
+					</contains>
+					<then>
+						<!--Reliability required for test sending Prack message to peer.-->
+						<send protocol="sip" msgtype="Prack"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Alerting3" event="180-INVITE"/>
+			<transition to="Alerting3" event="183-INVITE"/>
+			<transition to="VerifyTone3" event="ALERTING_UAC"/>
+		</state>
+		
+		<state ID="Alerting3" timer="12000">
+			<response>
+				<!-- Expected responses are 180, 183, PRACK, UPDATE, or 200 -->
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>UPDATE</expr>
+					</eq>
+					<then>
+						<!--QoS required for test, sending a 200-OK to Update message to peer.-->
+						<send protocol="sip" msgtype="200-Update"/>
+					</then>
+					<elseif>
+						<and>
+							<eq>
+								<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+								<expr>180</expr>
+							</eq>
+							<contains>
+								<msg_ref type="sip" hdr_instance="any">180-INVITE.Require</msg_ref>
+								<expr>100rel</expr>
+							</contains>
+						</and>
+						<then>
+							<!--Reliability required for test, sending Prack message to peer.-->
+							<send protocol="sip" msgtype="Prack"/>
+						</then>
+					</elseif>
+				</if>
+			</response>
+			<transition to="Alerting3" event="200-PRACK"/>
+			<transition to="Alerting3" event="UPDATE"/>
+			<transition to="Alerting3" event="18x-INVITE"/>
+			<transition to="VerifyTone3" event="ALERTING_UAC"/>
+		</state>
+		
+		<!-- STEP 7 -->
+		<state ID="VerifyTone3" timer="5000">
+			<prelude>
+				<log step="7" requirements="REQ16733" 
+					promptUser="True" verify="True" 
+					expr="Verify that the UE plays the ringing(r2).\n Note: The tone may vary between vendors and so,\n finding the standard ringing tone is vital for the verification."/>
+			</prelude>
+			<transition to="EndTheCall3" event="TimerExpired"/>
+		</state>
+		
+		<!-- STEP 8 -->
+		<state ID="EndTheCall3" ES="true">
+			<transition to="Setup3a" event="SessionTerminated"/>
+		</state>
+		
+		<!-- STEP 9 -->
+		<state ID="Setup3a">
+			<prelude>
+				<sleep time="8000"/>
+				<send protocol="sip" msgtype="Invite">
+					<mod modtype="add" hdr="Alert-Info">
+						<expr>&lt;file:///PacketCableRST/r3&gt;</expr>
+					</mod>
+				</send>
+			</prelude>
+			<!-- Expected responses are 100, 180, 183 or 200 -->
+			<response>
+				<if>
+					<contains>
+						<msg_ref type="sip" hdr_instance="any">18x-Invite.Require</msg_ref>
+						<expr>100rel</expr>
+					</contains>
+					<then>
+						<!--Reliability required for test sending Prack message to peer.-->
+						<send protocol="sip" msgtype="Prack"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Proceeding3a" event="100-INVITE"/>
+			<transition to="Alerting3a" event="180-INVITE"/>
+			<transition to="Alerting3a" event="183-INVITE"/>
+			<transition to="VerifyTone3a" event="ALERTING_UAC"/>
+		</state>
+		
+		<state ID="Proceeding3a">
+			<!-- Expected responses are 180, 183 or 200 -->
+			<response>
+				<if>
+					<contains>
+						<msg_ref type="sip" hdr_instance="any">18x-Invite.Require</msg_ref>
+						<expr>100rel</expr>
+					</contains>
+					<then>
+						<!--Reliability required for test sending Prack message to peer.-->
+						<send protocol="sip" msgtype="Prack"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Alerting3a" event="180-INVITE"/>
+			<transition to="Alerting3a" event="183-INVITE"/>
+			<transition to="VerifyTone3a" event="ALERTING_UAC"/>
+		</state>
+		
+		<state ID="Alerting3a" timer="12000">
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>UPDATE</expr>
+					</eq>
+					<then>
+						<!--QoS required for test, sending a 200-OK to Update message to peer.-->
+						<send protocol="sip" msgtype="200-Update"/>
+					</then>
+					<elseif>
+						<and>
+							<eq>
+								<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+								<expr>180</expr>
+							</eq>
+							<contains>
+								<msg_ref type="sip" hdr_instance="any">180-INVITE.Require</msg_ref>
+								<expr>100rel</expr>
+							</contains>
+						</and>
+						<then>
+							<!--Reliability required for test, sending Prack message to peer.-->
+							<send protocol="sip" msgtype="Prack"/>
+						</then>
+					</elseif>
+				</if>
+			</response>
+			<transition to="Alerting3a" event="200-PRACK"/>
+			<transition to="Alerting3a" event="UPDATE"/>
+			<transition to="Alerting3a" event="18x-INVITE"/>
+			<transition to="VerifyTone3a" event="ALERTING_UAC"/>
+		</state>
+		
+		<!-- STEP 9 -->
+		<state ID="VerifyTone3a" timer="5000">
+			<prelude>
+				<log step="9" requirements="REQ16733" 
+					promptUser="True" verify="True" 
+					expr="Verify that the UE plays the ringing(r3).\n Note: The tone may vary between vendors and so,\n finding the standard ringing tone is vital for the verification."/>
+			</prelude>
+			<transition to="EndTheCall3a" event="TimerExpired"/>
+		</state>
+		
+		<!-- STEP 10 -->
+		<state ID="EndTheCall3a" ES="true">
+			<transition to="Setup4" event="SessionTerminated"/>
+		</state>
+		
+		<!-- STEP 11-->
+		<state ID="Setup4">
+			<prelude>
+				<sleep time="8000"/>
+				<send protocol="sip" msgtype="Invite">
+					<mod modtype="add" hdr="Alert-Info">
+						<expr>&lt;file:///PacketCableRST/r4&gt;</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<contains>
+						<msg_ref type="sip" hdr_instance="any">18x-Invite.Require</msg_ref>
+						<expr>100rel</expr>
+					</contains>
+					<then>
+						<!--Reliability required for test sending Prack message to peer.-->
+						<send protocol="sip" msgtype="Prack"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Proceeding4" event="100-INVITE"/>
+			<transition to="Alerting4" event="180-INVITE"/>
+			<transition to="Alerting4" event="183-INVITE"/>
+			<transition to="VerifyTone4" event="ALERTING_UAC"/>
+		</state>
+		
+		<state ID="Proceeding4">
+			<response>
+				<if>
+					<contains>
+						<msg_ref type="sip" hdr_instance="any">18x-Invite.Require</msg_ref>
+						<expr>100rel</expr>
+					</contains>
+					<then>
+						<!--Reliability required for test sending Prack message to peer.-->
+						<send protocol="sip" msgtype="Prack"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Alerting4" event="180-INVITE"/>
+			<transition to="Alerting4" event="183-INVITE"/>
+			<transition to="VerifyTone4" event="ALERTING_UAC"/>
+		</state>
+		
+		<state ID="Alerting4" timer="12000">
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>UPDATE</expr>
+					</eq>
+					<then>
+						<!--QoS required for test, sending a 200-OK to Update message to peer.-->
+						<send protocol="sip" msgtype="200-Update"/>
+					</then>
+					<elseif>
+						<and>
+							<eq>
+								<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+								<expr>180</expr>
+							</eq>
+							<contains>
+								<msg_ref type="sip" hdr_instance="any">180-INVITE.Require</msg_ref>
+								<expr>100rel</expr>
+							</contains>
+						</and>
+						<then>
+							<!--Reliability required for test, sending Prack message to peer.-->
+							<send protocol="sip" msgtype="Prack"/>
+						</then>
+					</elseif>
+				</if>
+			</response>
+			<transition to="Alerting4" event="200-PRACK"/>
+			<transition to="Alerting4" event="UPDATE"/>
+			<transition to="Alerting4" event="18x-INVITE"/>
+			<transition to="VerifyTone4" event="ALERTING_UAC"/>
+		</state>
+		
+		<!-- STEP 11 -->
+		<state ID="VerifyTone4" timer="5000">
+			<prelude>
+				<log step="11" requirements="REQ16733" 
+					promptUser="True" verify="True" 
+					expr="Verify that the UE plays the ringing(r4).\n Note: The tone may vary between vendors and so,\n finding the standard ringing tone is vital for the verification."/>
+			</prelude>
+			<transition to="EndTheCall4" event="TimerExpired"/>
+		</state>
+		
+		<!-- STEP 12 -->
+		<state ID="EndTheCall4" ES="true">
+			<transition to="Setup5" event="SessionTerminated"/>
+		</state>
+		
+		<!-- STEP 13 -->
+		<state ID="Setup5">
+			<prelude>
+				<sleep time="8000"/>
+				<send protocol="sip" msgtype="Invite">
+					<mod modtype="replace" hdr="Alert-Info">
+						<expr>&lt;file:///PacketCableRST/r5&gt;</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<contains>
+						<msg_ref type="sip" hdr_instance="any">18x-Invite.Require</msg_ref>
+						<expr>100rel</expr>
+					</contains>
+					<then>
+						<!--Reliability required for test sending Prack message to peer.-->
+						<send protocol="sip" msgtype="Prack"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Proceeding5" event="100-INVITE"/>
+			<transition to="Alerting5" event="180-INVITE"/>
+			<transition to="Alerting5" event="183-INVITE"/>
+			<transition to="VerifyTone5" event="ALERTING_UAC"/>
+		</state>
+		
+		<state ID="Proceeding5">
+			<response>
+				<if>
+					<contains>
+						<msg_ref type="sip" hdr_instance="any">18x-Invite.Require</msg_ref>
+						<expr>100rel</expr>
+					</contains>
+					<then>
+						<!--Reliability required for test sending Prack message to peer.-->
+						<send protocol="sip" msgtype="Prack"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Alerting5" event="180-INVITE"/>
+			<transition to="Alerting5" event="183-INVITE"/>
+			<transition to="VerifyTone5" event="ALERTING_UAC"/>
+		</state>
+		
+		<state ID="Alerting5" timer="12000">
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>UPDATE</expr>
+					</eq>
+					<then>
+						<!--QoS required for test, sending a 200-OK to Update message to peer.-->
+						<send protocol="sip" msgtype="200-Update"/>
+					</then>
+					<elseif>
+						<and>
+							<eq>
+								<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+								<expr>180</expr>
+							</eq>
+							<contains>
+								<msg_ref type="sip" hdr_instance="any">180-INVITE.Require</msg_ref>
+								<expr>100rel</expr>
+							</contains>
+						</and>
+						<then>
+							<!--Reliability required for test, sending Prack message to peer.-->
+							<send protocol="sip" msgtype="Prack"/>
+						</then>
+					</elseif>
+				</if>
+			</response>
+			<transition to="Alerting5" event="200-PRACK"/>
+			<transition to="Alerting5" event="UPDATE"/>
+			<transition to="Alerting5" event="18x-INVITE"/>
+			<transition to="VerifyTone5" event="ALERTING_UAC"/>
+		</state>
+		
+		<!-- STEP 13 -->
+		<state ID="VerifyTone5" timer="5000">
+			<prelude>
+				<log step="13" requirements="REQ16733" promptUser="True" verify="True" 
+					expr="Verify that the UE plays the ringing(r5).\n Note: The tone may vary between vendors and so,\n finding the standard ringing tone is vital for the verification."/>
+			</prelude>
+			<transition to="EndTheCall5" event="TimerExpired"/>
+		</state>
+		
+		<!-- STEP 14 -->
+		<state ID="EndTheCall5" ES="true">
+			<transition to="Setup6" event="SessionTerminated"/>
+		</state>
+		
+		<!-- STEP 15 -->
+		<state ID="Setup6">
+			<prelude>
+				<sleep time="8000"/>
+				<send protocol="sip" msgtype="Invite">
+					<mod modtype="replace" hdr="Alert-Info">
+						<expr>&lt;file:///PacketCableRST/r6&gt;</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<contains>
+						<msg_ref type="sip" hdr_instance="any">18x-Invite.Require</msg_ref>
+						<expr>100rel</expr>
+					</contains>
+					<then>
+						<!--Reliability required for test sending Prack message to peer.-->
+						<send protocol="sip" msgtype="Prack"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Proceeding6" event="100-INVITE"/>
+			<transition to="Alerting6" event="180-INVITE"/>
+			<transition to="Alerting6" event="183-INVITE"/>
+			<transition to="VerifyTone6" event="ALERTING_UAC"/>
+		</state>
+		<state ID="Proceeding6">
+			<response>
+				<if>
+					<contains>
+						<msg_ref type="sip" hdr_instance="any">18x-Invite.Require</msg_ref>
+						<expr>100rel</expr>
+					</contains>
+					<then>
+						<!--Reliability required for test sending Prack message to peer.-->
+						<send protocol="sip" msgtype="Prack"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Alerting6" event="180-INVITE"/>
+			<transition to="Alerting6" event="183-INVITE"/>
+			<transition to="VerifyTone6" event="ALERTING_UAC"/>
+		</state>
+		
+		<state ID="Alerting6" timer="12000">
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>UPDATE</expr>
+					</eq>
+					<then>
+						<!--QoS required for test, sending a 200-OK to Update message to peer.-->
+						<send protocol="sip" msgtype="200-Update"/>
+					</then>
+					<elseif>
+						<and>
+							<eq>
+								<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+								<expr>180</expr>
+							</eq>
+							<contains>
+								<msg_ref type="sip" hdr_instance="any">180-INVITE.Require</msg_ref>
+								<expr>100rel</expr>
+							</contains>
+						</and>
+						<then>
+							<!--Reliability required for test, sending Prack message to peer.-->
+							<send protocol="sip" msgtype="Prack"/>
+						</then>
+					</elseif>
+				</if>
+			</response>
+			<transition to="Alerting6" event="200-PRACK"/>
+			<transition to="Alerting6" event="UPDATE"/>
+			<transition to="Alerting6" event="18x-INVITE"/>
+			<transition to="VerifyTone6" event="ALERTING_UAC"/>
+		</state>
+		
+		<!-- STEP 15 -->
+		<state ID="VerifyTone6" timer="5000">
+			<prelude>
+				<log step="15" requirements="REQ16733" 
+					promptUser="True" verify="True" 
+					expr="Verify that the UE plays the ringing(r6).\n Note: The tone may vary between vendors and so,\n finding the standard ringing tone is vital for the verification."/>
+			</prelude>
+			<transition to="EndTheCall6" event="TimerExpired"/>
+		</state>
+		
+		<!-- STEP 16 -->
+		<state ID="EndTheCall6" ES="true">
+			<transition to="Setup7" event="SessionTerminated"/>
+		</state>
+		
+		<!-- STEP 17 -->
+		<state ID="Setup7">
+			<prelude>
+				<sleep time="8000"/>
+				<send protocol="sip" msgtype="Invite">
+					<mod modtype="replace" hdr="Alert-Info">
+						<expr>&lt;file:///PacketCableRST/rg&gt;</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<contains>
+						<msg_ref type="sip" hdr_instance="any">18x-Invite.Require</msg_ref>
+						<expr>100rel</expr>
+					</contains>
+					<then>
+						<!--Reliability required for test sending Prack message to peer.-->
+						<send protocol="sip" msgtype="Prack"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Proceeding7" event="100-INVITE"/>
+			<transition to="Alerting7" event="180-INVITE"/>
+			<transition to="Alerting7" event="183-INVITE"/>
+			<transition to="VerifyTone7" event="ALERTING_UAC"/>
+		</state>
+		
+		<state ID="Proceeding7">
+			<response>
+				<if>
+					<contains>
+						<msg_ref type="sip" hdr_instance="any">18x-Invite.Require</msg_ref>
+						<expr>100rel</expr>
+					</contains>
+					<then>
+						<!--Reliability required for test sending Prack message to peer.-->
+						<send protocol="sip" msgtype="Prack"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Alerting7" event="180-INVITE"/>
+			<transition to="Alerting7" event="183-INVITE"/>
+			<transition to="VerifyTone7" event="ALERTING_UAC"/>
+		</state>
+		
+		<state ID="Alerting7" timer="12000">
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>UPDATE</expr>
+					</eq>
+					<then>
+						<!--QoS required for test, sending a 200-OK to Update message to peer.-->
+						<send protocol="sip" msgtype="200-Update"/>
+					</then>
+					<elseif>
+						<and>
+							<eq>
+								<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+								<expr>180</expr>
+							</eq>
+							<contains>
+								<msg_ref type="sip" hdr_instance="any">180-INVITE.Require</msg_ref>
+								<expr>100rel</expr>
+							</contains>
+						</and>
+						<then>
+							<!--Reliability required for test, sending Prack message to peer.-->
+							<send protocol="sip" msgtype="Prack"/>
+						</then>
+					</elseif>
+				</if>
+			</response>
+			<transition to="Alerting7" event="200-PRACK"/>
+			<transition to="Alerting7" event="UPDATE"/>
+			<transition to="Alerting7" event="18x-INVITE"/>
+			<transition to="VerifyTone7" event="ALERTING_UAC"/>
+		</state>
+		
+		<!-- STEP 17 -->
+		<state ID="VerifyTone7" timer="5000">
+			<prelude>
+				<log step="17" requirements="REQ16733" 
+					promptUser="True" verify="True" 
+					expr="Verify that the UE plays the ringing(rg).\n Note: The tone may vary between vendors and so,\n finding the standard ringing tone is vital for the verification."/>
+			</prelude>
+			<transition to="EndTheCall7" event="TimerExpired"/>
+		</state>
+		
+		<!-- STEP 18 -->
+		<state ID="EndTheCall7" ES="true">
+			<transition to="OffHook8" event="SessionTerminated"/>
+		</state>
+		
+		<!-- STEP 19 -->
+		<state ID="OffHook8">
+			<prelude>
+				<send protocol="utility" msgtype="OffHook"/>
+			</prelude>
+			<transition to="Setup8" event="OffHookComplete"/>
+		</state>
+		
+		<state ID="Setup8">
+			<prelude once="true">
+				<send protocol="utility" msgtype="DialDigits">
+					<mod modtype="add" hdr="number">
+						<msg_ref type="platform">UE1.phone number 1</msg_ref>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>Invite</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="486-INVITE">
+							<mod modtype="add" hdr="Alert-Info">
+								<expr>&lt;file:///PacketCableRST/ro&gt;</expr>
+							</mod>
+						</send>
+					</then>
+				</if>
+			</response>
+			<transition to="Setup8" event="DialDigitsComplete"/>
+			<transition to="WaitAck8" event="INVITE"/>
+		</state>
+		
+		<!--  STEP 19  -->
+		<state ID="WaitAck8">
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>ACK</expr>
+					</eq>
+					<then>
+						<log step="19" requirements="REQ16733" promptUser="true" verify="true"
+						expr="Can you hear the reorder tone specified by the PacketCableRST/ro file?"/>
+					</then>
+				</if>
+			</response>
+			<transition to="WaitAck8" event="DialDigitsComplete"/>
+			<transition to="END" event="ACK"/>
+		</state>
+		
+	</add_to>
+</pc2xml>

@@ -1,0 +1,111 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+Change History: (Author & Date)
+
+
+-->
+<!-- Document type and attributes. -->
+<pc2xml version="$Revision: 6076 $"
+        name="E-UE_PROV_2.1.3.4"
+        descrip="eUE ignores notification receiver security name in TLV 38.7 sub-type
+                 when sub-type 3 is not set to a value of 4 or 5."
+        number="E-UE_PROV_2.1.3.4">
+
+
+    <!-- Reset UE; start capture. -->
+    <template file="./templates/EUE_Prov_B_1_1_1.xml" name="SNMPVersions"/>
+
+    <add_to fsm="SNMPVersions">
+        <transition from="StartCapture_RebootWait" to="eUEProvisioned" event="TimerExpired"/>
+
+        <state ID="eUEProvisioned">
+	        <prelude once="true">
+			<send protocol="utility" msgtype="SNMPGet">
+			    <mod modtype="add" hdr="oids">
+				<expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvisioningState.0</expr>
+			    </mod>
+			    <mod modtype="replace" hdr="agentip">
+				<msg_ref type="platform">UE0.IP</msg_ref>
+			    </mod>
+			</send>
+		</prelude>
+		<response>
+		        <!-- E/MTA DUT reports provisioning pass code (1) to the provisioning service (SNMP Entity). -->
+			<verify step="PC-1.5, 5">
+			    <contains>
+				<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+				<expr>1</expr>
+			    </contains>
+			</verify>
+		</response>
+            <transition to="SNMPcheck" event="SNMPResp"/>
+	    <transition to="SNMPcheck" event="SNMPRespFailure"/>
+        </state>
+
+        <state ID="SNMPcheck">
+		<prelude>
+		<stop_capture/>
+			<parse_capture name="eUE_Prov">
+			    <parser_filter protocol="snmp" msgtype="Inform Request" ip="DUT.DHCP Server IP"/>
+			</parse_capture>
+			<parse_capture name="otherReceiver">
+			    <parser_filter protocol="snmp" ip="Platform.SNMP Server2 IP"/>
+			</parse_capture>
+
+			<!-- EMTA sends PktcMTADevProvisioning Status INFORM provisioning PASS (1) to default Receiver. -->
+			<verify step="PC-1.5, 5">
+				<eq>
+					<capture_ref type="snmp" name="eUE_Prov" msg_instance="3">Inform Request.msgData.plaintext.data.informRequest.variable_bindings.1-3-6-1-2-1-140-1-1-8-0.int.show</capture_ref>
+					<expr>1</expr>
+				</eq>
+			</verify>
+			
+			<!-- MTA receives Acknowledgement to Inform. -->
+			<!--verify step="PC-1.5, Step 5">
+			    <and>
+				<lt>
+				    <capture_ref type="snmp" name="eUE_Prov" msg_instance="last">Inform Request.num</capture_ref>
+				    <capture_ref type="snmp" name="eUE_Prov" msg_instance="last">Get Response.num</capture_ref>
+				</lt>
+				<eq>
+				    <capture_ref type="snmp" name="eUE_Prov" msg_instance="last">Get Response.ip.dst_host.show</capture_ref>
+				    <expr> DUT.IP </expr>                           
+				</eq>
+			    </and>
+			</verify-->
+
+		       <!-- EMTA sends PktcMTADevProvisioning Status INFORM provisioning PASS (1) to IP Address set by the TLV38.1. -->
+			<verify step="PC-1.5, 7">
+			    <and>
+				<eq>
+				    <capture_ref type="snmp" name="eUE_Prov" msg_instance="3">Inform Request.ipv6.src.show</capture_ref>
+				    <msg_ref type="platform">DUT.IP</msg_ref>
+				</eq>
+				<and>
+						<eq>
+						    <capture_ref type="snmp" name="otherReceiver">Inform Request.ipv6.dst.show</capture_ref>
+						    <msg_ref type="platform">Platform.SNMP Server2 IP</msg_ref>
+						</eq>
+						<eq>
+							<capture_ref type="snmp" name="otherReceiver">Inform Request.data.informRequest.variable_bindings.1-3-6-1-2-1-140-1-1-8-0.int.show</capture_ref>
+							<expr>1</expr>
+						</eq>
+					</and>
+				    </and>
+			</verify>
+
+			<generate event="SucceedEvent"/>
+		</prelude>
+		<transition to="END" event="SucceedEvent"/>
+        </state>
+    </add_to>
+</pc2xml>

@@ -1,0 +1,109 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+
+<!-- First are the document type and the attributes for our document -->
+<pc2xml version="$Revision: 8188 $" name="UT_UE_1.4.1" descrip="This is a unit test script for the UE_1.4.1 test script." number="1">
+	<!-- Next we define all of the network elements and extension 
+     controls to be used in this test -->
+	<fsm name="UE0">
+		<models>
+			<session/>
+		</models>
+		<NE sim_type="term" elements="UE0" targets="DUT UE0"/>
+		<states initialstate="Register">
+			<!-- REGISTER State -->
+			<state ID="Register">
+				<prelude>
+					<send protocol="sip" msgtype="Register" target="PCSCF1" originator="DUT"/>
+				</prelude>
+				<transition to="Digest" event="401-Register"/>
+				<transition to="Option1" event="200-Register"/>
+			</state>
+			<state ID="Digest">
+				<prelude>
+					<send protocol="sip" msgtype="Register" target="PCSCF1" originator="DUT"/>
+				</prelude>
+				<transition to="Option1" event="200-Register"/>
+			</state>
+			<!-- Option1 STATE -->
+			<state ID="Option1">
+				<postlude>
+					<send protocol="sip" msgtype="200-Options" target="UE1" originator="DUT"/>
+				</postlude>
+				<!-- Expected response is 200 to Options -->
+				<transition to="foo" event="OPTIONS"/>
+			</state>
+			<!-- foo STATE -->
+			<state ID="foo">
+				<response>
+					<if>
+						<contains>
+							<msg_ref type="sip" hdr_instance="any">Options.Require</msg_ref>
+							<expr>foo</expr>
+						</contains>
+						<then>
+							<send protocol="sip" msgtype="420-Options" target="UE1" originator="DUT"/>
+						</then>
+						<else>
+							<fail/>
+						</else>
+					</if>
+				</response>
+				<transition to="Option3" event="Options"/>
+			</state>
+			<!-- Option3 STATE -->
+			<state ID="Option3">
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="sip">Options.Request-Line.Request-URI</msg_ref>
+							<expr>sip:UE0@1.1.1.1</expr>
+						</eq>
+						<then>
+							<send protocol="sip" msgtype="404-Options" target="UE1" originator="DUT"/>
+						</then>
+						<else>
+							<fail/>
+						</else>
+					</if>
+				</response>
+				<transition to="Option4" event="Options"/>
+			</state>
+			<!-- Option4 STATE -->
+			<state ID="Option4">
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="sip">Options.Content-Type.media-subtype</msg_ref>
+							<expr>junk</expr>
+						</eq>
+						<then>
+							<send protocol="sip" msgtype="415-Options" target="UE1" originator="DUT"/>
+						</then>
+						<else>
+							<fail/>
+						</else>
+					</if>
+				</response>
+				<transition to="END" event="Options"/>
+			</state>
+		</states>
+	</fsm>
+</pc2xml>

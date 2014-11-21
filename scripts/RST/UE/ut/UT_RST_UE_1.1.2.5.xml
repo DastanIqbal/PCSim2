@@ -1,0 +1,69 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+
+<!-- First are the document type and the attributes for our document -->
+<pc2xml version="$Revision: 8188 $" name="UT_RST-UE 1.1.2.5" descrip=" Incoming Call While Off Hook  " number="UT_RST-UE 1.1.2.5">
+	<fsm name="UT_RST-UE 1.1.2.5">
+		<models>
+			<session/>
+		</models>
+		<NE sim_type="term" elements="DUT" targets="UE0 DUT"/>
+		<states initialstate="PendingRegister">
+			<state ID="PendingRegister" timer="500">
+				<transition to="Setup" event="Registered"/>
+				<transition to="Register" event="TimerExpired"/>
+			</state>
+			<!-- REGISTER State -->
+			<state ID="Register">
+				<prelude>
+					<send protocol="sip" msgtype="Register" target="PCSCF1" originator="DUT"/>
+				</prelude>
+				<transition to="Digest" event="401-Register"/>
+				<transition to="Setup" event="200-Register"/>
+			</state>
+			<state ID="Digest">
+				<prelude>
+					<send protocol="sip" msgtype="Register" target="PCSCF1" originator="DUT"/>
+				</prelude>
+				<transition to="Setup" event="200-Register"/>
+			</state>
+			<!-- SETUP STATE -->
+			<state ID="Setup">
+				<!-- Step 1 from the Default Message Flow Call-Term-at-UE(DUT) Sequence Diagram -
+               Test 18x response for reliability for possible Prack message- send Invite -->
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>Invite</expr>
+						</eq>
+						<then>
+							<send protocol="sip" msgtype="486-Invite"/>
+							<generate even="SucceedEvent"/>
+						</then>
+					</if>
+				</response>
+				<!-- Transitions for Setup state -->
+				<transition to="END" event="SucceedEvent"/>
+				<transition to="END" event="500-INVITE"/>
+			</state>
+		</states>
+	</fsm>
+</pc2xml>

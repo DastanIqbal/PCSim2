@@ -1,0 +1,74 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="SIP-UE 1.6.2.1" 
+	descrip="Final Response to Non-INVITE Client Transaction" 
+	number="SIP-UE 1.6.2.1">
+	
+	<template file="./templates/CallOrigAtUETemp.xml" name="UE1"/>
+	<configure name="FSM Process Duplicate Messages" value="true"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Releasing"/>
+		<state ID="OnHook"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		
+		<transition from="Connected" to="OnHook" event="TimerExpired"/>
+		
+		<state ID="OnHook">
+			<!--Step 2 test case SIP 1.6.2.1 - Terminate the session at the UE -->
+			<prelude>
+				<send protocol="utility" msgtype="OnHook"/>
+			</prelude>
+			<transition to="Releasing" event="onhookcomplete"/>
+		</state>
+		
+		<state ID="Releasing">
+			<postlude>
+				<!--Step 3 test case SIP 1.6.2.1 - Send 200-BYE back to UE-->
+				<send protocol="sip" msgtype="200-BYE"/>
+			</postlude>
+			<transition to="Verify" event="BYE"/>
+		</state>
+		
+		<state ID="Verify" timer="4000">
+			<response>
+				<verify step="4" requirements="RFC993">
+					<neq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>BYE</expr>
+					</neq>
+				</verify>
+			</response>
+			<transition to="Fail" event="BYE"/>
+			<transition to="END" event="TimerExpired"/>
+		</state>
+		
+		<state ID="Fail">
+			<prelude>
+				<fail/>
+				<generate event="FailEvent"/>
+			</prelude>
+			<transition to="END" event="FailEvent"/>
+		</state>
+	</add_to>
+</pc2xml>

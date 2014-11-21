@@ -1,0 +1,56 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+
+<pc2xml version="$Revision: 8188 $" name="UT_UE_1.9.1" descrip="This is a unit test script for testing the UE_1.9.1 test script." number="1">
+	<template name="UE0" file="$UT_PATH/Templates/ut/Term_DUT.xml"/>
+	<remove_from fsm="UE0">
+		<state ID="Setup" sub="response"/>
+	</remove_from>
+	<add_to fsm="UE0">
+		<!-- SETUP State -->
+		<state ID="Setup" sub="response">
+			<if>
+				<and>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>Invite</expr>
+					</eq>
+					<eq>
+						<msg_ref type="sip">INVITE.Content-Type.media-subtype</msg_ref>
+						<expr>XXXXX</expr>
+					</eq>
+				</and>
+				<then>
+					<send protocol="sip" msgtype="100-INVITE" target="UE1" originator="DUT"/>
+					<send protocol="sip" msgtype="415-INVITE" target="UE1" originator="DUT">
+						<mod modtype="add" hdr="Accept">
+							<expr>application/sdp</expr>
+						</mod>
+					</send>
+				</then>
+			</if>
+		</state>
+		<transition from="Setup" to="Releasing" event="INVITE"/>
+		<!-- RELEASING State -->
+		<state ID="Releasing">
+			<transition to="END" event="ACK"/>
+		</state>
+	</add_to>
+</pc2xml>

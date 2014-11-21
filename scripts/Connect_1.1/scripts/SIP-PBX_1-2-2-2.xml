@@ -1,0 +1,84 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	2011-11-15	Seung Lee - final versionfor
+
+
+
+
+-->
+<pc2xml version="$Revision: 1 $" 
+	name="SIP-PBX 1.2.2.2" 
+	descrip="Verification of INVITE Parameters for Anonymous Calls" 
+	number="SIP-PBX 1.2.2.2" >
+
+<template file="./templates/Proxy_Term_At_DUT.xml" name="UE1"/>
+
+	<remove_from fsm="UE1">
+		<state ID="Register"/>
+		<state ID="OnHookUE1"/>
+	</remove_from>		
+
+	<add_to fsm="UE1">
+		
+		<!-- REGISTER State -->
+			<state ID="Register">
+				<prelude once="true" >
+					<start_capture>
+						<filter>
+							<var_expr>
+								<expr>host </expr>
+								<msg_ref type="platform">UE0.IP</msg_ref>
+								<expr> || host </expr>
+								<msg_ref type="platform">UE0.IP2</msg_ref>
+								<expr> || host </expr>
+								<msg_ref type="platform">PCSCF1.IP</msg_ref>
+								<expr> || host </expr>
+								<msg_ref type="platform">UE1.IP</msg_ref>
+							</var_expr>
+						</filter>
+					</start_capture>
+				</prelude>
+				<transition to="OffHook" event="Registered"/>
+			</state>	
+			<!-- OnHook State -->
+			<state ID="OnHookUE1">	
+				<prelude>
+					<send protocol="utility" msgtype="OnHook"/>
+				</prelude>
+					<postlude once="true">
+						<stop_capture/>
+								<log promptUser="True" 
+									expr="Open Capture file, filter on SIP messages and find the first INVITE"/>
+							
+						<!-- Step 2 test case SIP-PBX 1.2.2.2-->
+								<log promptUser="True" yesExpected="True" verify="True" 
+									step="2" requirements="REQ24241, REQ24242, REQ24250, REQ24251" 
+									expr="Verify the From header field URI contains either:
+									“Anonymous”&lt;sip:anonymous@anonymous.invalid&gt; or
+									“Anonymous” &lt;sip:anonymous@redlab.com&gt;"/>
+									
+						<!-- Step 3 test case SIP-PBX 1.2.2.2-->
+								<log promptUser="True" yesExpected="True" verify="True" 
+									step="3, 4" requirements="REQ24251" 
+									expr="Verify there is no P-Asserted-Identity included in the INVITE message"/>			
+									
+						<!-- Step 4 test case SIP-PBX 1.2.2.2-->
+								<!--log promptUser="True" yesExpected="True" verify="True" 
+									step="4" requirements="REQ, REQ" 
+									expr="Check Caller ID display on UE1: should say 'anonymous'"/-->							
+					</postlude>
+				<transition to="END" event="OnHookComplete"/>	
+			</state>		
+	</add_to>
+</pc2xml>	

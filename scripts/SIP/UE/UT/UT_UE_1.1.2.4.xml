@@ -1,0 +1,132 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+
+<pc2xml version="$Revision: 8188 $" name="UT_SIP-UE 1.1.2.4" descrip="Re-Registration Action upon Receiving a 408/500/504 Response" number="UT_SIP-UE 1.1.2.4">
+	<template name="UT_SIP-UE 1.1.2.4" file="./templates//UT/Orig_DUT.xml"/>
+	<remove_from fsm="UT_SIP-UE 1.1.2.4">
+		<transition from="PendingRegister" to="Setup" event="Registered"/>
+		<transition from="Register" to="Setup" event="200-Register"/>
+		<transition from="Digest" to="Setup" event="200-Register"/>
+		<state ID="Setup"/>
+		<state ID="Proceeding"/>
+		<state ID="Alerting"/>
+		<state ID="Answer"/>
+		<state ID="Connected"/>
+	</remove_from>
+	<add_to fsm="UT_SIP-UE 1.1.2.4">
+		<transition from="Digest" to="Re-Register" event="200-Register"/>
+		<state ID="Re-Register">
+			<prelude>
+				<sleep time="30000"/>
+				<send protocol="sip" msgtype="Register" target="PCSCF1" originator="DUT">
+					<mod modtype="add" hdr="Contact" param="reg-id">
+						<expr>21</expr>
+					</mod>
+				</send>
+			</prelude>
+			<transition to="Re-PendingRegistration" event="408-Register"/>
+		</state>
+		<state ID="Re-PendingRegistration">
+			<prelude>
+				<send protocol="sip" msgtype="Register" target="PCSCF1" originator="DUT">
+					<mod modtype="add" hdr="Contact" param="reg-id">
+						<expr>22</expr>
+					</mod>
+				</send>
+			</prelude>
+			<transition to="Re-Digest" event="401-Register"/>
+		</state>
+		<state ID="Re-Digest">
+			<prelude>
+				<send protocol="sip" msgtype="Register" target="PCSCF1" originator="DUT">
+					<mod modtype="add" hdr="Contact" param="reg-id">
+						<expr>23</expr>
+					</mod>
+				</send>
+			</prelude>
+			<transition to="Re-Register2" event="200-Register"/>
+			<transition to="END" event="503-Register"/>
+		</state>
+		<state ID="Re-Register2">
+			<prelude>
+				<sleep time="30000"/>
+				<send protocol="sip" msgtype="Register" target="PCSCF1" originator="DUT">
+					<mod modtype="add" hdr="Contact" param="reg-id">
+						<expr>24</expr>
+					</mod>
+				</send>
+			</prelude>
+			<transition to="2nd Re-PendingRegistration" event="500-Register"/>
+		</state>
+		<state ID="2nd Re-PendingRegistration">
+			<prelude>
+				<send protocol="sip" msgtype="Register" target="PCSCF1" originator="DUT">
+					<mod modtype="add" hdr="Contact" param="reg-id">
+						<expr>25</expr>
+					</mod>
+				</send>
+			</prelude>
+			<transition to="2nd Re-Digest" event="401-Register"/>
+		</state>
+		<state ID="2nd Re-Digest">
+			<prelude>
+				<send protocol="sip" msgtype="Register" target="PCSCF1" originator="DUT">
+					<mod modtype="add" hdr="Contact" param="reg-id">
+						<expr>26</expr>
+					</mod>
+				</send>
+			</prelude>
+			<transition to="Re-Register3" event="200-Register"/>
+			<transition to="END" event="503-Register"/>
+		</state>
+		<state ID="Re-Register3">
+			<prelude>
+				<sleep time="30000"/>
+				<send protocol="sip" msgtype="Register" target="PCSCF1" originator="DUT">
+					<mod modtype="add" hdr="Contact" param="reg-id">
+						<expr>27</expr>
+					</mod>
+				</send>
+			</prelude>
+			<transition to="3rd Re-PendingRegistration" event="504-Register"/>
+		</state>
+		<state ID="3rd Re-PendingRegistration">
+			<prelude>
+				<send protocol="sip" msgtype="Register" target="PCSCF1" originator="DUT">
+					<mod modtype="add" hdr="Contact" param="reg-id">
+						<expr>28</expr>
+					</mod>
+				</send>
+			</prelude>
+			<transition to="3rd Re-Digest" event="401-Register"/>
+		</state>
+		<state ID="3rd Re-Digest">
+			<prelude>
+				<send protocol="sip" msgtype="Register" target="PCSCF1" originator="DUT">
+					<mod modtype="add" hdr="Contact" param="reg-id">
+						<expr>29</expr>
+					</mod>
+				</send>
+				<generate event="SucceedEvent"/>
+			</prelude>
+			<transition to="END" event="SucceedEvent"/>
+		</state>
+	</add_to>
+</pc2xml>

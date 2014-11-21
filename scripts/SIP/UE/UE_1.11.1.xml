@@ -1,0 +1,246 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="SIP-UE 1.11.1" 
+	descrip="UAS Reliable Provisional Response" 
+	number="SIP-UE 1.11.1">
+	
+	<template file="./templates/CallTermAtUETemp.xml" name="UE1"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Setup"/>
+		<state ID="Alerting"/>
+		<state ID="Proceeding"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<state ID="Setup">
+			<prelude>
+				<send protocol="sip" msgtype="Invite">
+					<!-- Step-1, Message Flow for test case SIP 1.11.1 - 
+					Add a Require header with a value of 100rel-->
+					<mod modtype="add" hdr="Require" param="option-tag">
+						<expr>100rel</expr>
+					</mod>
+				</send>
+			</prelude>
+			<!-- Expected responses are 100, 180, 183 or 200 -->
+			<response>
+				<if>
+					<or>
+						<eq>
+							<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+							<expr>180</expr>
+						</eq>
+						<eq>
+							<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+							<expr>183</expr>
+						</eq>
+					</or>
+					<then>
+						<verify step="2" requirements="RFC1, RFC7, RFC36" group="100rel">
+							<contains>
+								<msg_ref type="sip" hdr_instance="any">18x-Invite.Require</msg_ref>
+								<expr>100rel</expr>
+							</contains>
+						</verify>
+						<verify step="3" requirements="RFC8" group="rseq">
+							<contains>
+								<msg_ref type="sip">18x-Invite</msg_ref>
+								<expr>RSeq: </expr>
+							</contains>
+						</verify>
+						<verify step="4" requirements="RFC9" group="rseq_range">
+							<and>
+								<gte>
+									<msg_ref type="sip">18x-Invite.RSeq.response-num</msg_ref>
+									<expr>1</expr>
+								</gte>
+								<lte>
+									<msg_ref type="sip">18x-Invite.RSeq.response-num</msg_ref>
+									<expr>214748647</expr>
+								</lte>
+							</and>
+						</verify>
+						<!--Reliability required for test sending Prack message to peer.-->
+						<send protocol="sip" msgtype="Prack"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Proceeding" event="100-INVITE"/>
+			<transition to="Alerting" event="180-INVITE"/>
+			<transition to="Alerting" event="183-INVITE"/>
+			<transition to="Connected" event="200-INVITE"/>
+		</state>
+		
+		<state ID="Proceeding">
+			<!-- Expected responses are 180, 183 or 200 -->
+			<response>
+				<if>
+					<contains>
+						<msg_ref type="sip" hdr_instance="any">18x-Invite.Require</msg_ref>
+						<expr>100rel</expr>
+					</contains>
+					<then>
+						<!--Reliability required for test sending Prack message to peer.-->
+						<send protocol="sip" msgtype="Prack"/>
+					</then>
+				</if>
+				<if>
+					<or>
+						<eq>
+							<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+							<expr>180</expr>
+						</eq>
+						<eq>
+							<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+							<expr>183</expr>
+						</eq>
+					</or>
+					<then>
+						<verify step="2" requirements="RFC1, RFC7, RFC36" group="100rel">
+							<contains>
+								<msg_ref type="sip" hdr_instance="any">18x-Invite.Require</msg_ref>
+								<expr>100rel</expr>
+							</contains>
+						</verify>
+						<verify step="3" requirements="RFC8" group="rseq">
+							<contains>
+								<msg_ref type="sip">18x-Invite</msg_ref>
+								<expr>RSeq: </expr>
+							</contains>
+						</verify>
+						<verify step="4" requirements="RFC9" group="rseq_range">
+							<and>
+								<gte>
+									<msg_ref type="sip">18x-Invite.RSeq.response-num</msg_ref>
+									<expr>1</expr>
+								</gte>
+								<lte>
+									<msg_ref type="sip">18x-Invite.RSeq.response-num</msg_ref>
+									<expr>214748647</expr>
+								</lte>
+							</and>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<transition to="Alerting" event="180-INVITE"/>
+			<transition to="Alerting" event="183-INVITE"/>
+			<transition to="Connected" event="200-INVITE"/>
+		</state>
+		
+		<state ID="Alerting" timer="12000">
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Response</msg_ref>
+						<expr>200-PRACK</expr>
+					</eq>
+					<then>
+						<!-- Step-5, Message Flow for test case SIP 1.11.1 - 
+						Verify the 200-PRACK.CSeq.value-->
+						<verify step="5" requirements="RFC11">
+							<eq>
+								<msg_ref type="sip">200-PRACK.CSeq.method</msg_ref>
+								<expr>PRACK</expr>
+							</eq>
+						</verify>
+						<!-- Step-5, Message Flow for test case SIP 1.11.1 - 
+						Verify the 200-PRACK.CSeq.value-->
+						<verify step="5" requirements="RFC11">
+							<eq>
+								<msg_ref type="sip" msg_instance="last">PRACK.CSeq.value</msg_ref>
+								<msg_ref type="sip">200-PRACK.CSeq.value</msg_ref>
+							</eq>
+						</verify>
+					</then>
+				</if>
+				<!-- See if it is time to answer the call. -->
+				<if>
+					<eq>
+						<msg_ref type="event"/>
+						<expr>TimerExpired</expr>
+					</eq>
+					<then>
+						<!--Take DUT phone off hook-->
+						<send protocol="utility" msgtype="OffHook"/>
+					</then>
+				</if>
+				<!-- Expected responses are 180, 183, PRACK, UPDATE, or 200 -->
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>UPDATE</expr>
+					</eq>
+					<then>
+						<!--QoS required for test, sending a 200-OK to Update message to peer.-->
+						<send protocol="sip" msgtype="200-Update"/>
+					</then>
+				</if>
+				<if>
+					<or>
+						<eq>
+							<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+							<expr>180</expr>
+						</eq>
+						<eq>
+							<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+							<expr>183</expr>
+						</eq>
+					</or>
+					<then>
+						<verify step="2" requirements="RFC1, RFC7, RFC36" group="100rel">
+							<contains>
+								<msg_ref type="sip" hdr_instance="any">18x-Invite.Require</msg_ref>
+								<expr>100rel</expr>
+							</contains>
+						</verify>
+						<verify step="3" requirements="RFC8" group="rseq">
+							<contains>
+								<msg_ref type="sip">18x-Invite</msg_ref>
+								<expr>RSeq: </expr>
+							</contains>
+						</verify>
+						<verify step="4" requirements="RFC9" group="rseq_range">
+							<and>
+								<gte>
+									<msg_ref type="sip">18x-Invite.RSeq.response-num</msg_ref>
+									<expr>1</expr>
+								</gte>
+								<lte>
+									<msg_ref type="sip">18x-Invite.RSeq.response-num</msg_ref>
+									<expr>214748647</expr>
+								</lte>
+							</and>
+						</verify>
+						<!--Reliability required for test sending Prack message to peer.-->
+						<send protocol="sip" msgtype="Prack"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Alerting" event="200-PRACK"/>
+			<transition to="Alerting" event="UPDATE"/>
+			<transition to="Alerting" event="18x-INVITE"/>
+			<transition to="Answer" event="TimerExpired"/>
+			<transition to="Connected" event="200-INVITE"/>
+		</state>
+	</add_to>
+</pc2xml>

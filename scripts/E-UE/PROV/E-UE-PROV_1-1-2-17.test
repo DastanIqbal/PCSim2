@@ -1,0 +1,327 @@
+#//*****************************************************************************
+#// Filename: E-UE-PROV_1-1-2-17.test
+#// Author:
+#//           Matthew Forbes
+#// Creation Date: October 23, 2008
+#// Modified by:
+#//*****************************************************************************
+#// Description:
+#//     TC1180 TEST CASE PROV 5.46 Wrong values of required Sub-options
+#//
+#// Objective:
+#//     Test the ability of the MTA to reject the DHCP OFFER if the "Required"
+#//     sub-options have the wrong values in the DHCP OFFER.
+#//     t
+#//
+#// PacketCable DUT:
+#//     MTA
+#//
+#// Test Steps:
+#//     - Initial configuration
+#//     - Configure policy with 2 IP addresses for option 6
+#//     - Start sniffer
+#//     - Reset DUT
+#//     - Check Provisioning state
+#//     - Stop sniffer
+#//     - Invoke parsing tool and validate using Pass/Fail scripts
+#//     - Delete MTA config file
+#//
+#// Notes:
+#//     - Requires provPrimitives.tcl & tftp_primitives.tcl.
+#//     - Requires the specific config file in $BASE_CFG_FILE_PATH in Provisioning Server.
+#//     - Requires parT.tcl parsing tool to parse data from capture file.
+#//*****************************************************************************
+##
+##
+##
+global SCRIPT_VERSION
+set SCRIPT_VERSION { # $Id: E-UE-PROV_1-1-2-17.test 7406 2010-07-20 17:17:37Z dthakore $ }
+
+#################### Init Provision and TFTP modules ################
+
+DoStep "E-UE-PROV_1-1-2-17_1-1" "Initial configuration" {
+    LogMsg "--- Initial PROV module ---"
+    Init_PROV
+    # ProvCreateConfig 291 $MTA_MAC
+} { PASS_STEP }
+
+
+#################### CONFIGURE POLICY FOR CM/MTA #########################
+
+DoStep "E-UE-PROV_1-1-2-17_1-2" "Configure DHCP server MTA policy with a wrong value for sub-option3(MTATC1180_1)" {
+    PROV_MODIFY_DEVICE $MTA_MAC MTATC1180_1
+    PROV_DEPLOY_DHCP
+} {PASS_STEP}
+
+########################### Start Sniffer ##################################
+
+
+DoStep "E-UE-PROV_1-1-2-17_2-1" "Start sniffer" {
+    LogMsg "--- Start sniffer ---"
+    Init_CONTROLLER_LAN
+    SetupCaptureControllerLan "host $MTA_IP || udp port 67 || host $CM_IP"
+    StartCaptureControllerLan
+} {PASS_STEP}
+
+
+#################### Reset CM / MTA #######################################
+
+DoStep "E-UE-PROV_1-1-2-17_3-1" "Reset CM/MTA" {
+    set val [SNMPvN_RESET $CM_IP]
+    LogMsg "--- Reset CM/MTA ---"
+} {
+    compare_value $val 0
+}
+
+#################### Verify MTA rejects OFFER ####################
+
+DoStep "E-UE-PROV_1-1-2-17_4-1" "Verify MTA is not Provisioned" {
+    # Wait for a minute to let CM/MTA starting to reboot
+    actionWait "Wait 60 seconds for CM Reset and MTA to reject the DHCP OFFER" 60
+    
+} {
+    PASS_STEP
+}
+
+DoStep "E-UE-PROV_1-1-2-17_6-1" "MTA should reject the DHCP OFFERs" {
+    verify_signal "Monitor trace:  MTA should reject the DHCP OFFERs and continue to send DHCP DISCOVERs"
+} {
+    PASS_STEP
+}
+
+
+
+
+########################### Stop Sniffer ##################################
+
+DoStep "E-UE-PROV_1-1-2-17_5-1" "Stop sniffer" {
+    LogMsg "--- Stop sniffer ---"
+    StopCaptureControllerLan
+    SaveToFileControllerLan "_bad_so3_1"
+} { PASS_STEP }
+
+
+#################### CONFIGURE POLICY FOR CM/MTA #########################
+
+DoStep "E-UE-PROV_1-1-2-17_1-2" "Configure DHCP server MTA policy with wrong value in sub-option 3(MTATC1180_2)" {
+    PROV_MODIFY_DEVICE $MTA_MAC MTATC1180_2
+    PROV_DEPLOY_DHCP
+} {PASS_STEP}
+
+########################### Start Sniffer ##################################
+
+
+DoStep "E-UE-PROV_1-1-2-17_2-1" "Start sniffer" {
+    LogMsg "--- Start sniffer ---"
+    Init_CONTROLLER_LAN
+    SetupCaptureControllerLan "host $MTA_IP || udp port 67 || host $CM_IP"
+    StartCaptureControllerLan
+} {PASS_STEP}
+
+
+#################### Reset CM / MTA #######################################
+
+DoStep "E-UE-PROV_1-1-2-17_3-1" "Reset CM/MTA" {
+    set val [SNMPvN_RESET $CM_IP]
+    LogMsg "--- Reset CM/MTA ---"
+} {
+    compare_value $val 0
+}
+
+#################### Verify MTA rejects OFFER ####################
+
+DoStep "E-UE-PROV_1-1-2-17_4-1" "Verify MTA is not Provisioned" {
+    # Wait for a minute to let CM/MTA starting to reboot
+    actionWait "Wait 60 seconds for CM Reset and MTA to reject the DHCP OFFER" 60
+    
+} {
+    PASS_STEP
+}
+
+DoStep "E-UE-PROV_1-1-2-17_6-1" "MTA should reject the DHCP OFFERs" {
+    verify_signal "Monitor trace:  MTA should reject the DHCP OFFERs and continue to send DHCP DISCOVERs"
+} {
+    PASS_STEP
+}
+
+
+########################### Stop Sniffer ##################################
+
+DoStep "E-UE-PROV_1-1-2-17_5-1" "Stop sniffer" {
+    LogMsg "--- Stop sniffer ---"
+    StopCaptureControllerLan
+    SaveToFileControllerLan "_bad_so3_2"
+} { PASS_STEP }
+
+#################### CONFIGURE POLICY FOR CM/MTA #########################
+
+DoStep "E-UE-PROV_1-1-2-17_1-2" "Configure DHCP server MTA policy with a wrong value for sub-option 3(MTATC1180_3)" {
+    PROV_MODIFY_DEVICE $MTA_MAC MTATC1180_3
+    PROV_DEPLOY_DHCP
+} {PASS_STEP}
+
+########################### Start Sniffer ##################################
+
+
+DoStep "E-UE-PROV_1-1-2-17_2-1" "Start sniffer" {
+    LogMsg "--- Start sniffer ---"
+    Init_CONTROLLER_LAN
+    SetupCaptureControllerLan "host $MTA_IP || udp port 67 || host $CM_IP"
+    StartCaptureControllerLan
+} {PASS_STEP}
+
+
+#################### Reset CM / MTA #######################################
+
+DoStep "E-UE-PROV_1-1-2-17_3-1" "Reset CM/MTA" {
+    set val [SNMPvN_RESET $CM_IP]
+    LogMsg "--- Reset CM/MTA ---"
+} {
+    compare_value $val 0
+}
+
+#################### Verify MTA rejects OFFER ####################
+
+DoStep "E-UE-PROV_1-1-2-17_4-1" "Verify MTA is not Provisioned" {
+    # Wait for a minute to let CM/MTA starting to reboot
+    actionWait "Wait 60 seconds for CM Reset and MTA to reject the DHCP OFFER" 60
+    
+} {
+    PASS_STEP
+}
+
+DoStep "E-UE-PROV_1-1-2-17_6-1" "MTA should reject the DHCP OFFERs" {
+    verify_signal "Monitor trace:  MTA should reject the DHCP OFFERs and continue to send DHCP DISCOVERs"
+} {
+    PASS_STEP
+}
+
+
+########################### Stop Sniffer ##################################
+
+DoStep "E-UE-PROV_1-1-2-17_5-1" "Stop sniffer" {
+    LogMsg "--- Stop sniffer ---"
+    StopCaptureControllerLan
+    SaveToFileControllerLan "_bad_so3_3"
+} { PASS_STEP }
+
+#################### CONFIGURE POLICY FOR CM/MTA #########################
+
+DoStep "E-UE-PROV_1-1-2-17_1-2" "Configure DHCP server MTA policy with a wrong value for sub-option 6(MTATC1180_4)" {
+    PROV_MODIFY_DEVICE $MTA_MAC MTATC1180_4
+    PROV_DEPLOY_DHCP
+} {PASS_STEP}
+
+########################### Start Sniffer ##################################
+
+
+DoStep "E-UE-PROV_1-1-2-17_2-1" "Start sniffer" {
+    LogMsg "--- Start sniffer ---"
+    Init_CONTROLLER_LAN
+    SetupCaptureControllerLan "host $MTA_IP || udp port 67 || host $CM_IP"
+    StartCaptureControllerLan
+} {PASS_STEP}
+
+
+#################### Reset CM / MTA #######################################
+
+DoStep "E-UE-PROV_1-1-2-17_3-1" "Reset CM/MTA" {
+    set val [SNMPvN_RESET $CM_IP]
+    LogMsg "--- Reset CM/MTA ---"
+} {
+    compare_value $val 0
+}
+
+#################### Verify MTA rejects OFFER ####################
+
+DoStep "E-UE-PROV_1-1-2-17_4-1" "Verify MTA is not Provisioned" {
+    # Wait for a minute to let CM/MTA starting to reboot
+    actionWait "Wait 60 seconds for CM Reset and MTA to reject the DHCP OFFER" 60
+    
+} {
+    PASS_STEP
+}
+
+DoStep "E-UE-PROV_1-1-2-17_6-1" "MTA should reject the DHCP OFFERs" {
+    verify_signal "Monitor trace:  MTA should reject the DHCP OFFERs and continue to send DHCP DISCOVERs"
+} {
+    PASS_STEP
+}
+
+
+########################### Stop Sniffer ##################################
+
+DoStep "E-UE-PROV_1-1-2-17_5-1" "Stop sniffer" {
+    LogMsg "--- Stop sniffer ---"
+    StopCaptureControllerLan
+    SaveToFileControllerLan "_bad_so6_1"
+} { PASS_STEP }
+
+#################### CONFIGURE POLICY FOR CM/MTA #########################
+
+DoStep "E-UE-PROV_1-1-2-17_1-2" "Configure DHCP server MTA policy with a wrong value for sub-option 6(MTATC1180_5)" {
+    PROV_MODIFY_DEVICE $MTA_MAC MTATC1180_5
+    PROV_DEPLOY_DHCP
+} {PASS_STEP}
+
+########################### Start Sniffer ##################################
+
+
+DoStep "E-UE-PROV_1-1-2-17_2-1" "Start sniffer" {
+    LogMsg "--- Start sniffer ---"
+    Init_CONTROLLER_LAN
+    SetupCaptureControllerLan "host $MTA_IP || udp port 67 || host $CM_IP"
+    StartCaptureControllerLan
+} {PASS_STEP}
+
+
+#################### Reset CM / MTA #######################################
+
+DoStep "E-UE-PROV_1-1-2-17_3-1" "Reset CM/MTA" {
+    set val [SNMPvN_RESET $CM_IP]
+    LogMsg "--- Reset CM/MTA ---"
+} {
+    compare_value $val 0
+}
+
+#################### Verify MTA rejects OFFER ####################
+
+DoStep "E-UE-PROV_1-1-2-17_4-1" "Verify MTA is not Provisioned" {
+    # Wait for a minute to let CM/MTA starting to reboot
+    actionWait "Wait 60 seconds for CM Reset and MTA to reject the DHCP OFFER" 60
+    
+} {
+    PASS_STEP
+}
+
+DoStep "E-UE-PROV_1-1-2-17_6-1" "MTA should reject the DHCP OFFERs" {
+    verify_signal "Monitor trace:  MTA should reject the DHCP OFFERs and continue to send DHCP DISCOVERs"
+} {
+    PASS_STEP
+}
+
+
+########################### Stop Sniffer ##################################
+
+DoStep "E-UE-PROV_1-1-2-17_5-1" "Stop sniffer" {
+    LogMsg "--- Stop sniffer ---"
+    StopCaptureControllerLan
+    SaveToFileControllerLan "_bad_so6_2"
+} { PASS_STEP }
+
+
+################################################################################
+# Cleanup
+################################################################################
+
+DoStep "E-UE-PROV_1-1-2-17_8-1" "Restore Policy for MTA" {
+    PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122
+    PROV_DEPLOY_DHCP
+} {PASS_STEP}
+
+# Clear
+set CONTINUE_PAST_STEP_ERROR 0
+
+Cleanup
+
+return 0

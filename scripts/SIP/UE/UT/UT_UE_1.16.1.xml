@@ -1,0 +1,69 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+
+<pc2xml version="$Revision: 8188 $" name="UT_UE_1.1.3.1" descrip="This is a unit test script for the UE_1.4.1 test script." number="1">
+	<template name="UE0" file="$UT_PATH/Templates/ut/Orig_DUT.xml"/>
+	<remove_from fsm="UE0">
+		<state ID="Setup"/>
+	</remove_from>
+	<add_to fsm="UE0">
+		<transition from="PendingRegister" to="Subscribe" event="Registered"/>
+		<transition from="Register" to="Subscribe" event="200-Register"/>
+		<transition from="Digest" to="Subscribe" event="200-Register"/>
+		<!-- Subscribe State -->
+			<state ID="Subscribe">
+				<prelude>
+					<send protocol="sip" msgtype="Subscribe" target="PCSCF1" originator="DUT">
+						<mod modtype="replace" hdr="From" param="name-addr">
+							<msg_ref type="sip" msg_instance="last">200-REGISTER.P-Associated-URI.name-addr</msg_ref>
+						</mod>
+						<mod modtype="replace" hdr="Request-Line" param="Request-URI">
+							<msg_ref type="sip" msg_instance="last">200-REGISTER.P-Associated-URI.addr-spec</msg_ref>
+						</mod>
+					</send>
+				</prelude>
+				<transition to="RecvNotify" event="200-Subscribe"/>
+			</state>
+			<state ID="RecvNotify">
+				<postlude>
+					<send protocol="sip" msgtype="200-Notify" target="PCSCF1" originator="DUT"/>
+				</postlude>
+				<transition to="Setup" event="NOTIFY"/>
+			</state>
+		<state ID="Setup">
+			<prelude>
+				<sleep time="3000"/>
+				<send protocol="sip" msgtype="Invite" target="UE1" originator="DUT">
+					<mod modtype="replace" hdr="From" param="name-addr">
+						<msg_ref type="sip" msg_instance="last">200-REGISTER.P-Associated-URI.name-addr</msg_ref>
+					</mod>
+				</send>
+			</prelude>
+			<postlude>
+				<send protocol="sip" msgtype="ACK" target="UE1" originator="DUT">
+					<mod modtype="replace" hdr="From" param="name-addr">
+						<msg_ref type="sip" msg_instance="last">200-REGISTER.P-Associated-URI.name-addr</msg_ref>
+					</mod>
+				</send>
+			</postlude>
+			<transition to="END" event="500-INVITE"/>
+		</state>
+	</add_to>
+</pc2xml>

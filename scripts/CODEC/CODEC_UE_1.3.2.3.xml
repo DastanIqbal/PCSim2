@@ -1,0 +1,331 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	PCPCIIATP-114 : Update the fmtp media line to use '=' instead of ':' between a parameter and its 
+			value. (ghassler 01/13/2010)
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="CODEC-MEDIA_1.3.2.3" 
+	descrip="UE T.38 Redundancy (Two-Way)" 
+	number="CODEC-MEDIA_1.3.2.3">
+	
+	<template file="./templates/Proxy.xml" name="SCSCF1"/>
+	<remove_from fsm="SCSCF1">
+		<state ID="Connected"/>
+		<state ID="OnHook"/>
+	</remove_from>
+	<add_to fsm="SCSCF1">
+		<state ID="Register" sub="prelude">
+			<!-- Step-1 test case Appendix B.7 Common Test Procedures -->
+			<log promptUser="true" expr="Connect fax machines with phones to UE0 and UE1."/>
+		</state>
+		<!-- CONNECTED State -->
+		<state ID="Connected" timer="30000">
+			<prelude once="true">
+				<!-- Step - 2 test case Appendix B.7 Common Test Procedures -->
+				<start_capture>
+					<filter>
+						<var_expr>
+							<expr>host </expr>
+							<msg_ref type="platform">PCSCF1.IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">UE0.IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">UE1.IP</msg_ref>
+						</var_expr>
+					</filter>
+				</start_capture>
+				<!-- Step - 3 test case Appendix B.7 Common Test Procedures -->
+				<log expr="Press start on UE0 so that the fax is transmitted to UE1."/>
+				
+				<var name="rtpmap">
+					<var_expr>
+						<expr>a=rtpmap:</expr>
+						<msg_ref type="platform">UE0.T38 Codec</msg_ref>
+						<expr> t38/8000</expr>
+					</var_expr>
+				</var>
+				<var name="red">
+					<var_expr>
+						<expr>a=rtpmap:</expr>
+						<msg_ref type="platform">UE0.T38 Codec</msg_ref>
+						<expr> RED/8000</expr>
+					</var_expr>
+				</var>
+				<var name="fmtp">
+					<var_expr>
+						<expr>a=fmtp:</expr>
+						<msg_ref type="platform">UE0.T38 Codec</msg_ref>
+						<expr> 0/0</expr>
+					</var_expr>
+				</var>
+			</prelude>
+			
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>REINVITE</expr>
+					</eq>
+					<then>
+						<proxy target="UE1"/>
+						<verify step="5" requirements="REQ11532, REQ12490, REQ12491, REQ16639, REQ13346">
+							<contains>
+								<msg_ref type="sdp">REINVITE.audio.payload-type</msg_ref>
+								<msg_ref type="platform">UE0.T38 Codec</msg_ref>
+							</contains>
+						</verify>
+						
+						<verify step="5" requirements="REQ11532, REQ12490, REQ12491, REQ16639, REQ13346">
+							<contains>
+								<msg_ref type="sip">REINVITE.SDP</msg_ref>
+								<var_ref name="rtpmap"/>
+							</contains>
+						</verify>
+						
+						<verify step="5" requirements="REQ11532, REQ12490, REQ12491, REQ16639, REQ13346">
+							<or>
+								<eq>
+									<msg_ref type="sdp">REINVITE.ptime.value</msg_ref>
+									<expr>20</expr>
+								</eq>
+								<null>
+									<msg_ref type="sip">REINVITE.ptime.value</msg_ref>
+								</null>
+							</or>
+						</verify>
+						
+						<verify step="5" requirements="REQ11532, REQ12490, REQ12491, REQ16639, REQ13346">
+							<contains>
+								<msg_ref type="sip">REINVITE.SDP</msg_ref>
+								<var_ref name="red"/>
+							</contains>
+						</verify>
+						
+						<verify step="5" requirements="REQ11532, REQ12490, REQ12491, REQ16639, REQ13346">
+							<contains>
+								<msg_ref type="sdp">REINVITE.fmtp.payload-type</msg_ref>
+								<var_ref name="fmtp"/>
+							</contains>
+						</verify>
+						
+						<verify step="5" requirements="REQ11532, REQ12490, REQ12491, REQ16639, REQ13346">
+							<eq>
+								<msg_ref type="sdp">INVITE.fmtp.payload-type</msg_ref>
+								<msg_ref type="platform">UE0.T38 Codec</msg_ref>
+							</eq>
+						</verify>
+						<verify step="5" requirements="REQ11532, REQ12490, REQ12491, REQ16639, REQ13346">
+							<eq>
+								<msg_ref type="sdp">INVITE.fmtp.codec-name</msg_ref>
+								<expr>0</expr>
+							</eq>
+						</verify>
+						<verify step="5" requirements="REQ11532, REQ12490, REQ12491, REQ16639, REQ13346">
+							<eq>
+								<msg_ref type="sdp">INVITE.fmtp.clockrate</msg_ref>
+								<expr>0</expr>
+							</eq>
+						</verify>
+						<var name="faxparams">
+								<msg_ref type="sdp">INVITE.fmtp-fax.params</msg_ref>
+							</var>
+						<verify step="5" requirements="REQ11532, REQ12490, REQ12491, REQ16639, REQ13346">
+							<and>
+								<contains>
+									<var_ref name="faxparams"/>
+									<expr>T38FaxRateManagement=transferedTCF</expr>
+								</contains>
+							<and>
+								<contains>
+									<var_ref name="faxparams"/>
+									<expr>T38FaxVersion=0</expr>
+								</contains>
+								<contains>
+									<var_ref name="faxparams"/>
+									<expr>T38FaxMaxDatagram=173</expr>
+								</contains>
+							</and>
+							</and>
+						</verify>
+						<verify step="5" requirements="REQ11532, REQ12490, REQ12491, REQ16639, REQ13346">>
+							<eq>
+								<msg_ref type="sdp">INVITE.fmtp-fax.payload-type</msg_ref>
+								<msg_ref type="platform">UE0.T38 Codec</msg_ref>
+							</eq>
+						</verify>
+					</then>
+				</if>
+				<if>
+					<eq>
+						<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+						<expr>100</expr>
+					</eq>
+					<then>
+						<proxy target="UE0"/>
+					</then>
+					<elseif>
+						<gte>
+							<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+							<expr>200</expr>
+						</gte>
+						<then>
+							<proxy target="UE0"/>
+							<verify step="5" requirements="REQ16632, REQ12584, REQ12585">
+								<eq>
+									<msg_ref type="sdp">Response.audio.payload-type</msg_ref>
+									<expr>codecs</expr>
+								</eq>
+							</verify>
+						
+							<verify step="5" requirements="REQ16632, REQ12584, REQ12585">
+								<contains>
+									<msg_ref type="sip">Response.SDP</msg_ref>
+									<var_ref name="rtpmap"/>
+								</contains>
+							</verify>
+								
+							<verify step="5" requirements="REQ11532, REQ12490, REQ12491, REQ16639, REQ13346">
+								<or>
+								<eq>
+									<msg_ref type="sdp">Response.ptime.value</msg_ref>
+									<expr>20</expr>
+								</eq>
+								<null>
+									<msg_ref type="sip">Response.ptime.value</msg_ref>
+								</null>
+							</or>
+							</verify>
+							
+							<verify step="5" requirements="REQ16632, REQ12584, REQ12585">
+								<contains>
+									<msg_ref type="sip">Response.SDP</msg_ref>
+									<var_ref name="red"/>
+								</contains>
+							</verify>
+							
+						<verify step="5" requirements="REQ11532, REQ12490, REQ12491, REQ16639, REQ13346">
+							<eq>
+								<msg_ref type="sdp">Response.fmtp.payload-type</msg_ref>
+								<msg_ref type="platform">UE0.T38 Codec</msg_ref>
+							</eq>
+						</verify>
+						<verify step="5" requirements="REQ11532, REQ12490, REQ12491, REQ16639, REQ13346">
+							<eq>
+								<msg_ref type="sdp">Response.fmtp.codec-name</msg_ref>
+								<expr>0</expr>
+							</eq>
+						</verify>
+						<verify step="5" requirements="REQ11532, REQ12490, REQ12491, REQ16639, REQ13346">
+							<eq>
+								<msg_ref type="sdp">Response.fmtp.clockrate</msg_ref>
+								<expr>0</expr>
+							</eq>
+						</verify>
+						<var name="faxparams">
+							<msg_ref type="sdp">Response.fmtp-fax.params</msg_ref>
+						</var>
+						<verify step="5" requirements="REQ11532, REQ12490, REQ12491, REQ16639, REQ13346">
+							<and>
+								<contains>
+									<var_ref name="faxparams"/>
+									<expr>T38FaxRateManagement=transferedTCF</expr>
+								</contains>
+							<and>
+								<contains>
+									<var_ref name="faxparams"/>
+									<expr>T38FaxVersion=0</expr>
+								</contains>
+								<contains>
+									<var_ref name="faxparams"/>
+									<expr>T38FaxMaxDatagram=173</expr>
+								</contains>
+							</and>
+							</and>
+						</verify>
+						<verify step="5" requirements="REQ11532, REQ12490, REQ12491, REQ16639, REQ13346">>
+							<eq>
+								<msg_ref type="sdp">Response.fmtp-fax.payload-type</msg_ref>
+								<msg_ref type="platform">UE0.T38 Codec</msg_ref>
+							</eq>
+						</verify>
+						</then>
+					</elseif>
+				</if>
+			</response>
+			<transition to="Connected" event="REINVITE"/>
+			<transition to="Connected" event="xxx-INVITE"/>
+			<transition to="Connected" event="ACK"/>
+			<transition to="OnHook" event="TimerExpired"/>
+		</state>
+		
+		<!-- OnHook State -->
+			<state ID="OnHook">
+				<prelude once="true">
+					<send protocol="utility" msgtype="OnHook"/>
+				</prelude>
+				<response>
+					<if>
+						<or>
+							<eq>
+								<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE1.IP</msg_ref>
+							</eq>
+							<eq>
+								<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE1.IP</msg_ref>
+							</eq>
+						</or>
+						<then>
+							<proxy target="UE0"/>
+						</then>
+						<elseif>
+							<or>
+								<eq>
+									<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+									<msg_ref type="platform">UE0.IP</msg_ref>
+								</eq>
+								<eq>
+									<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+									<msg_ref type="platform">UE0.IP</msg_ref>
+								</eq>
+							</or>
+							<then>
+								<proxy target="UE1"/>
+							</then>
+						</elseif>
+					</if>
+					<if>
+						<eq>
+							<msg_ref type="sip">Response</msg_ref>
+							<expr>200-BYE</expr>
+						</eq>
+						<then>
+							<log step="3" promptUser="True" verify="True" 
+								expr="Verify that all pages are received without any distortions."/>
+							<!-- Step - 5 test case Appendix B.7 Common Test Procedures -->
+							<log step="3" requirements="REQ11532" promptUser="True" verify="True" 
+								expr="Verify in the capture that there is redundant payload information within the packets collected. (Example:\nm=audio 12345 RTP/AVP 0 101\na=rtpmap: t38/8000\na=rtpmap: 101 red/8000\na=fmtp: 101 0/0). \nT38FaxRateManagement=transferedTCF; \nT38FaxVerson=0;T38FaxRateDatagram=160\n"/>
+						</then>
+					</if>
+				</response>
+				<transition to="OnHook" event="OnHookComplete"/>
+				<transition to="OnHook" event="Bye"/>
+				<transition to="OnHookUE1" event="200-Bye"/>
+			</state>
+	</add_to>
+</pc2xml>

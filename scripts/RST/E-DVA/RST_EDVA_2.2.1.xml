@@ -1,0 +1,381 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	PCPCII-139 : Update the Voicetronix modifiers to use the new values. (ghassler 07/10/2009)
+	PCPCIIAPPSATP-146: Update the value tested for the pktcEDVAEndPntDtmfMinPlayout mib from 0 to 50.
+	PCPCIIAPPSATP-150: Add loopback information to the messaging as well as additional verifications. (ghassler 09/30/2010)
+
+
+-->
+
+<!-- First are the document type and the attributes for our document -->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-EDVA 2.2.1" 
+	descrip="E-DVA Does Not Support Loopback Tests" 
+	number="RST-EDVA 2.2.1" inspector="disable">
+	
+	<template file="./templates/Proxy.xml" name="Core"/>
+	
+	<remove_from fsm="Core">
+		<state ID="OffHook"/>
+		<state ID="Setup"/>
+		<state ID="Alerting"/>
+		<state ID="Connected"/>
+		<state ID="OnHookUE1"/>
+	</remove_from>
+	
+	<add_to fsm="Core">
+		<state ID="OffHook">
+				<prelude>
+					<send protocol="utility" msgtype="OffHook">
+						<mod modtype="replace" hdr="voiceport">
+							<msg_ref type="platform">Platform.voiceport1</msg_ref>
+						</mod>
+					</send>
+				</prelude>
+				<transition to="Setup" event="OffHookComplete"/>
+			</state>
+		
+		<state ID="Setup">
+			<prelude once="true">
+				 <start_capture>
+					<filter>
+						<var_expr>
+							<expr>host </expr>
+							<msg_ref type="platform">UE0.IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">Platform.STUN IP Address</msg_ref>
+						</var_expr>
+					</filter>
+				</start_capture>
+				<send protocol="utility" msgtype="DialDigits">
+					<mod modtype="add" hdr="number">
+						<msg_ref type="platform">DUT.phone number 1</msg_ref>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">INVITE.SourceAddress.IP</msg_ref>
+						<msg_ref type="platform">UE1.IP</msg_ref>
+					</eq>
+					<then>
+						<var name="v">
+							<msg_ref type="sdp">INVITE.v</msg_ref>
+						</var>
+						<var name="o">
+							<msg_ref type="sdp">INVITE.o</msg_ref>
+						</var>
+						<var name="s">
+							<msg_ref type="sdp">INVITE.s</msg_ref>
+						</var>
+						<var name="c">
+							<msg_ref type="sdp">INVITE.c</msg_ref>
+						</var>
+						<var name="t">
+							<msg_ref type="sdp">INVITE.t</msg_ref>
+						</var>
+						<var name="port">
+							<msg_ref type="sdp">INVITE.audio.port</msg_ref>
+						</var>
+						<proxy target="UE0">
+							<mod modtype="add" hdr="Require" param="option-tag">
+								<expr>answermode</expr>
+							</mod>
+							<mod modtype="add" hdr="Answer-Mode">
+								<expr>auto;require</expr>
+							</mod>
+							<!-- delete the original codec information -->
+							<mod modtype="delete" hdr="SDP"/>
+							
+							<mod modtype="add" hdr="SDP">
+								<var_expr>
+									<var_ref name="v"/>
+									<expr>\r\n</expr>
+									<var_ref name="o"/>
+									<expr>\r\n</expr>
+									<var_ref name="s"/>
+									<expr>\r\n</expr>
+									<var_ref name="c"/>
+									<expr>\r\n</expr>
+									<var_ref name="t"/>
+									<expr>\r\nm=audio </expr>
+									<var_ref name="port"/>
+									<expr> RTP/AVP 0\r\nb=AS:80\r\nb=TIAS:64000\r\na=maxprate:50.0\r\n</expr>
+									<expr>a=rtpmap:0 PCMU/8000\r\na=sendrecv\r\na=ptime:20\r\n</expr>
+									<expr>a=loopback:rtp-media-loopback\r\na=loopback-source:0</expr>
+								</var_expr>
+							`</mod>
+						</proxy>
+					</then>
+				<elseif>
+					<notnull>
+						<msg_ref type="sdp">Response.t.start</msg_ref>
+					</notnull>
+					<then>
+						<var name="v2">
+							<msg_ref type="sdp">Response.v</msg_ref>
+						</var>
+						<var name="o2">
+							<msg_ref type="sdp">Response.o</msg_ref>
+						</var>
+						<var name="s2">
+							<msg_ref type="sdp">Response.s</msg_ref>
+						</var>
+						<var name="c2">
+							<msg_ref type="sdp">Response.c</msg_ref>
+						</var>
+						<var name="t2">
+							<msg_ref type="sdp">Response.t</msg_ref>
+						</var>
+						<var name="port2">
+							<msg_ref type="sdp">Response.audio.port</msg_ref>
+						</var>
+						<var name="answer">
+								<msg_ref type="sip">Response</msg_ref>
+							</var>
+						<proxy target="UE1">
+							<!-- delete the original codec information -->
+							<mod modtype="delete" hdr="SDP"/>
+							
+							<mod modtype="add" hdr="SDP">
+								<var_expr>
+									<var_ref name="v2"/>
+									<expr>\r\n</expr>
+									<var_ref name="o2"/>
+									<expr>\r\n</expr>
+									<var_ref name="s2"/>
+									<expr>\r\n</expr>
+									<var_ref name="c2"/>
+									<expr>\r\n</expr>
+									<var_ref name="t2"/>
+									<expr>\r\nm=audio </expr>
+									<var_ref name="port2"/>
+									<expr> RTP/AVP 0\r\nb=AS:80\r\nb=TIAS:64000\r\na=maxprate:50.0\r\n</expr>
+									<expr>a=rtpmap:0 PCMU/8000\r\na=sendrecv\r\na=ptime:20</expr>
+								</var_expr>
+							`</mod>
+						</proxy>
+					</then>
+					</elseif>
+					<elseif>
+						<or>
+							<eq>
+								<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE1.IP</msg_ref>
+							</eq>
+							<eq>
+								<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE1.IP</msg_ref>
+							</eq>
+						</or>
+						<then>
+							<proxy target="UE0"/>
+						</then>
+					</elseif>
+					<elseif>
+						<or>
+							<eq>
+								<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE0.IP</msg_ref>
+							</eq>
+							<eq>
+								<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE0.IP</msg_ref>
+							</eq>
+						</or>
+						<then>
+							<proxy target="UE1"/>
+						</then>
+					</elseif>
+				</if>
+			</response>
+			<transition to="Setup" event="DialDigitsComplete"/>
+			<transition to="Setup" event="INVITE"/>
+			<transition to="Setup" event="OPTIONS"/>
+			<transition to="Setup" event="200-OPTIONS"/>
+			<transition to="Setup" event="PRACK"/>
+			<transition to="Setup" event="200-PRACK"/>
+			<transition to="Setup" event="UPDATE"/>
+			<transition to="Setup" event="200-UPDATE"/>
+			<transition to="Setup" event="CANCEL"/>
+			<transition to="Setup" event="xxx-INVITE"/>
+			<transition to="Connected" event="ACK"/>
+			<transition to="Setup" event="OffHookComplete"/>
+		</state>
+		
+			
+		<state ID="Connected">
+			<prelude once="true">
+				<sleep time="1000"/>
+				<send protocol="utility" msgtype="SNMPGetTable">
+					<mod modtype="add" hdr="oids">
+						<expr>CL-PKTC-EUE-EDVA-MIB::pktcEDVAEndPntConfigTable</expr>
+					</mod>
+				</send>
+			</prelude>
+				<response>
+				<if>
+					<eq>
+						<msg_ref type="utility">Response</msg_ref>
+						<expr>SNMPResp</expr>
+					</eq>
+					<then>
+						<var name="varbind">
+							<array_ref>SNMPResp.varBind</array_ref>
+							<where>
+								<contains>
+									<array_index index="* 1 0"/>
+									<expr>pktcEDVAEndPntHookState</expr>
+								</contains>
+							</where>
+						</var>
+						<verify step="6" requirements="REQ21242">
+							<eq>
+								<var_ref name="varbind" index="0 0 2"/>
+								<expr>50</expr>
+							</eq>
+						</verify>
+						<verify step="6" requirements="REQ21242">
+							<eq>
+								<var_ref name="varbind" index="0 1 2"/>
+								<expr>2</expr>
+							</eq>
+						</verify>
+						<verify step="6" requirements="REQ21242">
+							<eq>
+								<var_ref name="varbind" index="0 2 2"/>
+								<expr>2</expr>
+							</eq>
+						</verify>
+						<verify step="6" requirements="REQ21242">
+							<eq>
+								<var_ref name="varbind" index="0 3 2"/>
+								<expr>3</expr>
+							</eq>
+						</verify>
+					
+						<var name="audioPort">
+							<var_ref name="answer" protocol="sdp" hdr="audio" param="port"/>
+						</var>
+												
+						<var name="audio">
+							<var_expr>
+								<expr>m=audio </expr>
+								<var_ref name="audioPort"/>
+								<expr> RTP/AVP 0</expr>
+							</var_expr>
+						</var>
+						
+						<verify step="2" requirements="REQ14735">
+				          <contains>
+								<var_ref name="answer" protocol="sip" hdr="SDP"/>
+								<var_ref name="audio"/>
+							</contains>
+				        </verify>
+				       
+				        <verify step="2" requirements="REQ14735">
+				          	<neq>
+								<var_ref name="answer" protocol="sdp" hdr="audio" param="port"/>
+								<expr>0</expr>
+							</neq>
+				        </verify>
+		       			
+		       			<verify step="2" requirements="REQ14735">
+							<contains>
+								<var_ref name="answer" protocol="sip" hdr="SDP"/>
+								<expr>a=loopback:rtp-media-loopback</expr>
+							</contains>
+						</verify>
+						
+						<verify step="2" requirements="REQ14735">
+							<contains>
+								<var_ref name="answer" protocol="sip" hdr="SDP"/>
+								<expr>a=loopback-mirror:0</expr>
+							</contains>
+						</verify>
+						<stop_capture/>
+						<log step="1" promptUser="true" verify="true" yesExpected="false"
+								requirements="REQ14734"
+								expr="Did the DUT ring?"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Connected" event="OffHookComplete"/>
+			<transition to="OnHookUE1" event="SNMPResp"/>
+			<transition to="OnHookUE1" event="SNMPRespFailure"/>
+		</state>
+		
+		<!-- OnHook State -->
+		<state ID="OnHookUE1">
+				<prelude once="true">
+					<send protocol="utility" msgtype="OnHook">
+						<mod modtype="replace" hdr="voiceport">
+							<msg_ref type="platform">Platform.voiceport1</msg_ref>
+						</mod>
+					</send>
+				</prelude>
+				<response>
+					<if>
+						<or>
+							<eq>
+								<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE1.IP</msg_ref>
+							</eq>
+							<eq>
+								<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE1.IP</msg_ref>
+							</eq>
+						</or>
+						<then>
+							<proxy target="UE0"/>
+						</then>
+						<elseif>
+							<or>
+								<eq>
+									<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+									<msg_ref type="platform">UE0.IP</msg_ref>
+								</eq>
+								<eq>
+									<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+									<msg_ref type="platform">UE0.IP</msg_ref>
+								</eq>
+							</or>
+							<then>
+								<proxy target="UE1"/>
+							</then>
+						</elseif>
+					</if>
+					<if>
+						<eq>
+							<msg_ref type="sip">Response</msg_ref>
+							<expr>200-BYE</expr>
+						</eq>
+						<then>
+							<log step="2" promptUser="true" verify="true"
+								requirements="REQ14735"
+								expr="Is the payload type for the RTP packets coming from the DUT\nset to the value G711 (0)?"/>
+							<log step="2" promptUser="true" verify="true"
+								requirements="REQ14735"
+								expr="Is the device sending RTP approximately every 20 milliseconds?"/>
+						</then>
+					</if>
+				</response>
+				<transition to="OnHookUE1" event="OnHookComplete"/>
+				<transition to="OnHookUE1" event="Bye"/>
+				<transition to="END" event="200-Bye"/>
+			</state>
+ 	
+	</add_to>
+</pc2xml>

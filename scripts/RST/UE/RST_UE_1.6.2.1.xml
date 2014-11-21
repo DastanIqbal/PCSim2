@@ -1,0 +1,85 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	PCPCII-139 : Update the Voicetronix modifiers to use the new values. (ghassler 07/10/2009)
+	PCPCII-211 : Correct the dialing logic for Voicetronix and add *95 to the targets to allow the
+		testing for no invite to work properly. (03/10/2010)
+	
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-UE 1.6.2.1" 
+	descrip="Subscriber Programmable PIN – feature disabled " 
+	number="RST-UE 1.6.2.1">
+	
+	<fsm name="UE1">
+		<models>
+			<session/>
+		</models>
+	
+		<NE sim_type="term" elements="UE1 PCSCF2 SCSCF1 PCSCF1" targets="UE1 *95"/>
+		
+		<states initialstate="Register">
+			<state ID="Register">
+				<transition to="OffHook" event="Registered"/>
+			</state>
+			
+			<state ID="OffHook">
+				<prelude>
+					<send protocol="utility" msgtype="OffHook"/>
+				</prelude>
+				<transition to="Setup" event="OffHookComplete"/>
+			</state>
+			
+			<state ID="Setup" timer="5000">
+				<prelude once="true">
+					<send protocol="utility" msgtype="DialDigits">
+						<mod modtype="add" hdr="number">
+							<expr>*95</expr>
+						</mod>
+					</send>
+					<sleep time="2000"/>
+					<!-- Step 1 test case SIP 1.6.2.1 - Verify an error tone is played-->
+					<log step="1" requirements="REQ13899" 
+						promptUser="True" yesExpected="True" verify="True" 
+						expr="Verify an error tone is played?"/>
+				</prelude>
+				<response>
+					<if>
+						<neq>
+							<msg_ref type="utility">Response</msg_ref>
+							<expr>DialDigitsComplete</expr>
+						</neq>
+						<then>
+							<verify step="1" requirements="REQ13899">
+								<and>
+									<eq>
+										<msg_ref type="event"/>
+										<expr>TimerExpired</expr>
+									</eq>
+									<neq>
+										<msg_ref type="sip">Request</msg_ref>
+										<expr>INVITE</expr>
+									</neq>
+								</and>
+							</verify>
+						</then>
+					</if>
+				</response>
+				<transition to="Setup" event="DialDigitsComplete"/>
+				<transition to="END" event="TimerExpired"/>
+			</state>
+		</states>
+	</fsm>
+</pc2xml>

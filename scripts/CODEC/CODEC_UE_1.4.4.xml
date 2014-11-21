@@ -1,0 +1,375 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="CODEC-MEDIA_1.4.4" 
+	descrip="UE Protocol Operation-Offer (Mode Attributes)" 
+	number="CODEC-MEDIA_1.4.4">
+	
+	<template file="./templates/CallTermAtUETemp.xml" name="UE1"/>
+
+	<remove_from fsm="UE1">
+		<state ID="Setup" sub="prelude"/>
+		<state ID="Connected"/>
+		<state ID="OnHook"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<state ID="Setup" sub="prelude">
+			<!--  STEP 1 -->
+			<start_capture>
+				<filter>
+					<var_expr>
+						<expr>host </expr>
+						<msg_ref type="platform">UE0.IP</msg_ref>
+						<expr> || host </expr>
+						<msg_ref type="platform">Platform.SIP Stack 1 IP Address</msg_ref>
+					</var_expr>
+				</filter>
+			</start_capture>
+			
+			<!-- STEP 2 -->
+			<send protocol="sip" msgtype="Invite">
+				<mod modtype="replace" hdr="ptime" param="value">
+					<expr>10</expr>
+				</mod>
+				<mod modtype="replace" hdr="media-modifier" param="value">
+					<expr>96</expr>
+				</mod>
+				<mod modtype="replace" hdr="max-packet-rate" param="value">
+					<expr>100</expr>
+				</mod>
+			</send>
+		</state>
+		
+		<state ID="Connected" timer="5000">
+			<prelude once="true">
+				<send protocol="sip" msgtype="ACK"/>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="event"/>
+						<expr>DIALOG_CONFIRMED_UAC</expr>
+					</eq>
+					<then>
+						<!--  STEPS 2, 3, 4, and 5 -->
+						<verify step="2" requirements="RFC2256">
+							<or>
+								<or>
+									<eq>
+										<msg_ref type="sdp" msg_instance="last">18x-Invite.audio.payload-type</msg_ref>
+										<expr>0</expr>
+									</eq>
+									<startsWith>
+										<msg_ref type="sdp" msg_instance="last">18x-Invite.audio.payload-type</msg_ref>
+										<expr>0 </expr>
+									</startsWith>
+								</or>
+							<or>
+								<or>
+									<eq>
+										<msg_ref type="sdp" msg_instance="last">200-UPDATE.audio.payload-type</msg_ref>
+										<expr>0</expr>
+									</eq>
+									<startsWith>
+										<msg_ref type="sdp" msg_instance="last">200-UPDATE.audio.payload-type</msg_ref>
+										<expr>0 </expr>
+									</startsWith>
+								</or>
+								<or>
+									<eq>
+										<msg_ref type="sdp" msg_instance="last">200-INVITE.audio.payload-type</msg_ref>
+										<expr>0</expr>
+									</eq>
+									<startsWith>
+										<msg_ref type="sdp" msg_instance="last">200-INVITE.audio.payload-type</msg_ref>
+										<expr>0 </expr>
+									</startsWith>
+								</or>
+							</or>
+							</or>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<transition to="Connected" event="OffHookComplete"/>
+			<transition to="Reinvite" event="TimerExpired"/>
+		</state>
+		
+		<state ID="Reinvite">
+			<prelude once="true">
+				<send protocol="sip" msgtype="REINVITE">
+					<mod modtype="replace" hdr="mode" param="value">
+						<expr>sendonly</expr>
+					</mod>
+					<mod modtype="replace" hdr="ptime" param="value">
+						<expr>10</expr>
+					</mod>
+					<mod modtype="replace" hdr="media-modifier" param="value">
+						<expr>96</expr>
+					</mod>
+					<mod modtype="replace" hdr="max-packet-rate" param="value">
+						<expr>100</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Response</msg_ref>
+						<expr>200-INVITE</expr>
+					</eq>
+					<then>
+						<verify step="3" requirements="RFC2294, RFC2298">
+							<eq>
+								<msg_ref type="sdp">200-INVITE.mode.value</msg_ref>
+								<expr>recvonly</expr>
+							</eq>
+						</verify>
+						<start_stream name="vm" file="../config/tones/tone2.rtp" format="G711">
+							<to>
+								<ip>
+									<msg_ref type="sdp" msg_instance="last">200-INVITE.c.address</msg_ref>
+								</ip>
+								<port>
+									<msg_ref type="sdp" msg_instance="last">200-INVITE.audio.port</msg_ref>
+								</port>
+							</to>
+							<from>
+								<ip>
+									<msg_ref type="platform">Platform.STUN IP Address</msg_ref>
+								</ip>
+								<port>
+									<msg_ref type="platform">Platform.RTP Port1</msg_ref>
+								</port>
+							</from>
+						</start_stream>
+					</then>
+				</if>
+			</response>
+			<transition to="Reinvite" event="1xx-INVITE"/>
+			<transition to="Hold" event="200-INVITE"/>
+		</state>
+		
+		<state ID="Hold" timer="5000">
+			<prelude>
+				<send protocol="sip" msgtype="ACK"/>
+				<log step="3" requirements="RFC2294, RFC2298" promptUser="True" 
+					verify="True" expr="Verify the tone2 is audible on the UE?"/>
+			</prelude>
+			<postlude>
+				<stop_stream name="vm"/>
+			</postlude>
+			<transition to="Reverse" event="TimerExpired"/>
+		</state>
+		
+		<state ID="Reverse">
+			<prelude once="true">
+				<send protocol="sip" msgtype="REINVITE">
+					<mod modtype="replace" hdr="mode" param="value">
+						<expr>recvonly</expr>
+					</mod>
+					<mod modtype="replace" hdr="ptime" param="value">
+						<expr>10</expr>
+					</mod>
+					<mod modtype="replace" hdr="media-modifier" param="value">
+						<expr>96</expr>
+					</mod>
+					<mod modtype="replace" hdr="max-packet-rate" param="value">
+						<expr>100</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Response</msg_ref>
+						<expr>200-INVITE</expr>
+					</eq>
+					<then>
+						<verify step="5" requirements="RFC2295, RFC2300">
+							<eq>
+								<msg_ref type="sdp">200-INVITE.mode.value</msg_ref>
+								<expr>sendonly</expr>
+							</eq>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<transition to="Reinvite" event="1xx-INVITE"/>
+			<transition to="Hold2" event="200-INVITE"/>
+		</state>
+		
+		<state ID="Hold2" timer="5000">
+			<prelude>
+				<send protocol="sip" msgtype="ACK"/>
+			</prelude>
+			<transition to="Mute" event="TimerExpired"/>
+		</state>
+		
+		<state ID="Mute">
+			<prelude once="true">
+				<send protocol="sip" msgtype="REINVITE">
+					<mod modtype="replace" hdr="mode" param="value">
+						<expr>inactive</expr>
+					</mod>
+					<mod modtype="replace" hdr="ptime" param="value">
+						<expr>10</expr>
+					</mod>
+					<mod modtype="replace" hdr="media-modifier" param="value">
+						<expr>96</expr>
+					</mod>
+					<mod modtype="replace" hdr="max-packet-rate" param="value">
+						<expr>100</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Response</msg_ref>
+						<expr>200-INVITE</expr>
+					</eq>
+					<then>
+						<verify step="7" requirements="RFC2297">
+							<eq>
+								<msg_ref type="sdp">200-INVITE.mode.value</msg_ref>
+								<expr>inactive</expr>
+							</eq>
+						</verify>
+						<start_stream name="vm2" file="../config/tones/tone1.rtp" format="G711">
+							<to>
+								<ip>
+									<msg_ref type="sdp" msg_instance="last">200-INVITE.c.address</msg_ref>
+								</ip>
+								<port>
+									<msg_ref type="sdp" msg_instance="last">200-INVITE.audio.port</msg_ref>
+								</port>
+							</to>
+							<from>
+								<ip>
+									<msg_ref type="platform">Platform.STUN IP Address</msg_ref>
+								</ip>
+								<port>
+									<msg_ref type="platform">Platform.RTP Port1</msg_ref>
+								</port>
+							</from>
+						</start_stream>
+					</then>
+				</if>
+			</response>
+			<transition to="Reinvite" event="1xx-INVITE"/>
+			<transition to="Hold3" event="200-INVITE"/>
+		</state>
+		
+		<state ID="Hold3" timer="5000">
+			<prelude>
+				<send protocol="sip" msgtype="ACK"/>
+				<log step="7" requirements="RFC2297" promptUser="True" 
+					verify="True" expr="Verify that there is not audible sound in the DUT's receiver?"/>
+			</prelude>
+			<postlude>
+				<stop_stream name="vm2"/>
+			</postlude>
+			<transition to="Resume" event="TimerExpired"/>
+		</state>
+		
+		<state ID="Resume">
+			<prelude once="true">
+				<send protocol="sip" msgtype="REINVITE">
+					<mod modtype="replace" hdr="mode" param="value">
+						<expr>sendrecv</expr>
+					</mod>
+					<mod modtype="replace" hdr="ptime" param="value">
+						<expr>10</expr>
+					</mod>
+					<mod modtype="replace" hdr="media-modifier" param="value">
+						<expr>96</expr>
+					</mod>
+					<mod modtype="replace" hdr="max-packet-rate" param="value">
+						<expr>100</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Response</msg_ref>
+						<expr>200-INVITE</expr>
+					</eq>
+					<then>
+						<verify step="8" requirements="RFC2301">
+							<eq>
+								<msg_ref type="sdp">200-INVITE.mode.value</msg_ref>
+								<expr>sendrecv</expr>
+							</eq>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<transition to="Reinvite" event="1xx-INVITE"/>
+			<transition to="Talk" event="200-INVITE"/>
+		</state>
+		
+		<state ID="Talk" timer="5000">
+			<prelude>
+				<send protocol="sip" msgtype="ACK"/>
+			</prelude>
+			<transition to="Releasing" event="TimerExpired"/>
+		</state>
+		
+		<state ID="OnHook">
+			<prelude>
+				<stop_capture/>
+				<send protocol="utility" msgtype="OnHook"/>
+			</prelude>
+			<postlude>
+				<var name="rtpPort">
+					<msg_ref type="platform">UE1.SDPPort</msg_ref>
+				</var>
+				<var name="rtcpPort">
+					<expr>0</expr>
+				</var>
+				<assign name="rtcpPort">
+					<add_ref type="platform">UE1.SDPPort</add_ref>
+				</assign>
+				
+				<log promptUser="true" verify="true" step="3" 
+					requirements="RFC2294, RFC2298"
+					expr="Using the capture file, did the DUT stop sending RTP media after the first REINVITE?"/>
+				<log promptUser="true" verify="true" step="4" 
+					requirements="RFC2295, RFC2300"
+					expr="Did the DUT start sending RTP media after the second REINVITE?"/>
+				<log promptUser="true" verify="true" step="6" 
+					requirements="RFC2303"
+					expr="Did the DUT send the RTP traffic to port $rtpPort ?"/>
+				<log promptUser="true" verify="true" step="6" 
+					requirements="RFC2303"
+					expr="Did the DUT send the RTCP traffic to port $rtcpPort ?"/>
+				<log promptUser="true" verify="true" step="7" 
+					requirements="RFC2297"
+					expr="Did the DUT stop sending RTP media after the third REINVITE?"/>
+				<log promptUser="true" verify="true" step="8" 
+					requirements="RFC2301"
+					expr="Did the DUT start sending RTP media after the fourth REINVITE?"/>
+			</postlude>				
+			<transition to="END" event="OnHookComplete"/>
+		</state>
+	</add_to>
+</pc2xml>

@@ -1,0 +1,54 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-UE 1.2.2.5" 
+	descrip=" O Transmitted" 
+	number="RST-UE 1.2.2.5">
+	
+	<fsm name="UE1">
+		<models>
+			<session/>
+		</models>
+		
+		<NE sim_type="orig" elements="UE1 PCSCF2 SCSCF1 PCSCF1" targets="UE1"/>
+		
+		<states initialstate="Register">
+			
+			<state ID="Register">
+				<transition to="Setup" event="Registered"/>
+			</state>
+			
+			<state ID="Setup">
+				<prelude>
+					<send protocol="sip" msgtype="Invite">
+						<!-- Step 1 test case SIP 1.2.2.5-->
+						<mod modtype="replace" hdr="P-Asserted-Identity">
+							<expr>&lt;sip:notanumber@server.phone.com&gt;</expr>
+						</mod>
+					</send>
+					<log promptUser="True" yesExpected="True" verify="True" 
+					step="2" requirements="REQ14461"
+					expr="View Caller ID display device. Verify the\n number field contains out-of-area/unavailable in the number field\nand nothing in the name field?"/>
+				</prelude>
+				<transition to="END" event="xxx-INVITE"/>
+			</state>
+		</states>
+	</fsm>
+</pc2xml>

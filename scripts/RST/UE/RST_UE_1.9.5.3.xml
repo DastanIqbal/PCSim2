@@ -1,0 +1,110 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	PCPCII-139 : Update the Voicetronix modifiers to use the new values. (ghassler 07/10/2009)
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-UE 1.9.5.3" 
+	descrip="UE in network hold when phone goes on-hook during Ringback" 
+	number="RST-UE 1.9.5.3" inspector="disable">
+	
+	<template file="./templates/CallOrigAtUETemp.xml" name="UE1"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Setup" sub="prelude"/>
+		<state ID="Connected"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<NE targets="service:sos"/>
+		
+		<state ID="Setup" sub="prelude" once="true">
+			<!-- Step 1 test case SIP 1.9.5.3 - Initiate an emergency call session from the .-->
+			<send protocol="utility" msgtype="DialDigits">
+				<mod modtype="add" hdr="number">
+					<expr>911</expr>
+				</mod>
+			</send>
+		</state>
+		
+		<state ID="Connected">
+			<prelude once="true">
+				<sleep time="5000"/>
+				<!-- Step 2 test case SIP 1.9.5.3 - Initiate Ringback as per step 5-8 
+					[UE Hook Flash Case Flow]. from the .-->
+				<send protocol="sip" msgtype="REINVITE">
+					<mod modtype="add" hdr="Alert-Info">
+						<expr>&lt;file:///PacketCableRST/ot&gt;</expr>
+					</mod>
+					<mod modtype="add" hdr="Priority">
+						<expr>emergency</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Response</msg_ref>
+						<expr>200-INVITE</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="ACK"/>
+						<sleep time="1000"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Connected" event="1xx-INVITE"/>
+			<transition to="Verify" event="200-INVITE"/>
+		</state>
+		
+		<state ID="Verify">
+			<prelude once="true">
+				<send protocol="utility" msgtype="OnHook"/>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>REINVITE</expr>
+					</eq>
+					<then>
+						<verify step="2" requirements="REQ14087">
+							<and>
+								<!-- Step 3 test case SIP 1.9.5.3 - Verify that the UE 
+								initiates network hold by sending an INVITE -->
+								<eq>
+									<msg_ref type="sip">REINVITE.Priority.value</msg_ref>
+									<expr>emergency</expr>
+								</eq>
+								<eq>
+									<msg_ref type="sdp">REINVITE.mode.value</msg_ref>
+									<expr>inactive</expr>
+								</eq>
+							</and>
+						</verify>
+						<!-- HookFlash Step 2 and 3 -Sending 100-Invite and 200-Invite to Invite -->
+						<send protocol="sip" msgtype="100-INVITE"/>
+						<send protocol="sip" msgtype="200-INVITE"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Releasing" event="ACK"/>
+			<transition to="Verify" event="REINVITE"/>
+			<transition to="Verify" event="OnHookComplete"/>
+		</state>
+	</add_to>
+</pc2xml>

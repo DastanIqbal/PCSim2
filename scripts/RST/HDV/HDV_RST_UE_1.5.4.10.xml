@@ -1,0 +1,86 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+-->
+
+<pc2xml version="$Revision: 6798 $" 
+	name="HDV-RST-UE 1.5.4.10" 
+	descrip="Call Transfer - Transferee" 
+	number="HDV-RST-UE 1.5.4.10">
+
+	<template file="$SCRIPT_PATH/RST/UE/RST_UE_1.5.4.10.xml"/>
+        
+        
+        <remove_from fsm="UE1">
+		<state ID="UE1Connected"/>
+		
+	</remove_from>
+        <add_to fsm="UE1">
+                <state ID="UE1Connected">
+				<prelude once="true">
+					<!-- Step 11 from the Default Message Flow Call-Term-at-UE(DUT) Sequence Diagram - received 200-OK to Invite -->
+					<send protocol="sip" msgtype="ACK"/>
+					<sleep time="5000"/>
+					<send protocol="sip" msgtype="REINVITE">
+						<mod modtype="replace" hdr="mode" param="value">
+							<expr>inactive</expr>
+						</mod>
+					</send>
+				</prelude>
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="sip">Response</msg_ref>
+							<expr>200-INVITE</expr>
+						</eq>
+						<then>
+							<send protocol="sip" msgtype="ACK"/>
+                                                        <log promptUser="True" yesExpected="True" verify="True" step="2" requirements="REQ14460" 
+                                                                    expr="Verify whether the DUT provides dial-tone to the PP."/>
+							<sleep time="3000"/>
+							<send protocol="sip" msgtype="REFER">
+								<mod modtype="replace" hdr="Target-Dialog" param="local-tag">
+									<msg_ref type="sip" msg_instance="last">18x-INVITE.To.tag</msg_ref>
+								</mod>
+								<mod modtype="replace" hdr="Target-Dialog" param="remote-tag">
+									<msg_ref type="sip" msg_instance="last">18x-INVITE.From.tag</msg_ref>
+								</mod>
+							</send>
+						</then>
+					</if>
+					<if>
+						<or>
+							<eq>
+								<msg_ref type="sip">Response</msg_ref>
+								<expr>200-REFER</expr>
+							</eq>
+							<eq>
+								<msg_ref type="sip">Response</msg_ref>
+								<expr>202-REFER</expr>
+							</eq>
+						</or>
+						<then>
+							<generate event="SucceedEvent" fsm="UE2"/>
+						</then>
+					</if>
+				</response>
+				<!-- Transitions for UE1Connected state -->
+				<transition to="UE1Connected" event="100-INVITE"/>
+				<transition to="UE1Connected" event="200-INVITE"/>
+				<transition to="UE1WaitForNotify" event="202-REFER"/>
+				<transition to="UE1WaitForNotify" event="200-REFER"/>
+			</state>
+	</add_to>	
+        
+</pc2xml>

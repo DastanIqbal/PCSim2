@@ -1,0 +1,55 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+-->
+<pc2xml version="$Revision: 6076 $" 
+	name="HDV_RST_UE_1.5.2.1" 
+	descrip="Call Waiting support" 
+	number="1">
+	
+	<template file="$SCRIPT_PATH/RST/UE/RST_UE_1.5.2.1.xml"/>
+	
+	<remove_from fsm="UE2">
+		<state ID="Setup2" sub="prelude"/>
+		<state ID="AlertingUAC"/>
+	</remove_from>
+	<add_to fsm="UE2">
+		<state ID="Setup2" sub="prelude">
+			<log promptUser="true" verify="true" expr="Go offhook on two more HD/DECT handsets and verify that they have 2-way voice."/>
+			<start_capture>
+				<filter>
+					<var_expr>
+						<expr>host </expr>
+						<msg_ref type="platform">UE0.IP</msg_ref>
+						<expr> || host </expr>
+						<msg_ref type="platform">Platform.STUN IP Address</msg_ref>
+					</var_expr>
+				</filter>
+			</start_capture>
+			<send protocol="sip" msgtype="Invite"/>
+		</state>
+		
+		<state ID="AlertingUAC">
+			<prelude once="true">
+				<log promptUser="true" verify="true" step="10" requirements="REQ13779, REQ23385" expr="Verify that the Call Waiting tone can be heard in all three portable handsets."/>
+				<generate event="Branch4Event" fsm="UE1"/>
+				<stop_capture/>
+			</prelude>
+			<transition to="WaitAnswer" event="Branch5Event"/>
+		</state>
+	</add_to>
+			
+	
+</pc2xml>

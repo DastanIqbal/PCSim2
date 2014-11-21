@@ -1,0 +1,116 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+-->
+<!-- First are the document type and the attributes for our document -->
+<pc2xml version="$Revision: 6675 $" 
+	name="Proxy Template" 
+	descrip="Template for the Proxy Operations " 
+	number="1">
+	
+	<fsm name="Proxy">
+		<models>
+			<session/>
+		</models>
+
+		<NE sim_type="term" elements="SCSCF2 PCSCF2 SCSCF1 PCSCF1" targets="SCSCF1 PCSCF1 SCSCF2 PCSCF2"/>
+		
+		<states initialstate="Setup">
+			
+			<!-- state ID="Register">
+				<transition to="RegisterUE1" event="Registered"/>
+			</state>
+			
+			<state ID="RegisterUE1">
+				<transition to="Setup" event="Registered"/>
+			</state-->
+				
+			<state ID="Setup">
+				<response>
+					<if>
+						<or>
+							<eq>
+								<msg_ref type="sip">Request.SourceAddress.Port</msg_ref>
+								<msg_ref type="platform">UE1.UDPPort</msg_ref>
+							</eq>
+							<eq>
+								<msg_ref type="sip">Response.SourceAddress.Port</msg_ref>
+								<msg_ref type="platform">UE1.UDPPort</msg_ref>
+							</eq>
+						</or>
+						<then>
+							<proxy target="UE2" stack="SIP Stack 2"/>
+						</then>
+						<elseif>
+							<or>
+								<eq>
+									<msg_ref type="sip">Request.SourceAddress.Port</msg_ref>
+									<msg_ref type="platform">UE2.UDPPort</msg_ref>
+								</eq>
+								<eq>
+									<msg_ref type="sip">Response.SourceAddress.Port</msg_ref>
+									<msg_ref type="platform">UE2.UDPPort</msg_ref>
+								</eq>
+							</or>
+							<then>
+								<proxy target="UE1" stack="SIP Stack 1"/>
+							</then>
+						</elseif>
+					</if>
+				</response>
+				<transition to="Setup" event="OPTIONS"/>
+				<transition to="Setup2" event="xxx-OPTIONS"/>
+			</state>
+			
+			<state ID="Setup2">
+				<response>
+					<if>
+						<or>
+							<eq>
+								<msg_ref type="sip">Request.SourceAddress.Port</msg_ref>
+								<msg_ref type="platform">UE1.UDPPort</msg_ref>
+							</eq>
+							<eq>
+								<msg_ref type="sip">Response.SourceAddress.Port</msg_ref>
+								<msg_ref type="platform">UE1.UDPPort</msg_ref>
+							</eq>
+						</or>
+						<then>
+							<proxy target="UE2" stack="SIP Stack 2"/>
+						</then>
+						<elseif>
+							<or>
+								<eq>
+									<msg_ref type="sip">Request.SourceAddress.Port</msg_ref>
+									<msg_ref type="platform">UE2.UDPPort</msg_ref>
+								</eq>
+								<eq>
+									<msg_ref type="sip">Response.SourceAddress.Port</msg_ref>
+									<msg_ref type="platform">UE2.UDPPort</msg_ref>
+								</eq>
+							</or>
+							<then>
+								<proxy target="UE1" stack="SIP Stack 1"/>
+							</then>
+						</elseif>
+					</if>
+				</response>
+				<transition to="Setup2" event="OPTIONS"/>
+				<transition to="END" event="xxx-OPTIONS"/>
+			</state>
+		</states>
+	</fsm>
+</pc2xml>

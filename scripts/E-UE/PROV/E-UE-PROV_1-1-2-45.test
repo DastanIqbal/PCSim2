@@ -1,0 +1,167 @@
+#//*****************************************************************************
+#// Filename: E-UE-PROV_1-1-2-45.test
+#// Author:   Matthew Forbes
+#// Creation Date: March 18, 2009
+#// Modified by:
+#//*****************************************************************************
+#// Description:
+#//     TC3253 TEST CASE E-UE-PROV 1.1.2.45 - Ability of eUE to Periodically Retry the
+#//	Initialization Stage in the Secure Provisioning Flow if There is No ToD Retrieved
+#//	by the eCM
+#//
+#// Objective:
+#//     To verify the ability of the eUE to periodically retry the initialization stage 
+#//	in the Secure Provisioning Flow when no ToD is received by the eCM.
+#//
+#//
+#// PacketCable DUT:
+#//     E-UE
+#//
+#// Test Steps:
+#//     - Initial Configuration
+#//     - Set policy for no ToD response
+#//     - Start sniffer
+#//     - Reset DUT
+#//     - Observe no flow beyond DHCP ACK
+#//     - Change policy for ToD response
+#//     - Wait for Provisioning of eUE
+#//     - Monitor trace and verify syslog message and return to eUE-1
+#//     - Stop sniffer
+#//     - Restore policy
+#//
+#// Notes:
+#//     - Requires provPrimitives.tcl & tftp_primitives.tcl.
+#//     - Requires the specific config file in $BASE_CFG_FILE_PATH in Provisioning Server.
+#//     - Requires parT.tcl parsing tool to parse data from capture file.
+#//*****************************************************************************
+global SCRIPT_VERSION
+set SCRIPT_VERSION { # $Id: E-UE-PROV_1-1-2-45.test 7406 2010-07-20 17:17:37Z dthakore $ }
+
+DoStep "E-UE-PROV_1-1-2-45-PreStep-1" "Initialize Test Platform" {
+    Init_PROV
+    Init_CONTROLLER_LAN
+} { PASS_STEP }
+
+
+
+set msgStr "Configure DHCP SERVER: Block ToD port and set up policy"
+DoStep "E-UE-PROV_1-1-2-45_PreStep-3" $msgStr {
+} {
+    PROV_BLOCK_PORT 37 udp $PROV_DHCP1_IP
+    PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122 Device_Level_Secure.cfg
+    PROV_DEPLOY_DHCP
+}
+
+set msgStr "Start Sniffer"
+DoStep "E-UE-PROV_1-1-2-45_2-1" $msgStr {
+    LogMsg "--- $msgStr ---"
+    SetupCaptureControllerLan "host $MTA_IP || udp port 67 || host $CM_IP"
+    StartCaptureControllerLan
+} {PASS_STEP}
+
+
+DoStep "E-UE-PROV_1-1-2-45_2-2" "Reset DUT" {
+    set val [SNMPvN_RESET $CM_IP]
+    LogMsg "Hard reboot of CM and MTA has passed"
+} {
+    IsEqual $val 0
+}
+
+DoStep "E-UE-PROV_1-1-2-45-2-3" "pktcMTADevProvisioningState Content Verification" {
+    # Wait for a minute to let CM/MTA starting to reboot
+    actionWait "Wait for CM/MTA to reboot" 50
+    set val [SNMPvN_GET $oid_docsDevServerBootState $CM_IP]
+    LogMsg "MTA Provisioning State"
+    LogMsg "             - Expected : 1"
+    LogMsg "             - Received : $val"
+} {
+    IsEqual $val 1
+}
+
+DoStep "E-UE-PROV_1-1-2-45_3-1" "Verify 2-6 DHCP Discover Messages" {
+    LogMsg "E-UE-PROV_1-1-2-45_2-2" "Verify 2-6 DHCP Discover Messages"
+} {
+    actionWait "Wait 10 minutes for DISCOVER MESSAGES" 600
+    # verify_signal "Monitor Trace (10 minutes form CM prov completion): Verify eUE ($MTA_IP)
+    # sends at least 2 DHCP DISCOVER messages, but not more than 6."
+}
+
+DoStep "E-UE-PROV_1-1-2-45_3-2" "Stop sniffer" {
+    LogMsg "--- Stop sniffer ---"
+    StopCaptureControllerLan
+    SaveToFileControllerLan
+} { PASS_STEP }
+
+######################## INVOKE PARSING TOOL ##################################
+
+DoStep "E-UE_PROV_1-1-2-45_3-3" "Analyze flow data" {
+    # Initial PARSER TOOL
+    Init_PART
+    # Set up parser file
+    set PARSERFILE    $ETH_DEFAULT_TXT_FILE
+    # Find CM MAC with colons
+    set  CM_MAC_COL [AddColMac $CM_MAC]
+    set MTA_MAC_COL [AddColMac $MTA_MAC]
+} { PASS_STEP }
+
+####################### PARSE DATA TO DATASTORE ##################################
+
+DoStep "E-UE_PROV_1-1-2-45_3-4" "Parse all data into database" {
+    # Parse data
+    set PARAMS_DHCP "{DHCP {} {} {} {} {} {} {} {}}"
+    set msgID_MTA [ParseFile $PARSERFILE "$PARAMS_DHCP"]
+} {
+    if { $::PART_RETURN == 0 } {
+        PASS_STEP
+    } else {
+        FAIL_STEP "Failed ParT ParseFile operation."
+    }
+}
+
+DoStep "E-UE_PROV_1-1-2-45_3-5" "Verify DHCP Discover Exponential Backoff" {
+    #DECLARE A NEW VARIABLE
+    catch { unset ::MATT }
+    variable ::MATT
+    #CALL INRANGE TO RETURN THE TIMESTAMPS FOR ALL THE AS-REQs PARSED FROM THE FILE AND ORIGINATED BY THE MTA
+    VerifyValue $msgID_MTA "INRANGEALL(AFTER:-1,BEFORE:-1):(::MATT):(DISCOVER) DHCP DISCOVER OPTIONCLIENTHWADDRESS" "IS" "$MTA_MAC_COL"
+    # tk_messageBox -message "DELETEME: The packets which match this type are: $::MATT($msgID_MTA_KRB) "
+    
+    
+    if { ( [ llength $::MATT($msgID_MTA) ] < 2 ) || ( [ llength $::MATT($msgID_MTA) ] > 7 ) } {
+        verify_signal "ERROR: The capture file captured less than 2 AS-REQ, increase the time to wait and please rerun the test case! Abort?"
+    }
+} {PASS_STEP}
+
+
+################################################################################
+# Cleanup
+################################################################################
+set msgStr "Restore DHCP server policy(MTAFORCW122) and comment out override.props."
+DoStep "E-UE-PROV_1-1-2-45-PostStep-1" $msgStr {
+    PROV_UNBLOCK_PORT 37 udp $PROV_DHCP1_IP
+    PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122 Device_Level_Secure.cfg
+    PROV_DEPLOY_DHCP
+} {
+    PASS_STEP
+}
+
+DoStep "E-UE-PROV_1-1-2-45-PostStep-2" "Reboot CM/MTA" {
+    set val [SNMPvN_RESET $CM_IP]
+    LogMsg "Reboot of CM and MTA has passed"
+} {
+    IsEqual $val 0
+}
+
+DoStep "E-UE-PROV_1-1-2-45-PostStep-3" "pktcMTADevProvisioningState Content Verification" {
+    # Wait for a minute to let CM/MTA starting to reboot
+    actionWait "Wait for CM/MTA to reboot" 60
+    set val [GetProvState 1 600]
+    LogMsg "MTA Provisioning State"
+    LogMsg "             - Expected : 1"
+    LogMsg "             - Received : $val"
+} {
+    IsEqual $val 1
+}
+
+Cleanup
+

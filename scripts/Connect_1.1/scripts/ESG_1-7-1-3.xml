@@ -1,0 +1,519 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	2011-09-20	Marc Weaver - Initial version
+	2011-11-15	Seung Lee - final versionfor
+
+
+
+
+-->
+
+<!-- First are the document type and the attributes for our document -->
+<pc2xml version="$Revision: 1 $" 
+	name="ESG 1.7.1.3" 
+	descrip="Ability of SETA Function to Originate an Auto Answer Test Call" 
+	number="ESG 1.7.1.3">
+	
+	<template file="./templates/CallOrigAtUETemp.xml" name="UE1"/>
+	<remove_from fsm="UE1">
+		<state ID="OffHook"/>
+		<state ID="Setup"/>
+		<state ID="Answer"/>
+		<state ID="Connected"/>
+		<state ID="Releasing"/>
+		<state ID="OnHook"/>
+	</remove_from>
+	<add_to fsm="UE1">
+		<!-- OFFHOOK State -->
+		<state ID="OffHook">
+			<prelude>
+				<start_capture>
+					<filter>
+						<var_expr>
+							<expr> sip || syslog || rtp </expr>
+							<!-- expr>host </expr>
+							<msg_ref type="platform">UE0.IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">Platform.STUN IP Address</msg_ref-->
+						</var_expr>
+					</filter>
+				</start_capture>
+			<send protocol="utility" msgtype="OffHook"/>
+			</prelude>
+			<!-- Transitions for OffHook state -->
+			<transition to="Setup" event="OffHookComplete"/>
+		</state>
+		<state ID="Setup">
+			<prelude once="true">
+				<send protocol="utility" msgtype="DialDigits">
+					<mod modtype="add" hdr="number">
+						<msg_ref type="platform">UE1.phone number 1</msg_ref>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<contains>
+						<msg_ref type="sip">Invite.SDP</msg_ref>
+						<expr>m=audio</expr>
+					</contains>
+					<then>
+						<var name="offer">
+							<msg_ref type="sip">Invite</msg_ref>
+						</var>
+						<var name="audioPort">
+							<var_ref name="offer" protocol="sdp" hdr="audio" param="port"/>
+						</var>
+						<var name="ulaw">
+							<var_expr>
+								<expr>m=audio </expr>
+								<var_ref name="audioPort"/>
+								<expr> RTP/AVP 0</expr>
+							</var_expr>
+						</var>
+						<var name="alaw">
+							<var_expr>
+								<expr>m=audio </expr>
+								<var_ref name="audioPort"/>
+								<expr> RTP/AVP 8</expr>
+							</var_expr>
+						</var>
+						<var name="g711a">
+							<var_expr>
+								<expr>m=audio </expr>
+								<var_ref name="audioPort"/>
+								<expr> RTP/AVP 8 0</expr>
+							</var_expr>
+						</var>
+						<var name="g711u">
+							<var_expr>
+								<expr>m=audio </expr>
+								<var_ref name="audioPort"/>
+								<expr> RTP/AVP 0 8</expr>
+							</var_expr>
+						</var>
+					</then>
+				</if>
+						<!-- If the current message that we received is an Invite, answer with
+           a 100-trying -->
+				<!-- Step 2 in the Call-Orig-at_UE(DUT) Default Message Flow document. -->
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>Invite</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="100-INVITE"/>
+						<!-- verify step="3" requirements="REQ14680">
+							<contains>
+								<msg_ref type="sip">Invite.SDP</msg_ref>
+								<var_ref name="ulaw"/>
+							</contains>
+						</verify-->
+						<var name="sdp">
+							<msg_ref type="sip">INVITE.SDP</msg_ref>
+						</var>
+						<verify step="2" requirements="RFC2636">
+							<eq>
+								<var_ref name="offer" protocol="sdp" hdr="v" param="number"/>
+								<expr>0</expr>
+							</eq>
+						</verify>
+						
+						<verify step="2" requirements="RFC2636">
+							<notnull>
+								<var_ref name="offer" protocol="sdp" hdr="o" param="user"/>
+							</notnull>
+						</verify>
+						
+						<verify step="9" requirements="RFC2643">
+							<dnc>
+								<var_ref name="offer" protocol="sdp" hdr="o" param="user"/>
+								<expr> </expr>
+							</dnc>
+						</verify>
+						
+						<verify step="2" requirements="RFC2636">
+							<gte>
+								<var_ref name="offer" protocol="sdp" hdr="o" param="session-id"/>
+								<expr>0</expr>
+							</gte>
+						</verify>
+						
+						<verify step="2" requirements="RFC2636">
+							<gte>
+								<var_ref name="offer" protocol="sdp" hdr="o" param="session-version"/>
+								<expr>0</expr>
+							</gte>
+						</verify>
+						
+						<verify step="2" requirements="RFC2636">
+							<eq>
+								<var_ref name="offer" protocol="sdp" hdr="o" param="net-type"/>
+								<expr>IN</expr>
+							</eq>
+						</verify>
+						
+						<verify step="2" requirements="RFC2636">
+							<or>
+								<eq>
+									<var_ref name="offer" protocol="sdp" hdr="o" param="address-type"/>
+									<expr>IP4</expr>
+								</eq>
+								<eq>
+									<var_ref name="offer" protocol="sdp" hdr="o" param="address-type"/>
+									<expr>IP6</expr>
+								</eq>
+							</or>
+						</verify>
+						
+						<verify step="2" requirements="RFC2636">
+							<or>
+								<eq>
+									<var_ref name="offer" protocol="sdp" hdr="o" param="address"/>
+									<msg_ref type="platform">UE0.IP</msg_ref>
+								</eq>
+								<eq>
+									<var_ref name="offer" protocol="sdp" hdr="o" param="address"/>
+									<msg_ref type="platform">UE0.FQDN</msg_ref>
+								</eq>
+							</or>
+						</verify>
+						
+						<verify step="2" requirements="RFC2636">
+							<notnull>
+								<var_ref name="offer" protocol="sdp" hdr="s" param="name"/>
+							</notnull>
+						</verify>
+						
+						<verify step="2" requirements="RFC2636">
+							<and>
+								<eq>
+									<var_ref name="offer" protocol="sdp" hdr="t" param="start"/>
+									<expr>0</expr>
+								</eq>
+								<eq>
+									<var_ref name="offer" protocol="sdp" hdr="t" param="stop"/>
+									<expr>0</expr>
+								</eq>
+							</and>
+						</verify>
+											
+						<verify step="12" requirements="RFC2636">
+							<or>
+								<contains>
+									<msg_ref type="sip">Invite.SDP</msg_ref>
+									<var_ref name="alaw"/>
+								</contains>
+							<or>
+								<contains>
+									<msg_ref type="sip">Invite.SDP</msg_ref>
+									<var_ref name="g711a"/>
+								</contains>
+								<contains>
+									<msg_ref type="sip">Invite.SDP</msg_ref>
+									<var_ref name="g711u"/>
+								</contains>
+							</or>
+							</or>
+						</verify>
+					</then>
+				</if>
+				<!-- This set of tests determines whether to send 183 with Answer
+					 or a 180 to the INVITE -->
+				<!-- Step 3 in the Call-Orig-at_UE(DUT) Default Message Flow document. -->
+				<if>
+					<and>
+						<eq>
+							<msg_ref type="extensions">precondition</msg_ref>
+							<expr>require</expr>
+						</eq>
+						<or>
+							<contains>
+								<msg_ref type="sip" hdr_instance="any">Invite.Require</msg_ref>
+								<expr>precondition</expr>
+							</contains>
+							<contains>
+								<msg_ref type="sip" hdr_instance="any">Invite.Supported</msg_ref>
+								<expr>precondition</expr>
+							</contains>
+						</or>
+					</and>
+					<then>
+						<!--Sending 183-Invite with answer-->
+						<sleep time="200"/>
+						<send protocol="sip" msgtype="183-Invite"/>
+					</then>
+					<elseif>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>Invite</expr>
+						</eq>
+						<then>
+							<!--Sending 180-Invite with SS not supporting precondition.-->
+							<sleep time="200"/>
+							<send protocol="sip" msgtype="180-Invite"/>
+						</then>
+					</elseif>
+				</if>
+				
+				<if>
+					<eq>
+						<msg_ref type="sdp">INVITE.ptime.value</msg_ref>
+						<expr>10</expr>
+					</eq>
+					<then>
+						<verify step="3" requirements="RFC2636, RFC2276" group="ptime">
+							<eq>
+								<msg_ref type="sdp">INVITE.ptime.value</msg_ref>
+								<expr>10</expr>
+							</eq>
+							<then>
+								<var name="ptime">
+									<expr>10</expr>
+								</var>
+							</then>
+						</verify>
+						<verify step="4" requirements="RFC2684" group="as">
+							<eq>
+								<msg_ref type="sdp">INVITE.media-modifier.value</msg_ref>
+								<expr>96</expr>
+							</eq>
+						</verify>
+						<verify step="5" requirements="RFC2684, RFC2618, RFC2619, RFC2621, RFC2622, RFC2623, RFC2624, RFC2625, RFC2626" group="tias">
+							<eq>
+								<msg_ref type="sdp">INVITE.TIAS-modifier.value</msg_ref>
+								<expr>64000</expr>
+							</eq>
+						</verify>
+						<verify step="6" requirements="RFC2636" group="maxprate">
+							<or>
+								<eq>
+									<msg_ref type="sdp">INVITE.max-packet-rate.value</msg_ref>
+									<expr>100.0</expr>
+								</eq>
+								<eq>
+									<msg_ref type="sdp">INVITE.max-packet-rate.value</msg_ref>
+									<expr>100</expr>
+								</eq>
+							</or>
+						</verify>
+					</then>
+					<elseif>
+						<or>
+							<eq>
+								<msg_ref type="sdp">INVITE.ptime.value</msg_ref>
+								<expr>20</expr>
+							</eq>
+							<eq>
+								<msg_ref type="sdp">INVITE.ptime.value</msg_ref>
+								<expr/>
+							</eq>
+						</or>
+						<then>
+							<verify step="3" requirements="RFC2636, RFC2276" group="ptime">
+								<or>
+									<eq>
+										<msg_ref type="sdp">INVITE.ptime.value</msg_ref>
+										<expr>20</expr>
+									</eq>
+									<eq>
+										<msg_ref type="sdp">INVITE.ptime.value</msg_ref>
+										<expr/>
+									</eq>
+								</or>
+								<then>
+									<var name="ptime">
+										<expr>20</expr>
+									</var>
+								</then>
+							</verify>
+							<verify step="4" requirements="RFC2684" group="as">
+								<eq>
+									<msg_ref type="sdp">INVITE.media-modifier.value</msg_ref>
+									<expr>80</expr>
+								</eq>
+							</verify>
+							<verify step="5" requirements="RFC2684, RFC2618, RFC2619, RFC2621, RFC2622, RFC2623, RFC2624, RFC2625, RFC2626" group="tias">
+								<eq>
+									<msg_ref type="sdp">INVITE.TIAS-modifier.value</msg_ref>
+									<expr>64000</expr>
+								</eq>
+							</verify>
+							<verify step="9" requirements="REQ14375, REQ14376, REQ14380" group="maxprate">
+								<or>
+									<eq>
+										<msg_ref type="sdp">INVITE.max-packet-rate.value</msg_ref>
+										<expr>50.0</expr>
+									</eq>
+									<eq>
+										<msg_ref type="sdp">INVITE.max-packet-rate.value</msg_ref>
+										<expr>50</expr>
+									</eq>
+								</or>
+							</verify>
+						</then>
+					</elseif>
+					<elseif>
+						<eq>
+							<msg_ref type="sdp">INVITE.ptime.value</msg_ref>
+							<expr>30</expr>
+						</eq>
+						<then>
+							<verify step="3" requirements="RFC2636, RFC2276" group="ptime">
+								<eq>
+									<msg_ref type="sdp">INVITE.ptime.value</msg_ref>
+									<expr>30</expr>
+								</eq>
+								<then>
+									<var name="ptime">
+										<expr>30</expr>
+									</var>
+								</then>
+							</verify>
+							<verify step="4" requirements="RFC2684" group="as">
+								<eq>
+									<msg_ref type="sdp">INVITE.media-modifier.value</msg_ref>
+									<expr>75</expr>
+								</eq>
+							</verify>
+							<verify step="5" requirements="RFC2684, RFC2618, RFC2619, RFC2621, RFC2622, RFC2623, RFC2624, RFC2625, RFC2626" group="tias">
+								<eq>
+									<msg_ref type="sdp">INVITE.TIAS-modifier.value</msg_ref>
+									<expr>64000</expr>
+								</eq>
+							</verify>
+							<verify step="6" requirements="RFC2636" group="maxprate">
+								<eq>
+									<msg_ref type="sdp">INVITE.max-packet-rate.value</msg_ref>
+									<expr>33.3</expr>
+								</eq>
+							</verify>
+						</then>
+					</elseif>
+				</if>
+				
+			</response>
+			<!-- Transitions for Setup state -->
+			<transition to="Setup" event="DialDigitsComplete"/>
+			<transition to="Alerting" event="INVITE"/>
+		</state>
+		<state ID="Answer" timer="5000">
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="event"/>
+						<expr>TimerExpired</expr>
+					</eq>
+					<then>
+						<!--Sending 200-Invite-->
+						<send protocol="sip" msgtype="200-INVITE"/>
+					</then>
+				</if>
+				<!-- Now test for an UPDATE message -->
+				<!-- Steps 6 and 7 in the Call-Orig-at_UE(DUT) Default Message Flow document. -->
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>UPDATE</expr>
+					</eq>
+					<then>
+						<!--QoS required or supported sending 200-Update message to peer.-->
+						<send protocol="sip" msgtype="200-Update"/>
+					</then>
+				</if>
+			<verify step="2" requirements="REQ ">
+				<eq>
+					<msg_ref type="sip">Request</msg_ref>
+					<expr>ACK</expr>
+				</eq>	
+			</verify>
+			</response>
+			<!-- Transitions for Answer state -->
+			<transition to="Answer" event="UPDATE"/>
+			<transition to="Answer" event="TimerExpired"/>
+			<transition to="Connected" event="ACK"/>
+		</state>
+		
+		<!-- CONNECTED State -->
+		<state ID="Connected" >
+			<prelude>
+				<sleep time="120000" />
+			</prelude>
+			<response>
+				<verify step="6" requirements="REQ ">
+					<eq>
+						<msg_ref type="sip">Request.BYE.msg_instance</msg_ref>
+						<expr>1</expr>
+					</eq>
+				</verify>
+			</response>
+			<postlude>
+				<stop_capture/>
+				<log step="4" requirements="REQ14679" promptUser="true" verify="true"
+					expr="Is the device sending RTP approximately every $ptime milliseconds?"/>
+			</postlude>
+			<!-- Transitions for Connected state -->
+			<transition to="Releasing" event="TimerExpired"/>
+			<transition to="Releasing" event="BYE"/>
+		</state>
+		<state ID="Releasing">
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>BYE</expr>
+					</eq>
+					<then>
+						<verify step="6" requirements="REQ ">
+							<eq>
+								<expr>0</expr>
+								<expr>1</expr>
+							</eq>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<postlude>
+				<!--Sending BYE to peer to terminate call.-->
+				<send protocol="sip" msgtype="200-Bye"/>
+			</postlude>
+				<!-- Transitions for Releasing state -->
+			<transition to="END" event="200-Bye"/>
+		</state>		
+</add_to>
+</pc2xml>
+
+<!-- These are the steps to check the syslog messages-->
+
+	            
+	             <!-- From step 29 of B.2.2.3 for IPv4 -->
+				<!--verify step="16" group="Syslog">
+					<and>
+						<contains>
+							<capture_ref type="syslog" name="eUE_Prov">NOTICE.msg.show</capture_ref>
+							<expr>LOCAL</expr>
+						</contains>
+					<and>
+						<contains>
+							<capture_ref type="syslog" name="eUE_Prov">NOTICE.msg.show</capture_ref>
+							<expr>6</expr>
+						</contains>
+					</and>
+					<contains>
+							<capture_ref type="syslog" name="eUE_Prov">NOTICE.msg.show</capture_ref>
+							<expr>Priority 134</expr>
+						</contains>
+					</and>
+				</verify-->

@@ -1,0 +1,79 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+
+<pc2xml version="$Revision: 6076 $" name="UT_HDV_SIP_UE_2.2.2.2" descrip="Barge-In Disabled" number="1">
+	<fsm name="DUT">
+		<models>
+			<session/>
+		</models>
+		<NE sim_type="term" elements="DUT" targets="DUT UE0"/>
+		<states initialstate="Register">
+			
+			<state ID="Register">
+				<prelude>
+					<send protocol="sip" msgtype="Register" target="PCSCF1" originator="DUT"/>
+				</prelude>
+				<transition to="Digest" event="401-Register"/>
+				<transition to="RecieveInvite2" event="200-Register"/>
+			</state>
+			
+			<state ID="Digest">
+				<prelude>
+					<send protocol="sip" msgtype="Register" target="PCSCF1" originator="DUT"/>
+				</prelude>
+				<transition to="RecieveInvite2" event="200-Register"/>
+			</state>
+			
+		
+                        <state ID="RecieveInvite2" timer="5000">
+                               <prelude once="true">
+					<sleep time="1000" /> 
+					<send protocol="sip" msgtype="INVITE" target="UE1" originator="DUT" /> 
+				</prelude>
+			<transition to="RecieveInvite2" event="180-INVITE" />
+                        <transition to="Waitstate" event="200-Invite" /> 
+                        </state>
+                        
+                        <state ID="Waitstate" timer="6000">
+				 <prelude>
+					<send protocol="sip" msgtype="ACK" target="UE1" originator="DUT" />
+				</prelude>
+			<transition to="Bye2" event="TimerExpired" /> 
+			</state>
+
+                        <state ID="Bye2" timer="5000">
+                                <response>
+					<if>
+					<eq>
+					<msg_ref type="sip">Request</msg_ref> 
+					<expr>BYE</expr> 
+					</eq>
+					<then>
+					<send protocol="sip" msgtype="200-BYE" target="UE1" originator="DUT" /> 
+					</then>
+					</if>
+				</response>
+			<transition to="Bye2" event="BYE" /> 
+			<transition to="END" event="TimerExpired" /> 
+			</state>
+
+		</states>
+	</fsm>
+</pc2xml>

@@ -1,0 +1,239 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+ Change History: (Author & Date)
+-->
+<pc2xml version="$Revision: 7768 $"
+        name="EUE Prov 1.1.2.23"
+        descrip="eUE tries all resolved IP addresses for SNMP entity FQDN contained
+                 in sub-option 3 before returning to first step in provisioning flow."
+        number="EUE Prov 1.1.2.23">
+
+    <template file="./templates/EUE_Prov_B_1_1_1.xml" name="MultipleIP"/>
+
+    <add_to fsm="MultipleIP">
+        <transition from="StartCapture_RebootWait" to="EDVAProvisions" event="TimerExpired"/>
+
+        <!-- E/MTA DUT reports provisioning pass code (1) to provisioning service (SNMP Entity). -->
+        <state ID="EDVAProvisions">
+            <prelude once="true">
+                <stop_capture/>
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvisioningState.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">UE0.IP</msg_ref>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="5">
+                    <contains>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>1</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="SetKRBTix" event="SNMPResp"/>
+        </state>
+
+        <!-- Set pktcMtaDevResetKrbTickets MIB to value of invalidateProvOnReboot=1 SNMPv3 -->
+        <state ID="SetKRBTix">
+            <prelude>
+				<stop_capture/>
+                <send protocol="utility" msgtype="SNMPSet">
+                    <mod modtype="add" hdr="array">
+                        <var_expr>
+                            <expr>varBind 1 1 3 \r\n ][ , </expr>
+                            <expr>PKTC-IETF-MTA-MIB::pktcMtaDevResetKrbTickets.0,BITS,1][\r\n</expr>
+                        </var_expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+                    <mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="6">
+                    <contains>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>1</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="ReConfigure" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+        <!-- Configure DNS server. -->
+        <!--state ID="ReConfigure"
+               provFile="E-UE_PROV_v6_2.1.2.1_2.bin"
+               policyFile="MTAFORCW122_test"
+               nextState="Reset2"/-->
+		<state ID="ReConfigure">
+			<prelude>
+				<log promptUser="true" expr="Set the DUT to use a new policy, X_eUEv6_wrongSNMP_3 and depoly."/>
+				<generate event="Branch1Event"/>
+			</prelude>
+			<transition to="Reset2" event="Branch1Event"/>
+		</state>
+
+        <!-- Reset the UE DUT (not the CM) and bring it to an operational state. -->
+        <!-- Longer timer due to nature of test. -->
+        <state ID="Reset2" timer="350000">
+            <prelude once="true">
+
+                <start_capture>
+                    <filter>
+                        <var_expr>
+                            <expr>host </expr>
+                            <msg_ref type="platform">DUT.IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.DHCP Server IP</msg_ref>
+                        </var_expr>
+                    </filter>
+                </start_capture>
+
+                <send protocol="utility" msgtype="SNMPSet">
+                    <mod modtype="add" hdr="array">
+                        <var_expr>
+                            <expr>varBind 1 1 3 \r\n ][ , </expr>
+                            <expr>PKTC-IETF-MTA-MIB::pktcMtaDevResetNow.0,INTEGER,1][\r\n</expr>
+                        </var_expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP Address</msg_ref>
+                    </mod>
+                    <mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPRespFailure</expr>
+                    </eq>
+                    <then>
+                        <fail/>
+                    </then>
+                </if>
+                <if>
+                    <or>
+                        <eq>
+                            <msg_ref type="sip">REGISTER.Contact.expires</msg_ref>
+                            <expr>0</expr>
+                        </eq>
+                        <eq>
+                            <msg_ref type="sip">REGISTER.Expires.value</msg_ref>
+                            <expr>0</expr>
+                        </eq>
+                    </or>
+                    <then>
+                        <send protocol="sip" msgtype="200-REGISTER"/>
+                    </then>
+                </if>
+            </response>
+            <transition to="VerifyMessaging" event="TimerExpired"/>
+            <transition to="Reset2" event="SNMPResp"/>
+            <transition to="Reset2" event="REGISTER"/>
+            <!-- Step 7 MTA resets properly, otherwise SNMPRespFailure. -->
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+        <state ID="VerifyMessaging">
+            <prelude once="true">
+                <stop_capture/>
+
+                <parse_capture name="eUE_v6">
+                    <parser_filter protocol="dhcpv6" clientMAC="DUT.MAC Address"/>
+                </parse_capture>
+					
+                <parse_capture name="PKTC">
+                    <parser_filter protocol="pktc" ip="DUT.IP"/>
+                </parse_capture>
+
+                <!-- Only three AP-REQ messages are seen for any of the three provisioning servers. -->
+				<!-- No AP-REP messages are found.-->
+                <verify step="9 12 15">
+                        <null>
+                            <capture_ref type="pktc" name="PKTC">AP-REP.kmmid</capture_ref>
+                        </null>
+                </verify>
+				
+				<verify step="8 10">
+					<and>
+						<eq>
+							<capture_ref type="pktc" name="PKTC" msg_instance="first">AP-REQ.ipv6.dst_host</capture_ref>
+							<capture_ref type="pktc" name="PKTC" msg_instance="2">AP-REQ.ipv6.dst_host</capture_ref>
+						</eq>
+						<and>
+							<eq>
+								<capture_ref type="pktc" name="PKTC" msg_instance="first">AP-REQ.ipv6.dst_host</capture_ref>
+								<capture_ref type="pktc" name="PKTC" msg_instance="3">AP-REQ.ipv6.dst_host</capture_ref>
+							</eq>
+							<neq>
+								<capture_ref type="pktc" name="PKTC" msg_instance="first">AP-REQ.ipv6.dst_host</capture_ref>
+								<capture_ref type="pktc" name="PKTC" msg_instance="4">AP-REQ.ipv6.dst_host</capture_ref>
+							</neq>
+						</and>
+					</and>
+                </verify>
+
+				<verify step="11 13">
+					<and>
+						<eq>
+							<capture_ref type="pktc" name="PKTC" msg_instance="4">AP-REQ.ipv6.dst_host</capture_ref>
+							<capture_ref type="pktc" name="PKTC" msg_instance="5">AP-REQ.ipv6.dst_host</capture_ref>
+						</eq>
+						<and>
+							<eq>
+								<capture_ref type="pktc" name="PKTC" msg_instance="4">AP-REQ.ipv6.dst_host</capture_ref>
+								<capture_ref type="pktc" name="PKTC" msg_instance="6">AP-REQ.ipv6.dst_host</capture_ref>
+							</eq>
+							<neq>
+								<capture_ref type="pktc" name="PKTC" msg_instance="6">AP-REQ.ipv6.dst_host</capture_ref>
+								<capture_ref type="pktc" name="PKTC" msg_instance="7">AP-REQ.ipv6.dst_host</capture_ref>
+							</neq>
+						</and>
+					</and>
+                </verify>
+				
+				<verify step="14 16">
+					<and>
+						<eq>
+							<capture_ref type="pktc" name="PKTC" msg_instance="7">AP-REQ.ipv6.dst_host</capture_ref>
+							<capture_ref type="pktc" name="PKTC" msg_instance="8">AP-REQ.ipv6.dst_host</capture_ref>
+						</eq>
+						<eq>
+							<capture_ref type="pktc" name="PKTC" msg_instance="7">AP-REQ.ipv6.dst_host</capture_ref>
+							<capture_ref type="pktc" name="PKTC" msg_instance="9">AP-REQ.ipv6.dst_host</capture_ref>
+						</eq>
+					</and>
+                </verify>
+
+                <!-- MTA returns to MTA-1 and begins sending broadcast Discover messages. -->
+                <verify step="17">
+					<lt>
+						<capture_ref type="pktc" name="PKTC" msg_instance="last">AP-REQ.timestamp</capture_ref>
+                        <capture_ref type="dhcpv6" name="eUE_v6" msg_instance="last">Solicit.timestamp</capture_ref>
+					</lt>
+                </verify>
+				<generate event="SucceedEvent"/>
+            </prelude>
+			<transition to="END" event="SucceedEvent"/>
+        </state>
+    </add_to>
+</pc2xml>

@@ -1,0 +1,96 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	PCPCII-135 : UPdate the script to accommodate a de-register message during the reboot. (ghassler 06/24/2009)
+	
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="SIP-UE 1.15.3" 
+	descrip="Error response to unknown subscription" 
+	number="SIP-UE 1.15.3">
+	
+	<template file="./templates/UERegAndSubTemp.xml" name="Registrar"/>
+	
+	<remove_from fsm="Registrar">
+		<state ID="Registered" sub="response"/>
+		<state ID="Notification"/>
+	</remove_from>
+	
+	<add_to fsm="Registrar">
+		<state ID="Registered" sub="response">
+			<if>
+				<eq>
+					<msg_ref type="event"/>
+					<expr>FailEvent</expr>
+				</eq>
+				<then/>
+				<elseif>
+					<and>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>SUBSCRIBE</expr>
+						</eq>
+						<contains>
+							<msg_ref type="sip">SUBSCRIBE.Event</msg_ref>
+							<expr>reg</expr>
+						</contains>
+					</and>
+					<then>
+						<send protocol="sip" msgtype="200-SUBSCRIBE"/>
+						<sleep time="100"/>
+						<send protocol="sip" msgtype="NOTIFY">
+							<!-- Step  1, of test case SIP 1.15.3 - 
+							UE begins initial subscription sequence for 
+							the registration-state event package -->
+							<mod modtype="replace" hdr="Event" param="event-type">
+								<expr>unknown</expr>
+							</mod>
+						</send>
+					</then>
+					<else>
+						<generate event="FailEvent"/>
+					</else>
+				</elseif>
+			</if>
+		</state>
+		
+		<state ID="Notification">
+			<response>
+				<verify>
+					<and>
+						<gte>
+							<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+							<expr>400</expr>
+						</gte>
+						<and>
+							<lte>
+								<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+								<expr>599</expr>
+							</lte>
+							<eq>
+								<msg_ref type="sip">Response.CSeq.method</msg_ref>
+								<expr>NOTIFY</expr>
+							</eq>
+						</and>
+					</and>
+				</verify>
+			</response>
+			<transition to="END" event="4xx-NOTIFY"/>
+			<transition to="END" event="5xx-NOTIFY"/>
+		</state>
+	</add_to>
+</pc2xml>

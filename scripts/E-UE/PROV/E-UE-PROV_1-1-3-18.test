@@ -1,0 +1,110 @@
+################################################################################
+#// Filename: E-UE-PROV_1-1-3-18.test
+#// Author:   Matthew Forbes
+#//
+#//
+#//
+#// Creation Date: March 06, 2009
+#// Modified by:
+################################################################################
+#// Description:
+#//     TC3244 TEST CASE E-UE-PROV 1-1-3-18 Ability of eUE To Properly Form the 
+#//     DHCP Client Identifier
+#//
+#// Objective:
+#//     This test verifies the ability of the eUE to properly form the client Identifier
+#//     when initialized inIPv4 mode. In addition, if the eUE supports the TFTP blocksize option,
+#//     the blocksize is verified and being correct for IPv4. This test is applicable to an IPv4
+#//     only eUE, or a dual stack eUE that is provisioned in IPv4 mode.
+#//
+#// PacketCable DUT:
+#//     EDVA
+#//
+#// Test Steps:
+#//     - Initial configuration
+#//     - Start sniffer
+#//     - Reset DUT
+#//     - Check Provisioning state
+#//     - Verify Option 61 Client Identifier format in DHCP DISCOVER
+#//     - Check the TFTP Read request for blocksize
+#//     - Stop sniffer
+#//
+#// Notes:
+#//     - Requires provPrimitives.tcl & tftp_primitives.tcl.
+#//     - Requires the specific config file in $BASE_CFG_FILE_PATH in Provisioning Server.
+#//     - Requires parT.tcl parsing tool to parse data from capture file.
+##########################################################################################
+
+global SCRIPT_VERSION
+set SCRIPT_VERSION { # $Id: E-UE-PROV_1-1-3-18.test 7406 2010-07-20 17:17:37Z dthakore $ }
+
+###################### INITIAL CONFIGURATION OF DUT ########################
+
+DoStep "E-UE-PROV_1-1-3-18_1-1" "Initial configuration" {
+    LogMsg "--- Initial PROV module ---"
+    Init_PROV
+    PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122 Device_Level_Secure.cfg
+    PROV_DEPLOY_DHCP
+} { PASS_STEP }
+
+DoStep "E-UE-PROV_1-1-3-18_2-1" "Start sniffer" {
+    LogMsg "--- Start sniffer ---"
+    Init_CONTROLLER_LAN
+    SetupCaptureControllerLan "host $MTA_IP || udp port 67 || host $CM_IP"
+    StartCaptureControllerLan
+} {PASS_STEP}
+
+################## RESET CM and MTA and ALLOW TIME TO PROVISION ####################
+
+DoStep "E-UE-PROV_1-1-3-18_3-1" "Reset MTA" {
+    set val [SNMPvN_RESET $CM_IP]
+    LogMsg "Reset of CM and MTA has passed"
+} {
+    IsEqual $val 0
+}
+
+DoStep "E-UE-PROV_1-1-3-18_3-2" "pktcMTADevProvisioningState Content Verification" {
+    # Wait for a minute to let CM/MTA starting to reboot
+    actionWait "Wait for CM/MTA to reboot" 60
+    # Get the OID from the MTA and check it using our previously defined
+    set val [GetProvState 1 600]
+    LogMsg "MTA Provisioning State"
+    LogMsg "             - Expected : 1"
+    LogMsg "             - Received : $val"
+} {
+    IsEqual $val 1
+}
+
+DoStep "E-UE-PROV_1-1-3-18_3-1" "Verify eontents DHCP DISCOVER and REQUEST Option 61" {
+    LogMsg "--- Verify contents DHCP DISCOVER and REQUEST Option 61 ---"
+    Init_PART
+    set DUID [regsub -all : [AddColMac $MTA_MAC] " "]
+} {
+    verify_signal "Monitor trace: Does the eUE include option 61 in the DHCP Discover in the
+    format shown in the test case description below, where:
+    Type = 255 (ff)
+    IAID = 32 bit opaque value (bytes 4-7)
+    DUID = formed using one of the methods described in RFC 3315 (mac address preceded by mfr. id)
+    (Check hex code for option 61, client identifier, format should be
+     3d 0f ff xx xx xx xx xx xx xx $DUID ) ?"
+}
+
+DoStep "E-UE-PROV_1-1-3-18_4-1" " Check the TFTP Read request for blocksize" {
+    LogMsg "---  Check the TFTP Read request for blocksize ---"
+} {
+    verify_signal "Monitor trace: Check the TFTP Read request for blocksize option, if present
+    then verify that blocksize = 1428. (If not present click yes) "
+}
+
+DoStep "E-UE-PROV_1-1-3-18_5-1" "Stop sniffer" {
+    LogMsg "--- Stop sniffer ---"
+    StopCaptureControllerLan
+    SaveToFileControllerLan
+} { PASS_STEP }
+
+
+################################################################################
+# Cleanup
+################################################################################
+Cleanup
+return 0

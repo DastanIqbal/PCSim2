@@ -1,0 +1,461 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+ Change History: (Author & Date)
+
+-->
+
+<pc2xml version="$Revision: 8188 $" name="RST_E-UE_PROV 3.1.3.2"
+		descrip="Ability of RST eUE to Implement the Digit Map Profile Table"
+		number="RST_E-UE_PROV 3.1.3.2">
+
+	<!-- Next we define the each of state machines -->
+	<template file="./templates/EUE_Prov_B_1_1_1.xml" name="RebootCM"/>
+
+	<add_to fsm="RebootCM">
+		<transition from="StartCapture_RebootWait" to="VerifyProvision" event="TimerExpired"/>
+		
+		<state ID="VerifyProvision">
+			<prelude>
+				<send protocol="utility" msgtype="SNMPGet">
+					<mod modtype="add" hdr="oids">
+						<expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvisioningState.0</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="2">
+					<eq>
+						<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+						<expr>1</expr>
+					</eq>
+				</verify>
+			</response>
+			<transition to="GetDigitMapProfileTable" event="SNMPResp"/>
+			<transition to="GetDigitMapProfileTable" event="SNMPRespFailure"/>
+		</state>
+		
+		<state ID="GetDigitMapProfileTable">
+			<prelude>
+				<send protocol="utility" msgtype="SNMPGetTable">
+					<mod modtype="add" hdr="oids">
+						<expr>CL-PKTC-EUE-RST-MIB::pktcEUERSTDigitMapProfileTable</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="3">
+					<and>
+						<!-- Test for pktcEUERSTDMValue  -->
+						<eq>
+							<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+							<expr>&quot;// Timer values</expr>
+						</eq>
+						<!-- Test for pktcEUERSTDMStatus -->
+						<eq>
+							<msg_ref type="utility" index="0 1 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					</and>
+				</verify>
+			</response>
+			<postlude>
+				<stop_capture/>
+			</postlude>
+			<transition to="EDVAIPv4Hybrid" event="SNMPResp"/>
+			<transition to="EDVAIPv4Hybrid" event="SNMPRespFailure"/>
+		</state>
+		
+		<state ID="EDVAIPv4Hybrid" provFile="MAC_H.bin" 
+				policyFile="3basic.cfg" nextState="Reboot2"/>
+				
+		<state ID="Reboot2" timer="10000">
+			<prelude once="true">
+				<start_capture>
+					<filter>
+						<var_expr>
+							<expr>host </expr>
+							<msg_ref type="platform">DUT.IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.CM IP Address</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.DHCP Gateway IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.DHCP CM Gateway IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.KDC IP Address</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.TFTP Server IP</msg_ref>
+						</var_expr>
+					</filter>
+				</start_capture>
+				<send protocol="utility" msgtype="SNMPSet">
+					<mod modtype="add" hdr="array">
+						<var_expr>
+								<expr>varBind 1 1 3 \r\n ][ , </expr>
+								<expr>DOCS-CABLE-DEVICE-MIB::docsDevResetNow.0,INTEGER,1][\r\n</expr>
+						</var_expr>
+					</mod>
+					<mod modtype="replace" hdr="agentip">
+						<msg_ref type="platform">DUT.CM IP Address</msg_ref>
+					</mod>
+					<!-- Always use version 2 for a CM reset -->
+					<mod modtype="replace" hdr="version">
+						<expr>2c</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="utility">Response</msg_ref>
+						<expr>SNMPRespFailure</expr>
+					</eq>
+					<then>
+						<fail/>
+					</then>
+				</if>
+				<if>
+					<or>
+						<eq>
+							<msg_ref type="sip">REGISTER.Contact.expires</msg_ref>
+							<expr>0</expr>
+						</eq>
+						<eq>
+							<msg_ref type="sip">REGISTER.Expires.value</msg_ref>
+							<expr>0</expr>
+						</eq>
+					</or>
+					<then>
+						<send protocol="sip" msgtype="200-REGISTER"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Reboot2" event="SNMPResp"/>
+			<transition to="Register2" event="TimerExpired"/>
+			<transition to="END" event="SNMPRespFailure"/>
+			<transition to="Reboot2" event="REGISTER"/>
+		</state>
+		
+		<state ID="Register2">
+			<transition to="Provisioned2" event="Registered"/>
+		</state>
+		
+		<state ID="Provisioned2">	
+			<prelude>
+				<send protocol="utility" msgtype="SNMPGet">
+					<mod modtype="add" hdr="oids">
+						<expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvisioningState.0</expr>
+					</mod>
+					<mod modtype="replace" hdr="version">
+						<expr>3</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="5">
+					<eq>
+						<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+						<expr>1</expr>
+					</eq>
+				</verify>
+			</response>
+			<transition to="GetDigitMapProfileTable2" event="SNMPResp"/>
+			<transition to="GetDigitMapProfileTable2" event="SNMPRespFailure"/>
+		</state>
+		
+		<state ID="GetDigitMapProfileTable2">
+			<prelude>
+				<send protocol="utility" msgtype="SNMPGetTable">
+					<mod modtype="add" hdr="oids">
+						<expr>CL-PKTC-EUE-RST-MIB::pktcEUERSTDigitMapProfileTable</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="6">
+					<and>
+						<!-- Test for pktcEUERSTDMValue  -->
+						<eq>
+							<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+							<expr>&quot;// Timer values</expr>
+						</eq>
+						<!-- Test for pktcEUERSTDMStatus -->
+						<eq>
+							<msg_ref type="utility" index="0 1 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					</and>
+				</verify>
+			</response>
+			<postlude>
+				<stop_capture/>
+			</postlude>
+			<transition to="EDVAIPv4Hybrid" event="SNMPResp"/>
+			<transition to="EDVAIPv4Hybrid" event="SNMPRespFailure"/>
+		</state>
+		
+		<state ID="EDVAIPv6Secure" provFile="MAC_S.bin" 
+				policyFile="3basic.cfg" nextState="Reboot3"/>
+				
+		<state ID="Reboot3" timer="10000">
+			<prelude once="true">
+				<start_capture>
+					<filter>
+						<var_expr>
+							<expr>host </expr>
+							<msg_ref type="platform">DUT.IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.CM IP Address</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.DHCP Gateway IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.DHCP CM Gateway IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.KDC IP Address</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.TFTP Server IP</msg_ref>
+						</var_expr>
+					</filter>
+				</start_capture>
+				<send protocol="utility" msgtype="SNMPSet">
+					<mod modtype="add" hdr="array">
+						<var_expr>
+								<expr>varBind 1 1 3 \r\n ][ , </expr>
+								<expr>DOCS-CABLE-DEVICE-MIB::docsDevResetNow.0,INTEGER,1][\r\n</expr>
+						</var_expr>
+					</mod>
+					<mod modtype="replace" hdr="agentip">
+						<msg_ref type="platform">DUT.CM IP Address</msg_ref>
+					</mod>
+					<!-- Always use version 2 for a CM reset -->
+					<mod modtype="replace" hdr="version">
+						<expr>2c</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="utility">Response</msg_ref>
+						<expr>SNMPRespFailure</expr>
+					</eq>
+					<then>
+						<fail/>
+					</then>
+				</if>
+				<if>
+					<or>
+						<eq>
+							<msg_ref type="sip">REGISTER.Contact.expires</msg_ref>
+							<expr>0</expr>
+						</eq>
+						<eq>
+							<msg_ref type="sip">REGISTER.Expires.value</msg_ref>
+							<expr>0</expr>
+						</eq>
+					</or>
+					<then>
+						<send protocol="sip" msgtype="200-REGISTER"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Reboot3" event="SNMPResp"/>
+			<transition to="Register3" event="TimerExpired"/>
+			<transition to="END" event="SNMPRespFailure"/>
+			<transition to="Reboot3" event="REGISTER"/>
+		</state>
+		
+		<state ID="Register3">
+			<transition to="Provisioned3" event="Registered"/>
+		</state>
+		
+		<state ID="Provisioned3">	
+			<prelude>
+				<send protocol="utility" msgtype="SNMPGet">
+					<mod modtype="add" hdr="oids">
+						<expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvisioningState.0</expr>
+					</mod>
+					<mod modtype="replace" hdr="version">
+						<expr>3</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="8">
+					<eq>
+						<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+						<expr>1</expr>
+					</eq>
+				</verify>
+			</response>
+			<transition to="GetDigitMapProfileTable3" event="SNMPResp"/>
+			<transition to="GetDigitMapProfileTable3" event="SNMPRespFailure"/>
+		</state>
+		
+		<state ID="GetDigitMapProfileTable3">
+			<prelude>
+				<send protocol="utility" msgtype="SNMPGetTable">
+					<mod modtype="add" hdr="oids">
+						<expr>CL-PKTC-EUE-RST-MIB::pktcEUERSTDigitMapProfileTable</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="9">
+					<and>
+						<!-- Test for pktcEUERSTDMValue  -->
+						<eq>
+							<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+							<expr>&quot;// Timer values</expr>
+						</eq>
+						<!-- Test for pktcEUERSTDMStatus -->
+						<eq>
+							<msg_ref type="utility" index="0 1 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					</and>
+				</verify>
+			</response>
+			<postlude>
+				<stop_capture/>
+			</postlude>
+			<transition to="EDVAIPv6Hybrid" event="SNMPResp"/>
+			<transition to="EDVAIPv6Hybrid" event="SNMPRespFailure"/>
+		</state>
+		
+		<state ID="EDVAIPv6Hybrid" provFile="MAC_H.bin" 
+				policyFile="3basic.cfg" nextState="Reboot4"/>
+				
+		<state ID="Reboot4" timer="10000">
+			<prelude once="true">
+				<start_capture>
+					<filter>
+						<var_expr>
+							<expr>host </expr>
+							<msg_ref type="platform">DUT.IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.CM IP Address</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.DHCP Gateway IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.DHCP CM Gateway IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.KDC IP Address</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.TFTP Server IP</msg_ref>
+						</var_expr>
+					</filter>
+				</start_capture>
+				<send protocol="utility" msgtype="SNMPSet">
+					<mod modtype="add" hdr="array">
+						<var_expr>
+								<expr>varBind 1 1 3 \r\n ][ , </expr>
+								<expr>DOCS-CABLE-DEVICE-MIB::docsDevResetNow.0,INTEGER,1][\r\n</expr>
+						</var_expr>
+					</mod>
+					<mod modtype="replace" hdr="agentip">
+						<msg_ref type="platform">DUT.CM IP Address</msg_ref>
+					</mod>
+					<!-- Always use version 2 for a CM reset -->
+					<mod modtype="replace" hdr="version">
+						<expr>2c</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="utility">Response</msg_ref>
+						<expr>SNMPRespFailure</expr>
+					</eq>
+					<then>
+						<fail/>
+					</then>
+				</if>
+				<if>
+					<or>
+						<eq>
+							<msg_ref type="sip">REGISTER.Contact.expires</msg_ref>
+							<expr>0</expr>
+						</eq>
+						<eq>
+							<msg_ref type="sip">REGISTER.Expires.value</msg_ref>
+							<expr>0</expr>
+						</eq>
+					</or>
+					<then>
+						<send protocol="sip" msgtype="200-REGISTER"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Reboot4" event="SNMPResp"/>
+			<transition to="Register4" event="TimerExpired"/>
+			<transition to="END" event="SNMPRespFailure"/>
+			<transition to="Reboot4" event="REGISTER"/>
+		</state>
+		
+		<state ID="Register4">
+			<transition to="Provisioned4" event="Registered"/>
+		</state>
+		
+		<state ID="Provisioned4">	
+			<prelude>
+				<send protocol="utility" msgtype="SNMPGet">
+					<mod modtype="add" hdr="oids">
+						<expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvisioningState.0</expr>
+					</mod>
+					<mod modtype="replace" hdr="version">
+						<expr>3</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="11">
+					<eq>
+						<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+						<expr>1</expr>
+					</eq>
+				</verify>
+			</response>
+			<transition to="GetDigitMapProfileTable4" event="SNMPResp"/>
+			<transition to="GetDigitMapProfileTable4" event="SNMPRespFailure"/>
+		</state>
+		
+		<state ID="GetDigitMapProfileTable4">
+			<prelude>
+				<send protocol="utility" msgtype="SNMPGetTable">
+					<mod modtype="add" hdr="oids">
+						<expr>CL-PKTC-EUE-RST-MIB::pktcEUERSTDigitMapProfileTable</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="12">
+					<and>
+						<!-- Test for pktcEUERSTDMValue  -->
+						<eq>
+							<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+							<expr>&quot;// Timer values</expr>
+						</eq>
+						<!-- Test for pktcEUERSTDMStatus -->
+						<eq>
+							<msg_ref type="utility" index="0 1 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+					</and>
+				</verify>
+			</response>
+			<transition to="END" event="SNMPResp"/>
+			<transition to="END" event="SNMPRespFailure"/>
+		</state>
+	</add_to>
+</pc2xml>

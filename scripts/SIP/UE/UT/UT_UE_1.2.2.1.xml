@@ -1,0 +1,85 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+
+<!-- First are the document type and the attributes for our document -->
+<pc2xml version="$Revision: 8188 $" name="UT_SIP-UE 1.2.2.1" descrip="UAS Error Response with out-of-sequence re-INVITE" number="UT_SIP-UE 1.2.2.1">
+	<template name="UT_SIP-UE 1.2.2.1" file="./templates/ut/Term_DUT.xml"/>
+	<remove_from fsm="UT_SIP-UE 1.2.2.1">
+		<state ID="Alerting"/>
+		<state ID="Answer"/>
+		<state ID="Connected"/>
+	</remove_from>
+	<add_to fsm="UT_SIP-UE 1.2.2.1">
+		<state ID="Alerting">
+			<!-- Expected responses are 100, 180, 183 or 200 -->
+			<response>
+				<!-- Step 4 from the Default Message Flow Call-Term-at-UE(DUT) Sequence Diagram -
+               Test 18x response for reliability for possible Prack message -->
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>REINVITE</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="500-INVITE" target="UE1" originator="DUT">
+							<mod modtype="add" hdr="Retry-After" param="value">
+								<expr>6</expr>
+							</mod>
+						</send>
+					</then>
+				</if>
+			</response>
+			<!-- Transitions for Setup state -->
+			<transition to="WaitRelease" event="REINVITE"/>
+		</state>
+		<state ID="WaitRelease">
+			<!-- response>
+				<if>
+					<and>
+						<gte>
+							<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+							<expr>300</expr>
+						</gte>
+						<lte>
+							<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+							<expr>699</expr>
+						</lte>
+					</and>
+					<then>
+						<send protocol="sip" msgtype="ACK" target="UE1" originator="DUT"/>
+					</then>
+				</if>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>CANCEL</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="200-CANCEL" target="UE1" originator="DUT"/>
+					</then>
+				</if>
+			
+			</response-->
+			<transition to="WaitRelease" event="ACK"/>
+			<transition to="END" event="CANCEL"/>
+			<!-- transition to="END" event="500-INVITE"/-->
+		</state>
+	</add_to>
+</pc2xml>

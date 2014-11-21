@@ -1,0 +1,74 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+
+<pc2xml version="$Revision: 6076 $" name="UT_Codec_1.7.7" descrip="This is a unit test for the Codec 1.7.7 test script" number="1">
+	
+	<template file="./templates/ut/Term_Proxy_DUT.xml" />
+	
+	<configure name="No Response Timeout" value="120000"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Setup"/>
+	</remove_from>
+	
+	<remove_from fsm="UE0">
+		<state ID="Connected"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<states initialstate="Setup"/>
+		<!-- SETUP State -->
+		<state ID="Setup">
+				
+				<prelude>
+					<sleep time="12000"/>
+					<send protocol="sip" msgtype="Invite" destination="DUT" target="PCSCF1" originator="UE1"/>
+				</prelude>
+				<!-- Expected responses are 100, 180, 183 or 200 -->
+				<response>
+					
+					<if>
+						<contains>
+							<msg_ref type="sip" msg_instance="last" hdr_instance="any">18x-Invite.Require</msg_ref>
+							<expr>100rel</expr>
+						</contains>
+						<then>
+							
+							<send protocol="sip" msgtype="Prack" destination="DUT" target="PCSCF1" originator="UE1"/>
+						</then>
+					</if>
+				</response>
+				<!-- Transitions for Setup state -->
+				<transition from="Setup" to="Proceeding" event="100-INVITE"/>
+				<transition from="Setup" to="Alerting" event="180-INVITE"/>
+				<transition from="Setup" to="Alerting" event="183-INVITE"/>
+				<transition from="Setup" to="Connected" event="200-INVITE"/>
+			</state>
+	</add_to>
+	
+	<add_to fsm="UE0">
+		<state ID="Connected" timer="60000">
+			<postlude>
+				<send protocol="sip" msgtype="BYE" destination="UE1" target="PCSCF1" originator="DUT"/>
+			</postlude>
+			<transition to="EndCall" event="TimerExpired"/>
+		</state>
+	</add_to>
+</pc2xml>

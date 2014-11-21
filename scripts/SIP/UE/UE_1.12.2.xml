@@ -1,0 +1,72 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="SIP-UE 1.12.2" 
+	descrip="Reception of a second UPDATE  before generating a response to a previous UPDATE (During Session Establishment)." 
+	number="SIP-UE 1.12.2">
+	
+	<template file="./templates/CallTermAtUETemp.xml" name="UE1"/>
+	
+	<add_to fsm="UE1">
+		<transition from="Alerting" to="Verify" event="ALERTING_UAC"/>
+		
+		<transition from="Proceeding" to="Verify" event="ALERTING_UAC"/>
+		
+		<transition from="Setup" to="Verify" event="ALERTING_UAC"/>
+		
+		<state ID="Verify">
+			<prelude once="true">
+				<sleep time="500"/>
+				<send protocol="sip" msgtype="UPDATE"/>
+				<send protocol="sip" msgtype="UPDATE"/>
+			</prelude>
+			<response>
+				<!-- Step 2 from test case 1.12.1 -->
+				<if>
+					<eq>
+						<msg_ref type="sip">Response</msg_ref>
+						<expr>500-UPDATE</expr>
+					</eq>
+					<then>
+						<verify step="3" requirements="RFC1422">
+							<eq>
+								<msg_ref type="sip">500-UPDATE.CSeq.value</msg_ref>
+								<msg_ref type="sip" msg_instance="lasst">UPDATE.CSeq.value</msg_ref>
+							</eq>
+						</verify>
+						<verify step="4" requirements="RFC1423">
+							<and>
+								<gte>
+									<msg_ref type="sip">500-UPDATE.Retry-After.value</msg_ref>
+									<expr>0</expr>
+								</gte>
+								<lte>
+									<msg_ref type="sip">500-UPDATE.Retry-After.value</msg_ref>
+									<expr>10</expr>
+								</lte>
+							</and>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<transition to="END" event="500-UPDATE"/>
+		</state>
+	</add_to>
+</pc2xml>

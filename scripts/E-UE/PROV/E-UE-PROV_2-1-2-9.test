@@ -1,0 +1,101 @@
+#//****************************************************************************
+#// Filename: E-UE-PROV_2-1-2-9.test
+#// Author:   Matthew Forbes
+#// Creation Date: 11/03/2008
+#// Modified by:
+#//
+#//
+#//
+#//****************************************************************************
+#// Description:
+#//     TC2837 TEST CASE E-UE-PROV 2.1.2.9 Ability of eUE to support post
+#// Configuration Incremental Provisioning
+#//
+#// Objective:
+#//     Test the ability of the eUE DUT to support post configuration file
+#// incremental provisioning.
+#//
+#// PacketCable DUT:
+#//     EDVA
+#//
+#// Test Steps:
+#//     - Initial configuration
+#//     - Start sniffer
+#//     - Reset EDVA
+#//     - Check Provisioning state
+#//     - SNMP Set on pktcEUEUsrIMPIId & pktcEUEUsrIMPUId
+#//     - Check values in table, pktcEUEUsrIMPITable & pktcEUEUsrIMPUTable
+#//     - Stop Sniffer
+#//
+#// Notes:
+#//     - Requires provPrimitives.tcl & tftp_primitives.tcl.
+#//     - Requires the specific config file in $BASE_CFG_FILE_PATH in Provisioning Server.
+#//****************************************************************************
+global SCRIPT_VERSION
+set SCRIPT_VERSION { # $Id: E-UE-PROV_2-1-2-9.test 7770 2011-01-25 22:10:01Z botte $ }
+
+DoStep "PRESTEP_E-UE-PROV_2-1-2-9_1" "Initial configuration" {
+    LogMsg "--- Initial PROV module ---"
+    Init_PROV
+    # PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122 Secure_Flow_BasicCall_DigitMap_CW69_RST_Baseline.cfg
+    PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122 C.1.1.3.bin
+    PROV_DEPLOY_DHCP
+} {PASS_STEP}
+
+
+DoStep "PRESTEP_E-UE-PROV_2-1-2-9_2-1" "Start sniffer" {
+    LogMsg "--- Start sniffer ---"
+    Init_CONTROLLER_LAN
+    SetupCaptureControllerLan "host $MTA_IP"
+    StartCaptureControllerLan
+} {PASS_STEP}
+
+
+DoStep "E-UE-PROV_2-1-2-9_2-2" "SNMP RESET" {
+    SNMP_SET $oid_pktcMtaDevResetNow INTEGER 1 $MTA_IP
+    actionWait "Wait for MTA to reboot" 60
+} {PASS_STEP}
+
+
+DoStep "E-UE-PROV_2-1-2-9_2-3" "pktcMtaDevProvisioningState Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMP_GET $oid_pktcMtaDevProvisioningState $MTA_IP 20]
+    LogMsg "The Value of MTA Provisioning State is: $val"
+} {
+    IsEqual $val 1
+}
+
+DoStep "E-UE-PROV_2-1-2-9_3" "SNMP SET pktcEUEUsrIMPIId" {
+    set val [SNMP_SET $oid_pktcEUEUsrIMPIId.2 STRING 7205551302@redlab.com $MTA_IP]
+} {
+    IsEqual $val 0
+}
+
+DoStep "E-UE-PROV_2-1-2-9_4" "SNMP SET pktcEUEUsrIMPUId" {
+    set val [SNMP_SET $oid_pktcEUEUsrIMPUId.2 STRING 7205551302@redlab.com $MTA_IP]
+} {
+    IsEqual $val 0
+}
+
+DoStep "E-UE-PROV_2-1-2-9_5-1" "Check SNMP table pktcEUEUsrIMPITable" {
+    set val [SNMP_TABLE_GET $table_pktcEUEUsrIMPITable $MTA_IP 4]
+} {
+    IsEqual $val 7205551302@redlab.com
+}
+
+
+DoStep "E-UE-PROV_2-1-2-9_5-2" "Check SNMP table pktcEUEUsrIMPUTable" {
+    set val [SNMP_TABLE_GET $table_pktcEUEUsrIMPUTable $MTA_IP 4]
+} {
+    IsEqual $val 7205551302@redlab.com
+}
+
+
+DoStep "E-UE-PROV_2-1-2-9_POSTSTEP" "Stop sniffer" {
+    LogMsg "--- Stop sniffer ---"
+    StopCaptureControllerLan
+    SaveToFileControllerLan
+} {PASS_STEP}
+
+
+Cleanup

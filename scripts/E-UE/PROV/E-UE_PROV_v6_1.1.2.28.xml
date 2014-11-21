@@ -1,0 +1,194 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+ Change History: (Author & Date)
+-->
+<pc2xml version="$Revision: 7768 $"
+        name="EUE Prov 1.1.2.28"
+        descrip="eUE uses selected IP address when multiple IP addresses are resolved
+                 for SNMP entity FQDN contained in sub-option 3."
+        number="EUE Prov 1.1.2.28">
+
+    <template file="./templates/EUE_Prov_B_1_1_1.xml" name="MultipleIP"/>
+
+    <add_to fsm="MultipleIP">
+        <transition from="StartCapture_RebootWait" to="EDVAProvisions" event="TimerExpired"/>
+
+        <!-- E/MTA DUT reports provisioning pass code (1) to provisioning service (SNMP Entity). -->
+        <state ID="EDVAProvisions">
+            <prelude once="true">
+                <stop_capture/>
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>DOCS-CABLE-DEVICE-MIB::docsDevServerBootState.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">UE0.IP</msg_ref>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="5">
+                    <contains>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>1</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="ReConfigure" event="SNMPResp"/>
+        </state>
+
+        <!-- Configure DNS server and SNMP servers. -->
+        <state ID="ReConfigure"
+               provFile="E-UE_PROV_v6_2.1.2.1_2.bin"
+               policyFile="MTAFORCW122_test"
+               nextState="Reset2"/>
+
+        <!-- Reset the UE DUT (not the CM) and bring it to an operational state. -->
+        <!-- Longer timer due to nature of test. -->
+        <state ID="Reset2" timer="180000">
+            <prelude once="true">
+                <start_capture>
+                    <filter>
+                        <var_expr>
+                            <expr>host </expr>
+                            <msg_ref type="platform">DUT.IP</msg_ref>
+                        </var_expr>
+                    </filter>
+                </start_capture>
+
+                <send protocol="utility" msgtype="SNMPSet">
+                    <mod modtype="add" hdr="array">
+                        <var_expr>
+                            <expr>varBind 1 1 3 \r\n ][ , </expr>
+                            <expr>PKTC-IETF-MTA-MIB::pktcMtaDevResetNow.0,INTEGER,1][\r\n</expr>
+                        </var_expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP Address</msg_ref>
+                    </mod>
+                    <mod modtype="replace" hdr="version">
+                        <expr>2c</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPRespFailure</expr>
+                    </eq>
+                    <then>
+                        <fail/>
+                    </then>
+                </if>
+                <if>
+                    <or>
+                        <eq>
+                            <msg_ref type="sip">REGISTER.Contact.expires</msg_ref>
+                            <expr>0</expr>
+                        </eq>
+                        <eq>
+                            <msg_ref type="sip">REGISTER.Expires.value</msg_ref>
+                            <expr>0</expr>
+                        </eq>
+                    </or>
+                    <then>
+                        <send protocol="sip" msgtype="200-REGISTER"/>
+                    </then>
+                </if>
+            </response>
+            <transition to="EDVAProvisions2" event="TimerExpired"/>
+            <transition to="Reset2" event="SNMPResp"/>
+            <transition to="Reset2" event="REGISTER"/>
+            <!-- Step 7 MTA resets properly -->
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+        <!-- E/MTA DUT reports provisioning pass code (1) to provisioning service (SNMP Entity). -->
+        <state ID="EDVAProvisions2">
+            <prelude once="true">
+                <stop_capture/>
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>DOCS-CABLE-DEVICE-MIB::docsDevServerBootState.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">UE0.IP</msg_ref>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="16">
+                    <contains>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>1</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="VerifyInformAndResponse" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+        <state ID="VerifyInformAndResponse">
+            <prelude once="true">
+                <stop_capture/>
+
+                <parse_capture name="eUE_Prov">
+                    <parser_filter protocol="snmp" ip="DUT.IP"/>
+                </parse_capture>
+
+                <!-- Note the IP address to which the MTA DUT sent the enrollment SNMPv2c Inform. -->
+                <var name="enrollment">
+                    <capture_ref type="snmp" name="eUE_Prov" msg_instance="first">Inform Request.ip.dst_host.show</capture_ref>
+                </var>
+
+                <!-- Note the IP address to which the MTA DUT sent the final SNMPv2c Inform. -->
+                <var name="final_inform">
+                    <capture_ref type="snmp" name="eUE_Prov" msg_instance="last">Inform Request.ip.dst_host.show</capture_ref>
+                </var>
+            </prelude>
+
+            <response>
+                <!-- Only one enrollment response is sent - verification implied by test case. -->
+                <verify>
+                    <notnull>
+                        <capture_ref type="snmp" name="eUE_Prov" msg_instance="2">Get Response</capture_ref>
+                    </notnull>
+                </verify>
+
+                <!-- Verify the three possible provisioning scenarios. -->
+                <!-- Regardless of number of Informs Requests, they occur before sole Response. -->
+                <verify step="8 10 11 13 14 15">
+                    <lt>
+                        <capture_ref type="snmp" name="eUE_Prov" msg_instance="last">Inform Request.num</capture_ref>
+                        <capture_ref type="snmp" name="eUE_Prov">Get Response.num</capture_ref>
+                    </lt>
+                </verify>
+
+                <verify step="18">
+                    <!-- Enrollment SNMPv2c Inform equals Set. -->
+                    <eq>
+                        <var_ref name="enrollment"/>
+                        <capture_ref type="snmp" name="eUE_Prov">Set Request.ip.dst_host.show</capture_ref>
+                    </eq>
+                </verify>
+                <verify step="19">
+                    <!-- Final SNMPv2c Inform equals Set. -->
+                         It must be the same IP address from which it received the SNMPv2c Set in MTA-19.
+                    <eq>
+                        <var_ref name="final_inform"/>
+                        <capture_ref type="snmp" name="eUE_Prov">Set Request.ip.dst_host.show</capture_ref>
+                    </eq>
+                </verify>
+            </response>
+        </state>
+    </add_to>
+</pc2xml>

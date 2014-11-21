@@ -1,0 +1,238 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+ Change History: (Author & Date)
+	2011-10-10	prosenberg-watt - Initial version
+	2011-11-15	Seung Lee - final versionfor
+-->
+<pc2xml version="$Revision: 1 $" 
+	name="ESG SIP PBX 1.3.4.2" 
+	descrip="Call Hold by SP-SSE" 
+	number="ESG SIP PBX 1.3.4.2">
+	
+	<template file="./templates/Proxy_with_HF.xml" name="UE0"/>
+	<!--configure name="SIP Inspector Type" value="UE"/>
+	<configure name="SIP Inspector" value="enable"/-->
+
+	<remove_from fsm="UE0">
+		<state ID="Register"/>
+		<state ID="Mute"/>
+		<state ID="Muted"/>
+		<state ID="Unmute"/>
+		<state ID="OnHookUE1"/>
+	</remove_from>
+
+	<add_to fsm="UE0">
+		<state ID="Register">
+			<prelude>
+				<start_capture>
+					<filter>
+						<var_expr>
+							<expr>host </expr>
+							<msg_ref type="platform">UE0.IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">UE0.IP2</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">PCSCF1.IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">UE1.IP</msg_ref>
+						</var_expr>
+					</filter>
+				</start_capture>
+			</prelude>
+			<transition to="OffHook" event="Registered"/>
+		</state>
+
+		<state ID="Mute" timer="300">
+			<transition to="CallHold" event="TimerExpired"/>
+		</state>
+	
+		<state ID="CallHold">
+			<prelude once="true">
+				<log expr="On SP-SSE, start a call hold." promptUser="true"/>
+				<generate event="Branch1Event"/>
+			</prelude>
+			<response>
+				<if>
+					<and>
+						<or>
+							<eq>
+								<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE0.IP</msg_ref>
+							</eq>
+							<eq>
+								<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE0.IP</msg_ref>
+							</eq>
+						</or>
+						<neq>
+							<msg_ref type="sip">Response</msg_ref>
+							<expr>200-INVITE</expr>
+						</neq>
+					</and>
+					<then>
+						<proxy target="UE1"/>
+					</then>
+					<elseif>
+						<and>
+							<or>
+								<eq>
+									<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+									<msg_ref type="platform">UE0.IP</msg_ref>
+								</eq>
+								<eq>
+									<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+									<msg_ref type="platform">UE0.IP</msg_ref>
+								</eq>
+							</or>
+							<eq>
+								<msg_ref type="sip">Response</msg_ref>
+								<expr>200-INVITE</expr>
+							</eq>
+						</and>
+						<then>
+							<verify step="7">
+								<or>
+									<contains>
+										<msg_ref type="sdp">200-INVITE.mode.value</msg_ref>
+										<expr>inactive</expr>
+									</contains>
+									<contains>
+										<msg_ref type="sdp">200-INVITE.mode.value</msg_ref>
+										<expr>sendonly</expr>
+									</contains>										
+								</or>
+							</verify>
+							<proxy target="UE1"/>
+						</then>
+					</elseif>
+					<elseif>
+						<or>
+							<eq>
+								<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE1.IP</msg_ref>
+							</eq>
+							<eq>
+								<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE1.IP</msg_ref>
+							</eq>
+						</or>
+						<then>
+							<proxy target="UE0"/>
+						</then>
+					</elseif>
+				</if>
+			</response>
+			<transition to="CallHold" event="Branch1Event"/>
+			<transition to="CallHold" event="REINVITE"/>
+			<transition to="CallHold" event="xxx-INVITE"/>
+			<transition to="CallHoldCancel" event="ACK"/>
+		</state>
+	
+		<state ID="CallHoldCancel">
+			<prelude once="true">
+				<log expr="Cancel the call hold." promptUser="true"/>
+				<generate event="Branch2Event"/>
+			</prelude>
+			<response>
+				<if>
+					<and>
+						<or>
+							<eq>
+								<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE0.IP</msg_ref>
+							</eq>
+							<eq>
+								<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE0.IP</msg_ref>
+							</eq>
+						</or>
+						<neq>
+							<msg_ref type="sip">Response</msg_ref>
+							<expr>200-INVITE</expr>
+						</neq>
+					</and>
+					<then>
+						<proxy target="UE1"/>
+					</then>
+					
+					<elseif>
+						<and>
+							<or>
+								<eq>
+									<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+									<msg_ref type="platform">UE0.IP</msg_ref>
+								</eq>
+								<eq>
+									<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+									<msg_ref type="platform">UE0.IP</msg_ref>
+								</eq>
+							</or>
+							<eq>
+								<msg_ref type="sip">Response</msg_ref>
+								<expr>200-INVITE</expr>
+							</eq>
+						</and>
+						<then>
+							<verify step="8">
+								<or>
+									<contains>
+										<msg_ref type="sdp">200-INVITE.mode.value</msg_ref>
+										<expr>active</expr>
+									</contains>
+									<contains>
+										<msg_ref type="sdp">200-INVITE.mode.value</msg_ref>
+										<expr>sendrecv</expr>
+									</contains>
+								</or>
+							</verify>
+							<proxy target="UE1"/>
+						</then>					
+					</elseif>
+					
+					<elseif>
+						<or>
+							<eq>
+								<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE1.IP</msg_ref>
+							</eq>
+							<eq>
+								<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE1.IP</msg_ref>
+							</eq>
+						</or>
+						<then>
+							<proxy target="UE0"/>
+						</then>
+					</elseif>
+				</if>
+			</response>
+			<transition to="CallHoldCancel" event="Branch2Event"/>
+			<transition to="CallHoldCancel" event="REINVITE"/>
+			<transition to="CallHoldCancel" event="xxx-INVITE"/>
+			<transition to="MediaResumed" event="ACK"/>
+		</state>
+		
+		<state ID="OnHookUE1">
+			<prelude>
+				<send protocol="utility" msgtype="OnHook">
+					<mod modtype="replace" hdr="voiceport">
+						<msg_ref type="platform">Platform.voiceport1</msg_ref>
+					</mod>
+				</send>
+			</prelude>
+			<postlude>
+				<stop_capture/>	
+			</postlude>
+			<transition to="END" event="OnHookComplete"/>
+		</state>	
+	</add_to>
+</pc2xml>

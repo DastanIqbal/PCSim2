@@ -1,0 +1,102 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="SIP-UE 1.3.1.1" 
+	descrip="Verification of ACK message" 
+	number="SIP-UE 1.3.1.1">
+	
+	<template name="UE1" file="./templates/CallOrigAtUETemp.xml"/>
+	<configure name="SIP Inspector Type" value="UE"/>
+	<configure name="SIP Inspector" value="enable"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Register" sub="response"/>
+		<state ID="Connected"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<state ID="Register" sub="response">
+			<!-- When the registered event comes in see if the device
+				is supposed to be simulated or a real device -->
+			<if>
+				<or>
+					<neq>
+						<msg_ref type="platform">Platform.SIP Inspector Type</msg_ref>
+						<expr>UE</expr>
+					</neq>
+					<neq>
+						<msg_ref type="platform">Platform.SIP Inspector</msg_ref>
+						<expr>enable</expr>
+					</neq>
+				</or>
+				<then>
+					<log level="FATAL" expr="The SIP Inspector Type setting must equal enable and the SIP Inspector setting must equal UE for the test to be executed."/>
+					<generate event="FailEvent"/>
+				</then>
+				<elseif>
+					<or>
+						<eq>
+							<msg_ref type="platform">UE1.simulated</msg_ref>
+							<expr>false</expr>
+						</eq>
+						<or>
+							<eq>
+								<msg_ref type="platform">UE1.simulated</msg_ref>
+								<expr>disable</expr>
+							</eq>
+							<eq>
+								<msg_ref type="platform">UE1.simulated</msg_ref>
+								<expr>off</expr>
+							</eq>
+						</or>
+					</or>
+					<then>
+						<generate event="Branch1Event"/>
+					</then>
+					<else>
+						<generate event="Branch2Event"/>
+					</else>
+				</elseif>
+			</if>
+		</state>
+		
+		<transition from="Register" to="END" event="FailEvent"/>
+		
+		<state ID="Connected" timer="20000">
+			<response>
+				<!-- Step 2 from test case 1.3.1.1 - Verify that ACKCSeqvalue = INVITECSeqvalue-->
+				<verify step="2" requirements="RFC675">
+					<eq>
+						<msg_ref type="sip" msg_instance="last">ACK.CSeq.value</msg_ref>
+						<msg_ref type="sip" msg_instance="last">INVITE.CSeq.value</msg_ref>
+					</eq>
+				</verify>
+				<!-- Step 3 from test case 1.3.1.1 - Verify that ACKCSeqvalue = INVITE CSeq value-->
+				<verify step="3" requirements="RFC676">
+					<eq>
+						<msg_ref type="sip" msg_instance="last">ACK.CSeq.method</msg_ref>
+						<expr>ACK</expr>
+					</eq>
+				</verify>
+			</response>
+			<transition to="Releasing" event="TimerExpired"/>
+		</state>
+	</add_to>
+</pc2xml>

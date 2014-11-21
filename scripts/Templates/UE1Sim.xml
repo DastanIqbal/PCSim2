@@ -1,0 +1,203 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	PCPCII-139 : Update the Voicetronix modifiers to use the new values. (ghassler 07/10/2009)
+
+
+
+
+-->
+
+<!-- First are the document type and the attributes for our document -->
+<pc2xml version="$Revision: 8188 $" 
+	name="Simulated UE1 Originates Dialog Template" 
+	descrip="This is a template to emulate the creation and termination of a dialog from a UE (UE1) calling (UE2)." 
+	number="1">
+	
+	<fsm name="UE1">
+		<models>
+			<session/>
+		</models>
+	
+		<NE sim_type="orig" elements="UE1" targets="UE1"/>
+	
+		<states initialstate="UE1Registering">
+			<!-- UE1REGISTERING State -->
+			<state ID="UE1Registering">
+				<prelude>
+					<send protocol="sip" msgtype="Register"/>
+				</prelude>
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+							<expr>200</expr>
+						</eq>
+						<then>
+							<generate event="Registered"/>
+						</then>
+					</if>
+				</response>
+				<transition to="UE1Digest" event="401-Register"/>
+				<transition to="UE1Register" event="200-Register"/>
+			</state>
+			<state ID="UE1Digest">
+				<prelude>
+					<send protocol="sip" msgtype="Register"/>
+				</prelude>
+				<postlude>
+					<generate event="Registered"/>
+				</postlude>
+				<transition to="UE1Register" event="200-Register"/>
+			</state>
+			<!-- UE1REGISTER STATE -->
+			<state ID="UE1Register">
+				<!-- Transitions for Register state -->
+				<transition to="UE1Setup" event="Registered"/>
+			</state>
+			<!-- UE1OFFHOOK State -->
+			<state ID="UE1OffHook">
+				<prelude>
+					<send protocol="utility" msgtype="OffHook"/>
+				</prelude>
+				<!-- Transitions for OffHook state -->
+				<transition to="UE1Setup" event="OffHookComplete"/>
+			</state>
+			
+			<!-- UE1SETUP STATE -->
+			<state ID="UE1Setup">
+				<!-- Step 1 from the Default Message Flow Call-Term-at-UE(DUT) Sequence Diagram -
+               		Test 18x response for reliability for possible Prack message- send Invite -->
+				<prelude>
+					<send protocol="sip" msgtype="Invite" destination="UE2"/>
+				</prelude>
+				<!-- Expected responses are 100, 180, 183 or 200 -->
+				<response>
+					<!-- Step 4 from the Default Message Flow Call-Term-at-UE(DUT) Sequence Diagram -
+               Test 18x response for reliability for possible Prack message -->
+					<if>
+						<contains>
+							<msg_ref type="sip" msg_instance="last" hdr_instance="any">18x-Invite.Require</msg_ref>
+							<expr>100rel</expr>
+						</contains>
+						<then>
+							<!--Reliablity required for test sending Prack message to peer.-->
+							<send protocol="sip" msgtype="Prack" destination="UE2"/>
+						</then>
+					</if>
+				</response>
+				<!-- Transitions for Setup state -->
+				<transition to="UE1Proceeding" event="100-INVITE"/>
+				<transition to="UE1Alerting" event="180-INVITE"/>
+				<transition to="UE1Alerting" event="183-INVITE"/>
+				<transition to="UE1Connected" event="200-INVITE"/>
+			</state>
+			<!-- UE1PROCEEDING STATE -->
+			<!-- Step 2 from the Default Message Flow Call-Term-at-UE(DUT) Sequence Diagram - received 100-Invite -->
+			<state ID="UE1Proceeding">
+				<!-- Expected responses are 180, 183 or 200 -->
+				<response>
+					<!-- Step 4 from the Default Message Flow Call-Term-at-UE(DUT) Sequence Diagram-
+               Test 18x response for reliability for possible Prack message -->
+					<if>
+						<contains>
+							<msg_ref type="sip" msg_instance="last" hdr_instance="any">18x-Invite.Require</msg_ref>
+							<expr>100rel</expr>
+						</contains>
+						<then>
+							<!--Reliablity required for test sending Prack message to peer.-->
+							<!-- Step 3 from the Default Message Flow Call-Term-at-UE(DUT) Sequence Diagram- send Prack -->
+							<send protocol="sip" msgtype="Prack" destination="UE2"/>
+						</then>
+					</if>
+				</response>
+				<!-- Transitions for Proceeding state -->
+				<transition to="UE1Alerting" event="180-INVITE"/>
+				<transition to="UE1Alerting" event="183-INVITE"/>
+				<transition to="UE1Connected" event="200-INVITE"/>
+			</state>
+			<!-- ALERTING STATE -->
+			<!-- Step 5 from the Default Message Flow Call-Term-at-UE(DUT) Sequence Diagram- requires no special processing we simply need a transition 
+			     back to this state. -->
+			<state ID="UE1Alerting">
+				<response>
+					<!-- Expected responses are 180, 183, PRACK, UPDATE, or 200 -->
+					<!-- Step 6 from the Default Message Flow Call-Term-at-UE(DUT) Sequence Diagram - received UPDATE -->
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>UPDATE</expr>
+						</eq>
+						<then>
+							<!-- Step 7 from the Default Message Flow Call-Term-at-UE(DUT) Sequence Diagram- received UPDATE -->
+							<!--QoS required for test, sending a 200-OK to Update message to peer.-->
+							<send protocol="sip" msgtype="200-Update" destination="UE2"/>
+						</then>
+						<!-- Step 8 from the Default Message Flow Call-Term-at-UE(DUT) Sequence Diagram - received 180 -->
+						<elseif>
+							<and>
+								<eq>
+									<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+									<expr>180</expr>
+								</eq>
+								<contains>
+									<msg_ref type="sip" hdr_instance="any">180-INVITE.Require</msg_ref>
+									<expr>100rel</expr>
+								</contains>
+							</and>
+							<then>
+								<!--Reliablity required for test, sending Prack message to peer.-->
+								<send protocol="sip" msgtype="Prack" destination="UE2"/>
+							</then>
+						</elseif>
+					</if>
+				</response>
+				<!-- Transitions for Alerting state -->
+				<transition to="UE1Alerting" event="200-PRACK"/>
+				<transition to="UE1Alerting" event="UPDATE"/>
+				<transition to="UE1Alerting" event="18x-INVITE"/>
+				<transition to="UE1Connected" event="200-INVITE"/>
+			</state>
+			<!-- UE1CONNECTED STATE -->
+			<state ID="UE1Connected" timer="30000">
+				<prelude>
+					<!-- Step 11 from the Default Message Flow Call-Term-at-UE(DUT) Sequence Diagram - received 200-OK to Invite -->
+					<send protocol="sip" msgtype="ACK" destination="UE2"/>
+				</prelude>
+				<!-- Transitions for Connected state -->
+				<transition to="UE1OnHook" event="TimerExpired"/>
+			</state>
+			<!-- UE1RELEASING STATE -->
+			<state ID="UE1Releasing">
+				<prelude>
+					<send protocol="sip" msgtype="Bye" destination="UE2"/>
+				</prelude>
+				<!-- Transitions for Releasing state -->
+				<transition to="UE1CallComplete" event="200-BYE"/>
+			</state>
+			<!-- UE1ONHOOK STATE -->
+			<state ID="UE1OnHook">
+				<prelude>
+					<!-- This message is only sent to the third party tools
+               			when Voicetronix is enabled in the platform settings. 
+              		 	Otherwise the utility stack will always return a 
+               			OnHookComplete event. -->
+					<send protocol="utility" msgtype="OnHook"/>
+				</prelude>
+				<!-- Transitions for OnHook state -->
+				<transition to="UE1Releasing" event="OnHookComplete"/>
+			</state>
+			<state ID="UE1CallComplete" ES="true"/>
+		</states>
+	</fsm>
+</pc2xml>

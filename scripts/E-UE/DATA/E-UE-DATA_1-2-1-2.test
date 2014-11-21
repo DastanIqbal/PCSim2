@@ -1,0 +1,386 @@
+###############################################################################
+#// Filename: E-UE-DATA_1-2-1-2.test (PACT)
+#// Author:   Matthew Forbes
+#//
+#//
+#//
+#// Creation Date: March 10, 2009
+#// Modified by:
+#//             Matthew Forbes 2/8/10 - Changed config file. Added popup, step 5 and 9, to verify DUT uses
+#//             DNS server from config file or option 6 for secure and hybrid flows
+################################################################################
+#// Description:
+#//     TC2742 TEST CASE E-UE-DATA 1.2.1.2 - Ability of eUE to Implement the
+#//	    Operator Domain Table
+#//
+#// Objective:
+#//     This test verifies the eUE ability to properly implement the pktcEUEDevOpTable defined in
+#//     CL-PKTC-EUE-DEV-MIB.
+#//
+#//
+#// PacketCable DUT:
+#//     EDVA
+#//
+#// Test Steps:
+#//     - Initial configuration
+#//     - Start sniffer
+#//     - Reset DUT
+#//     - Check Provisioning state
+#//     - Invoke SNMPv3 API and query MIB objects and validate values
+#//     - Stop sniffer
+#//     - Hybrid configuration
+#//     - Start sniffer
+#//     - Reset DUT
+#//     - Check Provisioning state
+#//     - Invoke SNMPv2 API and bulk query MIB objects and validate values
+#//     - Stop sniffer
+#//
+#//
+#// Notes:
+#//     - Requires provPrimitives.tcl
+#//
+#//
+################################################################################
+global SCRIPT_VERSION
+set SCRIPT_VERSION { # $Id: E-UE-DATA_1-2-1-2.test 7447 2010-08-06 14:39:17Z ghassler $ }
+
+set test_case E-UE-DATA_1-2-1-2-
+set step_num 1
+
+Init_PROV
+Init_PART
+
+set NON_WRITABLE 2
+
+DoStep ${test_case}${step_num} "Initial Configuration" {
+    LogMsg "--- Init PROV module ---"
+    # PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122 Secure_Flow_BasicCall_DigitMap.cfg
+    # PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122 Secure_Flow_BasicCall_DigitMap_CW69_RST_Baseline.cfg
+    PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122 C.1.2.11.bin
+    PROV_DEPLOY_DHCP
+} {PASS_STEP}
+
+DoStep ${test_case}[incr step_num] "Start sniffer" {
+    LogMsg "--- Start sniffer ---"
+    Init_CONTROLLER_LAN
+    SetupCaptureControllerLan "host $MTA_IP || udp port 67"
+    StartCaptureControllerLan
+} {PASS_STEP}
+
+DoStep ${test_case}${step_num} "Reset CM/MTA" {
+    set val [SNMPvN_RESET $CM_IP]
+    LogMsg "--- Reset of CM and MTA has passed ---"
+} {
+    IsEqual $val 0
+}
+
+DoStep ${test_case}[incr step_num] "pktcMTADevProvisioningState Content Verification" {
+    # Wait for a minute to let CM/MTA starting to reboot
+    actionWait "Wait for CM/MTA to reboot" 60
+    # Get the OID from the MTA and check it using our previously defined
+    set val [GetProvState 1 600]
+    LogMsg "MTA Provisioning State"
+    LogMsg "             - Expected : 1"
+    LogMsg "             - Received : $val"
+} {
+    IsEqual $val 1
+}
+
+DoStep ${test_case}[incr step_num]_1 "pktcEUEDevDnsAddrType Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMP_TABLE_GET $table_pktcEUEDevDnsTable.1 $MTA_IP 1]
+    LogMsg "The Value of pktcEUEDevDnsAddrType is: $val"
+} {
+    IsEqual $val 1
+}
+
+DoStep ${test_case}${step_num}_2 "pktcEUEDevDnsAddr Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMP_TABLE_GET $table_pktcEUEDevDnsTable.1 $MTA_IP 2]
+    LogMsg "The Value of pktcEUEDevDnsAddr is: $val"
+    set hexip [ decIpToHexIp $PROV_DNS1_IP ]
+} {
+    IsEqual $val "$hexip "
+}
+
+DoStep ${test_case}${step_num}_3 "pktcEUEDevDnsRowStatus Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMP_TABLE_GET $table_pktcEUEDevDnsTable.1 $MTA_IP 3]
+    LogMsg "The Value of pktcEUEDevDnsRowStatus is: $val"
+} {
+    IsEqual $val 1
+}
+
+DoStep ${test_case}[incr step_num] "pktcEUEDevDnsAddrType Content set" {
+    # Try to set the read only parameter
+    set val [SNMP_SET $oid_pktcEUEDevDnsAddrType INTEGER 2 $MTA_IP]
+    LogMsg "The Value of pktcEUEDevDnsAddrType is: $val"
+} {IsEqual $val $NON_WRITABLE}
+
+DoStep ${test_case}[incr step_num] "Verify DUT uses DNS IP from config file" {
+    LogMsg "Verify DUT uses DNS IP from config file"
+} {
+    verify_signal "Monitor Trace:  Verify DUT uses DNS IP from config file, $PROV_DNS1_IP "
+}
+
+DoStep ${test_case}[incr step_num] "Stop Sniffer" {
+    LogMsg "--- Stop Sniffer ---"
+    StopCaptureControllerLan
+    SaveToFileControllerLan "_Secure1"
+} { PASS_STEP }
+
+DoStep ${test_case}${step_num} "Initial Configuration" {
+    LogMsg "--- Init PROV module ---"
+    # PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122 Secure_Flow_BasicCall_DigitMap_No_DNS.cfg
+    PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122 C.1.2.8.bin
+    PROV_DEPLOY_DHCP
+} {PASS_STEP}
+
+DoStep ${test_case}[incr step_num] "Start sniffer" {
+    LogMsg "--- Start sniffer ---"
+    Init_CONTROLLER_LAN
+    SetupCaptureControllerLan "host $MTA_IP || udp port 67"
+    StartCaptureControllerLan
+} {PASS_STEP}
+
+DoStep ${test_case}${step_num} "Reset CM/MTA" {
+    set val [SNMPvN_RESET $CM_IP]
+    LogMsg "--- Reset of CM and MTA has passed ---"
+} {
+    IsEqual $val 0
+}
+
+DoStep ${test_case}[incr step_num] "pktcMTADevProvisioningState Content Verification" {
+    # Wait for a minute to let CM/MTA starting to reboot
+    actionWait "Wait for CM/MTA to reboot" 60
+    # Get the OID from the MTA and check it using our previously defined
+    set val [GetProvState 1 600]
+    LogMsg "MTA Provisioning State"
+    LogMsg "             - Expected : 1"
+    LogMsg "             - Received : $val"
+} {
+    IsEqual $val 1
+}
+
+DoStep ${test_case}[incr step_num]_1 "pktcEUEDevDnsAddrType Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMP_TABLE_GET $table_pktcEUEDevDnsTable.1 $MTA_IP 1]
+    LogMsg "The Value of pktcEUEDevDnsAddrType is: $val"
+} {
+    IsEqual $val 0
+}
+
+DoStep ${test_case}${step_num}_2 "pktcEUEDevDnsAddr Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMP_TABLE_GET $table_pktcEUEDevDnsTable.1 $MTA_IP 2]
+    LogMsg "The Value of pktcEUEDevDnsAddr is: $val"
+} {
+    IsEqual $val ""
+}
+
+DoStep ${test_case}${step_num}_3 "pktcEUEDevDnsRowStatus Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMP_TABLE_GET $table_pktcEUEDevDnsTable.1 $MTA_IP 3]
+    LogMsg "The Value of pktcEUEDevDnsRowStatus is: $val"
+} {
+    IsEqual $val 1
+}
+
+DoStep ${test_case}[incr step_num] "Verify DUT uses DNS IP from DHCP Option 6" {
+    LogMsg "Verify DUT uses DNS IP from DHCP Option 6"
+} {
+    verify_signal "Monitor Trace:  Verify DUT uses DNS IP from DHCP Option 6, $PROV_DNS1_IP "
+}
+
+DoStep ${test_case}[incr step_num] "Stop Sniffer" {
+    LogMsg "--- Stop Sniffer ---"
+    StopCaptureControllerLan
+    SaveToFileControllerLan "_Secure2"
+} { PASS_STEP }
+
+set step_num 1
+
+DoStep ${test_case}${step_num}h "Initial Configuration" {
+    LogMsg "--- Init PROV module ---"
+    # PROV_MODIFY_DEVICE $MTA_MAC HYBRID2 HybridFlow_BasicCall_DigitMap_Inactive.cfg
+    # PROV_MODIFY_DEVICE $MTA_MAC HYBRID2 Hybrid_Flow_BasicCall_DigitMap_CW69_RST_Baseline.cfg
+    PROV_MODIFY_DEVICE $MTA_MAC HYBRID2 C.1.2.11.bin
+    PROV_DEPLOY_DHCP
+} {PASS_STEP}
+
+DoStep ${test_case}[incr step_num]h_1 "Start sniffer" {
+    LogMsg "--- Start sniffer ---"
+    Init_CONTROLLER_LAN
+    SetupCaptureControllerLan "host $MTA_IP || udp port 67"
+    StartCaptureControllerLan
+} {PASS_STEP}
+
+DoStep ${test_case}[incr step_num]h_2 "Reset CM/MTA" {
+    set val [SNMPvN_RESET $CM_IP]
+    LogMsg "--- Reset of CM and MTA has passed ---"
+} {
+    IsEqual $val 0
+}
+
+DoStep ${test_case}${step_num}h_3 "pktcMTADevProvisioningState Content Verification" {
+    # Wait for a minute to let CM/MTA starting to reboot
+    actionWait "Wait for CM/MTA to reboot" 120
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMPvN_GET $oid_pktcMtaDevProvisioningState $MTA_IP]
+    LogMsg "MTA Provisioning State"
+    LogMsg "             - Expected : 1"
+    LogMsg "             - Received : $val"
+} {
+    IsEqual $val 1
+}
+
+## Get all the values and verify
+
+DoStep ${test_case}[incr step_num]h_1 "pktcEUEDevDnsAddrType Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMPvN_TABLE_GET $table_pktcEUEDevDnsTable.1 $MTA_IP 1]
+    LogMsg "The Value of pktcEUEDevDnsAddrType is: $val"
+} {
+    IsEqual $val 1
+}
+
+DoStep ${test_case}${step_num}h_2 "pktcEUEDevDnsAddr Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMPvN_TABLE_GET $table_pktcEUEDevDnsTable.1 $MTA_IP 2]
+    LogMsg "The Value of pktcEUEDevDnsAddr is: $val"
+    # set hexip [decIpToHexIp $PROV_DNS1_IP]
+} {
+    IsEqual $val "$hexip "
+}
+
+DoStep ${test_case}[incr step_num]h_3 "pktcEUEDevDnsRowStatus Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMPvN_TABLE_GET $table_pktcEUEDevDnsTable.1 $MTA_IP 3]
+    LogMsg "The Value of pktcEUEDevDnsRowStatus is: $val"
+} {
+    IsEqual $val 1
+}
+
+DoStep ${test_case}[incr step_num]h "pktcEUEDevDnsAddrType Content set" {
+    # Try to set the read only parameter
+    set val [SNMPvN_SET $oid_pktcEUEDevDnsAddrType INTEGER 2 $MTA_IP]
+    LogMsg "The Value of pktcEUEDevDnsAddrType is: $val"
+} {IsEqual $val $NON_WRITABLE}
+
+DoStep ${test_case}[incr step_num] "Verify DUT uses DNS IP from config file" {
+    LogMsg "Verify DUT uses DNS IP from config file"
+} {
+    verify_signal "Monitor Trace:  Verify DUT uses DNS IP from config file, $PROV_DNS1_IP "
+}
+
+DoStep ${test_case}[incr step_num]h "Stop Sniffer" {
+    LogMsg "--- Stop Sniffer ---"
+    StopCaptureControllerLan
+    SaveToFileControllerLan "_Hybrid1"
+} { PASS_STEP }
+
+DoStep ${test_case}${step_num}h "Initial Configuration" {
+    LogMsg "--- Init PROV module ---"
+    # PROV_MODIFY_DEVICE $MTA_MAC HYBRID2 HybridFlow_BasicCall_DigitMap_Inactive_No_DNS.cfg
+    PROV_MODIFY_DEVICE $MTA_MAC HYBRID2 C.1.2.8.bin
+    PROV_DEPLOY_DHCP
+} {PASS_STEP}
+
+DoStep ${test_case}[incr step_num]h_1 "Start sniffer" {
+    LogMsg "--- Start sniffer ---"
+    Init_CONTROLLER_LAN
+    SetupCaptureControllerLan "host $MTA_IP || udp port 67"
+    StartCaptureControllerLan
+} {PASS_STEP}
+
+DoStep ${test_case}[incr step_num]h_2 "Reset CM/MTA" {
+    set val [SNMPvN_RESET $CM_IP]
+    LogMsg "--- Reset of CM and MTA has passed ---"
+} {
+    IsEqual $val 0
+}
+
+DoStep ${test_case}${step_num}h_3 "pktcMTADevProvisioningState Content Verification" {
+    # Wait for a minute to let CM/MTA starting to reboot
+    actionWait "Wait for CM/MTA to reboot" 120
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMPvN_GET $oid_pktcMtaDevProvisioningState $MTA_IP]
+    LogMsg "MTA Provisioning State"
+    LogMsg "             - Expected : 1"
+    LogMsg "             - Received : $val"
+} {
+    IsEqual $val 1
+}
+
+## Get all the values and verify
+
+DoStep ${test_case}[incr step_num]h_1 "pktcEUEDevDnsAddrType Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMPvN_TABLE_GET $table_pktcEUEDevDnsTable.1 $MTA_IP 1]
+    LogMsg "The Value of pktcEUEDevDnsAddrType is: $val"
+} {
+    IsEqual $val 0
+}
+
+DoStep ${test_case}${step_num}h_2 "pktcEUEDevDnsAddr Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMPvN_TABLE_GET $table_pktcEUEDevDnsTable.1 $MTA_IP 2]
+    LogMsg "The Value of pktcEUEDevDnsAddr is: $val"
+    # set hexip [decIpToHexIp $PROV_DNS1_IP]
+} {
+    IsEqual $val ""
+}
+
+DoStep ${test_case}[incr step_num]h_3 "pktcEUEDevDnsRowStatus Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMPvN_TABLE_GET $table_pktcEUEDevDnsTable.1 $MTA_IP 3]
+    LogMsg "The Value of pktcEUEDevDnsRowStatus is: $val"
+} {
+    IsEqual $val 1
+}
+
+DoStep ${test_case}[incr step_num] "Verify DUT uses DNS IP from DHCP Option 6" {
+    LogMsg "Verify DUT uses DNS IP from DHCP Option 6"
+} {
+    verify_signal "Monitor Trace:  Verify DUT uses DNS IP from DHCP Option 6, $PROV_DNS1_IP "
+}
+
+DoStep ${test_case}[incr step_num]h "Stop Sniffer" {
+    LogMsg "--- Stop Sniffer ---"
+    StopCaptureControllerLan
+    SaveToFileControllerLan "_Hybrid2"
+} { PASS_STEP }
+
+DoStep ${test_case}[incr step_num] "Configure Provisioning Server" {
+    PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122 Device_Level_Secure.cfg
+    PROV_DEPLOY_DHCP
+} { PASS_STEP }
+
+
+############### Reset CM and MTA and Verify Provisioning ################
+
+DoStep ${test_case}[incr step_num] "Reset CM/MTA" {
+    set val [SNMPvN_RESET $CM_IP]
+    LogMsg "--- Reset of CM and MTA has passed ---"
+} {
+    IsEqual $val 0
+}
+
+DoStep ${test_case}[incr step_num] "pktcMTADevProvisioningState Content Verification" {
+    # Wait for a minute to let CM/MTA starting to reboot
+    actionWait "Wait for CM/MTA to reboot" 60
+    # Get the OID from the MTA and check it using our previously defined
+    set val [GetProvState 1 600]
+    LogMsg "MTA Provisioning State"
+    LogMsg "             - Expected : 1"
+    LogMsg "             - Received : $val"
+} {
+    IsEqual $val 1
+}
+
+
+################################################################################
+# Cleanup
+################################################################################
+set CONTINUE_PAST_STEP_ERROR 0
+Cleanup

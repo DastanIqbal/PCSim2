@@ -1,0 +1,1109 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+ Change History: (Author & Date)
+	PCPCII-91 : Update the script to allow a second response to a BYE message be
+		proxied to the peer once the transfer has been completed. This is caused
+		by both the transferee and transferor sending a BYE message that cross over
+		the wire. This results in a new state called GlareCondition. (ghassler 1/9/09)
+		Removed the UE2OnHook state and executed the on hook operation once user has
+		answered Ringback question. (ghassler 1/15/09)
+	PCPCII-139 : Update the Voicetronix modifiers to use the new values. (ghassler 07/10/2009)
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-UE 1.5.3.10" 
+	descrip="transfer non-held call" 
+	number="RST-UE 1.5.3.10" inspector="disable">
+	
+	<fsm name="Core">
+		<models>
+			<session/>
+		</models>
+		
+		<NE sim_type="term" elements="SCSCF1 PCSCF1" targets="SCSCF1 PCSCF1"/>
+		
+		<states initialstate="Register">
+			<state ID="Register">
+				<transition to="UE1CallDUT" event="Registered"/>
+			</state>
+			
+			<state ID="UE1CallDUT">
+				<prelude>
+					<send protocol="utility" msgtype="OffHook">
+						<mod modtype="replace" hdr="voiceport">
+							<msg_ref type="platform">Platform.voiceport1</msg_ref>
+						</mod>
+					</send>
+				</prelude>
+				<transition to="UE1Setup" event="OffHookComplete"/>
+			</state>
+			
+			<state ID="UE1Setup">
+				<prelude once="true">
+					<send protocol="utility" msgtype="DialDigits">
+						<mod modtype="add" hdr="number">
+							<msg_ref type="platform">UE0.phone number 1</msg_ref>
+						</mod>
+						<mod modtype="replace" hdr="voiceport">
+							<msg_ref type="platform">Platform.voiceport1</msg_ref>
+						</mod>
+					</send>
+				</prelude>
+				<response>
+					<if>
+						<or>
+							<eq>
+								<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE1.IP</msg_ref>
+							</eq>
+							<eq>
+								<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE1.IP</msg_ref>
+							</eq>
+						</or>
+						<then>
+							<proxy target="UE0"/>
+						</then>
+						<elseif>
+							<or>
+								<eq>
+									<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+									<msg_ref type="platform">UE0.IP</msg_ref>
+								</eq>
+								<eq>
+									<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+									<msg_ref type="platform">UE0.IP</msg_ref>
+								</eq>
+							</or>
+							<then>
+								<proxy target="UE1"/>
+							</then>
+						</elseif>
+					</if>
+				</response>
+				<transition to="UE1Setup" event="DialDigitsComplete"/>
+				<transition to="UE1Setup" event="INVITE"/>
+				<transition to="UE1Alerting" event="CANCEL"/>
+				<transition to="UE1Alerting" event="xxx-INVITE"/>
+				<transition to="UE1Setup" event="OffHookComplete"/>
+			</state>
+			
+			<state ID="UE1Alerting" timer="12000">
+				<response>
+					<if>
+						<or>
+							<eq>
+								<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE1.IP</msg_ref>
+							</eq>
+							<eq>
+								<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE1.IP</msg_ref>
+							</eq>
+						</or>
+						<then>
+							<proxy target="UE0"/>
+						</then>
+						<elseif>
+							<or>
+								<eq>
+									<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+									<msg_ref type="platform">UE0.IP</msg_ref>
+								</eq>
+								<eq>
+									<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+									<msg_ref type="platform">UE0.IP</msg_ref>
+								</eq>
+							</or>
+							<then>
+								<proxy target="UE1"/>
+							</then>
+						</elseif>
+					</if>
+					<if>
+						<eq>
+							<msg_ref type="event"/>
+							<expr>TimerExpired</expr>
+						</eq>
+						<then>
+							<send protocol="utility" msgtype="OffHook">
+								<mod modtype="replace" hdr="voiceport">
+									<msg_ref type="platform">Platform.voiceport0</msg_ref>
+								</mod>
+							</send>
+						</then>
+					</if>
+				</response>
+				<transition to="UE1Alerting" event="OPTIONS"/>
+				<transition to="UE1Alerting" event="200-OPTIONS"/>
+				<transition to="UE1Alerting" event="PRACK"/>
+				<transition to="UE1Alerting" event="200-PRACK"/>
+				<transition to="UE1Alerting" event="UPDATE"/>
+				<transition to="UE1Alerting" event="200-UPDATE"/>
+				<transition to="UE1Alerting" event="xxx-INVITE"/>
+				<transition to="UE1Alerting" event="OffHookComplete"/>
+				<transition to="UE1Connected" event="ACK"/>
+			</state>
+			
+			<state ID="UE1Connected" timer="5000">
+				<transition to="DUTHookFlash" event="TimerExpired"/>
+			</state>
+			
+			<state ID="DUTHookFlash" timer="3000">
+				<prelude once="true">
+					<send protocol="utility" msgtype="HookFlash"/>
+				</prelude>
+				<response>
+					<if>
+						<or>
+							<eq>
+								<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE1.IP</msg_ref>
+							</eq>
+							<eq>
+								<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE1.IP</msg_ref>
+							</eq>
+						</or>
+						<then>
+							<proxy target="UE0"/>
+						</then>
+						<elseif>
+							<or>
+								<eq>
+									<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+									<msg_ref type="platform">UE0.IP</msg_ref>
+								</eq>
+								<eq>
+									<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+									<msg_ref type="platform">UE0.IP</msg_ref>
+								</eq>
+							</or>
+							<then>
+								<proxy target="UE1"/>
+							</then>
+						</elseif>
+					</if>
+				</response>
+				<transition to="DUTHookFlash" event="HookFlashComplete"/>
+				<transition to="DUTHookFlash" event="REINVITE"/>
+				<transition to="DUTHookFlash" event="xxx-INVITE"/>
+				<transition to="UE1SpecialOnHold" event="ACK"/>
+			</state>
+			
+			<state ID="UE1SpecialOnHold">
+				<prelude>
+					<send protocol="utility" msgtype="DialDigits">
+						<mod modtype="add" hdr="number">
+							<expr>*52</expr>
+						</mod>
+						<mod modtype="replace" hdr="voiceport">
+							<msg_ref type="platform">Platform.voiceport0</msg_ref>
+						</mod>
+					</send>
+				</prelude>
+				<transition to="UE2Setup" event="DialDigitsComplete"/>
+			</state>
+			
+			<state ID="UE2Setup">
+				<prelude once="true">
+					<send protocol="utility" msgtype="DialDigits">
+						<mod modtype="add" hdr="number">
+							<msg_ref type="platform">UE2.phone number 1</msg_ref>
+						</mod>
+						<mod modtype="replace" hdr="voiceport">
+							<msg_ref type="platform">Platform.voiceport0</msg_ref>
+						</mod>
+					</send>
+				</prelude>
+				<response>
+					<if>
+						<or>
+							<eq>
+								<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE2.IP</msg_ref>
+							</eq>
+							<eq>
+								<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE2.IP</msg_ref>
+							</eq>
+						</or>
+						<then>
+							<proxy target="UE0"/>
+						</then>
+						<elseif>
+							<or>
+								<eq>
+									<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+									<msg_ref type="platform">UE0.IP</msg_ref>
+								</eq>
+								<eq>
+									<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+									<msg_ref type="platform">UE0.IP</msg_ref>
+								</eq>
+							</or>
+							<then>
+								<proxy target="UE2"/>
+							</then>
+						</elseif>
+					</if>
+				</response>
+				<transition to="UE2Setup" event="DialDigitsComplete"/>
+				<transition to="UE2Setup" event="INVITE"/>
+				<transition to="UE2Alerting" event="CANCEL"/>
+				<transition to="UE2Alerting" event="xxx-INVITE"/>
+				<transition to="UE2Setup" event="OffHookComplete"/>
+			</state>
+			
+			<state ID="UE2Alerting" timer="12000">
+				<response>
+					<if>
+						<or>
+							<eq>
+								<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE2.IP</msg_ref>
+							</eq>
+							<eq>
+								<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE2.IP</msg_ref>
+							</eq>
+						</or>
+						<then>
+							<proxy target="UE0"/>
+						</then>
+						<elseif>
+							<or>
+								<eq>
+									<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+									<msg_ref type="platform">UE0.IP</msg_ref>
+								</eq>
+								<eq>
+									<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+									<msg_ref type="platform">UE0.IP</msg_ref>
+								</eq>
+							</or>
+							<then>
+								<proxy target="UE2"/>
+							</then>
+						</elseif>
+					</if>
+					<if>
+						<eq>
+							<msg_ref type="event"/>
+							<expr>TimerExpired</expr>
+						</eq>
+						<then>
+							<send protocol="utility" msgtype="OffHook">
+								<mod modtype="replace" hdr="voiceport">
+									<msg_ref type="platform">Platform.voiceport2</msg_ref>
+								</mod>
+							</send>
+						</then>
+					</if>
+					<if>
+						<eq>
+							<msg_ref type="sip">Response</msg_ref>
+							<expr>200-INVITE</expr>
+						</eq>
+						<then>
+							<var name="dialog1Contact">
+								<msg_ref type="sip">200-INVITE.Contact.addr-spec</msg_ref>
+							</var>
+						</then>
+					</if>
+				</response>
+				<transition to="UE2Alerting" event="OPTIONS"/>
+				<transition to="UE2Alerting" event="200-OPTIONS"/>
+				<transition to="UE2Alerting" event="PRACK"/>
+				<transition to="UE2Alerting" event="200-PRACK"/>
+				<transition to="UE2Alerting" event="UPDATE"/>
+				<transition to="UE2Alerting" event="200-UPDATE"/>
+				<transition to="UE2Alerting" event="xxx-INVITE"/>
+				<transition to="UE2Alerting" event="OffHookComplete"/>
+				<transition to="UE2Connected" event="ACK"/>
+			</state>
+			
+			<state ID="UE2Connected" timer="5000">
+				<transition to="DUTHookFlash2" event="TimerExpired"/>
+			</state>
+			
+			<state ID="DUTHookFlash2" timer="3000">
+				<prelude once="true">
+					<send protocol="utility" msgtype="HookFlash"/>
+				</prelude>
+				<response>
+					<if>
+						<or>
+							<eq>
+								<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE2.IP</msg_ref>
+							</eq>
+							<eq>
+								<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE2.IP</msg_ref>
+							</eq>
+						</or>
+						<then>
+							<proxy target="UE0"/>
+						</then>
+						<elseif>
+							<or>
+								<eq>
+									<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+									<msg_ref type="platform">UE0.IP</msg_ref>
+								</eq>
+								<eq>
+									<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+									<msg_ref type="platform">UE0.IP</msg_ref>
+								</eq>
+							</or>
+							<then>
+								<proxy target="UE2"/>
+							</then>
+						</elseif>
+					</if>
+				</response>
+				<transition to="DUTHookFlash2" event="HookFlashComplete"/>
+				<transition to="DUTHookFlash2" event="REINVITE"/>
+				<transition to="DUTHookFlash2" event="xxx-INVITE"/>
+				<transition to="UE2OnHold" event="ACK"/>
+			</state>
+			
+			<state ID="UE2OnHold">
+				<prelude once="true">
+					<verify step="5" requirements="REQ13820">
+						<eq>
+							<msg_ref type="sip" msg_instance="last">Response</msg_ref>
+							<expr>200-INVITE</expr>
+						</eq>
+					</verify>
+					<send protocol="utility" msgtype="VerifyDialTone">
+						<mod modtype="replace" hdr="voiceport">
+							<msg_ref type="platform">Platform.voiceport0</msg_ref>
+						</mod>
+					</send>
+				</prelude>
+				<response>
+					<verify step="5" requirements="REQ13820">
+						<eq>
+							<msg_ref type="utility">Response</msg_ref>
+							<expr>VerifyDialToneComplete</expr>
+						</eq>
+					</verify>
+				</response>
+				<transition to="UE3Setup" event="VerifyDialToneComplete"/>
+				<transition to="UE3Setup" event="VerifyDialToneError"/>
+			</state>
+			
+			<state ID="UE3Setup">
+				<prelude once="true">
+					<send protocol="utility" msgtype="DialDigits">
+						<mod modtype="add" hdr="number">
+							<msg_ref type="platform">UE3.phone number 1</msg_ref>
+						</mod>
+					</send>
+				</prelude>
+				<response>
+					<if>
+						<or>
+							<eq>
+								<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE3.IP</msg_ref>
+							</eq>
+							<eq>
+								<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE3.IP</msg_ref>
+							</eq>
+						</or>
+						<then>
+							<proxy target="UE0"/>
+						</then>
+						<elseif>
+							<or>
+								<eq>
+									<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+									<msg_ref type="platform">UE0.IP</msg_ref>
+								</eq>
+								<eq>
+									<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+									<msg_ref type="platform">UE0.IP</msg_ref>
+								</eq>
+							</or>
+							<then>
+								<proxy target="UE3"/>
+							</then>
+						</elseif>
+					</if>
+				</response>
+				<transition to="UE3Setup" event="DialDigitsComplete"/>
+				<transition to="UE3Setup" event="INVITE"/>
+				<transition to="UE3Alerting" event="xxx-INVITE"/>
+			</state>
+			
+			<state ID="UE3Alerting" timer="12000">
+				<response>
+					<if>
+						<or>
+							<eq>
+								<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE3.IP</msg_ref>
+							</eq>
+							<eq>
+								<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE3.IP</msg_ref>
+							</eq>
+						</or>
+						<then>
+							<proxy target="UE0"/>
+						</then>
+						<elseif>
+							<or>
+								<eq>
+									<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+									<msg_ref type="platform">UE0.IP</msg_ref>
+								</eq>
+								<eq>
+									<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+									<msg_ref type="platform">UE0.IP</msg_ref>
+								</eq>
+							</or>
+							<then>
+								<proxy target="UE3"/>
+							</then>
+						</elseif>
+					</if>
+					<if>
+						<eq>
+							<msg_ref type="event"/>
+							<expr>TimerExpired</expr>
+						</eq>
+						<then>
+							<send protocol="utility" msgtype="OffHook">
+								<mod modtype="replace" hdr="voiceport">
+									<msg_ref type="platform">Platform.voiceport3</msg_ref>
+								</mod>
+							</send>
+						</then>
+					</if>
+					<if>
+						<eq>
+							<msg_ref type="sip">Response</msg_ref>
+							<expr>200-INVITE</expr>
+						</eq>
+						<then>
+							<var name="dialog2Contact">
+								<msg_ref type="sip">200-INVITE.Contact.addr-spec</msg_ref>
+							</var>
+						</then>
+					</if>
+				</response>
+				<transition to="UE3Alerting" event="CANCEL"/>
+				<transition to="UE3Alerting" event="OPTIONS"/>
+				<transition to="UE3Alerting" event="200-OPTIONS"/>
+				<transition to="UE3Alerting" event="PRACK"/>
+				<transition to="UE3Alerting" event="200-PRACK"/>
+				<transition to="UE3Alerting" event="UPDATE"/>
+				<transition to="UE3Alerting" event="200-UPDATE"/>
+				<transition to="UE3Alerting" event="xxx-INVITE"/>
+				<transition to="UE3Alerting" event="xxx-CANCEL"/>
+				<transition to="UE3Alerting" event="OffHookComplete"/>
+				<transition to="UE3Connected" event="ACK"/>
+			</state>
+			
+			<state ID="UE3Connected">
+				<prelude once="true">
+					<verify step="6" requirements="REQ13820">
+						<eq>
+							<msg_ref type="sip" msg_instance="last">Response</msg_ref>
+							<expr>200-INVITE</expr>
+						</eq>
+					</verify>
+					<sleep time="5000"/>
+					<!-- Hang up on DUT.-->
+					<send protocol="utility" msgtype="OnHook"/>
+				</prelude>
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="sip">REFER.SourceAddress.IP</msg_ref>
+							<msg_ref type="platform">UE0.IP</msg_ref>
+						</eq>
+						<then>
+							<verify step="7" requirements="REQ13820">
+								<or>
+									<and>
+										<contains>
+											<msg_ref type="sip">REFER.Refer-To.uri</msg_ref>
+											<msg_ref type="platform">UE3.pui</msg_ref>
+										</contains>
+										<contains>
+											<msg_ref type="sip">REFER.To.name-addr</msg_ref>
+											<msg_ref type="platform">UE2.pui</msg_ref>
+										</contains>
+									</and>
+									<and>
+										<eq>
+											<msg_ref type="sip">REFER.Refer-To.uri</msg_ref>
+											<var_ref name="dialog2Contact"/>
+										</eq>
+										<eq>
+											<msg_ref type="sip">REFER.To.addr-spec</msg_ref>
+											<var_ref name="dialog1Contact"/>
+										</eq>
+									</and>
+								</or>
+							</verify>
+						</then>
+					</if>
+					<!-- There is a chance that the INVITE from the transferree to the
+						transferred-to device may arrive before the 200-NOTIFY, so
+						check for this first and pass it to UE2 if it arrives. -->
+					<if>
+						<and>
+							<eq>
+								<msg_ref type="sip">INVITE.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE2.IP</msg_ref>
+							</eq>
+							<eq>
+								<msg_ref type="sip">INVITE.Request-Line.username</msg_ref>
+								<msg_ref type="platform">UE3.username</msg_ref>
+							</eq>
+						</and>
+						<then>
+							<proxy target="UE3"/>
+						</then>
+						<elseif>
+							<or>
+								<eq>
+									<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+									<msg_ref type="platform">UE2.IP</msg_ref>
+								</eq>
+								<eq>
+									<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+									<msg_ref type="platform">UE2.IP</msg_ref>
+								</eq>
+							</or>
+							<then>
+								<proxy target="UE0"/>
+							</then>
+						</elseif>
+						<elseif>
+							<or>
+								<eq>
+									<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+									<msg_ref type="platform">UE0.IP</msg_ref>
+								</eq>
+								<eq>
+									<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+									<msg_ref type="platform">UE0.IP</msg_ref>
+								</eq>
+							</or>
+							<then>
+								<proxy target="UE2"/>
+							</then>
+						</elseif>
+					</if>
+				</response>
+				<transition to="UE3Connected" event="REINVITE"/>
+				<transition to="UE3Connected" event="xxx-INVITE"/>
+				<transition to="UE3Connected" event="INVITE"/>
+				<transition to="UE3Connected" event="ACK"/>
+				<transition to="UE3Connected" event="REFER"/>
+				<transition to="UE3Connected" event="20x-REFER"/>
+				<transition to="UE3Connected" event="NOTIFY"/>
+				<transition to="UE3Release" event="200-NOTIFY"/>
+				<transition to="UE3Connected" event="OnHookComplete"/>
+			</state>
+			
+			<!--  This is were things get tricky because the BYEs from
+			UE2 to the DUT may happen at the same time as those of the 
+			INVITE towards the DUT. Also the BYE for the second dialog
+			may be initiated by the transferred-to device instead of the
+			transferror. -->
+			<state ID="UE3Release">
+				<prelude once="true">
+					<var name="ack">
+						<expr>false</expr>
+					</var>
+					<var name="ue2release">
+						<expr>false</expr>
+					</var>
+					<var name="ue3release">
+						<expr>false</expr>
+					</var>
+				</prelude>
+				<response>
+					<if>
+						<and>
+							<eq>
+								<msg_ref type="sip">BYE.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE0.IP</msg_ref>
+							</eq>
+							<eq>
+								<msg_ref type="sip">BYE.Request-Line.username</msg_ref>
+								<msg_ref type="platform">UE2.username</msg_ref>
+							</eq>
+						</and>
+						<then>
+							<proxy target="UE2"/>
+						</then>
+						<elseif>
+							<and>
+								<eq>
+									<msg_ref type="sip">BYE.SourceAddress.IP</msg_ref>
+									<msg_ref type="platform">UE0.IP</msg_ref>
+								</eq>
+								<eq>
+									<msg_ref type="sip">BYE.Request-Line.username</msg_ref>
+									<msg_ref type="platform">UE3.username</msg_ref>
+								</eq>
+							</and>
+							<then>
+								<proxy target="UE3"/>
+							</then>
+						</elseif>
+						<elseif>
+							<and>
+								<eq>
+									<msg_ref type="sip">BYE.Request-Line.username</msg_ref>
+									<msg_ref type="platform">UE0.username</msg_ref>
+								</eq>
+								<or>
+									<eq>
+										<msg_ref type="sip">BYE.SourceAddress.IP</msg_ref>
+										<msg_ref type="platform">UE2.IP</msg_ref>
+									</eq>
+									<eq>
+										<msg_ref type="sip">BYE.SourceAddress.IP</msg_ref>
+										<msg_ref type="platform">UE3.IP</msg_ref>
+									</eq>
+								</or>
+							</and>
+							<then>
+								<proxy target="UE0"/>
+							</then>
+						</elseif>
+						<elseif>
+							<eq>
+								<msg_ref type="sip">200-BYE.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE2.IP</msg_ref>
+							</eq>
+							<then>
+								<proxy target="UE0"/>
+								<assign name="ue2release">
+									<expr>true</expr>
+								</assign>
+							</then>
+						</elseif>
+						<elseif>
+							<eq>
+								<msg_ref type="sip">200-BYE.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE3.IP</msg_ref>
+							</eq>
+							<then>
+								<proxy target="UE0"/>
+								<assign name="ue3release">
+									<expr>true</expr>
+								</assign>
+							</then>
+						</elseif>
+						<elseif>
+							<and>
+								<eq>
+									<msg_ref type="sip">200-BYE.SourceAddress.IP</msg_ref>
+									<msg_ref type="platform">UE0.IP</msg_ref>
+								</eq>
+								<contains>
+									<msg_ref type="sip" msg_instance="last">BYE.From.addr-spec</msg_ref>
+									<msg_ref type="platform">UE3.username</msg_ref>
+								</contains>
+							</and>
+							<then>
+								<proxy target="UE3"/>
+								<assign name="ue3release">
+									<expr>true</expr>
+								</assign>
+							</then>
+						</elseif>
+						<elseif>
+							<and>
+								<eq>
+									<msg_ref type="sip">200-BYE.SourceAddress.IP</msg_ref>
+									<msg_ref type="platform">UE0.IP</msg_ref>
+								</eq>
+								<contains>
+									<msg_ref type="sip" msg_instance="last">BYE.From.addr-spec</msg_ref>
+									<msg_ref type="platform">UE2.username</msg_ref>
+								</contains>
+							</and>
+							<then>
+								<proxy target="UE2"/>
+								<assign name="ue2release">
+									<expr>true</expr>
+								</assign>
+							</then>
+						</elseif>
+						<elseif>
+							<or>
+								<eq>
+									<msg_ref type="sip">Request</msg_ref>
+									<expr>NOTIFY</expr>
+								</eq>
+								<eq>
+									<msg_ref type="sip">Response.CSeq.method</msg_ref>
+									<expr>REFER</expr>
+								</eq>
+							</or>
+							<then>
+								<proxy target="UE0"/>
+							</then>
+						</elseif>
+						<elseif>
+							<eq>
+								<msg_ref type="sip">Response.CSeq.method</msg_ref>
+								<expr>NOTIFY</expr>
+							</eq>
+							<then>
+								<proxy target="UE2"/>
+							</then>
+						</elseif>
+						<elseif>
+							<or>
+								<eq>
+									<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+									<msg_ref type="platform">UE2.IP</msg_ref>
+								</eq>
+								<eq>
+									<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+									<msg_ref type="platform">UE2.IP</msg_ref>
+								</eq>
+							</or>
+							<then>
+								<proxy target="UE3"/>
+							</then>
+						</elseif>
+						<elseif>
+							<or>
+								<eq>
+									<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+									<msg_ref type="platform">UE3.IP</msg_ref>
+								</eq>
+								<eq>
+									<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+									<msg_ref type="platform">UE3.IP</msg_ref>
+								</eq>
+							</or>
+							<then>
+								<proxy target="UE2"/>
+							</then>
+						</elseif>
+					</if>
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>ACK</expr>
+						</eq>
+						<then>
+							<assign name="ack">
+								<expr>true</expr>
+							</assign>
+						</then>
+					</if>
+					<if>
+						<and>
+							<eq>
+								<var_ref name="ack"/>
+								<expr>true</expr>
+							</eq>
+						<and>
+							<eq>
+								<var_ref name="ue3release"/>
+								<expr>true</expr>
+							</eq>
+						<and>
+							<eq>
+								<var_ref name="ue2release"/>
+								<expr>true</expr>
+							</eq>
+							<!-- PCPCII-91 Add this test otherwise we generate this event twice -->
+							<neq>
+								<msg_ref type="event"/>
+								<expr>Branch1Event</expr>
+							</neq>
+						</and>
+						</and>
+						</and>
+						<then>
+							<generate event="Branch1Event"/>
+						</then>
+					</if>
+				</response>
+				<transition to="UE3Release" event="OPTIONS"/>
+				<transition to="UE3Release" event="200-OPTIONS"/>
+				<transition to="UE3Release" event="PRACK"/>
+				<transition to="UE3Release" event="200-PRACK"/>
+				<transition to="UE3Release" event="UPDATE"/>
+				<transition to="UE3Release" event="200-UPDATE"/>
+				<transition to="UE3Release" event="xxx-INVITE"/>
+				<transition to="UE3Release" event="INVITE"/>
+				<transition to="UE3Release" event="BYE"/>
+				<transition to="UE3Release" event="200-BYE"/>
+				<!-- PCPCII-91 Add a transition for a 481-BYE message in case a glare condition occurs while
+					the test is in the state. -->
+				<transition to="UE3Release" event="481-BYE"/>
+				<transition to="UE3Release" event="NOTIFY"/>
+				<transition to="UE3Release" event="xxx-NOTIFY"/>
+				<transition to="UE3Release" event="ACK"/>
+				<transition to="UE3Release" event="xxx-REFER"/>
+				<transition to="GlareCondition" event="Branch1Event"/>
+			</state>
+			
+			<!-- PCPCII-91 Add logic to allow any remaining 200-BYEs from the previous
+						state to continue to their respective peer. This can occur when
+						the transferor and the transferee devices both send a BYE -->
+			<state ID="GlareCondition" timer="3000">
+				<response>
+					<!-- PCPCII-91 Add logic to allow any remaining 200-BYEs from the previous
+						state to continue to their respective peer. This can occur when
+						the transferor and the transferee devices both send a BYE -->
+					<if>
+						<or>
+							<eq>
+								<msg_ref type="sip">NOTIFY.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE2.IP</msg_ref>
+							</eq>
+						<or>
+							<eq>
+								<msg_ref type="sip">xxx-BYE.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE2.IP</msg_ref>
+							</eq>
+							<eq>
+								<msg_ref type="sip">BYE.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE2.IP</msg_ref>
+							</eq>
+						</or>
+						</or>
+						<then>
+							<proxy target="UE0"/>
+						</then>
+						<elseif>
+							<or>
+								<eq>
+									<msg_ref type="sip">xxx-NOTIFY.SourceAddress.IP</msg_ref>
+									<msg_ref type="platform">UE0.IP</msg_ref>
+								</eq>
+							<or>
+								<eq>
+									<msg_ref type="sip">xxx-BYE.SourceAddress.IP</msg_ref>
+									<msg_ref type="platform">UE0.IP</msg_ref>
+								</eq>
+								<eq>
+									<msg_ref type="sip">BYE.SourceAddress.IP</msg_ref>
+									<msg_ref type="platform">UE0.IP</msg_ref>
+								</eq>
+							</or>
+							</or>
+							<then>
+								<proxy target="UE2"/>
+							</then>
+						</elseif>
+					</if>
+				</response>
+				<transition to="TransferConnected" event="TimerExpired"/>
+				<transition to="GlareCondition" event="BYE"/>
+				<transition to="GlareCondition" event="NOTIFY"/>
+				<transition to="GlareCondition" event="xxx-NOTIFY"/>
+				<transition to="GlareCondition" event="200-BYE"/>
+			</state>
+			<!--  END PCPCII-91 -->
+			
+			<state ID="TransferConnected" timer="5000">
+				<prelude once="true">
+					<send protocol="utility" msgtype="VerifyRing">
+						<mod modtype="replace" hdr="voiceport">
+							<msg_ref type="platform">Platform.voiceport0</msg_ref>
+						</mod>
+					</send>
+				</prelude>
+				<response>
+					<!-- There is a chance that the last NOTIFY from the transferree to the
+						transferor device may arrive after the ACK, so
+						check for this first and pass it to UE1 if it arrives. -->
+					<if>
+						<eq>
+							<msg_ref type="utility">Response</msg_ref>
+							<expr>VerifyRingComplete</expr>
+						</eq>
+						<then>
+							<verify step="8" requirements="REQ13820">
+								<eq>
+									<msg_ref type="utility">Response</msg_ref>
+									<expr>VerifyRingComplete</expr>
+								</eq>
+							</verify>
+							
+						</then>
+						<elseif>
+							<eq>
+								<msg_ref type="sip">NOTIFY.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE2.IP</msg_ref>
+							</eq>
+							<then>
+								<proxy target="UE0"/>
+							</then>
+						</elseif>
+						<elseif>
+							<eq>
+								<msg_ref type="sip">Response.CSeq.method</msg_ref>
+								<expr>NOTIFY</expr>
+							</eq>
+							<then>
+								<proxy target="UE2"/>
+							</then>
+						</elseif>
+						<elseif>
+							<or>
+								<eq>
+									<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+									<msg_ref type="platform">UE2.IP</msg_ref>
+								</eq>
+								<eq>
+									<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+									<msg_ref type="platform">UE2.IP</msg_ref>
+								</eq>
+							</or>
+							<then>
+								<proxy target="UE3"/>
+							</then>
+						</elseif>
+						<elseif>
+							<or>
+								<eq>
+									<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+									<msg_ref type="platform">UE3.IP</msg_ref>
+								</eq>
+								<eq>
+									<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+									<msg_ref type="platform">UE3.IP</msg_ref>
+								</eq>
+							</or>
+							<then>
+								<proxy target="UE2"/>
+							</then>
+						</elseif>
+						<elseif>
+							<eq>
+								<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE3.IP</msg_ref>
+							</eq>
+							<then>
+								<proxy target="UE1"/>
+							</then>
+						</elseif>
+						<elseif>
+							<eq>
+								<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE1.IP</msg_ref>
+							</eq>
+							<then>
+								<proxy target="UE0"/>
+								<generate event="Branch1Event"/>
+							</then>
+						</elseif>
+						<elseif>
+							<eq>
+								<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE0.IP</msg_ref>
+							</eq>
+							<then>
+								<proxy target="UE1"/>
+							</then>
+						</elseif>
+					</if>
+				</response>
+				<transition to="TransferConnected" event="NOTIFY"/>
+				<transition to="TransferConnected" event="REINVITE"/>
+				<transition to="TransferConnected" event="INVITE"/>
+				<transition to="TransferConnected" event="xxx-NOTIFY"/>
+				<transition to="TransferConnected" event="BYE"/>
+				<transition to="TransferConnected" event="200-BYE"/>
+				<transition to="TransferConnected" event="VerifyRingComplete"/>
+				<transition to="UE1OnHook" event="Branch1Event"/>
+				<transition to="UE1OnHook" event="TimerExpired"/>
+			</state>
+			
+			<state ID="UE1OnHook">
+				<prelude>
+					<send protocol="utility" msgtype="OnHook">
+						<mod modtype="replace" hdr="voiceport">
+							<msg_ref type="platform">Platform.voiceport1</msg_ref>
+						</mod>
+					</send>
+				</prelude>
+				<transition to="ReleaseTransferCall" event="OnHookComplete"/>
+			</state>
+			
+			<state ID="ReleaseTransferCall">
+				<prelude once="true">
+					<!-- PCPCII-91 Moved the OnHook operation for UE2 to this location instead
+								of its own state -->
+					<send protocol="utility" msgtype="OnHook">
+						<mod modtype="replace" hdr="voiceport">
+							<msg_ref type="platform">Platform.voiceport2</msg_ref>
+						</mod>
+					</send>
+					<!-- END PCPCII-91 -->
+				</prelude>
+				<response>
+					<!-- There is a chance that the last NOTIFY from the transferree to the
+						transferor device may arrive after the ACK, so
+						check for this first and pass it to UE1 if it arrives. -->
+					<if>
+						<or>
+							<eq>
+								<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE2.IP</msg_ref>
+							</eq>
+							<eq>
+								<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE2.IP</msg_ref>
+							</eq>
+						</or>
+						<then>
+							<proxy target="UE3"/>
+						</then>
+						<elseif>
+							<or>
+								<eq>
+									<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+									<msg_ref type="platform">UE3.IP</msg_ref>
+								</eq>
+								<eq>
+									<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+									<msg_ref type="platform">UE3.IP</msg_ref>
+								</eq>
+							</or>
+							<then>
+								<proxy target="UE2"/>
+							</then>
+						</elseif>
+					</if>
+				</response>
+				<transition to="ReleaseTransferCall" event="OnHookComplete"/>
+				<transition to="ReleaseTransferCall" event="BYE"/>
+				<!-- PCPCII-91 Changed transition to UE1OnHook instead of UE2OnHook -->
+				<transition to="END" event="200-BYE"/>
+			</state>
+		</states>
+	</fsm>
+</pc2xml>

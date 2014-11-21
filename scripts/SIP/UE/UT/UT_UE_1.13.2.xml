@@ -1,0 +1,97 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+
+<pc2xml version="$Revision: 8188 $" name="UT_UE_1.13.2" descrip="This is a unit test script for testing the UE_1.13.2 test script." number="1">
+	<template name="UE0" file="$UT_PATH/Templates/ut/Orig_DUT.xml"/>
+	<remove_from fsm="UE0">
+		<state ID="Setup" sub="prelude"/>
+	</remove_from>
+	<add_to fsm="UE0">
+		<states initialstate="Register"/>
+		<state ID="Setup" sub="prelude">
+			<sleep time="3000"/>
+			<send protocol="sip" msgtype="Invite" target="UE1" originator="DUT"/>
+		</state>
+		<transition from="Setup" to="Fail" event="18x-INVITE"/>
+		<transition from="Setup" to="Fail" event="100-INVITE"/>
+		<transition from="Setup" to="Fail" event="200-INVITE"/>
+		<transition from="Setup" to="EndCall1" event="421-INVITE"/>
+		<state ID="EndCall1" ES="true">
+			<transition to="Setup2" event="SessionTerminated"/>
+		</state>
+		<state ID="Setup2">
+			<prelude>
+				<sleep time="3000"/>
+				<send protocol="sip" msgtype="Invite" target="UE1" originator="DUT">
+					<mod modtype="add" hdr="Allow">
+						<expr>INVITE, REGISTER, UPDATE, SUBSCRIBE, ACK, REFER, PRACK, BYE</expr>
+					</mod>
+					<mod modtype="add" hdr="Require">
+						<expr>100rel, precondition</expr>
+					</mod>
+					<mod modtype="add" hdr="qos-curr-local">
+						<expr>a=curr: qos local sendrecv</expr>
+					</mod>
+					<mod modtype="add" hdr="qos-curr-remote">
+						<expr>a=curr: qos remote none</expr>
+					</mod>
+					<mod modtype="add" hdr="qos-des-local">
+						<expr>a=des: qos mandatory local sendrecv</expr>
+					</mod>
+					<mod modtype="add" hdr="qos-des-remote">
+						<expr>a=des: qos mandatory remote sendrecv</expr>
+					</mod>
+					<mod modtype="add" hdr="qos-conf-remote">
+						<expr>a=conf: qos remote sendrecv</expr>
+					</mod>
+				</send>
+			</prelude>
+			<!-- Expected responses are 100, 180, 183 or 200 -->
+			<response>
+				<!-- Step 4 from the Default Message Flow Call-Term-at-UE(DUT) Sequence Diagram -
+					Test 18x response for reliability for possible Prack message -->
+				<if>
+					<contains>
+						<msg_ref type="sip" msg_instance="last" hdr_instance="any">18x-Invite.Require</msg_ref>
+						<expr>100rel</expr>
+					</contains>
+					<then>
+						<!--Reliablity required for test sending Prack message to peer.-->
+						<send protocol="sip" msgtype="Prack" target="UE1" originator="DUT"/>
+					</then>
+				</if>
+			</response>
+			<!-- Transitions for Setup state -->
+			<transition to="Proceeding" event="100-INVITE"/>
+			<transition to="Alerting" event="180-INVITE"/>
+			<transition to="Alerting" event="183-INVITE"/>
+			<transition to="Connected" event="200-INVITE"/>
+			<transition to="END" event="500-INVITE"/>
+		</state>
+		<state ID="Fail">
+			<prelude>
+				<fail/>
+				<generate event="FailEvent"/>
+			</prelude>
+			<!-- Transitions for Fail state -->
+			<transition to="END" event="FailEvent"/>
+		</state>
+	</add_to>
+</pc2xml>

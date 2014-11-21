@@ -1,0 +1,69 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+
+<!-- First are the document type and the attributes for our document -->
+<pc2xml version="$Revision: 8188 $" name="NAT-UE 1.1.1.2" descrip="STUN Request format (usage - keep alive)" number="NAT-UE 1.1.1.2">
+	<!-- Next we define the each of state machines -->
+	<fsm name="FSM1">
+		<models>
+			<stun/>
+		</models>
+		<!-- Next we define all of the network elements-->
+		<NE sim_type="term" elements="SCSCF1 PCSCF1" targets="SCSCF1"/>
+		<!-- All of the states for the test. References to "Step x" from the
+     Default Message Flow - UE Registration (DUT) Sequence Diagram -->
+		<states initialstate="BindingReq">
+			<!-- BINDINGREQ State -->
+			<state ID="BindingReq">
+				<response>
+					<!-- Validation that the message header is 20 bytes, it 
+						contains the magic cookie (0x2112A442), the message length
+						field doesn't contain the 20 bytes of the message header, 
+						and the message type is set to 0x0001 
+						occurs automatically in the STUN stack. If they aren't valid,
+						the stack will not deliver the message." -->
+					<verify step="1" requirements="RFC4218, RFC4190, RFC4191, RFC4195, RFC4196, RFC4197, RFC4199">
+						<eq>
+							<msg_ref type="stun">Request</msg_ref>
+							<expr>BindingRequest</expr>
+						</eq>
+						<then>
+							<send protocol="stun" msgtype="BindingResponse"/>
+						</then>
+					</verify>
+					<verify step="1" requirements="RFC4218, RFC4190, RFC4191, RFC4195, RFC4196, RFC4197, RFC4199">
+						<and>
+							<gte>
+								<msg_ref type="stun">BindingRequest.message-length</msg_ref>
+								<expr>0</expr>
+							</gte>
+							<lte>
+								<msg_ref type="stun">BindingRequest.message-length</msg_ref>
+								<expr>548</expr>
+							</lte>
+						</and>
+					</verify>
+				</response>
+				<!-- Transitions for BindingReq state -->
+				<transition to="END" event="BindingRequest"/>
+			</state>
+		</states>
+	</fsm>
+</pc2xml>

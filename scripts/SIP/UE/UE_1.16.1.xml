@@ -1,0 +1,144 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="SIP-UE 1.16.1" 
+	descrip="Support for P-Associated-URI Header/Value In Registration" 
+	number="SIP-UE 1.16.1" inspector="disable">
+	
+	<template file="./templates/UERegAndSubTemp.xml" name="Registrar"/>
+	<template file="./templates/CallOrigAtUETemp.xml" name="UE1"/>
+	
+	<add_to fsm="UE1">
+		<states initialstate="WaitRegistered"/>
+		<state ID="WaitRegistered">
+			<transition to="OffHook" event="SucceedEvent"/>
+		</state>
+	</add_to>
+	
+	<remove_from fsm="Registrar">
+		<state ID="Registered"/>
+		<state ID="NotificationComplete"/>
+		<state ID="Notification"/>
+	</remove_from>
+	
+	<remove_from fsm="UE1">
+		<state ID="Register"/>
+		<state ID="Setup"/>
+	</remove_from>
+	
+	<add_to fsm="Registrar">
+		<NE targets="uedut"/>
+		
+		<state ID="Registered">
+			<prelude once="true">
+				<var name="default_pi">
+					<var_expr>
+						<expr>&lt;sip:uedut@</expr>
+						<msg_ref type="platform">DUT.domain</msg_ref>
+						<expr>&gt;</expr>
+					</var_expr>
+				</var>
+				<send protocol="sip" msgtype="200-Register">
+					<mod modtype="replace" hdr="P-Associated-URI">
+						<var_ref name="default_pi"/>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<and>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>SUBSCRIBE</expr>
+						</eq>
+						<contains>
+							<msg_ref type="sip">SUBSCRIBE.Event</msg_ref>
+							<expr>reg</expr>
+						</contains>
+					</and>
+					<then>
+						<send protocol="sip" msgtype="200-SUBSCRIBE"/>
+						<sleep time="100"/>
+						<send protocol="sip" msgtype="NOTIFY"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Registered" event="REGISTER"/>
+			<transition to="Notification" event="SUBSCRIBE"/>
+		</state>
+		
+		<state ID="Notification">
+			<postlude>
+				<generate event="SucceedEvent" fsm="UE1"/>
+			</postlude>
+			<transition to="NotificationComplete" event="200-NOTIFY"/>
+		</state>
+		
+		<state ID="NotificationComplete">
+			<prelude>
+				<generate event="Branch1Event"/>
+			</prelude>
+			<transition to="WaitSuccess" event="Branch1Event"/>
+		</state>
+		
+		<state ID="WaitSuccess">
+			<transition to="END" event="SucceedEvent"/>
+		</state>
+	</add_to>
+	<add_to fsm="UE1">
+		<state ID="Setup">
+			<prelude once="true">
+				<send protocol="utility" msgtype="DialDigits">
+					<mod modtype="add" hdr="number">
+						<msg_ref type="platform">UE1.phone number 1</msg_ref>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>INVITE</expr>
+					</eq>
+					<then>
+						<verify step="4" requirements="REQ16872">
+							<eq>
+								<msg_ref type="sip">INVITE.From.name-addr</msg_ref>
+								<var_ref name="default_pi"/>
+							</eq>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<transition to="Setup" event="DialDigitsComplete"/>
+			<transition to="EndCall" event="INVITE"/>
+		</state>
+		
+		<state ID="EndCall" ES="true">
+			<transition to="Success" event="SessionTerminated"/>
+		</state>
+		
+		<state ID="Success">
+			<prelude>
+				<generate event="SucceedEvent" fsm="Registrar"/>
+			</prelude>
+		</state>
+	</add_to>
+</pc2xml>

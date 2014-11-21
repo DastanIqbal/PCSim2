@@ -1,0 +1,262 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+ Change History: (Author & Date)
+	PCPCII-129: Update the TIAS and maxprate values to 64000 and 33.3 respectively (ghassler 05/20/2009)
+	PCPCII-136 & PCPCII-140 - Update the script to match all of the changes made to the D09 version of the
+		ATP. (ghassler 07/01/2009 & 08/04/2009)
+	PCPCII-158: Update the max-prate to 34 instead of 33.3 (ghassler 11/14/2009)
+	PCPCII-175 : Update the script to match the D10 version of the ATP (ghassler 01/28/2010)
+	PCPCII-478: Update the maxprate to 33.3 instead of 34 (ghassler 8/9/2010) 
+	
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="CODEC-MEDIA_1.1.8" 
+	descrip="G.711 (30msec) UE Termination Session (PCMA)" 
+	number="CODEC-MEDIA_1.1.8">
+	
+	<template file="./templates/CallTermAtUETemp.xml" name="UE1"/>
+
+	<remove_from fsm="UE1">
+		<state ID="Setup" sub="prelude"/>
+		<state ID="Connected"/>
+		<state ID="OnHook"/>
+	</remove_from>
+
+	<add_to fsm="UE1">
+		<state ID="Setup" sub="prelude">
+			<!--  STEP 1 -->
+			<start_capture>
+				<filter>
+					<var_expr>
+						<expr>host </expr>
+						<msg_ref type="platform">UE0.IP</msg_ref>
+						<expr> || host </expr>
+						<msg_ref type="platform">Platform.SIP Stack 1 IP Address</msg_ref>
+					</var_expr>
+				</filter>
+			</start_capture>
+			
+			<!-- STEP 2 -->
+			<send protocol="sip" msgtype="INVITE">
+				<mod modtype="replace" hdr="audio" param="payload-type">
+					<expr>8</expr>
+				</mod>
+				<mod modtype="replace" hdr="ptime" param="value">
+					<expr>30</expr>
+				</mod>
+				<mod modtype="replace" hdr="media-modifier" param="value">
+					<expr>96</expr>
+				</mod>
+				<mod modtype="replace" hdr="TIAS-modifier" param="value">
+					<expr>64000</expr>
+				</mod>
+				<mod modtype="replace" hdr="rtpmap" param="codec-name">
+					<expr>PCMA</expr>
+				</mod>
+				<mod modtype="replace" hdr="rtpmap" param="payload-type">
+					<expr>8</expr>
+				</mod>
+				<mod modtype="replace" hdr="max-packet-rate" param="value">
+					<expr>33.3</expr>
+				</mod>
+			</send>
+		</state>
+		
+		<state ID="Connected" timer="30000">
+			<prelude once="true">
+				<send protocol="sip" msgtype="ACK"/>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="event"/>
+						<expr>DIALOG_CONFIRMED_UAC</expr>
+					</eq>
+					<then>
+						<!-- STEPS 3, 4 and 5 -->
+						<verify step="3 4 5" requirements="RFC2256, REQ13336, RFC2260">
+							<or>
+								<and>
+									<gt>
+										<msg_ref type="sdp" msg_instance="last">18x-Invite.audio.port</msg_ref>
+										<expr>0</expr>
+									</gt>
+									<lt>
+										<msg_ref type="sdp" msg_instance="last">18x-Invite.audio.port</msg_ref>
+										<expr>65536</expr>
+									</lt>
+								</and>
+								<or>
+									<and>
+										<gt>
+											<msg_ref type="sdp" msg_instance="last">200-UPDATE.audio.port</msg_ref>
+											<expr>0</expr>
+										</gt>
+										<lt>
+											<msg_ref type="sdp" msg_instance="last">200-UPDATE.audio.port</msg_ref>
+											<expr>65536</expr>
+										</lt>
+									</and>
+									<and>
+										<gt>
+											<msg_ref type="sdp" msg_instance="last">200-Invite.audio.port</msg_ref>
+											<expr>0</expr>
+										</gt>
+										<lt>
+											<msg_ref type="sdp" msg_instance="last">200-Invite.audio.port</msg_ref>
+											<expr>65536</expr>
+										</lt>
+									</and>
+								</or>
+							</or>
+						</verify>
+						
+						<!-- STEP 6 -->
+						<verify step="6" requirements="RFC2256">
+							<or>
+								<eq>
+									<msg_ref type="sdp" msg_instance="last">18x-Invite.audio.protocol</msg_ref>
+									<expr>RTP/AVP</expr>
+								</eq>
+								<or>
+									<eq>
+										<msg_ref type="sdp" msg_instance="last">200-UPDATE.audio.protocol</msg_ref>
+										<expr>RTP/AVP</expr>
+									</eq>
+									<eq>
+										<msg_ref type="sdp" msg_instance="last">200-Invite.audio.protocol</msg_ref>
+										<expr>RTP/AVP</expr>
+									</eq>
+								</or>
+							</or>
+						</verify>
+						
+						<!-- STEP 7 -->
+						<verify step="7" requirements="REQ12494, REQ12628">
+							<or>
+								<contains>
+									<msg_ref type="sdp" msg_instance="last">18x-Invite.audio.payload-type</msg_ref>
+									<expr>8</expr>
+								</contains>
+								<or>
+									<contains>
+										<msg_ref type="sdp" msg_instance="last">200-UPDATE.audio.payload-type</msg_ref>
+										<expr>8</expr>
+									</contains>
+									<contains>
+										<msg_ref type="sdp" msg_instance="last">200-Invite.audio.payload-type</msg_ref>
+										<expr>8</expr>
+									</contains>
+								</or>
+							</or>
+						</verify>
+						
+						<!-- STEP 8 -->
+						<verify step="8" requirements="REQ14813, REQ14373">
+							<or>
+								<eq>
+									<msg_ref type="sdp" msg_instance="last">18x-Invite.ptime.value</msg_ref>
+									<expr>30</expr>
+								</eq>
+								<or>
+									<eq>
+										<msg_ref type="sdp" msg_instance="last">200-UPDATE.ptime.value</msg_ref>
+										<expr>30</expr>
+									</eq>
+									<eq>
+										<msg_ref type="sdp" msg_instance="last">200-Invite.ptime.value</msg_ref>
+										<expr>30</expr>
+									</eq>
+								</or>
+							</or>
+						</verify>
+						
+						<!-- STEP 9 -->
+						<verify step="9" requirements="REQ14375, REQ14376, REQ14380">
+							<or>
+								<eq>
+									<msg_ref type="sdp" msg_instance="last">18x-Invite.media-modifier.value</msg_ref>
+									<expr>75</expr>
+								</eq>
+								<or>
+									<eq>
+										<msg_ref type="sdp" msg_instance="last">200-UPDATE.media-modifier.value</msg_ref>
+										<expr>75</expr>
+									</eq>
+									<eq>
+										<msg_ref type="sdp" msg_instance="last">200-Invite.media-modifier.value</msg_ref>
+										<expr>75</expr>
+									</eq>
+								</or>
+							</or>
+						</verify>
+						
+						<!-- STEP 10 -->
+						<verify step="10" requirements="RFC2618, RFC2619, RFC2621, RFC2622, RFC2623, RFC2624, RFC2625, RFC2626, REQ14375, REQ14376, REQ14380">
+							<or>
+								<eq>
+									<msg_ref type="sdp" msg_instance="last">18x-Invite.TIAS-modifier.value</msg_ref>
+									<expr>64000</expr>
+								</eq>
+								<or>
+									<eq>
+										<msg_ref type="sdp" msg_instance="last">200-UPDATE.TIAS-modifier.value</msg_ref>
+										<expr>64000</expr>
+									</eq>
+									<eq>
+										<msg_ref type="sdp" msg_instance="last">200-Invite.TIAS-modifier.value</msg_ref>
+										<expr>64000</expr>
+									</eq>
+								</or>
+							</or>
+						</verify>
+						
+						<!-- STEP 11 -->
+						<verify step="11" requirements="REQ14375, REQ14376, REQ14380">
+							<or>
+								<eq>
+									<msg_ref type="sdp" msg_instance="last">18x-Invite.max-packet-rate.value</msg_ref>
+									<expr>33.3</expr>
+								</eq>
+								<or>
+									<eq>
+										<msg_ref type="sdp" msg_instance="last">200-UPDATE.max-packet-rate.value</msg_ref>
+										<expr>33.3</expr>
+									</eq>
+									<eq>
+										<msg_ref type="sdp" msg_instance="last">200-Invite.max-packet-rate.value</msg_ref>
+										<expr>33.3</expr>
+									</eq>
+								</or>
+							</or>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<transition to="Connected" event="OffHookComplete"/>
+			<transition to="Releasing" event="TimerExpired"/>
+		</state>
+		
+		<state ID="OnHook">
+			<prelude>
+				<stop_capture/>
+				<send protocol="utility" msgtype="OnHook"/>
+			</prelude>
+			<postlude>
+				<log promptUser="true" verify="true" step="8" 
+				requirements="REQ14813, REQ14373"
+				expr="Are the RTP packets arriving at approximately 30 msec intervals within the capture file?"/>
+			</postlude>				
+			<transition to="END" event="OnHookComplete"/>
+		</state>
+	</add_to>
+</pc2xml>

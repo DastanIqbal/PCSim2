@@ -1,0 +1,761 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+ Change History: (Author & Date)
+
+
+
+-->
+
+
+<!-- First are the document type and the attributes for our document -->
+<pc2xml version="$Revision: 7768 $" 
+		name="E-UE_DATA_1.2.5.6" 
+		descrip="Ability of eUE To Properly Implement the System MIB Group"
+		number="E-UE_DATA_1.2.5.6">
+
+	<!-- Step 1 -->
+	<template file="./templates/EUE_Prov_B_1_1_1.xml" name="SystemMIBGroup" />
+
+	<add_to fsm="SystemMIBGroup">
+		<transition from="StartCapture_RebootWait" to="EUEProvision" event="TimerExpired"/>
+
+		<!-- Step 18 The E-UE DUT provisions successfully and becomes operational. -->
+        <state ID="EUEProvision" timer="10000">
+            <prelude once="true">				
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvisioningState.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+					<mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="8">
+                    <eq>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>1</expr>
+                    </eq>
+                </verify>
+            </response>
+            <transition to="SNMPGet1" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+		
+		<!-- Step 18-3, SNMP Walk of the mib-2.system group -->
+		<!-- PACT gives error on system group. Therefore, querying the each MIBs in the table one at a time. -->
+		
+		<!-- Step 18-4 -->
+		<state ID="SNMPGet1">
+			<prelude>
+				<send protocol="utility" msgtype="SNMPGet">
+					<mod modtype="add" hdr="oids">
+						<expr>SNMPv2-MIB::sysDescr.0</expr>
+					</mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+					<mod modtype="replace" hdr="version">
+						<expr>3</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="18-4-sysDescr">
+					<and>
+						<notnull>
+							<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+						</notnull>
+						<neq>
+							<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+							<expr></expr>
+						</neq>
+					</and>
+				</verify>
+            </response>
+            <transition to="SNMPGet2" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure" />
+		</state>
+		
+		<!--  Step 18-5 -->
+		<state ID="SNMPGet2">
+			<prelude>
+				<send protocol="utility" msgtype="SNMPGet">
+					<mod modtype="add" hdr="oids">
+						<expr>SNMPv2-MIB::sysObjectID.0</expr>
+					</mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+					<mod modtype="replace" hdr="version">
+						<expr>3</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="18-5-sysObjectID">
+					<and>
+						<notnull>
+							<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+						</notnull>
+						<contains>
+							<msg_ref type="utility" index="0 0 0">SNMPResp.varBind</msg_ref>
+							<expr>enterprises.4413.2.1.7</expr>
+						</contains>
+					</and>
+				</verify>
+            </response>
+            <transition to="SNMPGet3" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure" />
+		</state>
+		
+		<!--  Step 18-6 -->
+		<state ID="SNMPGet3">
+			<prelude>
+				<send protocol="utility" msgtype="SNMPGet">
+					<mod modtype="add" hdr="oids">
+						<expr>SNMPv2-MIB::sysUpTime.0</expr>
+					</mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+					<mod modtype="replace" hdr="version">
+						<expr>3</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="18-6-sysUpTime">
+					<and>
+						<contains>
+							<msg_ref type="utility" index="0 0 1">SNMPResp.varBind</msg_ref>
+							<expr>Timeticks</expr>
+						</contains>
+						<notnull>
+							<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+						</notnull>
+					</and>
+				</verify>
+            </response>
+            <transition to="SNMPGet4" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure" />
+		</state>
+				
+		<!--  Step 18-7 -->
+		<state ID="SNMPGet4">
+			<prelude>
+				<send protocol="utility" msgtype="SNMPGet">
+					<mod modtype="add" hdr="oids">
+						<expr>SNMPv2-MIB::sysContact.0</expr>
+					</mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+					<mod modtype="replace" hdr="version">
+						<expr>3</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="18-7-sysContact ">
+					<and>
+						<notnull>
+							<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+						</notnull>
+						<neq>
+							<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+							<expr></expr>
+						</neq>
+					</and>
+				</verify>
+            </response>
+            <transition to="SNMPGet5" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure" />
+		</state>
+		
+		<!--  Step 18-8 -->
+		<state ID="SNMPGet5">
+			<prelude>
+				<send protocol="utility" msgtype="SNMPGet">
+					<mod modtype="add" hdr="oids">
+						<expr>SNMPv2-MIB::sysName.0</expr>
+					</mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+					<mod modtype="replace" hdr="version">
+						<expr>3</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="18-8-sysName">
+					<and>
+						<notnull>
+							<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+						</notnull>
+						<neq>
+							<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+							<expr></expr>
+						</neq>
+					</and>
+				</verify>
+            </response>
+            <transition to="SNMPGet6" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure" />
+		</state>
+				
+		<!--  Step 18-9 -->
+		<state ID="SNMPGet6">
+			<prelude>
+				<send protocol="utility" msgtype="SNMPGet">
+					<mod modtype="add" hdr="oids">
+						<expr>SNMPv2-MIB::sysLocation.0</expr>
+					</mod>
+					<mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+					<mod modtype="replace" hdr="version">
+						<expr>3</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="18-9-sysLocation">
+					<and>
+						<notnull>
+							<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+						</notnull>
+						<neq>
+							<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+							<expr></expr>
+						</neq>
+					</and>
+				</verify>
+            </response>
+            <transition to="SNMPGet7" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure" />
+		</state>
+		
+		<!--  Step 18-10 -->
+		<state ID="SNMPGet7">
+			<prelude>
+				<send protocol="utility" msgtype="SNMPGet">
+					<mod modtype="add" hdr="oids">
+						<expr>SNMPv2-MIB::sysServices.0</expr>
+					</mod>
+					<mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+					<mod modtype="replace" hdr="version">
+						<expr>3</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<!-- This is a bit mask and requires 2^6 to be set and can be no higher that 2^7-1 -->
+				<verify step="18-10-sysServices">
+					<and>
+						<gte>
+							<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+							<expr>64</expr>
+						</gte>
+						<lte>
+							<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+							<expr>128</expr>
+						</lte>
+					</and>
+				</verify>
+            </response>
+            <transition to="SNMPGet8" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure" />
+		</state>
+		
+		<!--  Step 18-11 -->
+		<state ID="SNMPGet8">
+			<prelude>
+				<send protocol="utility" msgtype="SNMPGet">
+					<mod modtype="add" hdr="oids">
+						<expr>SNMPv2-MIB::sysORLastChange.0</expr>
+					</mod>
+					<mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+					<mod modtype="replace" hdr="version">
+						<expr>3</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="18-11-sysORLastChange">
+					<or>	
+						<contains>
+							<msg_ref type="utility" index="0 0 1">SNMPResp.varBind</msg_ref>
+							<expr>Timeticks</expr>
+						</contains>
+						<contains>
+							<msg_ref type="utility" index="0 0 0">SNMPResp.varBind</msg_ref>
+							<expr>enterprises.4413.2.1.7</expr>
+						</contains>
+					</or>	
+				</verify>
+            </response>
+            <transition to="SNMPGet9" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure" />
+		</state>
+		
+		<!--  Step 18-12 -->
+		<state ID="SNMPGet9">
+			<prelude>
+				<send protocol="utility" msgtype="SNMPGetTable">
+					<mod modtype="add" hdr="oids">
+						<expr>SNMPv2-MIB::sysORTable</expr>
+					</mod>
+					<mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+					<mod modtype="replace" hdr="version">
+						<expr>3</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+					<!-- ATP request to verify entries exist for: sysORIndex (in index), sysORID, sysORFDescr, sysORUpTime. -->
+                    <verify step="18-12-sysORTable">
+                    	<and>
+                    		<notnull>
+                    			<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                    		</notnull>
+                    	<and>
+                    		<notnull>
+                    			<msg_ref type="utility" index="0 1 2">SNMPResp.varBind</msg_ref>
+                    		</notnull>
+                    		<notnull>
+                    			<msg_ref type="utility" index="0 2 2">SNMPResp.varBind</msg_ref>
+                    		</notnull>
+                    	</and>
+                    	</and>
+                    </verify>
+            </response>
+			<postlude>
+				<stop_capture />
+			</postlude>
+            <transition to="Reconfigure2" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure" />
+		</state>
+		
+		<!-- vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv -->
+        <!-- ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ -->
+		<!-- Hybrid Mode -->
+        <!-- Step 21 -->
+        <state ID="Reconfigure2"
+			   provFile="v6.C.1.2.3_Hybrid.bin"
+               policyFile="X_eUEv6_Hybrid"
+               nextState="Reset2"/>
+
+        <state ID="Reset2" timer="120000">
+            <prelude once="true">
+			    <start_capture>
+                    <filter>
+                        <var_expr>
+							<expr>host </expr>
+							<msg_ref type="platform">DUT.IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.CM IP Address</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.DHCP Server IP</msg_ref>
+						</var_expr>
+                    </filter>
+                </start_capture>
+				
+                <send protocol="utility" msgtype="SNMPSet">
+                    <mod modtype="add" hdr="array">
+                        <var_expr>
+                            <expr>varBind 1 1 3 \r\n ][ , </expr>
+                            <expr>DOCS-CABLE-DEVICE-MIB::docsDevResetNow.0,INTEGER,1][\r\n</expr>
+                        </var_expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.CM IP Address</msg_ref>
+                    </mod>
+                    <!-- Always use version 2c for a CM reset -->
+					<mod modtype="replace" hdr="version">
+						<expr>2c</expr>
+					</mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPRespFailure</expr>
+                    </eq>
+                    <then>
+                        <fail/>
+                    </then>
+                </if>
+                <if>
+                    <or>
+                        <eq>
+                            <msg_ref type="sip">REGISTER.Contact.expires</msg_ref>
+                            <expr>0</expr>
+                        </eq>
+                        <eq>
+                            <msg_ref type="sip">REGISTER.Expires.value</msg_ref>
+                            <expr>0</expr>
+                        </eq>
+                    </or>
+                    <then>
+                        <send protocol="sip" msgtype="200-REGISTER"/>
+                    </then>
+                </if>
+            </response>
+            <transition to="EUEProvision2" event="TimerExpired"/>
+            <transition to="Reset2" event="SNMPResp"/>
+            <transition to="Reset2" event="REGISTER"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+        <!-- Step 21 The E-UE DUT provisions successfully and becomes operational. -->
+        <state ID="EUEProvision2" timer="10000">
+            <prelude once="true">				
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvisioningState.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+					<mod modtype="replace" hdr="version">
+                        <expr>2c</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="21">
+                    <contains>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>1</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="SNMPGet1h" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+		
+		<!-- Step 22-3, SNMP Walk of the mib-2.system group -->
+		<!-- PACT gives error on system group. Therefore, querying the each MIBs in the table one at a time. -->
+		
+		<!-- Step 22-4 -->
+		<state ID="SNMPGet1h">
+			<prelude>
+				<send protocol="utility" msgtype="SNMPGet">
+					<mod modtype="add" hdr="oids">
+						<expr>SNMPv2-MIB::sysDescr.0</expr>
+					</mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+					<mod modtype="replace" hdr="version">
+						<expr>2c</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="22-4-sysDescr">
+					<and>
+						<notnull>
+							<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+						</notnull>
+						<neq>
+							<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+							<expr></expr>
+						</neq>
+					</and>
+				</verify>
+            </response>
+            <transition to="SNMPGet2h" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure" />
+		</state>
+		
+		<!--  Step 22-5 -->
+		<state ID="SNMPGet2h">
+			<prelude>
+				<send protocol="utility" msgtype="SNMPGet">
+					<mod modtype="add" hdr="oids">
+						<expr>SNMPv2-MIB::sysObjectID.0</expr>
+					</mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+					<mod modtype="replace" hdr="version">
+						<expr>2c</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="22-5-sysObjectID">
+					<and>
+						<notnull>
+							<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+						</notnull>
+						<contains>
+							<msg_ref type="utility" index="0 0 0">SNMPResp.varBind</msg_ref>
+							<expr>enterprises.4413.2.1.7</expr>
+						</contains>
+					</and>
+				</verify>
+            </response>
+            <transition to="SNMPGet3h" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure" />
+		</state>
+		
+		<!--  Step 22-6 -->
+		<state ID="SNMPGet3h">
+			<prelude>
+				<send protocol="utility" msgtype="SNMPGet">
+					<mod modtype="add" hdr="oids">
+						<expr>SNMPv2-MIB::sysUpTime.0</expr>
+					</mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+					<mod modtype="replace" hdr="version">
+						<expr>2c</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="22-6-sysUpTime">
+					<and>
+						<contains>
+							<msg_ref type="utility" index="0 0 1">SNMPResp.varBind</msg_ref>
+							<expr>Timeticks</expr>
+						</contains>
+						<notnull>
+							<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+						</notnull>
+					</and>
+				</verify>
+            </response>
+            <transition to="SNMPGet4h" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure" />
+		</state>
+				
+		<!--  Step 22-7 -->
+		<state ID="SNMPGet4h">
+			<prelude>
+				<send protocol="utility" msgtype="SNMPGet">
+					<mod modtype="add" hdr="oids">
+						<expr>SNMPv2-MIB::sysContact.0</expr>
+					</mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+					<mod modtype="replace" hdr="version">
+						<expr>2c</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="22-7-sysContact ">
+					<and>
+						<notnull>
+							<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+						</notnull>
+						<neq>
+							<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+							<expr></expr>
+						</neq>
+					</and>
+				</verify>
+            </response>
+            <transition to="SNMPGet5h" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure" />
+		</state>
+		
+		<!--  Step 22-8 -->
+		<state ID="SNMPGet5h">
+			<prelude>
+				<send protocol="utility" msgtype="SNMPGet">
+					<mod modtype="add" hdr="oids">
+						<expr>SNMPv2-MIB::sysName.0</expr>
+					</mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+					<mod modtype="replace" hdr="version">
+						<expr>2c</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="22-8-sysName">
+					<and>
+						<notnull>
+							<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+						</notnull>
+						<neq>
+							<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+							<expr></expr>
+						</neq>
+					</and>
+				</verify>
+            </response>
+            <transition to="SNMPGet6h" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure" />
+		</state>
+				
+		<!--  Step 22-9 -->
+		<state ID="SNMPGet6h">
+			<prelude>
+				<send protocol="utility" msgtype="SNMPGet">
+					<mod modtype="add" hdr="oids">
+						<expr>SNMPv2-MIB::sysLocation.0</expr>
+					</mod>
+					<mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+					<mod modtype="replace" hdr="version">
+						<expr>2c</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="22-9-sysLocation">
+					<and>
+						<notnull>
+							<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+						</notnull>
+						<neq>
+							<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+							<expr></expr>
+						</neq>
+					</and>
+				</verify>
+            </response>
+            <transition to="SNMPGet7h" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure" />
+		</state>
+		
+		<!--  Step 22-10 -->
+		<state ID="SNMPGet7h">
+			<prelude>
+				<send protocol="utility" msgtype="SNMPGet">
+					<mod modtype="add" hdr="oids">
+						<expr>SNMPv2-MIB::sysServices.0</expr>
+					</mod>
+					<mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+					<mod modtype="replace" hdr="version">
+						<expr>2c</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<!-- This is a bit mask and requires 2^6 to be set and can be no higher that 2^7-1 -->
+				<verify step="22-10-sysServices">
+					<and>
+						<gte>
+							<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+							<expr>64</expr>
+						</gte>
+						<lte>
+							<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+							<expr>128</expr>
+						</lte>
+					</and>
+				</verify>
+            </response>
+            <transition to="SNMPGet8h" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure" />
+		</state>
+		
+		<!--  Step 22-11 -->
+		<state ID="SNMPGet8h">
+			<prelude>
+				<send protocol="utility" msgtype="SNMPGet">
+					<mod modtype="add" hdr="oids">
+						<expr>SNMPv2-MIB::sysORLastChange.0</expr>
+					</mod>
+					<mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+					<mod modtype="replace" hdr="version">
+						<expr>2c</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="22-11-sysORLastChange">
+					<or>	
+						<contains>
+							<msg_ref type="utility" index="0 0 1">SNMPResp.varBind</msg_ref>
+							<expr>Timeticks</expr>
+						</contains>
+						<contains>
+							<msg_ref type="utility" index="0 0 0">SNMPResp.varBind</msg_ref>
+							<expr>enterprises.4413.2.1.7</expr>
+						</contains>
+					</or>	
+				</verify>
+            </response>
+            <transition to="SNMPGet9h" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure" />
+		</state>
+		
+		<!--  Step 22-12 -->
+		<state ID="SNMPGet9h">
+			<prelude>
+				<send protocol="utility" msgtype="SNMPGetTable">
+					<mod modtype="add" hdr="oids">
+						<expr>SNMPv2-MIB::sysORTable</expr>
+					</mod>
+					<mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+					<mod modtype="replace" hdr="version">
+						<expr>2c</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+					<!-- ATP request to verify entries exist for: sysORIndex (in index), sysORID, sysORFDescr, sysORUpTime. -->
+                    <verify step="22-12-sysORTable">
+                    	<and>
+                    		<notnull>
+                    			<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                    		</notnull>
+                    	<and>
+                    		<notnull>
+                    			<msg_ref type="utility" index="0 1 2">SNMPResp.varBind</msg_ref>
+                    		</notnull>
+                    		<notnull>
+                    			<msg_ref type="utility" index="0 2 2">SNMPResp.varBind</msg_ref>
+                    		</notnull>
+                    	</and>
+                    	</and>
+                    </verify>
+            </response>
+			<postlude>
+				<stop_capture />
+			</postlude>
+            <transition to="END" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure" />
+		</state>
+	</add_to>
+</pc2xml>

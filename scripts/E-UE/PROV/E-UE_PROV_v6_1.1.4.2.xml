@@ -1,0 +1,53 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+ Change History: (Author & Date)
+
+
+
+-->
+<!-- First are the document type and the attributes for our document -->
+<pc2xml version="$Revision: 7768 $" name="EUE Prov 1.1.4.2" 
+		descrip="Verify Proper eUE Behavior When the DHCP REPLY Message is not Valid" 
+		number="EUE Prov 1.1.4.2">
+
+	<!-- Next we define the each of state machines -->
+	<template file="./templates/EUE_Prov_B_1_1_1.xml" name="RebootCM"/>
+	
+	<add_to fsm="RebootCM">
+		<transition from="StartCapture_RebootWait" to="VerifyBootState" event="TimerExpired"/>
+	
+		<state ID="VerifyBootState">
+			<prelude>
+				<sleep time="30000"/>
+				<stop_capture/>
+				<parse_capture name="eUE_DHCPv6">
+					<parser_filter protocol="dhcpv6" clientMAC="DUT.MAC Address"/>
+				</parse_capture>
+				<parse_capture name="eUE_Prov">
+					<parser_filter protocol="kerberos" ip="DUT.IP"/>
+				</parse_capture>
+				<verify step="2">
+					<and>
+						<notnull>
+							<capture_ref type="dhcpv6" name="eUE_DHCPv6">Release.num</capture_ref>
+						</notnull>
+						<null>
+							<capture_ref type="kerberos" name="eUE_Prov">AS REQ.num</capture_ref>
+						</null>
+					</and>
+				</verify>
+				<generate event="Branch1Event"/>
+			</prelude>
+			<transition to="END" event="Branch1Event"/>
+		</state>
+	</add_to>
+</pc2xml>

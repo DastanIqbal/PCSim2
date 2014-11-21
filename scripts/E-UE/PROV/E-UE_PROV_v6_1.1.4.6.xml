@@ -1,0 +1,88 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+ Change History: (Author & Date)
+
+
+
+-->
+<!-- First are the document type and the attributes for our document -->
+<pc2xml version="$Revision: 7768 $" name="EUE Prov 1.1.4.6" 
+		descrip="Verify Proper eUE Behavior When No Valid RAs are Received" 
+		number="EUE Prov 1.1.4.6">
+
+	<!-- Next we define the each of state machines -->
+	<template file="./templates/EUE_Prov_B_1_1_1.xml" name="RebootCM"/>
+	
+	<add_to fsm="RebootCM">
+		<transition from="StartCapture_RebootWait" to="VerifyBootState" event="TimerExpired"/>
+	
+		<state ID="VerifyBootState">
+			<prelude once="true">
+				<stop_capture/>
+				<parse_capture name="eUE_Prov">
+					<parser_filter ip="DUT.IP"/>
+				</parse_capture>
+				<parse_capture name="eUE_DHCPc6">
+					<parser_filter protocol="dhcpv6" clientMAC="DUT.MAC Address"/>
+				</parse_capture>
+				<verify step="2">
+					<notnull>
+						<capture_ref type="dns" name="eUE_Prov">Router Solicitation.num</capture_ref>
+					</notnull>
+				</verify>
+				<verify step="2">
+					<and>
+						<gte>
+							<capture_ref type="dns" name="eUE_Prov">Router Solicitation.timestamp</capture_ref>
+							<capture_ref type="dns" name="eUE_Prov" msg_instance="2" add="2900">Router Solicitation.timestamp</capture_ref>
+						</gte>
+						<lte>
+							<capture_ref type="dns" name="eUE_Prov">Router Solicitation.timestamp</capture_ref>
+							<capture_ref type="dns" name="eUE_Prov" msg_instance="2" add="3100">Router Solicitation.timestamp</capture_ref>
+						</lte>
+					</and>
+				</verify>
+				<verify step="2">
+					<and>
+						<gte>
+							<capture_ref type="dns" name="eUE_Prov" msg_instance="2">Router Solicitation.timestamp</capture_ref>
+							<capture_ref type="dns" name="eUE_Prov" msg_instance="3" add="2900">Router Solicitation.timestamp</capture_ref>
+						</gte>
+						<lte>
+							<capture_ref type="dns" name="eUE_Prov"  msg_instance="2">Router Solicitation.timestamp</capture_ref>
+							<capture_ref type="dns" name="eUE_Prov" msg_instance="3" add="3100">Router Solicitation.timestamp</capture_ref>
+						</lte>
+					</and>
+				</verify>
+				
+				<verify step="2">
+					<null>
+						<capture_ref type="dns" name="eUE_Prov" msg_instance="4">Router Solicitation.timestamp</capture_ref>
+					</null>
+				</verify>
+				
+				<verify step="2">
+					<and>
+						<null>
+							<capture_ref type="dns" name="eUE_Prov">Router Advertisement.num</capture_ref>
+						</null>
+						<null>
+							<capture_ref type="dhcpv6" name="eUE_DHCPc6">Solicit.num</capture_ref>
+						</null>
+					</and>
+				</verify>
+				<generate event="Branch1Event"/>	
+			</prelude>
+			<transition to="END" event="Branch1Event"/>
+		</state>
+	</add_to>
+</pc2xml>

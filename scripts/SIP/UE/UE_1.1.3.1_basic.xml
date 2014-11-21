@@ -1,0 +1,314 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	PCPCII-393 : Add logic to allow the device to not respond to the INVITE message is step 19, as there is
+		no requirement for the device to answer an INVITE when not registered. (ghassler 06/19/2010)
+	
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="SIP-UE 1.1.3.1" 
+	descrip="De-Registration Details" 
+	number="SIP-UE 1.1.3.1" inspector="disable">
+	
+	<template file="./templates/UERegAndSubTemp.xml" name="Registrar"/>
+	<template file="./templates/CallOrigAtUETemp.xml" name="UE1"/>
+	
+	<remove_from fsm="Registrar">
+		<state ID="Registered"/>
+		<state ID="Notification"/>
+	</remove_from>
+	
+	<remove_from fsm="UE1">
+		<state ID="Connected"/>
+		<state ID="Releasing"/>
+		<state ID="OnHook"/>
+	</remove_from>
+	
+	<add_to fsm="Registrar">
+		<transition from="Authorization" to="Fail" event="AuthenticateFailed"/>
+		<state ID="Fail">
+			<prelude>
+				<fail/>
+				<generate event="FailEvent"/>
+				<log level="ERROR" expr="DUT's Athentication failed during registration."/>
+			</prelude>
+			<!-- Transitions for Fail state -->
+			<transition to="END" event="FailEvent"/>
+		</state>
+		
+		<state ID="Registered">
+			<prelude>
+				<send protocol="sip" msgtype="200-Register"/>
+			</prelude>
+			<response>
+				<if>
+					<and>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>SUBSCRIBE</expr>
+						</eq>
+						<contains>
+							<msg_ref type="sip">SUBSCRIBE.Event</msg_ref>
+							<expr>reg</expr>
+						</contains>
+					</and>
+					<then>
+						<send protocol="sip" msgtype="200-SUBSCRIBE"/>
+						<sleep time="100"/>
+						<send protocol="sip" msgtype="NOTIFY"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Registered" event="REGISTER"/>
+			<transition to="WaitDereg" event="SUBSCRIBE"/>
+		</state>
+		
+		<state ID="WaitDereg">
+			<prelude once="true">
+				<generate event="Registered" fsm="UE1"/>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>REGISTER</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="200-REGISTER"/>
+					</then>
+				</if>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>REGISTER</expr>
+					</eq>
+					<then>
+						<verify step="6" requirements="REQ16831">
+							<contains>
+								<msg_ref type="sip">REGISTER.From.name-addr</msg_ref>
+								<msg_ref type="platform">DUT.pui</msg_ref>
+							</contains>
+						</verify>
+						<verify step="6" requirements="REQ16831">
+							<contains>
+								<msg_ref type="sip">REGISTER.To.name-addr</msg_ref>
+								<msg_ref type="platform">DUT.pui</msg_ref>
+							</contains>
+						</verify>
+						<verify step="7" requirements="REQ17002, REQ17003">
+							<contains>
+								<msg_ref type="sip">REGISTER.Authorization.username</msg_ref>
+								<msg_ref type="platform">DUT.prui</msg_ref>
+							</contains>
+						</verify>
+						<verify step="8" requirements="REQ17004">
+							<eq>
+								<msg_ref type="sip">REGISTER.Authorization.realm</msg_ref>
+								<msg_ref type="sip" msg_instance="last">401-REGISTER.WWW-Authenticate.realm</msg_ref>
+							</eq>
+						</verify>
+						<verify step="9" requirements="REQ17005">
+							<contains>
+								<msg_ref type="sip">REGISTER.Authorization.uri</msg_ref>
+								<msg_ref type="platform">DUT.domain</msg_ref>
+							</contains>
+						</verify>
+						<verify step="10" requirements="REQ17006">
+							<eq>
+								<msg_ref type="sip">REGISTER.Authorization.nonce</msg_ref>
+								<msg_ref type="sip" msg_instance="last">REGISTER.Authorization.nonce</msg_ref>
+							</eq>
+						</verify>
+						<verify step="11" requirements="REQ17007">
+							<eq>
+								<msg_ref type="sip">REGISTER.Authorization.response</msg_ref>
+								<msg_ref type="sip" msg_instance="last">REGISTER.Authorization.response</msg_ref>
+							</eq>
+						</verify>
+						<verify step="12" requirements="REQ17007">
+							<contains>
+								<msg_ref type="sip">REGISTER.From.name-addr</msg_ref>
+								<msg_ref type="platform">DUT.pui</msg_ref>
+							</contains>
+						</verify>
+						<verify step="14" requirements="REQ17010">
+							<or>
+								<eq>
+									<msg_ref type="sip">REGISTER.Contact</msg_ref>
+									<expr>*</expr>
+								</eq>
+								<or>
+									<contains>
+										<msg_ref type="sip">REGISTER.Contact.name-addr</msg_ref>
+										<msg_ref type="platform">DUT.FQDN</msg_ref>
+									</contains>
+									<contains>
+										<msg_ref type="sip">REGISTER.Contact.name-addr</msg_ref>
+										<msg_ref type="platform">DUT.IP</msg_ref>
+									</contains>
+								</or>
+							</or>
+						</verify>
+						<verify step="15" requirements="REQ17011">
+							<or>
+								<contains>
+									<msg_ref type="sip">REGISTER.Via.sent-by</msg_ref>
+									<msg_ref type="platform">DUT.FQDN</msg_ref>
+								</contains>
+								<contains>
+									<msg_ref type="sip">REGISTER.Via.sent-by</msg_ref>
+									<msg_ref type="platform">DUT.IP</msg_ref>
+								</contains>
+							</or>
+						</verify>
+						<verify step="16" requirements="REQ17012, RFC449">
+							<or>
+								<eq>
+									<msg_ref type="sip">REGISTER.Expires.value</msg_ref>
+									<expr>0</expr>
+								</eq>
+								<eq>
+									<msg_ref type="sip">REGISTER.Contact.expires</msg_ref>
+									<expr>0</expr>
+								</eq>
+							</or>
+						</verify>
+						<verify step="17" requirements="REQ17013">
+							<contains>
+								<msg_ref type="sip">REGISTER.Request-Line.Request-URI</msg_ref>
+								<msg_ref type="platform">DUT.domain</msg_ref>
+							</contains>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<transition to="WaitDereg" event="200-NOTIFY"/>
+			<transition to="WaitDereg" event="Branch1Event"/>
+			<transition to="WaitSucceed" event="REGISTER"/>
+		</state>
+		
+		<state ID="WaitSucceed">
+			<prelude once="true">
+				<generate event="Branch2Event" fsm="UE1"/>
+			</prelude>
+			<transition to="END" event="SucceedEvent"/>
+		</state>
+	</add_to>
+	
+	<add_to fsm="UE1">
+		<state ID="Connected">
+			<prelude once="true">
+				<!-- Step 3 of test case 1.1.3.1 - 
+					Cause the UE to deregister for the public user identity 
+					associated with the call in progress from step 2 of this test case.-->
+				<sleep time="5000"/>
+				<send protocol="utility" msgtype="SNMPSet">
+					<mod modtype="add" hdr="array">
+						<var_expr>
+							<expr>varBind 1 1 3 \r\n ][ , </expr>
+							<expr>PKTC-IETF-MTA-MIB::pktcMtaDevEnabled.0,INTEGER,2][\r\n</expr>
+						</var_expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>BYE</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="200-BYE"/>
+						<generate event="Branch1Event" fsm="Registrar"/>
+						<verify step="4" requirements="REQ16997">
+							<eq>
+								<msg_ref type="sip" msg_instance="last">Invite.Call-ID.value</msg_ref>
+								<msg_ref type="sip">Bye.Call-ID.value</msg_ref>
+							</eq>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<transition to="Connected" event="SNMPResp"/>
+			<transition to="END" event="SNMPRespFailure"/>
+			<transition to="Connected" event="BYE"/>
+			<transition to="EndTheCall" event="Branch2Event"/>
+		</state>
+		
+		<state ID="EndTheCall" ES="true">
+			<transition to="SendInvite" event="SessionTerminated"/>
+		</state>
+
+		<state ID="SendInvite" timer="5000">
+			<prelude once="true">
+				<send protocol="sip" msgtype="INVITE"/>
+			</prelude>
+			<response>
+				<if>
+					<neq>
+						<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+						<expr>100</expr>
+					</neq>
+				  <then>
+					<verify step="20" requirements="REQ17017">
+						<or>
+							<and>
+								<gt>
+									<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+									<expr>299</expr>
+								</gt>
+								<lt>
+									<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+									<expr>699</expr>
+								</lt>
+							</and>
+							<eq>
+								<msg_ref type="event"/>
+								<expr>TimerExpired</expr>
+							</eq>
+						</or>
+					</verify>
+				  </then>
+				</if>
+			</response>
+			<transition to="SendInvite" event="100-INVITE"/>
+			<transition to="SendAck" event="3xx-INVITE"/>
+			<transition to="SendAck" event="4xx-INVITE"/>
+			<transition to="SendAck" event="5xx-INVITE"/>
+			<transition to="SendAck" event="6xx-INVITE"/>
+			<transition to="Succeed" event="TimerExpired"/>
+		</state>
+		
+		<state ID="Succeed">
+			<prelude>
+				<generate event="SucceedEvent"/>
+				<generate event="SucceedEvent" fsm="Registrar"/>
+			</prelude>
+			<transition to="Complete" event="SucceedEvent"/>
+		</state>
+		
+		<state ID="SendAck">
+			<prelude>
+				<send protocol="sip" msgtype="ACK"/>
+				<generate event="SucceedEvent"/>
+				<generate event="SucceedEvent" fsm="Registrar"/>
+			</prelude>
+			<transition to="Complete" event="SucceedEvent"/>
+		</state>
+		<state ID="Complete" ES="true"/>
+	</add_to>
+</pc2xml>

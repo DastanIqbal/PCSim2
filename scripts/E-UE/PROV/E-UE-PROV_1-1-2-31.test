@@ -1,0 +1,368 @@
+#//*****************************************************************************
+#// Filename: E-UE-PROV_1-1-2-31.test
+#// Author:   Dan Smith
+#// Creation Date: August 10, 2004
+#// Modified by:
+#//*****************************************************************************
+#// Description:
+#//     TC1319 TEST CASE PROV 5.58 Verification if MTA follows the failure logic in
+#//     Provisioning Flows MTA 5- MTA 8.
+#//
+#// Objective:
+#//     To test the ability of the MTA to follow the failure logic in 
+#//     Provisioning Flows MTA 5- MTA 8.
+#//
+#// PacketCable DUT:
+#//     MTA
+#//
+#// Test Steps:
+#//     - Initialize MTA config file setup
+#//     - Configure DNS to not send DNS SRV REPLY
+#//     - Start Sniffer
+#//     - Reset DUT
+#//     - Allow time for MTA to attempt to complete provision
+#//     - Stop Sniffer
+#//     - Invoke parsing and verify using pass/fail scripts
+#//     - Repeat above steps, but configure DNS to not send DNS REPLY
+#//     - Delete MTA config file
+#//
+#// Notes:
+#//     - Requires provPrimitives.tcl & tftp_primitives.tcl.
+#//     - Requires the specific config file in $BASE_CFG_FILE_PATH in Provisioning Server.
+#//     - Requires parT.tcl parsing tool to parse data from capture file.
+#//*****************************************************************************
+########
+# Notes: 10-Aug-2004 (DLS)
+#
+# - Use Future ParT Release: SEQUENCE-I API to Identify (n) DHCP Discover Msg (optional)
+# - Add CM.bin and MTA.bin config file TFTP logic (optional)
+# - Define better method for DHCP Server configuration?
+# - Restore MTA (DHCP Server) to basic working config...
+#
+########
+
+##
+##
+##
+global SCRIPT_VERSION
+set SCRIPT_VERSION { # $Id: E-UE-PROV_1-1-2-31.test 7406 2010-07-20 17:17:37Z dthakore $ }
+
+#################### Init Provision and TFTP modules ################
+
+DoStep "E-UE-PROV_1-1-2-31_1-1" "Initial configuration" {
+    LogMsg "--- Initial PROV module ---"
+    Init_PROV
+    # ProvCreateConfig 291 $MTA_MAC
+} { PASS_STEP }
+
+
+#################### (Manual) Provision CM / MTA ################
+
+DoStep "E-UE-PROV_1-1-2-31_1-4" "Configure DNS Server" {
+} {
+    # verify_signal "Configure DNS Server with no DNS SRV REPLY (MTATC1319NEGSRVRESP)"
+    PROV_MODIFY_DEVICE $MTA_MAC MTATC1319NEGSRVRESP 
+    PROV_DEPLOY_DHCP
+}
+
+########################## Clear Tickets ##################################
+
+
+set msgStr "Reset Kerberos Tickets"
+DoStep "E-UE-PROV_1-1-2-31_1-5" $msgStr {
+    LogMsg "--- $msgStr ---"
+    set val [SNMP_SET $oid_pktcMtaDevResetKrbTickets OCTET-STRING 0xC0 $MTA_IP]
+} { 
+    if {$val == 0} {
+        LogMsg "Kerberos Tickets Have been cleared"
+        PASS_STEP
+    } else {
+        FAIL_STEP "Cannot reset Kerberos tickets"
+    }
+}
+
+# if {000} {
+
+#################### Start Sniffer ##################################
+
+DoStep "E-UE-PROV_1-1-2-31_1-6" "Start sniffer" {
+    LogMsg "--- Start sniffer ---"
+    Init_CONTROLLER_LAN
+    SetupCaptureControllerLan "host $MTA_IP || udp port 67 || host $CM_IP"
+    StartCaptureControllerLan
+} {PASS_STEP}
+
+#################### Reset MTA #######################################
+
+
+DoStep "E-UE-PROV_1-1-2-31_2-1" "Reset MTA" {
+    actionWait "Wait 5 seconds" 5
+    set val [SNMP_SET $oid_pktcMtaDevResetNow INTEGER 1 $MTA_IP]
+    LogMsg "--- Reset MTA ---"
+} {
+    IsEqual $val 0
+}
+
+#################### Verify MTA does NOT become Operational ################
+
+DoStep "E-UE-PROV_1-1-2-31_3-1" "Verify MTA not Provisioned" {
+    # Wait for a minute to let CM/MTA starting to reboot
+    actionWait "Wait 120 seconds to allow for back-off and retry!" 120
+} {PASS_STEP}
+
+#################### Stop Sniffer ##################################
+
+set msgStr "Stop sniffer"
+DoStep "E-UE-PROV_1-1-2-31_3-3" $msgStr {
+    LogMsg "--- $msgStr ---"
+    StopCaptureControllerLan
+    SaveToFileControllerLan "_NoDnsSrvReply"
+} { PASS_STEP }
+
+#################### Init ParT Tool ##################################
+
+DoStep "E-UE-PROV_1-1-2-31_3-4" "Analyze flow data" {
+    # Initial PARSER TOOL
+    Init_PART
+
+    # Set up parser file
+    set PARSERFILE    $ETH_DEFAULT_TXT_FILE
+
+} { PASS_STEP }
+
+#################### Parse Frames to ParT DataStore ##################################
+
+DoStep "E-UE-PROV_1-1-2-31_3-5" "Parse all data into database" {
+    # Parse data
+    set PARAMS_DHCP         "{DHCP {} {} {} {} {} {} {} {}}"
+    set PARAMS_MTA_SRC      "{{} {} {} {} $MTA_IP {} {} {} {}}"
+    set PARAMS_MTA_DST      "{{} {} {} {} {} {} {} $MTA_IP {}}"
+    set msgID_MTA           [ParseFile $PARSERFILE "$PARAMS_DHCP $PARAMS_MTA_SRC $PARAMS_MTA_DST"]
+    
+} {
+    if { $::PART_RETURN == 0 } {
+        PASS_STEP
+    } else {
+        FAIL_STEP "Failed ParT ParseFile operation."
+    }
+}
+
+#################### ParT Verify MTA Frames ################################
+
+set msgStr "set CONTINUE_PAST_STEP_ERROR 1"
+DoStep "E-UE-PROV_1-1-2-31_3-6" $msgStr {
+    set CONTINUE_PAST_STEP_ERROR 1
+} { PASS_STEP }
+
+#################### MTA-5 ################################
+
+set msgStr "Verify MTA send DNS SRV Query"
+DoStep "E-UE-PROV_1-1-2-31_3-7" $msgStr {
+    LogMsg "--- $msgStr ---"
+} {
+    VerifyValue $msgID_MTA "INANY DNS DNS_QUERY_SRV DNS_QUERIES" "EXISTS" ""
+}
+
+#################### MTA-6 ################################
+
+set msgStr "Verify No DNS SRV Response"
+DoStep "E-UE-PROV_1-1-2-31_3-8" $msgStr {
+    LogMsg "--- $msgStr ---"
+} {
+    VerifyNotValue $msgID_MTA "INANY DNS DNS_RESPONSE_SRV DNS_ANSWERS" "EXISTS" "" AND "HEADERSRCIP" "IS" "10.32.0.51"
+}
+
+#################### Verify Repeated DNS SRV Query Sequence ################################
+
+# Future ParT Release: SEQUENCE-I API
+set msgStr "Verify MTA Repeated DNS SRV Query Sequence"
+DoStep "E-UE-PROV_1-1-2-31_3-9" $msgStr {
+    LogMsg "--- $msgStr ---"
+
+    # Set SEQUENCE to check
+    set MTA_SEQUENCE "DNS:DNS_QUERY_SRV,DNS:DNS_QUERY_SRV,DNS:DNS_QUERY_SRV"
+
+    # Remove whitespace
+    regsub -all { } $MTA_SEQUENCE {} MTA_SEQUENCE
+} {
+    # Verify Sequence
+    VerifyValue $msgID_MTA "SEQUENCE $MTA_SEQUENCE" "" ""
+}
+
+#################### Verify Sequence ################################
+
+# Future ParT Release: SEQUENCE-I API
+set msgStr "Verify MTA Returns to DHCP:Discover Sequence"
+DoStep "E-UE-PROV_1-1-2-31_3-10" $msgStr {
+    LogMsg "--- $msgStr ---"
+
+    # Set SEQUENCE to check
+    set MTA_SEQUENCE "DHCP:DISCOVER,DNS:DNS_QUERY_SRV,DHCP:DISCOVER"
+
+    # Remove whitespace
+    regsub -all { } $MTA_SEQUENCE {} MTA_SEQUENCE
+} {
+    # Verify Sequence
+    VerifyValue $msgID_MTA "SEQUENCE $MTA_SEQUENCE" "" ""
+}
+
+
+# set CONTINUE_PAST_STEP_ERROR 0
+
+# }
+#################### Repeat with no DNS Response #######################
+#################### Repeat with no DNS Response #######################
+#################### Repeat with no DNS Response #######################
+
+DoStep "E-UE-PROV_1-1-2-31_4-1" "Configure DNS Server" {
+    # No sending message
+} {
+    # verify_signal "Configure DNS server with no DNS REPLY (MTATC1319SRVNOFQDN)"
+    PROV_MODIFY_DEVICE $MTA_MAC MTATC1319SRVNOFQDN 
+    PROV_DEPLOY_DHCP
+}
+
+
+#################### Start Sniffer ##################################
+
+DoStep "E-UE-PROV_1-1-2-31_4-2" "Start sniffer" {
+    LogMsg "--- Start sniffer ---"
+    # Init_CONTROLLER_LAN
+
+#################### Error ParT Tool ##################################
+#
+# - Must not Init_CONTROLLER_LAN a second time (before close)!
+#
+#################### Error ParT Tool ##################################
+
+    SetupCaptureControllerLan "host $MTA_IP || udp port 67 || host $CM_IP"
+    StartCaptureControllerLan
+} {PASS_STEP}
+
+#################### Reset CM / MTA #######################################
+
+DoStep "E-UE-PROV_1-1-2-31_5-1" "Reset CM/MTA" {
+    set val [SNMPvN_RESET $CM_IP]
+    LogMsg "--- Reset CM/MTA ---"
+} {
+    IsEqual $val 0
+}
+
+#################### Verify MTA does NOT become Operational ################
+
+DoStep "E-UE-PROV_1-1-2-31_6-1" "Verify MTA not Provisioned" {
+    # Wait for a minute to let CM/MTA starting to reboot
+    actionWait "Wait 210 seconds to allow for back-off and retry!" 210
+} {PASS_STEP}
+
+#################### Stop Sniffer ##################################
+
+DoStep "E-UE-PROV_1-1-2-31_6-2" "Stop sniffer" {
+    LogMsg "--- Stop sniffer ---"
+    StopCaptureControllerLan
+    SaveToFileControllerLan "_NoDNSReply"
+} { PASS_STEP }
+
+
+#################### Init ParT Tool ##################################
+# 
+# DoStep "E-UE-PROV_1-1-2-31_3-4" "Analyze flow data" {
+    # # Initial PARSER TOOL
+    # Init_PART
+    # 
+    # # Set up parser file
+    # set PARSERFILE    $ETH_DEFAULT_TXT_FILE
+    # 
+# } { PASS_STEP }
+#################### Parse Frames to ParT DataStore ##################################
+
+DoStep "E-UE-PROV_1-1-2-31_6-3" "Parse all data into database" {
+    # Parse data
+    set PARAMS_DHCP         "{DHCP {} {} {} {} {} {} {} {}}"
+    
+    set PARAMS_MTA_SRC      "{{} {} {} {} $MTA_IP {} {} {} {}}"
+    set PARAMS_MTA_DST      "{{} {} {} {} {} {} {} $MTA_IP {}}"
+    set msgID_MTA           [ParseFile $PARSERFILE "$PARAMS_DHCP $PARAMS_MTA_SRC $PARAMS_MTA_DST"]
+} {
+    if { $::PART_RETURN == 0 } {
+        PASS_STEP
+    } else {
+        FAIL_STEP "Failed ParT ParseFile operation."
+    }
+}
+
+#################### ParT Verify MTA Frames ################################
+
+
+#################### MTA-7 ################################
+
+DoStep "E-UE-PROV_1-1-2-31_6-4" "Verify MTA sends DNS Query" {
+    LogMsg "--- Verify MTA sends DNS Query ---"
+    set CONTINUE_PAST_STEP_ERROR 1
+} {
+    VerifyValue $msgID_MTA "INANY DNS DNS_QUERY_HOST DNS_QUERIES" "EXISTS" ""
+}
+
+#################### MTA-8 ################################
+
+set msgStr "Verify No DNS Response"
+DoStep "E-UE-PROV_1-1-2-31_6-5" $msgStr {
+    LogMsg "--- $msgStr ---"
+} {
+    VerifyNotValue $msgID_MTA "INANY DNS DNS_RESPONSE_HOST DNS_ANSWERS_ADDR" "EXISTS" "" AND "DNS_QUERIES" "IS" ".*kdc.*"
+}
+
+#################### Verify Repeated DNS Query Sequence ################################
+
+# Future ParT Release: SEQUENCE-I API
+set msgStr "Verify MTA Repeated DNS Query Sequence"
+DoStep "E-UE-PROV_1-1-2-31_6-6" $msgStr {
+    LogMsg "--- $msgStr ---"
+
+    # Set SEQUENCE to check
+    set MTA_SEQUENCE "DNS:DNS_QUERY_HOST,DNS:DNS_QUERY_HOST,DNS:DNS_QUERY_HOST"
+
+    # Remove whitespace
+    regsub -all { } $MTA_SEQUENCE {} MTA_SEQUENCE
+} {
+    # Verify Sequence
+    VerifyValue $msgID_MTA "SEQUENCE $MTA_SEQUENCE" "" ""
+}
+
+#################### Verify Sequence ################################
+
+# Future ParT Release: SEQUENCE-I API
+set msgStr "Verify MTA Returns to DHCP:Discover Sequence"
+DoStep "E-UE-PROV_1-1-2-31_6-7" $msgStr {
+    LogMsg "--- $msgStr ---"
+
+    # Set SEQUENCE to check
+    set MTA_SEQUENCE "DHCP:DISCOVER,DNS:DNS_QUERY_HOST,DHCP:DISCOVER"
+
+    # Remove whitespace
+    regsub -all { } $MTA_SEQUENCE {} MTA_SEQUENCE
+} {
+    # Verify Sequence
+    VerifyValue $msgID_MTA "SEQUENCE $MTA_SEQUENCE" "" ""
+}
+
+################################################################################
+# Cleanup
+################################################################################
+
+
+DoStep "E-UE-PROV_1-1-2-31_6-8" "Configure DNS Server" {
+    # No sending message
+} {
+    # verify_signal "Configure Provisioning server to normal policy(MTAFORCW_122)"
+    PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122
+    PROV_DEPLOY_DHCP
+    set val [SNMPvN_RESET $CM_IP]
+    actionWait "Wait 50 seconds for reboot" 50
+}
+
+# Clear
+set CONTINUE_PAST_STEP_ERROR 0
+Cleanup
+
+return 0

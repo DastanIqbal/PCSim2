@@ -1,0 +1,234 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+ Change History: (Author & Date)
+	PCPCII-128: Update script to test the username field in step 8 as part of the changes for 
+		the D07 release of ATP. (ghassler 04/24/2009)
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="SECURITY 1.2.1" 
+	descrip="407 Proxy Authenticate " 
+	number="SECURITY 1.2.1">
+	
+	<template file="./templates/CallOrigAtUETemp.xml" name="UE1"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Setup"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+				
+		<state ID="Setup">
+			<prelude once="true">
+				<generate event="AuthenticateSucceed" fsm="Stun"/>
+				<send protocol="utility" msgtype="DialDigits">
+					<mod modtype="add" hdr="number">
+						<msg_ref type="platform">UE1.phone number 1</msg_ref>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>Invite</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="407-INVITE">
+						</send>
+					</then>
+				</if>
+			</response>
+			<transition to="Setup" event="DialDigitsComplete"/>
+			<transition to="Setup" event="INVITE"/>
+			<transition to="AuthenticatedSetup" event="ACK"/>
+		</state>
+		
+		<state ID="AuthenticatedSetup">
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>Invite</expr>
+					</eq>
+					<then>
+					
+						<verify step="3" requirements="REQ19570, REQ19571, REQ19572, REQ19573, REQ22331">
+							<eq>
+								<msg_ref type="sip">INVITE.Proxy-Authorization.realm</msg_ref>
+								<msg_ref type="sip" msg_instance="last">407-INVITE.Proxy-Authenticate.realm</msg_ref>
+							</eq>
+						</verify>
+						<verify step="3" requirements="REQ19570, REQ19571, REQ19572, REQ19573, REQ22331">
+							<eq>
+								<msg_ref type="sip">INVITE.Proxy-Authorization.username</msg_ref>
+								<msg_ref type="platform">DUT.prui</msg_ref>
+							</eq>
+						</verify>
+						<verify step="3" requirements="REQ19570, REQ19571, REQ19572, REQ19573, REQ22331">
+							<contains>
+								<msg_ref type="sip">INVITE.Proxy-Authorization</msg_ref>
+								<expr>cnonce=</expr>
+							</contains>
+						</verify>
+						<verify step="3" requirements="REQ19570, REQ19571, REQ19572, REQ19573, REQ22331">
+							<digest/>
+						</verify>
+						<verify step="3" requirements="REQ19570, REQ19571, REQ19572, REQ19573, REQ22331">
+							<eq>
+								<msg_ref type="sip">INVITE.Proxy-Authorization.nonce</msg_ref>
+								<msg_ref type="sip" msg_instance="last">407-INVITE.Proxy-Authenticate.nonce</msg_ref>
+							</eq>
+						</verify>
+						<verify step="3" requirements="REQ19570, REQ19571, REQ19572, REQ19573, REQ22331">
+							<eq>
+								<msg_ref type="sip">INVITE.Proxy-Authorization.qop</msg_ref>
+								<expr>auth</expr>
+							</eq>
+						</verify>
+						<verify step="3" requirements="REQ19570, REQ19571, REQ19572, REQ19573, REQ22331">
+							<eq>
+								<msg_ref type="sip">INVITE.Proxy-Authorization.nc</msg_ref>
+								<expr>00000001</expr>
+							</eq>
+						</verify>
+						<verify step="3" requirements="REQ19570, REQ19571, REQ19572, REQ19573, REQ22331">
+							<eq>
+								<msg_ref type="sip">INVITE.Proxy-Authorization.algorithm</msg_ref>
+								<expr>MD5</expr>
+							</eq>
+						</verify>
+						<verify step="4" requirements="REQ19568">
+							<or>
+								<contains>	
+									<msg_ref type="sip">INVITE.Contact.addr-spec</msg_ref>
+									<msg_ref type="sip">INVITE.SourceAddress.port</msg_ref>
+								</contains>
+								<dnc>
+									<msg_ref type="sip">INVITE.Contact.addr-spec</msg_ref>
+									<expr>:</expr>
+								</dnc>
+							</or>
+						</verify>
+						<verify step="5" requirements="REQ19569">
+							<or>
+								<contains>	
+									<msg_ref type="sip">INVITE.Via.addr-spec</msg_ref>
+									<msg_ref type="sip">INVITE.SourceAddress.port</msg_ref>
+								</contains>
+								<dnc>
+									<msg_ref type="sip">INVITE.Via.addr-spec</msg_ref>
+									<expr>:</expr>
+								</dnc>
+							</or>
+						</verify>
+						<send protocol="sip" msgtype="200-INVITE">
+							<!-- D08 says to send a valid value
+							mod modtype="add" hdr="Proxy-Authentication-Info">
+								<var_expr>
+									<expr>qop=auth,nc=</expr>
+									<msg_ref type="sip" msg_instance="last">INVITE.Proxy-Authorization.nc</msg_ref>
+									<expr>,cnonce=</expr>
+									<msg_ref type="sip" msg_instance="last">INVITE.Proxy-Authorization.cnonce</msg_ref>
+									<expr>,rspAuth=&quot;6a605f743c10478b57e5fd50d6246152&quot;</expr>
+								</var_expr>
+							</mod-->
+							<generate event="Branch1Event" fsm="Stun"/>
+						</send>
+					</then>
+				</if>
+			</response>
+			<transition to="AuthenticatedSetup" event="INVITE"/>
+			<transition to="WaitStun" event="ACK"/>
+		</state>
+		
+		<state ID="WaitStun">
+			<transition to="SendBye" event="SucceedEvent"/>
+		</state>
+		
+		<state ID="SendBye">
+			<prelude>
+				<send protocol="sip" msgtype="BYE"/>
+			</prelude>
+			<transition to="END" event="200-BYE"/>
+		</state>
+	</add_to>
+	
+	<fsm name="Stun">
+		<models>
+			<stun/>
+		</models>
+		
+		<NE sim_type="term" elements="SCSCF1 PCSCF1" targets="PCSCF1"/>
+		
+		<states initialstate="WaitReg">
+			<state ID="WaitReg">
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="stun">Request</msg_ref>
+							<expr>BindingRequest</expr>
+						</eq>
+						<then>
+							<send protocol="stun" msgtype="BindingResponse"/>
+						</then>
+					</if>
+				</response>
+				<transition to="ProcessBindingReq" event="AuthenticateSucceed"/>
+				<transition to="WaitReg" event="BindingRequest"/>
+			</state>
+			
+			<state ID="ProcessBindingReq">
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="stun">Request</msg_ref>
+							<expr>BindingRequest</expr>
+						</eq>
+						<then>
+							<send protocol="stun" msgtype="BindingResponse"/>
+						</then>
+					</if>
+				</response>
+				<transition to="ProcessBindingReq" event="BindingRequest"/>
+				<transition to="VerifyBindingReq" event="Branch1Event"/>
+			</state>
+			
+			<state ID="VerifyBindingReq">
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="stun">Request</msg_ref>
+							<expr>BindingRequest</expr>
+						</eq>
+						<then>
+							<send protocol="stun" msgtype="BindingResponse"/>
+							<verify step="6" requirements="REQ19574">
+								<eq>
+									<msg_ref type="stun">Request</msg_ref>
+									<expr>BindingRequest</expr>
+								</eq>
+							</verify>
+							<generate event="SucceedEvent" fsm="UE1"/>
+						</then>
+					</if>
+				</response>
+				<transition to="Done" event="BindingRequest"/>
+			</state>
+			
+			<state ID="Done" ES="true" offHookOK="true"/>
+		</states>
+	</fsm>
+</pc2xml>

@@ -1,0 +1,76 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="SIP-UE 1.17.5" 
+	descrip="UE-originating case- Temporary GRUU" 
+	number="SIP-UE 1.17.5" inspector="disable">
+
+	<template file="./templates/UERegAndSubTemp.xml" name="Registrar"/>
+	<template file="./templates/CallOrigAtUETemp.xml" name="UE1"/>
+
+	<remove_from fsm="Registrar">
+		<state ID="NotificationComplete"/>
+	</remove_from>
+
+	<add_to fsm="Registrar">
+		<NE ext_require="gruu"/>
+		<state ID="Notification" sub="postlude">
+			<generate event="Registered" fsm="UE1"/>
+		</state>
+		<state ID="NotificationComplete">
+			<transition to="END" event="SucceedEvent"/>
+		</state>
+	</add_to>
+
+	<remove_from fsm="UE1">
+		<state ID="Setup"/>
+	</remove_from>
+
+	<add_to fsm="UE1">
+		<state ID="Setup">
+			<prelude once="true">
+				<send protocol="utility" msgtype="DialDigits">
+					<mod modtype="add" hdr="number">
+						<msg_ref type="platform">UE1.phone number 1</msg_ref>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>INVITE</expr>
+					</eq>
+					<then>
+						<verify step="1" requirements="REQ17052, REQ17053, RFC4027, RFC4032, RFC4033">
+							<contains>
+								<msg_ref type="sip" msg_instance="last" fsm="Registrar">200-REGISTER.Contact.temp-gruu</msg_ref>
+								<msg_ref type="sip">Invite.Contact.temp-gruu</msg_ref>
+							</contains>
+						</verify>
+						<generate event="SucceedEvent" fsm="Registrar"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Setup" event="DialDigitsComplete"/>
+			<transition to="END" event="invite"/>
+		</state>
+	</add_to>
+</pc2xml>

@@ -1,0 +1,116 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	
+
+
+-->
+<pc2xml version="$Revision: 7085 $" 
+	name="HDV_RST_UE_3.1.13.3" 
+	descrip="DECT PP Ability to Display Activation Status When DND is Enabled" 
+	number="HDV_RST_UE_3.1.13.3" inspector="disable">
+	
+	<template file="./templates/Proxy.xml" name="Core" />
+		 
+
+	<add_to fsm="Core">
+			<states initialstate="2CMTSReminder" /> 
+			<state ID="2CMTSReminder">
+				<prelude>
+					<start_capture>
+					<filter>
+					<var_expr>
+					<expr>host</expr> 
+					<msg_ref type="platform">UE0.IP</msg_ref> 
+					<expr>|| host</expr> 
+					<msg_ref type="platform">Platform.STUN IP Address</msg_ref> 
+					</var_expr>
+					</filter>
+					</start_capture>
+						<log promptUser="true" expr="Reminder: You will need to have the two UEs for this test on\ndifferent CMTSs in order to capture the RTP traffic between them." /> 
+						<generate event="Branch1Event" /> 
+				</prelude>
+			<transition to="Register1" event="Branch1Event" /> 
+			</state>
+
+
+		
+			<state ID="Register1">
+				<postlude>
+					<sleep time="10000"/>
+				</postlude>
+				<transition to="VerifyTone1" event="Registered"/>
+			</state>
+			
+			<state ID="VerifyTone1">
+				<prelude>
+					<send protocol="utility" msgtype="VerifyDialTone">
+					</send>
+						</prelude>
+							<response>
+							<verify>
+							<eq>
+							<msg_ref type="utility">Response</msg_ref> 
+							<expr>VerifyDialToneComplete</expr> 
+							</eq>
+							</verify>
+							</response>
+				<transition to="OffHook2" event="VerifyDialToneError" /> 
+				<transition to="OffHook2" event="VerifyDialToneComplete" /> 
+			</state>
+			
+			<state ID="OffHook2">
+				<prelude>
+					<sleep time="1000" /> 
+					<send protocol="utility" msgtype="OffHook" /> 
+				</prelude>
+			<transition to="OffHook3" event="OffHookComplete" /> 
+			</state>
+			
+
+			
+			<state ID="OffHook3" timer="2000">
+				<prelude>
+					
+					
+					<sleep time="1000"/>
+					<log promptUser="True" yesExpected="True" verify="True" 
+						step="1" requirements="REQ23568" 
+						expr="Verify that PP for Line 1 displays DND is enabled"/>
+					
+				</prelude>
+				
+				<transition to="Call3" event="OffHookComplete"/>
+				<transition to="Call3" event="TimerExpired"/>
+			</state>
+			
+			
+			<state ID="Call3" timer="1000">
+				
+				<transition to="EndCall3" event="TimerExpired"/>
+			</state>
+			
+			<state ID="EndCall3" ES="true">
+				<postlude once="true">
+					<sleep time="1000" /> 
+					<log promptUser="True" yesExpected="True" expr="Stop IP capture and save log files." />
+					<stop_capture /> 
+
+				</postlude>
+				<transition to="END" event="SessionTerminated"/>
+			</state>
+		
+		
+		</add_to>
+	
+</pc2xml>

@@ -1,0 +1,49 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-UE 1.1.8.4" 
+	descrip="UE Sends ACK in Response to Temporarily Unavailable?" 
+	number="RST-UE 1.1.8.4" inspector="disable">
+	
+	<template file="./templates/CallOrigAtUETemp.xml" name="UE1"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Answer"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<state ID="Answer">
+			<prelude>
+				<!-- Step 2 from the test case 1.1.8.4-->
+				<sleep time="2000"/>
+				<send protocol="sip" msgtype="480-INVITE"/>
+			</prelude>
+			<response>
+				<verify step="3" requirements="REQ14548">
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>ACK</expr>
+					</eq>
+				</verify>
+			</response>
+			<transition to="END" event="ACK"/>
+		</state>
+	</add_to>
+</pc2xml>

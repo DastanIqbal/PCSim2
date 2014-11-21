@@ -1,0 +1,46 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+ Change History: (Author & Date)
+
+-->
+
+<pc2xml version="$Revision: 8188 $" name="RST_E-UE_PROV 2.1.2.3"
+		descrip="Ability of RST eUE to Provision With a Compliant Configuration File"
+		number="RST_E-UE_PROV 2.1.2.3">
+
+	<!-- Next we define the each of state machines -->
+	<template file="./templates/EUE_Prov_B_1_1_1.xml" name="RebootCM"/>
+
+	<add_to fsm="RebootCM">
+		<transition from="StartCapture_RebootWait" to="VerifyProvision" event="TimerExpired"/>
+		
+		<state ID="VerifyProvision">
+			<prelude>
+				<send protocol="utility" msgtype="SNMPGet">
+					<mod modtype="add" hdr="oids">
+						<expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvisioningState.0</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="2" group="Prov State">
+					<eq>
+						<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+						<expr>1</expr>
+					</eq>
+				</verify>
+			</response>
+			<transition to="END" event="SNMPResp"/>
+			<transition to="END" event="SNMPRespFailure"/>
+		</state>
+	</add_to>
+</pc2xml>

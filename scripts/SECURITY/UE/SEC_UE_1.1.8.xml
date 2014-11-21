@@ -1,0 +1,122 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="SECURITY 1.1.8" 
+	descrip="UE ignores the unrecognized option in “qop-options�? attribute" 
+	number="SECURITY 1.1.8">
+	
+	<template file="./templates/UERegAndSubTemp.xml" name="Registrar"/>
+	
+	<remove_from fsm="Registrar">
+		<state ID="PendingRegistration"/>
+		<state ID="Authorization"/>
+	</remove_from>
+	
+	<add_to fsm="Registrar">
+		
+	<state ID="PendingRegistration">
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>REGISTER</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="401-REGISTER">
+							<mod modtype="replace" hdr="WWW-Authenticate" param="qop">
+								<expr>bogus-value,auth</expr>
+							</mod>
+						</send>
+					</then>
+				</if>
+			</response>
+			<transition to="Authorization" event="REGISTER"/>
+		</state>
+		
+		<state ID="Authorization">
+			<response>
+				<if>
+					<or>
+						<eq>
+							<msg_ref type="event"/>
+							<expr>AuthenticateSucceed</expr>
+						</eq>
+						<eq>
+							<msg_ref type="event"/>
+							<expr>AuthenticateFailed</expr>
+						</eq>
+					</or>
+					<then>
+						<!-- this is to prevent the AuthenticateFailed from being forwarded
+									to the next state on the AuthenticateSucceed -->
+					</then>
+					<elseif>
+						<and>
+							<eq>
+								<msg_ref type="sip">Request</msg_ref>
+								<expr>REGISTER</expr>
+							</eq>
+							<and>
+								<contains>
+									<msg_ref type="sip">REGISTER</msg_ref>
+									<expr>Authorization</expr>
+								</contains>
+								<digest/>
+							</and>
+						</and>
+						<then>
+							<generate event="AuthenticateSucceed"/>
+							<verify step="3" requirements="RFC2424">
+								<eq>
+									<msg_ref type="sip">Request</msg_ref>
+									<expr>REGISTER</expr>
+								</eq>
+							</verify>
+							<verify step="4" requirements="RFC2424">
+								<or>
+									<eq>
+										<msg_ref type="sip">REGISTER.Authorization.qop</msg_ref>
+										<expr>auth</expr>
+									</eq>
+									<eq>
+										<msg_ref type="sip">REGISTER.Authorization.qop</msg_ref>
+										<expr>&quot;auth&quot;</expr>
+									</eq>
+								</or>
+							</verify>
+							<verify step="5" requirements="REQ19559, REQ19722, REQ19560">
+								<digest/>
+							</verify>
+						</then>
+						<else>
+							<generate event="AuthenticateFailed"/>
+							<send protocol="sip" msgtype="503-Register"/>
+						</else>
+					</elseif>
+				</if>
+			</response>
+			<transition to="Registered" event="AuthenticateSucceed"/>
+			<transition to="END" event="AuthenticateFailed"/>
+			<transition to="Authorization" event="REGISTER"/>
+		</state>
+		
+		<transition from="Notification" to="END" event="200-NOTIFY"/>
+	</add_to>
+</pc2xml>

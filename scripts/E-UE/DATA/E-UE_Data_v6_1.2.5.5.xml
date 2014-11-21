@@ -1,0 +1,64 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+ Change History: (Author & Date)
+
+
+
+-->
+
+
+<!-- First are the document type and the attributes for our document -->
+<pc2xml version="$Revision: 7768 $" name="E-UE_Data_1.2.5.5" descrip="Ability of eUE to Support USM User Cloning"
+	number="E-UE_Data_1.2.5.5">
+
+	<!-- Step 1 -->
+	<template file="./templates/Reboot_Capture.xml" name="CMReset" />
+
+	<add_to fsm="CMReset">
+		<transition from="EUEProvisions" to="GetUserSpinLock" event="SNMPResp" />
+
+		<!-- Step 2 The E-UE DUT provisions successfully and becomes operational. -->
+		<state ID="EUEProvisions" sub="response">
+			<verify step="2">
+				<eq>
+					<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+					<expr>1</expr>
+				</eq>
+			</verify>
+		</state>
+		
+		<!-- Step 3-21 -->
+		<!-- TODO: have pcsim2 to ask pact to clone the user -->
+		
+		
+		<!-- Step 22 -->
+		<state ID="Reconfigure2" provFile="C.1.2.1.bin" policyFile="MTAFORCW122" nextState="Reboot2" />
+		
+		<transition from="EUEProvisions2" to="GetUserSpinLock" event="SNMPResp" />
+		
+		<!-- Step 23 The E-UE DUT provisions successfully and becomes operational. -->
+		<state ID="EUEProvisions2" sub="response">
+			<verify step="2">
+				<eq>
+					<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+					<expr>1</expr>
+				</eq>
+			</verify>
+		</state>
+		
+		<!-- Step 24, repeat 3-21 -->
+		<!-- TODO: have pcsim2 to ask pact to clone the user -->
+		
+		
+	</add_to>
+</pc2xml>
+		

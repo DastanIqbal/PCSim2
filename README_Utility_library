@@ -1,0 +1,3 @@
+The only two packages necessary to create the pc2_utility-0.1.jar library are 
+com.cablelabs.log and com.cablelabs.utils. Otherwise it doesn't have any 
+dependencies on any other packages.

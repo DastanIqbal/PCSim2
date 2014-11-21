@@ -1,0 +1,122 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+ Change History: (Author & Date)
+	PCPCIIATP-114 : Update the fmtp media line to use '=' instead of ':' between a parameter and its 
+			value. (ghassler 01/13/2010)
+	PCPCII-268 : Correct the SDP body sent in the REINVITE.
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="CODEC-MEDIA_1.3.2.9" 
+	descrip="T.38 Redundancy with Two Levels of Redundancy" 
+	number="CODEC-MEDIA_1.3.2.9">
+	
+	<template file="./templates/CallTermAtUETemp.xml" name="UE1"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Setup"/>
+		<state ID="Connected"/>
+		<state ID="OnHook"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<state ID="Setup">
+			<prelude>
+				<start_capture>
+					<filter>
+						<var_expr>
+							<expr>host </expr>
+							<msg_ref type="platform">PCSCF1.IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">UE0.IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">UE1.IP</msg_ref>
+						</var_expr>
+					</filter>
+				</start_capture>
+				<send protocol="sip" msgtype="Invite"/>
+			</prelude>
+			<!-- Expected responses are 100, 180, 183 or 200 -->
+			<response>
+				<if>
+					<contains>
+						<msg_ref type="sip" hdr_instance="any">18x-Invite.Require</msg_ref>
+						<expr>100rel</expr>
+					</contains>
+					<then>
+						<!--Reliablity required for test sending Prack message to peer.-->
+						<send protocol="sip" msgtype="Prack"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Proceeding" event="100-INVITE"/>
+			<transition to="Alerting" event="180-INVITE"/>
+			<transition to="Alerting" event="183-INVITE"/>
+			<transition to="Connected" event="200-INVITE"/>
+		</state>
+		
+		<state ID="Connected">
+			<prelude once="true">
+				<send protocol="sip" msgtype="ACK"/>
+				<sleep time="5000"/>
+				<send protocol="sip" msgtype="REINVITE">
+					<mod modtype="delete" hdr="audio"/>
+					<mod modtype="delete" hdr="media-modifier"/>
+					<mod modtype="delete" hdr="TIAS-modifier"/>
+					<mod modtype="delete" hdr="max-packet-rate"/>
+					<mod modtype="delete" hdr="rtpmap"/>
+					<mod modtype="delete" hdr="mode"/>
+					<mod modtype="delete" hdr="ptime"/>
+					<mod modtype="add" hdr="SDP">
+						<var_expr>
+							<expr>m=audio </expr>
+							<msg_ref type="platform">UE1.SDPPort2</msg_ref>
+							<expr> RTP/AVP 0 101\r\na=rtpmap: t38/8000\r\na=rtpmap:101 RED/8000\r\na=fmtp:101 0/0/0\r\n</expr>
+							<expr>a=fmtp:101 T38FaxRateManagement=transferredTCF;T38FaxVersion=0;=T38FaxMaxDatagram=173</expr>
+						</var_expr>
+					</mod>
+					<mod modtype="replace" hdr="s" param="name">
+						<expr>VoiceFax</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Response</msg_ref>
+						<expr>200-INVITE</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="ACK"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Connected" event="OffHookComplete"/>
+			<transition to="Connected" event="1xx-INVITE"/>
+			<transition to="ChangeMedia" event="200-INVITE"/>
+		</state>
+		
+		<state ID="ChangeMedia" timer="30000">
+			<transition to="Releasing" event="TimerExpired"/>
+		</state>
+		
+		<state ID="OnHook">
+			<prelude>
+				<send protocol="utility" msgtype="OnHook"/>
+				<stop_capture/>
+				<log step="5" requirements="REQ16638"
+					promptUser="true" verify="true"
+					expr="In the capture file, verify that there is redundant payload information within in the media packets and the packets collected two levels of redundancy.\n"/>
+			</prelude>
+			<transition to="END" event="OnHookComplete"/>
+		</state>
+	</add_to>
+</pc2xml>

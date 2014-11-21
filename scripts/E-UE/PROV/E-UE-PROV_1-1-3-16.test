@@ -1,0 +1,184 @@
+#//*****************************************************************************
+#// Filename: E-UE-PROV_1-1-3-16.test
+#// Author:   Matthew Forbes
+#//
+#//
+#//
+#// Creation Date: October 29, 2008
+#// Modified by:
+#//*****************************************************************************
+#// Description:
+#//     TC2813 TEST CASE E-UE-PROV 1-1-3-16 E/MTAs DHCP Lease renewal behavior
+#//
+#// Objective:
+#//     Insure the E/MTA's (DUT) DHCP client address renewal function behaves as
+#// defined in RFC-2131.
+#//
+#// PacketCable DUT:
+#//     MTA
+#//
+#// Test Steps:
+#//     - Initial configuration, lease renewal set in policy to 5 mins(MTAFORCW_TC1164)
+#//     - Start sniffer
+#//     - Reset DUT
+#//     - Check Provisioning state
+#//     - Monitor trace for 2.5 minutes, DUT should send DHCP REQ & receive ACK from server
+#//     - Reset DUT
+#//     - Configure DHCP server to ignore DHCP REQ from DUT 
+#//     - Monitor trace for 2.5 minutes, DUT should send DHCP REQ & not receive ACK from server
+#//     - Multiple unicasts (at least 1) for renwal, DHCP REQs
+#//     - MTA should reintialize, start at MTA-1, at 5 minutes
+#//     - Stop sniffer
+#//     - Delete MTA config file
+#//
+#// Notes:
+#//     - Requires provPrimitives.tcl & tftp_primitives.tcl.
+#//     - Requires the specific config file in $BASE_CFG_FILE_PATH in Provisioning Server.
+#//     - Requires parT.tcl parsing tool to parse data from capture file.
+#//*****************************************************************************
+
+global SCRIPT_VERSION
+set SCRIPT_VERSION { # $Id: E-UE-PROV_1-1-3-16.test 7406 2010-07-20 17:17:37Z dthakore $ }
+
+DoStep "E-UE-PROV_1-1-3-16_1-1" "Initialize module" {
+    LogMsg "--- Initial PROV module ---"
+    Init_PROV
+    Init_CONTROLLER_LAN
+} { PASS_STEP }
+
+DoStep "E-UE-PROV_1-1-3-16_1-2" "Initial configuration " {
+    LogMsg "--- Initial configuration ---"
+    PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_TC1164 Device_Level_Secure.cfg
+    PROV_DEPLOY_DHCP
+} { PASS_STEP }
+
+
+DoStep "E-UE-PROV_1-1-3-16_2-1" "Start sniffer" {
+    LogMsg "--- Start sniffer ---"
+    SetupCaptureControllerLan "host $MTA_IP || udp port 67 || host $CM_IP"
+    StartCaptureControllerLan
+} {PASS_STEP}
+
+################ Reset CM and MTA and Verify Provisioning ################
+
+DoStep "E-UE-PROV_1-1-3-16_2-2" "Reboot CM/MTA2" {
+    set val [SNMPvN_RESET $CM_IP]
+    LogMsg "Reboot of CM2 and MTA2 has passed"
+} {
+    IsEqual $val 0
+}
+
+DoStep "E-UE-PROV_1-1-3-16_3-1" "pktcMTADevProvisioningState Content Verification" {
+    # Wait for a minute to let CM/MTA starting to reboot
+    actionWait "Wait for CM/MTA2 to reboot" 60
+    set val [SNMP_GET $oid_pktcMtaDevProvisioningState $MTA_IP 10]
+    LogMsg "MTA Provisioning State"
+    LogMsg "             - Expected : 1"
+    LogMsg "             - Received : $val"
+} {
+    IsEqual $val 1
+}
+
+DoStep "E-UE-PROV_1-1-3-16_4-1" "Monitor Trace" {
+    verify_signal "Monitor Trace: DHCP REQUEST from $MTA_IP should occur 2.5 minutes after DHCP ACK and should get another DHCP ACK."
+} {PASS_STEP}
+
+
+DoStep "E-UE-PROV_1-1-3-16_5-1" "Wait for DHCP Renewal and stop capture" {
+    LogMsg "--- Stop sniffer ---"
+    StopCaptureControllerLan
+    SaveToFileControllerLan "_WithACK"
+} { PASS_STEP }
+
+
+DoStep "E-UE-PROV_1-1-3-16_7-1" "Start sniffer" {
+    LogMsg "--- Start sniffer ---"
+    SetupCaptureControllerLan "host $MTA_IP || udp port 67 || host $CM_IP"
+    StartCaptureControllerLan
+} {PASS_STEP}
+
+################ Reset CM and MTA and Verify Provisioning ################
+
+DoStep "E-UE-PROV_1-1-3-16_7-2" "Reboot CM/MTA" {
+    set val [SNMPvN_RESET $CM_IP]
+    LogMsg "Reboot of CM and MTA has passed"
+} {
+    IsEqual $val 0
+}
+
+DoStep "E-UE-PROV_1-1-3-16_7-3" "pktcMTADevProvisioningState Content Verification" {
+    # Wait for a minute to let CM/MTA starting to reboot
+    actionWait "Wait for CM/MTA to reboot" 60
+    set val [SNMP_GET $oid_pktcMtaDevProvisioningState $MTA_IP 10]
+    LogMsg "MTA Provisioning State"
+    LogMsg "             - Expected : 1"
+    LogMsg "             - Received : $val"
+} {
+    IsEqual $val 1
+}
+
+DoStep "E-UE-PROV_1-1-3-16_7-4" "Configure DHCP server to ignore requests from MTA" {
+    PROV_MODIFY_DEVICE_NEG $MTA_MAC {} true
+    PROV_DEPLOY_DHCP
+    # PROV_STOP_BOA DHCP
+} {PASS_STEP}
+
+DoStep "E-UE-PROV_1-1-3-16_8-1" "Monitor Trace" {
+    LogMsg "Monitor Trace: DHCP REQUEST from $MTA_IP should occur 2.5 minutes after DHCP ACK."
+} {
+    verify_signal "Monitor Trace: DHCP REQUEST from $MTA_IP should occur 2.5 minutes after DHCP ACK."
+}
+
+DoStep "E-UE-PROV_1-1-3-16_9-1" "Monitor Trace" {
+    LogMsg "Monitor Trace: DHCP REQUEST should not get a response, NO DHCP ACK."
+} {
+    verify_signal "Monitor Trace: DHCP REQUEST should not get a response, NO DHCP ACK."
+}
+
+DoStep "E-UE-PROV_1-1-3-16_9-2" "Monitor Trace" {
+    LogMsg "Monitor Trace: Multiple (at least 1) DHCP REQUESTs should occur between 2.5 and 5 \
+            minutes after DHCP ACK"
+} {
+    verify_signal "Monitor Trace: Multiple (at least 1) DHCP REQUESTs should occur between 2.5 and 5 \
+                    minutes after DHCP ACK"
+}
+
+DoStep "E-UE-PROV_1-1-3-16_10-1" "Monitor Trace" {
+    LogMsg "Monitor Trace: At 4 minute 22 secs after DHCP ACK, eUE should send a broadcast
+    DHCP REQUEST (CMTS gateway address to $PROV_DHCP1_IP)"
+} {
+    set gwip [string replace $MTA_IP 9 11 .1]
+    verify_signal "Monitor Trace: At 4 minute 22 secs after DHCP ACK, eUE should send a broadcast
+    DHCP REQUEST (CMTS gateway address $gwip to $PROV_DHCP1_IP)"
+}
+
+DoStep "E-UE-PROV_1-1-3-16_11-1" "Monitor Trace" {
+    LogMsg "Monitor Trace: DHCP REQUEST should not get a response, NO DHCP ACK."
+} {
+    verify_signal "Monitor Trace: DHCP REQUEST should not get a response, NO DHCP ACK."
+}
+
+DoStep "E-UE-PROV_1-1-3-16_12-1" "Monitor Trace" {
+    verify_signal "Monitor Trace: Around 5 minutes after the ACK the DUT should send a DHCP DISCOVER(MTA1)"
+} {PASS_STEP}
+
+DoStep "E-UE-PROV_1-1-3-16_13-1" "Wait for DHCP Renewal and stop capture" {
+    LogMsg "--- Stop sniffer ---"
+    StopCaptureControllerLan
+    SaveToFileControllerLan "_NoACK"
+} { PASS_STEP }
+
+
+DoStep "E-UE-PROV_1-1-3-16_PostStep-1" "Restore policy & DUT" {
+    # PROV_START_BOA DHCP
+    PROV_MODIFY_DEVICE_NEG $MTA_MAC {} false
+    PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122
+    PROV_DEPLOY_DHCP
+} {
+    SNMPvN_RESET $CM_IP
+    actionWait "Wait 60 seconds for DUT to reboot" 60
+}
+
+
+set CONTINUE_PAST_STEP_ERROR 0
+Cleanup

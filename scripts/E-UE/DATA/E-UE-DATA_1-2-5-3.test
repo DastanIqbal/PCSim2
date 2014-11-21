@@ -1,0 +1,169 @@
+################################################################################
+#// Filename: E-UE-DATA_1-2-5-3.test
+#// Author:   Matthew Forbes
+#//
+#//
+#//
+#// Creation Date: November 13, 2008
+#// Modified by:
+################################################################################
+#// Description:
+#//     TC2758 TEST CASE E-UE-DATA 1-2-5-3 Ability of eUE to implement the
+#//     USM User Table
+#//
+#// Objective:
+#//     This test verifies the eUE ablility to properly implement the USM User Table requirements as
+#//     per RFC 3414 and as applicable to SNMPv3 for the secure provisioning flow.
+#//
+#//
+#// PacketCable DUT:
+#//     EMTA
+#//
+#// Test Steps:
+#//     - Initial configuration
+#//     - Start sniffer
+#//     - Reset DUT
+#//     - Check Provisioning state
+#//     - Invoke SNMPv3 API and bulk query MIB objects and validate values for usmUserTable
+#//     - Stop sniffer
+#//
+#// Notes:
+#//     - Requires provPrimitives.tcl & tftp_primitives.tcl.
+#//     
+#//     
+################################################################################
+
+global SCRIPT_VERSION
+set SCRIPT_VERSION { # $Id: E-UE-DATA_1-2-5-3.test 7406 2010-07-20 17:17:37Z dthakore $ }
+
+
+DoStep "E-UE-DATA_1-2-5-3_1-1" "Initial configuration" {
+    LogMsg "--- Initial PROV module ---"
+    Init_PROV
+    Init_PART
+    # ProvCreateConfig 291 $MTA_MAC
+} { PASS_STEP }
+
+
+DoStep "E-UE-DATA_1-2-5-3_1-2" "Configure Provisioning Server" {
+    PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW122 Device_Level_Secure.cfg
+    PROV_DEPLOY_DHCP
+} { PASS_STEP }
+
+
+DoStep "E-UE-DATA_1-2-5-3_2-1" "Start sniffer" {
+    LogMsg "--- Start sniffer ---"
+    Init_CONTROLLER_LAN
+    SetupCaptureControllerLan "host $MTA_IP || udp port 67 || host $CM_IP"
+    StartCaptureControllerLan
+} {PASS_STEP}
+
+
+
+############### Reset CM and MTA and Verify Provisioning ################
+
+DoStep "E-UE-DATA_1-2-5-3_2-2" "Reset CM/MTA" {
+    set val [SNMPvN_RESET $CM_IP]
+    LogMsg "--- Reset of CM and MTA has passed ---"
+} {
+    IsEqual $val 0
+}
+
+DoStep "E-UE-DATA_1-2-5-3_2-3" "pktcMTADevProvisioningState Content Verification" {
+    # Wait for a minute to let CM/MTA starting to reboot
+    actionWait "Wait for CM/MTA to reboot" 60
+    # Get the OID from the MTA and check it using our previously defined
+    set val [GetProvState 1 600]
+    LogMsg "MTA Provisioning State"
+    LogMsg "             - Expected : 1"
+    LogMsg "             - Received : $val"
+} {
+    IsEqual $val 1
+}
+
+DoStep "E-UE-DATA_1-2-5-3_3-1" "usmUserSecurityName Content Verification" {
+    set mtamac [string toupper [AddColMac $MTA_MAC]]
+    set val [SNMP_TABLE_GET $table_usm $MTA_IP all]
+} {
+    verify_signal "Check the usmUserTable display on TclSim console.
+    Index should contain usmUserEngineID & usmUserName=eUE-Prov-$mtamac"
+}
+
+
+DoStep "E-UE-DATA_1-2-5-3_3-2" "usmUserSecurityName Content Verification" {    
+    set val [SNMP_TABLE_GET $table_usm $MTA_IP 1]
+} {
+    IsEqual $val "eUE-Prov-$mtamac"
+}
+
+DoStep "E-UE-DATA_1-2-5-3_3-3" "usmUserCloneFrom Content Verification" {
+    set val [SNMP_TABLE_GET $table_usm $MTA_IP 3]
+} {
+    IsEqual $val "zeroDotZero"
+}
+
+DoStep "E-UE-DATA_1-2-5-3_3-4" "usmUserAuthProtocol Content Verification" {
+    set val [SNMP_TABLE_GET $table_usm $MTA_IP 5]
+} {
+    IsEqual $val "usmHMACMD5AuthProtocol"
+}
+
+DoStep "E-UE-DATA_1-2-5-3_3-5" "usmUserAuthKeyChange Content Verification" {
+    set val [SNMP_TABLE_GET $table_usm $MTA_IP 7]
+} {
+    IsEqual $val ""
+}
+
+DoStep "E-UE-DATA_1-2-5-3_3-6" "usmUserOwnAuthKeyChange Content Verification" {
+    set val [SNMP_TABLE_GET $table_usm $MTA_IP 9]
+} {
+    IsEqual $val ""
+}
+
+DoStep "E-UE-DATA_1-2-5-3_3-7" "usmUserPrivProtocol Content Verification" {
+    set val [SNMP_TABLE_GET $table_usm $MTA_IP 11]
+} {
+    IsEqual $val "usmNoPrivProtocol"
+}
+
+DoStep "E-UE-DATA_1-2-5-3_3-8" "usmUserPrivKeyChange Content Verification" {
+    set val [SNMP_TABLE_GET $table_usm $MTA_IP 13]
+} {
+    IsEqual $val ""
+}
+
+DoStep "E-UE-DATA_1-2-5-3_3-9" "usmUserOwnPrivKeyChange Content Verification" {
+    set val [SNMP_TABLE_GET $table_usm $MTA_IP 15]
+} {
+    IsEqual $val ""
+}
+
+DoStep "E-UE-DATA_1-2-5-3_3-10" "usmUserPublic Content Verification" {
+    set val [SNMP_TABLE_GET $table_usm $MTA_IP 17]
+} {
+    IsEqual $val ""
+}
+
+DoStep "E-UE-DATA_1-2-5-3_3-11" "usmUserStorageType Content Verification" {
+    set val [SNMP_TABLE_GET $table_usm $MTA_IP 19]
+} {
+    IsEqual $val "2"
+}
+
+DoStep "E-UE-DATA_1-2-5-3_3-12" "usmUserStatus Content Verification" {
+    set val [SNMP_TABLE_GET $table_usm $MTA_IP 21]
+} {
+    IsEqual $val "1"
+}
+
+DoStep "E-UE-DATA_1-2-5-3_4-1" "Stop Sniffer" {
+    LogMsg "--- Stop Sniffer ---"
+    StopCaptureControllerLan
+    SaveToFileControllerLan 
+} { PASS_STEP }
+
+################################################################################
+# Cleanup
+################################################################################
+set CONTINUE_PAST_STEP_ERROR 0
+Cleanup

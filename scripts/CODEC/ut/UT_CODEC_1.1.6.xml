@@ -1,0 +1,136 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+
+<pc2xml version="$Revision: 8188 $" name="UT_Codec_1.1.6" descrip="This is a unit test for the Codec 1.1.6 test script" number="1">
+	<!-- NOTE THIS SCRIPT ASSUMES IT IS RUN AFTER UT_Codec_1.1.1 -->
+	<template file="$UT_PATH/CODEC/ut/UT_CODEC_1.1.1.xml"/>
+	<remove_from fsm="UE1">
+		<state ID="Setup"/>
+		<state ID="Answer"/>
+	</remove_from>
+	<add_to fsm="UE1">
+		<states initialstate="Setup"/>
+		<!-- SETUP State -->
+		<state ID="Setup">
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>Invite</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="100-INVITE" target="UE1" originator="DUT"/>
+					</then>
+				</if>
+				<if>
+					<and>
+						<eq>
+							<msg_ref type="extensions">precondition</msg_ref>
+							<expr>require</expr>
+						</eq>
+						<or>
+							<contains>
+								<msg_ref type="sip" hdr_instance="any">Invite.Require</msg_ref>
+								<expr>precondition</expr>
+							</contains>
+							<contains>
+								<msg_ref type="sip" hdr_instance="any">Invite.Supported</msg_ref>
+								<expr>precondition</expr>
+							</contains>
+						</or>
+					</and>
+					<then>
+						<!--Sending 183-Invite with answer-->
+						<send protocol="sip" msgtype="183-Invite" target="UE1" originator="DUT">
+							<mod modtype="replace" hdr="audio" param="payload-type">
+								<expr>8</expr>
+							</mod>
+							<mod modtype="replace" hdr="rtpmap" param="payload-type">
+								<expr>8</expr>
+							</mod>
+							<mod modtype="replace" hdr="rtpmap" param="codec-name">
+								<expr>PCMA</expr>
+							</mod>
+							<mod modtype="replace" hdr="ptime" param="value">
+								<expr>10</expr>
+							</mod>
+						</send>
+					</then>
+					<elseif>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>Invite</expr>
+						</eq>
+						<then>
+							<!--Sending 180-Invite with SS not supporting precondition.-->
+							<send protocol="sip" msgtype="180-Invite" target="UE1" originator="DUT"/>
+						</then>
+					</elseif>
+				</if>
+			</response>
+			<!-- Transitions for Setup state -->
+			<transition to="Alerting" event="INVITE"/>
+			<transition to="Register" event="TimerExpired"/>
+		</state>
+		<!-- ANSWER State -->
+		<state ID="Answer" timer="15000">
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="event"/>
+						<expr>TimerExpired</expr>
+					</eq>
+					<then>
+						<!--Sending 200-Invite-->
+						<send protocol="sip" msgtype="200-INVITE" target="UE1" originator="DUT">
+							<mod modtype="replace" hdr="audio" param="payload-type">
+								<expr>8</expr>
+							</mod>
+							<mod modtype="replace" hdr="rtpmap" param="payload-type">
+								<expr>8</expr>
+							</mod>
+							<mod modtype="replace" hdr="rtpmap" param="codec-name">
+								<expr>PCMA</expr>
+							</mod>
+							<mod modtype="replace" hdr="ptime" param="value">
+								<expr>20</expr>
+							</mod>
+						</send>
+					</then>
+				</if>
+				<!-- Now test for an UPDATE message -->
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>UPDATE</expr>
+					</eq>
+					<then>
+						<!--QoS required or supported sending 200-Update message to peer.-->
+						<send protocol="sip" msgtype="200-Update" target="UE1" originator="DUT"/>
+					</then>
+				</if>
+			</response>
+			<!-- Transitions for Answer state -->
+			<transition to="Answer" event="UPDATE"/>
+			<transition to="Answer" event="TimerExpired"/>
+			<transition to="Connected" event="ACK"/>
+		</state>
+	</add_to>
+</pc2xml>

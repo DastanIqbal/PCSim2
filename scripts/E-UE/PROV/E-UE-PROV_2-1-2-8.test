@@ -1,0 +1,76 @@
+#//****************************************************************************
+#// Filename: E-UE-PROV_2-1-2-8.test 
+#// Author:   Matthew Forbes
+#// Creation Date: 11/02/2008
+#// Modified by:
+#//     
+#//     
+#//     
+#//****************************************************************************
+#// Description:
+#//     TC2836 TEST CASE E-UE-PROV 2.1.2.8 Config File with Only Device Level
+#// Configuration Data
+#//
+#// Objective:
+#//     Test the capability of the eUE DUT load and use a configuration file
+#// containing only required Device Level Configuration Data.
+#//
+#// PacketCable DUT:
+#//     EDVA
+#//
+#// Test Steps:
+#//     - Initial configuration
+#//     - Start sniffer
+#//     - Configure EDVA
+#//     - SNMP RESET
+#//     - Check Provisioning state
+#//     - Stop sniffer
+#//     
+#// 
+#// Notes: 
+#//     - Requires provPrimitives.tcl & tftp_primitives.tcl.
+#//     - Requires the specific config file in $BASE_CFG_FILE_PATH in Provisioning Server.
+#//****************************************************************************
+global SCRIPT_VERSION
+set SCRIPT_VERSION { # $Id: E-UE-PROV_2-1-2-8.test 7406 2010-07-20 17:17:37Z dthakore $ }
+
+DoStep "PRESTEP_E-UE-PROV_2-1-2-8_1" "Initial configuration" {
+    LogMsg "--- Initial PROV module ---"
+    Init_PROV
+    # ProvCreateConfig 326 $MTA_MAC
+    PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122 Device_Level_Secure.cfg
+    PROV_DEPLOY_DHCP
+} {PASS_STEP}
+
+
+DoStep "PRESTEP_E-UE-PROV_2-1-2-8_2" "Start sniffer" {
+    LogMsg "--- Start sniffer ---"
+    Init_CONTROLLER_LAN
+    SetupCaptureControllerLan "host $MTA_IP"
+    StartCaptureControllerLan 
+} {PASS_STEP}
+
+
+DoStep "E-UE-PROV_2-1-2-8_3" "SNMP RESET" {
+    SNMP_SET $oid_pktcMtaDevResetNow INTEGER 1 $MTA_IP
+    actionWait "Wait for MTA to reboot" 60
+} {PASS_STEP}
+
+
+DoStep "E-UE-PROV_2-1-2-8_4" "pktcMtaDevProvisioningState Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMP_GET $oid_pktcMtaDevProvisioningState $MTA_IP 20]
+    LogMsg "The Value of MTA Provisioning State is: $val"
+} {
+    IsEqual $val 1
+}
+
+
+DoStep "POSTSTEP_E-UE-PROV_2-1-2-8_1" "Stop sniffer" {
+    LogMsg "--- Stop sniffer ---"
+    StopCaptureControllerLan
+    SaveToFileControllerLan 
+} {PASS_STEP}
+
+
+Cleanup

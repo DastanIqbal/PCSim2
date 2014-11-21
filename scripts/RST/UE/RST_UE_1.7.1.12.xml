@@ -1,0 +1,182 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	PCPCII-139 : Update the Voicetronix modifiers to use the new values. (ghassler 07/10/2009)
+
+
+
+
+-->
+
+<!-- First are the document type and the attributes for our document -->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-UE 1.7.1.12" 
+	descrip=" Renew Auto Recall Subscription " 
+	number="RST-UE 1.7.1.12" inspector="disable">
+	
+	<template file="./templates/CallTermAtUETemp.xml" name="UE1"/>
+
+	<remove_from fsm="UE1">
+		<state ID="OnHook"/>
+		<state ID="Setup"/>
+	</remove_from>
+
+	<add_to fsm="UE1">
+		<NE targets="UE1"/>
+		
+		<state ID="Setup">
+			<prelude>
+				<send protocol="sip" msgtype="Invite">
+					<!-- Step 1 test case SIP 1.7.1.12 - 
+						The INVITE message must contain the P-Asserted-Identity header.-->
+					<mod modtype="add" hdr="P-Asserted-Identity" param="name-addr">
+						<var_expr>
+							<expr>&lt;</expr>
+							<msg_ref type="platform">UE1.pui</msg_ref>
+							<expr>&gt;</expr>
+						</var_expr>
+					</mod>
+				</send>
+			</prelude>
+			<!-- Expected responses are 100, 180, 183 or 200 -->
+			<response>
+				<if>
+					<contains>
+						<msg_ref type="sip" msg_instance="last" hdr_instance="any">18x-Invite.Require</msg_ref>
+						<expr>100rel</expr>
+					</contains>
+					<then>
+						<!--Reliability required for test sending Prack message to peer.-->
+						<send protocol="sip" msgtype="Prack"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Proceeding" event="100-INVITE"/>
+			<transition to="Alerting" event="180-INVITE"/>
+			<transition to="Alerting" event="183-INVITE"/>
+			<transition to="Connected" event="200-INVITE"/>
+		</state>
+		
+		<state ID="OnHook">
+			<prelude>
+				<send protocol="utility" msgtype="OnHook"/>
+			</prelude>
+			<transition to="EndCall1" event="OnHookComplete"/>
+		</state>
+		
+		<state ID="EndCall1" ES="true">
+			<transition to="2ndOffHook" event="SessionTerminated"/>
+		</state>
+		
+		<state ID="2ndOffHook">
+			<prelude>
+				<send protocol="utility" msgtype="OffHook"/>
+			</prelude>
+			<transition to="2ndSetup" event="OffHookComplete"/>
+		</state>
+		
+		<state ID="2ndSetup">
+			<prelude once="true">
+				<!-- Step 3 -->
+				<send protocol="utility" msgtype="DialDigits">
+					<mod modtype="replace" hdr="number">
+						<expr>*69</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<!-- If the current message that we received is an Invite, answer with
+               a 100-trying -->
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>Invite</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="486-INVITE"/>
+					</then>
+				</if>
+				<if>
+					<and>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>SUBSCRIBE</expr>
+						</eq>
+						<and>
+							<contains>
+								<msg_ref type="sip">SUBSCRIBE.Event</msg_ref>
+								<expr>dialog</expr>
+							</contains>
+							<eq>
+								<msg_ref type="sip">SUBSCRIBE.Expires.value</msg_ref>
+								<expr>30000</expr>
+							</eq>
+						</and>
+					</and>
+					<then>
+						<send protocol="sip" msgtype="200-SUBSCRIBE"/>
+						<send protocol="sip" msgtype="NOTIFY"/>
+					</then>
+				</if>
+			</response>
+			<transition to="2ndSetup" event="Subscribe"/>
+			<transition to="2ndSetup" event="ACK"/>
+			<transition to="2ndOnHook" event="200-NOTIFY"/>
+		</state>
+		
+		<state ID="2ndOnHook">
+			<prelude>
+				<send protocol="utility" msgtype="OnHook"/>
+			</prelude>
+			<transition to="3rdOffHook" event="OnHookComplete"/>
+		</state>
+		
+		<state ID="3rdOffHook">
+			<prelude>
+				<send protocol="utility" msgtype="OffHook"/>
+			</prelude>
+			<transition to="3rdDial" event="OffHookComplete"/>
+		</state>
+		
+		<state ID="3rdDial">
+			<prelude>
+				<!-- Step 5 test case SIP 1.7.1.12- Initiate the auto recall feature 
+					at the UE (Dial the VSC-*69). This will cause the UE to send an INVITE message. -->
+				<send protocol="utility" msgtype="DialDigits">
+					<mod modtype="replace" hdr="number">
+						<expr>*69</expr>
+					</mod>
+				</send>
+			</prelude>
+			<transition to="3rdSetup" event="DialDigitsComplete"/>
+		</state>
+		
+		<state ID="3rdSetup">
+			<response>
+				<verify step="7" requirements="REQ14001">
+					<contains>
+						<msg_ref type="sip">SUBSCRIBE.Event</msg_ref>
+						<expr>dialog</expr>
+					</contains>
+				</verify>
+				<verify step="7" requirements="REQ14001">
+					<eq>
+						<msg_ref type="sip">SUBSCRIBE.Expires.value</msg_ref>
+						<expr>300</expr>
+					</eq>
+				</verify>
+			</response>
+			<transition to="END" event="SUBSCRIBE"/>
+		</state>
+	</add_to>
+</pc2xml>

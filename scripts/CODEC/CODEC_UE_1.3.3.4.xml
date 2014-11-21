@@ -1,0 +1,170 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+ Change History: (Author & Date)
+	
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="CODEC-MEDIA_1.3.3.4" 
+	descrip="Failed T.38-RTP Signaling 'T38' is Missing" 
+	number="CODEC-MEDIA_1.3.3.4">
+	
+	<template file="./templates/CallOrigAtUETemp.xml" name="UE1"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="OffHook"/>
+		<state ID="Connected"/>
+		<state ID="OnHook"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<state ID="OffHook">
+			<prelude>
+				<log promptUser="true" expr="Connect a fax machine to line 1 of the DUT."/>
+				<start_capture>
+					<filter>
+						<var_expr>
+							<expr>host </expr>
+							<msg_ref type="platform">PCSCF1.IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">UE0.IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">UE1.IP</msg_ref>
+						</var_expr>
+					</filter>
+				</start_capture>
+				<send protocol="utility" msgtype="OffHook"/>
+			</prelude>
+			<transition to="Setup" event="OffHookComplete"/>
+		</state>
+		
+		<state ID="Connected">
+			<prelude>
+				<log expr="Press 'Send' on the fax machine"/>
+			</prelude>
+			<response>
+				<if>
+					<contains>
+						<msg_ref type="sip">REINVITE.SDP</msg_ref>
+						<expr>T38FaxVersion:0</expr>
+					</contains>
+					<then>
+						<assign name="rate">
+							<expr>0</expr>
+						</assign>
+					</then>
+					<elseif>
+						<contains>
+							<msg_ref type="sip">REINVITE.SDP</msg_ref>
+							<expr>T38FaxVersion:1</expr>
+						</contains>
+						<then>
+							<assign name="rate">
+								<expr>1</expr>
+							</assign>
+						</then>
+					</elseif>
+					<elseif>
+						<contains>
+							<msg_ref type="sip">REINVITE.SDP</msg_ref>
+							<expr>T38FaxVersion:2</expr>
+						</contains>
+						<then>
+							<assign name="rate">
+								<expr>2</expr>
+							</assign>
+						</then>
+					</elseif>
+					<elseif>
+						<contains>
+							<msg_ref type="sip">REINVITE.SDP</msg_ref>
+							<expr>T38FaxVersion:3</expr>
+						</contains>
+						<then>
+							<assign name="rate">
+								<expr>3</expr>
+							</assign>
+						</then>
+					</elseif>
+				</if>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>REINVITE</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="100-INVITE"/>
+						<!-- STEP 4 -->
+						<send protocol="sip" msgtype="200-INVITE">
+							<mod modtype="delete" hdr="audio"/>
+							<mod modtype="delete" hdr="media-modifier"/>
+							<mod modtype="delete" hdr="TIAS-modifier"/>
+							<mod modtype="delete" hdr="max-packet-rate"/>
+							<mod modtype="delete" hdr="rtpmap"/>
+							<mod modtype="delete" hdr="mode"/>
+							<mod modtype="delete" hdr="ptime"/>
+							<mod modtype="add" hdr="SDP">
+								<var_expr>
+									<expr>a=pmft:\r\nm=audio </expr>
+									<msg_ref type="platform">UE1.SDPPort2</msg_ref>
+									<expr> RTP/AVP 0 </expr>
+									<msg_ref type="platform">UE0.T38 Codec</msg_ref>
+									<expr> </expr>
+									<msg_ref type="platform">UE0.DTMF Codec</msg_ref>
+									<expr>\r\nb=AS:80\r\nb=TIAS:64000\r\na=maxprate:50\r\n</expr>
+									<expr>a=rtpmap:</expr>
+									<msg_ref type="platform">UE0.T38 Codec</msg_ref>
+									<expr> t38/8000\r\na=rtpmap:</expr>
+									<msg_ref type="platform">UE0.T38 Codec</msg_ref>
+									<expr> RED/8000\r\na=fmtp:</expr>
+									<msg_ref type="platform">UE0.T38 Codec</msg_ref>
+									<expr> 0/0/0\r\n\a=fmtp:</expr>
+									<msg_ref type="platform">UE0.T38 Codec</msg_ref>
+									<expr>a=T38FaxVersion:</expr>
+									<var_ref name="rate"/>
+									<expr>;T38FaxRateManagement:transferredTCF;T38FaxMaxDatagram:173\r\n</expr>
+									<expr>a=gpmd:</expr>
+									<msg_ref type="platform">UE0.DTMF Codec</msg_ref>
+									<expr> vbd=yes\r\na=rtpmap:</expr>
+									<msg_ref type="platform">UE0.DTMF Codec</msg_ref>
+									<expr> RED/8000\r\na=fmtp:</expr>
+									<msg_ref type="platform">UE0.DTMF Codec</msg_ref>
+									<expr> 0/0</expr>
+								</var_expr>
+							</mod>
+							<mod modtype="replace" hdr="s" param="name">
+								<expr>VoiceFax</expr>
+							</mod>
+						</send>
+					</then>
+				</if>
+			</response>
+			<transition to="ChangeMedia" event="REINVITE"/>
+		</state>
+			
+		<state ID="ChangeMedia" timer="30000">
+			<transition to="ChangeMedia" event="ACK"/>
+			<transition to="Releasing" event="TimerExpired"/>
+		</state>
+			
+		<state ID="OnHook">
+			<prelude>
+				<send protocol="utility" msgtype="OnHook"/>
+				<stop_capture/>
+				<log step="4" requirements="REQ12625"
+					promptUser="true" verify="true"
+					expr="In the capture file, verify that V.152 was used to transmit the packets.\n"/>
+			</prelude>
+			<transition to="END" event="OnHookComplete"/>
+		</state>
+	</add_to>
+</pc2xml>

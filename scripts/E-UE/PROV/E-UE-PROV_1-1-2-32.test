@@ -1,0 +1,185 @@
+#//*****************************************************************************
+#// Filename: E-UE-PROV_1-1-32.test
+#// Author:   Matthew Forbes
+#//           
+#// Creation Date: October 24, 2008
+#// Modified by:
+#//*****************************************************************************
+#// Description:
+#//     TC2853 TEST CASE E-UE-PROV 1-1-32 Ability of eUE to Clear the Provisioning
+#//     Application Server Ticket Stored in NVRAM When a value is Configured in Sub-option 9
+#//
+#// Objective:
+#//     Test ability of the eUE to erase the saved application server ticket, when
+#//     configured thru DHCP-122-sub-option-9.
+#//
+#// PacketCable DUT:
+#//     MTA
+#//
+#// Test Steps:
+#//     - Initialize MTA config file setupts
+#//     - Setup DHCP Server 122.9 = 1
+#//     - Start Sniffer
+#//     - Reset DUT
+#//     - Check Provisioning state
+#//     - Stop sniffer
+#//     - Invoke parsing tool and validate using Pass/Fail scripts
+#//     - Delete MTA config file
+#//
+#// Notes:
+#//     - Requires provPrimitives.tcl & tftp_primitives.tcl.
+#//     - Requires the specific config file in $BASE_CFG_FILE_PATH in Provisioning Server.
+#//     - Requires parT.tcl parsing tool to parse data from capture file.
+#//*****************************************************************************
+
+global SCRIPT_VERSION
+set SCRIPT_VERSION { # $Id: E-UE-PROV_1-1-2-32.test 7406 2010-07-20 17:17:37Z dthakore $ }
+
+set step_name E-UE-PROV_1-1-2-32_
+set step_num 1
+
+DoStep ${step_name}${step_num}-PreStep "Initialize Test Platform" {
+    Init_PROV
+    Init_CONTROLLER_LAN
+    Init_PART
+} { PASS_STEP }
+
+
+DoStep ${step_name}${step_num} "Initial configuration" {
+    
+    LogMsg "--- Initial configuration ---"
+    # ProvCreateConfig 611 $MTA_MAC
+} { PASS_STEP }
+
+incr step_num
+
+DoStep ${step_name}${step_num} "Configure Provisioning Server" {
+    # No sending message
+    PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122 
+    PROV_DEPLOY_DHCP
+} { PASS_STEP }
+
+
+incr step_num
+
+
+set msgStr "Configure DHCP server option 122 suboption 9 with a value = 1 (MTATC1322-1)"
+DoStep ${step_name}${step_num}-1 $msgStr {
+} {
+   # verify_signal $msgStr
+   PROV_MODIFY_DEVICE $MTA_MAC MTATC1322_1
+   PROV_DEPLOY_DHCP
+}
+
+set msgStr "Start Sniffer"
+DoStep ${step_name}${step_num}-2 $msgStr {
+   LogMsg "--- $msgStr ---"
+   SetupCaptureControllerLan "host $MTA_IP || udp port 67 || host $CM_IP"
+   StartCaptureControllerLan
+} {PASS_STEP}
+
+DoStep ${step_name}${step_num}-3 "Reset MTA" {
+   LogMsg "SNMP set: pktcMtaDevResetNow - 1"
+    set val [SNMP_SET $oid_pktcMtaDevResetNow INTEGER 1 $MTA_IP]
+} {
+   IsEqual $val 0
+}
+
+incr step_num
+
+DoStep ${step_name}${step_num} "pktcMTADevProvisioningState Content Verification" {
+   # Wait for a second to let CM/MTA starting to reboot
+   set tSec 30
+   actionWait "Wait $tSec seconds for CM Reset; then poll for MTA Provisioned!" $tSec
+   
+   # Get the OID from the MTA and check it using our previously defined
+   set val [GetProvState 1 10]
+   LogMsg "MTA Provisioning State"
+   LogMsg "             - Expected : 1"
+   LogMsg "             - Received : $val"
+} {
+   IsEqual $val 1
+}
+
+incr step_num
+
+set msgStr "Stop Sniffer"
+DoStep ${step_name}${step_num}-1 $msgStr {
+   LogMsg "--- $msgStr ---"
+   StopCaptureControllerLan
+   SaveToFileControllerLan 
+} { PASS_STEP }
+    
+########################## INVOKE PARSING TOOL ##################################
+
+DoStep ${step_name}${step_num}-2 "Analyze flow data" {
+    
+    # Set up parser file
+    set PARSERFILE    $ETH_DEFAULT_TXT_FILE
+} { PASS_STEP }
+
+DoStep ${step_name}${step_num}-3 "Parse all data into database" {
+    # Parse data
+    set PARAMS_DHCP         "{DHCP {} {} {} {} {} {} {} {}}"
+    set PARAMS_MTA_SRC      "{{} {} {} {} $MTA_IP {} {} {} {}}"
+    set PARAMS_MTA_DST      "{{} {} {} {} {} {} {} $MTA_IP {}}"
+    set msgID_MTA           [ParseFile $PARSERFILE "$PARAMS_DHCP $PARAMS_MTA_SRC $PARAMS_MTA_DST"]
+} {
+    if { $::PART_RETURN == 0 } {
+        PASS_STEP
+    } else {
+        FAIL_STEP "Cannot find data"
+    }
+}
+    
+    set CONTINUE_PAST_STEP_ERROR 1
+    incr step_num
+############################ MTA-9 ###############################
+
+set msgStr "Verify MTA-9 Kerberos AS Request"
+DoStep ${step_name}${step_num}-9-1 $msgStr {
+    LogMsg "--- $msgStr ---"
+} {
+    VerifyValue $msgID_MTA "INFIRST KRB KRB_AS_REQ KRB_TYPE" "EXISTS" ""
+}
+
+## 
+##
+set msgStr "Verify MTA-9 Kerberos AS Request: Type is AS-REQ"
+DoStep ${step_name}${step_num}-9-2 $msgStr {
+    LogMsg "--- $msgStr ---"
+} {
+    VerifyValue $msgID_MTA "INFIRST KRB KRB_AS_REQ KRB_TYPE" "IS" "AS-REQ"
+}
+
+############################ MTA-10 ###############################
+
+set msgStr "Verify MTA-10 Kerberos AS Reply"
+DoStep ${step_name}${step_num}-10-1 $msgStr {
+    LogMsg "--- $msgStr ---"
+} {
+    VerifyValue $msgID_MTA "INANY KRB KRB_AS_REP KRB_TYPE" "EXISTS" ""
+}
+
+## 
+##
+set msgStr "Verify MTA-10 Kerberos AS Reply: Type is AS-REP"
+DoStep ${step_name}${step_num}-10-2 $msgStr {
+    LogMsg "--- $msgStr ---"
+} {
+    VerifyValue $msgID_MTA "INFIRST KRB KRB_AS_REP KRB_TYPE" "IS" "AS-REP"
+}
+
+
+################################################################################
+# Cleanup
+################################################################################
+
+DoStep ${step_name} "Restore MTA Policy" {
+    # verify_signal "Restore policy on DHCP server (MTAFORCW_122)"
+    PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122
+    PROV_DEPLOY_DHCP
+} { PASS_STEP }
+
+set CONTINUE_PAST_STEP_ERROR 0
+Cleanup

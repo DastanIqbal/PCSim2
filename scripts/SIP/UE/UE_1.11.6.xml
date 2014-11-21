@@ -1,0 +1,106 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="SIP-UE 1.11.6" 
+	descrip="UE Ignores 100rel in 100 Trying Response " 
+	number="SIP-UE 1.11.6">
+	
+	<template file="./templates/CallOrigAtUETemp.xml" name="UE1"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Setup"/>
+		<state ID="Alerting"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<NE ext_require="100rel"/>
+		
+		<state ID="Setup">
+			<prelude once="true">
+				<send protocol="utility" msgtype="DialDigits">
+					<mod modtype="add" hdr="number">
+						<msg_ref type="platform">UE1.phone number 1</msg_ref>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>Invite</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="100-INVITE">
+							<!-- Step 1 from test case 1.11.6 - Add a Require header -->
+							<mod modtype="add" hdr="Require" param="option-tag">
+								<expr>100rel</expr>
+							</mod>
+						</send>
+					</then>
+				</if>
+			</response>
+			<transition to="Setup" event="DialDigitsComplete"/>
+			<transition to="WaitPrack" event="INVITE"/>
+		</state>
+		
+		<state ID="WaitPrack" timer="4000">
+			<response>
+				<verify step="2" requirements="RFC21, RFC22">
+					<neq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>PRACK</expr>
+					</neq>
+				</verify>
+				<if>
+					<eq>
+						<msg_ref type="event"/>
+						<expr>TimerExpired</expr>
+					</eq>
+					<then>
+						<!--Sending 183-Invite with answer-->
+						<send protocol="sip" msgtype="183-Invite">
+							<mod modtype="add" hdr="Require" param="option-tag">
+								<expr>100rel</expr>
+							</mod>
+						</send>
+					</then>
+				</if>
+			</response>
+			<transition to="WaitPrack" event="DialDigitsComplete"/>
+			<transition to="Alerting" event="TimerExpired"/>
+			<transition to="WaitPrack" event="PRACK"/>
+		</state>
+		
+		<state ID="Alerting">
+			<response>
+				<verify step="3" requirements="RFC21">
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>PRACK</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="200-PRACK"/>
+					</then>
+				</verify>
+			</response>
+			<transition to="END" event="PRACK"/>
+		</state>
+	</add_to>
+</pc2xml>

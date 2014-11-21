@@ -1,0 +1,93 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="SIP-UE 1.5.2" 
+	descrip="CANCEL - Only After Receipt of a Provisional Response" 
+	number="SIP-UE 1.5.2">
+	
+	<template file="./templates/CallOrigAtUETemp.xml" name="UE1"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Setup"/>
+		<state ID="OnHook"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<state ID="Setup">
+			<prelude once="true">
+				<send protocol="utility" msgtype="DialDigits">
+					<mod modtype="add" hdr="number">
+						<msg_ref type="platform">UE1.phone number 1</msg_ref>
+					</mod>
+				</send>
+			</prelude>
+			<transition to="Setup" event="DialDigitsComplete"/>
+			<transition to="OnHook" event="INVITE"/>
+		</state>
+		
+		<state ID="OnHook">
+			<prelude>
+				<!-- Step-2, Message Flow for test case SIP 1.5.2 - 
+				Terminate the SIP session at the UE.  -->
+				<send protocol="utility" msgtype="OnHook"/>
+			</prelude>
+			<transition to="Wait" event="OnHookComplete"/>
+		</state>
+		
+		<!-- Step-2, Message Flow for test case SIP 1.5.2 - wait for 2*T1 seconds 
+			to check if the UE sends a CANCEL message -->
+		<state ID="Wait" timer="1000">
+			<response>
+				<verify step="2" requirements="RFC437">
+					<neq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>CANCEL</expr>
+					</neq>
+				</verify>
+			</response>
+			<transition to="VerifyCancel" event="TimerExpired"/>
+		</state>
+		
+		<state ID="VerifyCancel">
+			<prelude>
+				<!-- Step-3, Message Flow for test case SIP 1.5.2 - Send a default 
+				100 response from the SS -->
+				<send protocol="sip" msgtype="100-INVITE"/>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>CANCEL</expr>
+					</eq>
+					<then>
+						<verify step="4" requirements="RFC438">
+							<eq>
+								<msg_ref type="sip">Cancel.CSeq.method</msg_ref>
+								<expr>CANCEL</expr>
+							</eq>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<transition to="END" event="Cancel"/>
+		</state>
+	</add_to>
+</pc2xml>

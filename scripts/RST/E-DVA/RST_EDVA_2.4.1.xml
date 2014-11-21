@@ -1,0 +1,112 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	PCPCII-139 : Update the Voicetronix modifiers to use the new values. (ghassler 07/10/2009)
+
+
+
+
+-->
+
+<!-- First are the document type and the attributes for our document -->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-EDVA 2.4.1" 
+	descrip="Mapping a User to an EndPoint" 
+	number="RST-EDVA 2.4.1">
+	
+	<template file="./templates/CallOrigAtUETemp.xml" name="UE1"/>
+
+	<remove_from fsm="UE1">
+		<state ID="OffHook"/>
+		<state ID="OnHook"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<!-- OFFHOOK State -->
+		<state ID="OffHook">
+			<prelude>
+				<send protocol="utility" msgtype="OffHook">
+					<mod modtype="replace" hdr="voiceport">
+						<msg_ref type="platform">Platform.voiceport1</msg_ref>
+					</mod>
+				</send>
+			</prelude>
+			<transition to="VerifyDialTone" event="OffHookComplete"/>
+		</state>
+		<state ID="VerifyDialTone">
+			<prelude>
+				<send protocol="utility" msgtype="VERIFYDIALTONE">
+					<mod modtype="replace" hdr="voiceport">
+						<msg_ref type="platform">Platform.voiceport1</msg_ref>
+					</mod>
+					<mod modtype="replace" hdr="voiceExpected">
+						<expr>no</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="2" requirements="REQ22459">
+					<eq>
+						<msg_ref type="utility">message</msg_ref>
+						<expr>VERIFYDIALTONECOMPLETE</expr>
+					</eq>
+				</verify>
+			</response>
+			<!-- Transitions for OffHook state -->
+			<transition to="OnHook" event="VerifyDialToneComplete"/>
+			<transition to="OnHook" event="VerifyDialToneError"/>
+		</state>
+		<state ID="OnHook">
+			<prelude>
+				<send protocol="utility" msgtype="OnHook">
+					<mod modtype="replace" hdr="voiceport">
+						<msg_ref type="platform">Platform.voiceport1</msg_ref>
+					</mod>
+				</send>
+			</prelude>
+			<transition to="OffHook1" event="OnHookComplete"/>
+		</state>
+		<!-- OFFHOOK1 State -->
+		<state ID="OffHook1">
+			<prelude>
+				<send protocol="utility" msgtype="OffHook"/>
+			</prelude>
+			<!-- Transitions for OffHook state -->
+			<transition to="VerifyDialTone1" event="OffHookComplete"/>
+		</state>
+		<state ID="VerifyDialTone1">
+			<prelude>
+				<send protocol="utility" msgtype="VERIFYDIALTONE"/>
+			</prelude>
+			<response>
+				<verify step="3" requirements="REQ22460">
+					<eq>
+						<msg_ref type="utility">message</msg_ref>
+						<expr>VERIFYDIALTONECOMPLETE</expr>
+					</eq>
+				</verify>
+			</response>
+			<!-- Transitions for OffHook state -->
+			<transition to="OnHook1" event="VerifyDialToneComplete"/>
+			<transition to="OnHook1" event="VerifyDialToneError"/>
+		</state>
+		<!-- OnHook State -->
+		<state ID="OnHook1">
+			<prelude>
+				<send protocol="utility" msgtype="OnHook"/>
+			</prelude>
+			<!-- Transitions for OffHook state -->
+			<transition to="END" event="OnHookComplete"/>
+		</state>
+	</add_to>
+</pc2xml>

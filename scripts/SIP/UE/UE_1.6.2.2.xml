@@ -1,0 +1,236 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="SIP-UE 1.6.2.2" 
+	descrip="Timer E in the Trying State" 
+	number="SIP-UE 1.6.2.2">
+	
+	<template file="./templates/CallOrigAtUETemp.xml" name="UE1"/>
+	<configure name="FSM Process Duplicate Messages" value="true"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Releasing"/>
+		<state ID="OnHook"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<transition from="Connected" to="OnHook" event="TimerExpired"/>
+		
+		<state ID="OnHook">
+			<!--Step 2 test case SIP 1.6.2.2 - Terminate the session at the UE -->
+			<prelude>
+				<send protocol="utility" msgtype="OnHook"/>
+			</prelude>
+			<transition to="Bye" event="OnHookComplete"/>
+		</state>
+		
+		<state ID="Bye">
+			<response>
+				<verify step="2" requirements="RFC990">
+					<eq>
+						<msg_ref type="sip">BYE.Transport</msg_ref>
+						<expr>UDP</expr>
+					</eq>
+				</verify>
+			</response>
+			<transition to="Bye1" event="BYE"/>
+		</state>
+		
+		<state ID="Bye1">
+			<response>
+				<verify step="3" requirements="RFC991">
+					<and>
+						<gte>
+							<msg_ref type="sip">BYE.TIMESTAMP</msg_ref>
+							<add_ref type="sip" msg_instance="prev" value="400">BYE.TIMESTAMP</add_ref>
+						</gte>
+						<lte>
+							<msg_ref type="sip">BYE.TIMESTAMP</msg_ref>
+							<add_ref type="sip" msg_instance="prev" value="600">BYE.TIMESTAMP</add_ref>
+						</lte>
+					</and>
+				</verify>
+			</response>
+			<transition to="Bye2" event="BYE"/>
+		</state>
+		
+		<state ID="Bye2">
+			<response>
+				<verify step="3" requirements="RFC991">
+					<and>
+						<gte>
+							<msg_ref type="sip">BYE.TIMESTAMP</msg_ref>
+							<add_ref type="sip" msg_instance="prev" value="900">BYE.TIMESTAMP</add_ref>
+						</gte>
+						<lte>
+							<msg_ref type="sip">BYE.TIMESTAMP</msg_ref>
+							<add_ref type="sip" msg_instance="prev" value="1100">BYE.TIMESTAMP</add_ref>
+						</lte>
+					</and>
+				</verify>
+			</response>
+			<transition to="Bye3" event="BYE"/>
+		</state>
+		
+		<state ID="Bye3">
+			<response>
+				<verify step="3" requirements="RFC991">
+					<and>
+						<gte>
+							<msg_ref type="sip">BYE.TIMESTAMP</msg_ref>
+							<add_ref type="sip" msg_instance="prev" value="1900">BYE.TIMESTAMP</add_ref>
+						</gte>
+						<lte>
+							<msg_ref type="sip">BYE.TIMESTAMP</msg_ref>
+							<add_ref type="sip" msg_instance="prev" value="2100">BYE.TIMESTAMP</add_ref>
+						</lte>
+					</and>
+				</verify>
+			</response>
+			<transition to="Bye4" event="BYE"/>
+		</state>
+		
+		<state ID="Bye4">
+			<response>
+				<verify step="3" requirements="RFC991">
+					<and>
+						<gte>
+							<msg_ref type="sip">BYE.TIMESTAMP</msg_ref>
+							<add_ref type="sip" msg_instance="prev" value="3900">BYE.TIMESTAMP</add_ref>
+						</gte>
+						<lte>
+							<msg_ref type="sip">BYE.TIMESTAMP</msg_ref>
+							<add_ref type="sip" msg_instance="prev" value="4100">BYE.TIMESTAMP</add_ref>
+						</lte>
+					</and>
+				</verify>
+			</response>
+			<transition to="Bye5" event="BYE"/>
+		</state>
+		
+		<state ID="Bye5">
+			<response>
+				<verify step="3" requirements="RFC991">
+					<and>
+						<gte>
+							<msg_ref type="sip">BYE.TIMESTAMP</msg_ref>
+							<add_ref type="sip" msg_instance="prev" value="3900">BYE.TIMESTAMP</add_ref>
+						</gte>
+						<lte>
+							<msg_ref type="sip">BYE.TIMESTAMP</msg_ref>
+							<add_ref type="sip" msg_instance="prev" value="4100">BYE.TIMESTAMP</add_ref>
+						</lte>
+					</and>
+				</verify>
+			</response>
+			<transition to="Bye6" event="BYE"/>
+		</state>
+		
+		<state ID="Bye6">
+			<response>
+				<verify step="3" requirements="RFC991">
+					<and>
+						<gte>
+							<msg_ref type="sip">BYE.TIMESTAMP</msg_ref>
+							<add_ref type="sip" msg_instance="prev" value="3900">BYE.TIMESTAMP</add_ref>
+						</gte>
+						<lte>
+							<msg_ref type="sip">BYE.TIMESTAMP</msg_ref>
+							<add_ref type="sip" msg_instance="prev" value="4100">BYE.TIMESTAMP</add_ref>
+						</lte>
+					</and>
+				</verify>
+			</response>
+			<transition to="Bye7" event="BYE"/>
+		</state>
+		
+		<state ID="Bye7">
+			<response>
+				<verify step="3" requirements="RFC991">
+					<and>
+						<gte>
+							<msg_ref type="sip">BYE.TIMESTAMP</msg_ref>
+							<add_ref type="sip" msg_instance="prev" value="3900">BYE.TIMESTAMP</add_ref>
+						</gte>
+						<lte>
+							<msg_ref type="sip">BYE.TIMESTAMP</msg_ref>
+							<add_ref type="sip" msg_instance="prev" value="4100">BYE.TIMESTAMP</add_ref>
+						</lte>
+					</and>
+				</verify>
+			</response>
+			<transition to="Bye8" event="BYE"/>
+		</state>
+		
+		<state ID="Bye8">
+			<response>
+				<verify step="3" requirements="RFC991">
+					<and>
+						<gte>
+							<msg_ref type="sip">BYE.TIMESTAMP</msg_ref>
+							<add_ref type="sip" msg_instance="prev" value="3900">BYE.TIMESTAMP</add_ref>
+						</gte>
+						<lte>
+							<msg_ref type="sip">BYE.TIMESTAMP</msg_ref>
+							<add_ref type="sip" msg_instance="prev" value="4100">BYE.TIMESTAMP</add_ref>
+						</lte>
+					</and>
+				</verify>
+			</response>
+			<transition to="Bye9" event="BYE"/>
+		</state>
+		
+		<state ID="Bye9">
+			<response>
+				<verify step="3" requirements="RFC991">
+					<and>
+						<gte>
+							<msg_ref type="sip">BYE.TIMESTAMP</msg_ref>
+							<add_ref type="sip" msg_instance="prev" value="3900">BYE.TIMESTAMP</add_ref>
+						</gte>
+						<lte>
+							<msg_ref type="sip">BYE.TIMESTAMP</msg_ref>
+							<add_ref type="sip" msg_instance="prev" value="4100">BYE.TIMESTAMP</add_ref>
+						</lte>
+					</and>
+				</verify>
+			</response>
+			<transition to="Bye10" event="BYE"/>
+		</state>
+		
+		<state ID="Bye10">
+			<response>
+				<verify step="3" requirements="RFC991">
+					<and>
+						<gte>
+							<msg_ref type="sip">BYE.TIMESTAMP</msg_ref>
+							<add_ref type="sip" msg_instance="prev" value="3900">BYE.TIMESTAMP</add_ref>
+						</gte>
+						<lte>
+							<msg_ref type="sip">BYE.TIMESTAMP</msg_ref>
+							<add_ref type="sip" msg_instance="prev" value="4100">BYE.TIMESTAMP</add_ref>
+						</lte>
+					</and>
+				</verify>
+			</response>
+			<transition to="END" event="BYE"/>
+		</state>
+	</add_to>
+</pc2xml>

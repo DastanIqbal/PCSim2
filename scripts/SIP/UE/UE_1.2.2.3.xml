@@ -1,0 +1,84 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="SIP-UE 1.2.2.3" 
+	descrip="UAC does not re-send an INVITE until after retry interval" 
+	number="SIP-UE 1.2.2.3">
+	
+	<template file="./templates/CallOrigAtUETemp.xml" name="UE1"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Setup"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<state ID="Setup">
+			<prelude once="true">
+				<send protocol="utility" msgtype="DialDigits">
+					<mod modtype="add" hdr="number">
+						<msg_ref type="platform">UE1.phone number 1</msg_ref>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<!-- Step 2 test case SIP 1.2.2.3-The SS sends a 503  -->
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>Invite</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="503-INVITE">
+							<mod modtype="add" hdr="Retry-After" param="value">
+								<expr>60</expr>
+							</mod>
+						</send>
+						<log expr="Don't go OnHook on the device for \napproximately 60 seconds"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Setup" event="DialDigitsComplete"/>
+			<transition to="Verification" event="Invite"/>
+		</state>
+		
+		<state ID="Verification" timer="59250">
+			<response>
+				<verify step="3" requirements="REQ17109">
+					<neq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>INVITE</expr>
+					</neq>
+				</verify>
+			</response>
+			<transition to="Verification" event="DialDigitsComplete"/>
+			<transition to="END" event="TimerExpired"/>
+			<transition to="GotInvite" event="INVITE"/>
+			<transition to="Verification" event="ACK"/>
+		</state>
+		
+		<state ID="GotInvite">
+			<prelude>
+				<fail/>
+				<log level="ERROR" expr="Subsequent INVITE was sent within 60 seconds after the 503 response from the SS.\nTest case failed step 3.\n"/>
+			</prelude>
+			<transition to="END" event="FailEvent"/>
+		</state>
+	</add_to>
+</pc2xml>

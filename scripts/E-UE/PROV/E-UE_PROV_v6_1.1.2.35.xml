@@ -1,0 +1,471 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+ Change History: (Author & Date)
+
+
+
+-->
+<!-- Document type and attributes. -->
+<pc2xml version="$Revision: 6076 $"
+        name="E-UE_PROV_1.1.2.35"
+        descrip="E-UE provisions per configured DHCP options and IP preference parameter:
+                 Scenario-2 Scenario-3 Scenario-5 Scenario-6"
+        number="E-UE_PROV_1.1.2.35">
+
+
+    <configure name="No Response Timeout" value="180000"/>
+    <fsm name="ProvisioningScenarios">
+        <models>
+            <session/>
+        </models>
+		<NE sim_type="term" elements="SCSCF1 PCSCF1" targets="PCSCF1 SCSCF1 UE1"/>
+        <states initialstate="Capture_Reboot_Wait">
+
+
+            <!-- ======================================================================= -->
+            <!--  Scenario-2 is the initial configuration. -->
+
+            <state ID="Capture_Reboot_Wait" timer="150000">
+                <prelude once="true" >
+                    <start_capture>
+                        <filter>
+                            <var_expr>
+                                <expr>host </expr>
+                                <msg_ref type="platform">DUT.IP</msg_ref>
+                                <expr> || host </expr>
+                                <msg_ref type="platform">DUT.CM IP Address</msg_ref>
+                            </var_expr>
+                        </filter>
+                    </start_capture>
+                    <send protocol="utility" msgtype="SNMPSet">
+                        <mod modtype="add" hdr="array">
+                            <var_expr>
+                                <expr>varBind 1 1 3 \r\n ][ , </expr>
+                                <expr>DOCS-CABLE-DEVICE-MIB::docsDevResetNow.0,INTEGER,1][\r\n</expr>
+                            </var_expr>
+                        </mod>
+                        <mod modtype="replace" hdr="agentip">
+                            <msg_ref type="platform">DUT.CM IP Address</msg_ref>
+                        </mod>
+                        <mod modtype="replace" hdr="version">
+                            <expr>2c</expr>
+                        </mod>
+                    </send>
+                </prelude>
+                <response>
+                    <if>
+                        <eq>
+                            <msg_ref type="utility">Response</msg_ref>
+                            <expr>SNMPRespFailure</expr>
+                        </eq>
+                        <then>
+                            <fail/>
+                        </then>
+                    </if>
+                    <if>
+                        <or>
+                            <eq>
+                                <msg_ref type="sip">REGISTER.Contact.expires</msg_ref>
+                                <expr>0</expr>
+                            </eq>
+                            <eq>
+                                <msg_ref type="sip">REGISTER.Expires.value</msg_ref>
+                                <expr>0</expr>
+                            </eq>
+                        </or>
+                        <then>
+                            <send protocol="sip" msgtype="200-REGISTER"/>
+                        </then>
+                    </if>
+                </response>
+                <transition to="Scenario2" event="TimerExpired"/>
+                <transition to="Capture_Reboot_Wait" event="SNMPResp"/>
+                <transition to="Capture_Reboot_Wait" event="REGISTER"/>
+                <transition to="END" event="SNMPRespFailure"/>
+            </state>
+
+            <state ID="Scenario2">
+                <prelude once="true">
+                    <stop_capture/>
+
+                    <parse_capture name="eCM_DHCPv4">
+                        <parser_filter protocol="bootp" clientMAC="DUT.CM MAC Address"/>
+                    </parse_capture>
+                    <parse_capture name="eUE_DHCPv6">
+                        <parser_filter protocol="dhcpv6" clientMAC="DUT MAC Address"/>
+                    </parse_capture>
+
+                    <send protocol="utility" msgtype="SNMPGet">
+                        <mod modtype="add" hdr="oids">
+                            <expr>DOCS-CABLE-DEVICE-MIB::docsDevServerBootState.0</expr>
+                        </mod>
+                        <mod modtype="replace" hdr="agentip">
+                            <msg_ref type="platform">UE0.IP</msg_ref>
+                        </mod>
+                    </send>
+                </prelude>
+                <response>
+                    <verify step="6 7 8">
+                        <and>
+                            <contains>
+                                <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                                <expr>1</expr>
+                            </contains>
+                        <and>
+                            <eq>
+                                <capture_ref type="bootp" name="eCM_DHCPv4">Offer.ip.dst_host.show</capture_ref>
+                                <msg_ref type="platform">DUT.CM IP Address</msg_ref>
+                            </eq>
+                            <eq>
+                                <capture_ref type="dhcpv6" name="eUE_DHCPv6">Advertise.ip.dst_host.show</capture_ref>
+                                <msg_ref type="platform">DUT.IP Address</msg_ref>
+                            </eq>
+                        </and>
+                        </and>
+                    </verify>
+                </response>
+                <transition to="Configuration3" event="SNMPResp"/>
+                <transition to="END" event="SNMPRespFailure"/>
+            </state>
+
+
+            <!-- ======================================================================= -->
+            <state ID="Configuration3"
+               provFile="E-UE_PROV_v6_2.1.2.1_2.bin"
+               policyFile="MTAFORCW122_test"
+               nextState="Capture_Reboot_Wait_3"/>
+
+            <state ID="Capture_Reboot_Wait_3" timer="150000">
+                <prelude once="true" >
+                    <start_capture>
+                        <filter>
+                            <var_expr>
+                                <expr>host </expr>
+                                <msg_ref type="platform">DUT.IP</msg_ref>
+                                <expr> || host </expr>
+                                <msg_ref type="platform">DUT.CM IP Address</msg_ref>
+                            </var_expr>
+                        </filter>
+                    </start_capture>
+
+                    <send protocol="utility" msgtype="SNMPSet">
+                        <mod modtype="add" hdr="array">
+                            <var_expr>
+                                <expr>varBind 1 1 3 \r\n ][ , </expr>
+                                <expr>DOCS-CABLE-DEVICE-MIB::docsDevResetNow.0,INTEGER,1][\r\n</expr>
+                            </var_expr>
+                        </mod>
+                        <mod modtype="replace" hdr="agentip">
+                            <msg_ref type="platform">DUT.CM IP Address</msg_ref>
+                        </mod>
+                        <mod modtype="replace" hdr="version">
+                            <expr>2c</expr>
+                        </mod>
+                    </send>
+                </prelude>
+                <response>
+                    <if>
+                        <eq>
+                            <msg_ref type="utility">Response</msg_ref>
+                            <expr>SNMPRespFailure</expr>
+                        </eq>
+                        <then>
+                            <fail/>
+                        </then>
+                    </if>
+                    <if>
+                        <or>
+                            <eq>
+                                <msg_ref type="sip">REGISTER.Contact.expires</msg_ref>
+                                <expr>0</expr>
+                            </eq>
+                            <eq>
+                                <msg_ref type="sip">REGISTER.Expires.value</msg_ref>
+                                <expr>0</expr>
+                            </eq>
+                        </or>
+                        <then>
+                            <send protocol="sip" msgtype="200-REGISTER"/>
+                        </then>
+                    </if>
+                </response>
+                <transition to="Scenario3" event="TimerExpired"/>
+                <transition to="Capture_Reboot_Wait_3" event="SNMPResp"/>
+                <transition to="Capture_Reboot_Wait_3" event="REGISTER"/>
+                <transition to="END" event="SNMPRespFailure"/>
+            </state>
+
+            <state ID="Scenario3">
+                <prelude once="true">
+                    <stop_capture/>
+
+                    <parse_capture name="eCM_DHCPv4">
+                        <parser_filter protocol="bootp" clientMAC="DUT.CM MAC Address"/>
+                    </parse_capture>
+                    <parse_capture name="eUE_DHCPv6">
+                        <parser_filter protocol="dhcpv6" clientMAC="DUT MAC Address"/>
+                    </parse_capture>
+
+                    <send protocol="utility" msgtype="SNMPGet">
+                            <mod modtype="add" hdr="oids">
+                            <expr>DOCS-CABLE-DEVICE-MIB::docsDevServerBootState.0</expr>
+                        </mod>
+                        <mod modtype="replace" hdr="agentip">
+                            <msg_ref type="platform">UE0.IP</msg_ref>
+                        </mod>
+                    </send>
+                </prelude>
+                <response>
+                    <verify step="10 11 12">
+                        <and>
+                            <contains>
+                                <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                                <expr>3</expr>
+                            </contains>
+                        <and>
+                            <eq>
+                                <capture_ref type="bootp" name="eCM_DHCPv4">Offer.ip.dst_host.show</capture_ref>
+                                <msg_ref type="platform">DUT.CM IP Address</msg_ref>
+                            </eq>
+                            <null>
+                                <capture_ref type="dhcpv6" name="eUE_DHCPv6" msg_instance="any">Solicit</capture_ref>
+                            </null>
+                        </and>
+                        </and>
+                    </verify>
+                </response>
+                <transition to="Configuration5" event="SNMPResp"/>
+                <transition to="END" event="SNMPRespFailure"/>
+            </state>
+
+
+            <!-- ======================================================================= -->
+            <state ID="Configuration5"
+                   provFile="E-UE_PROV_v6_2.1.2.1_2.bin"
+                   policyFile="MTAFORCW122_test"
+                   nextState="Capture_Reboot_Wait_5"/>
+
+            <state ID="Capture_Reboot_Wait_5" timer="150000">
+                <prelude once="true" >
+                    <start_capture>
+                        <filter>
+                            <var_expr>
+                                <expr>host </expr>
+                                <msg_ref type="platform">DUT.IP</msg_ref>
+                                <expr> || host </expr>
+                                <msg_ref type="platform">DUT.CM IP Address</msg_ref>
+                            </var_expr>
+                        </filter>
+                    </start_capture>
+
+                    <send protocol="utility" msgtype="SNMPSet">
+                        <mod modtype="add" hdr="array">
+                            <var_expr>
+                                <expr>varBind 1 1 3 \r\n ][ , </expr>
+                                <expr>DOCS-CABLE-DEVICE-MIB::docsDevResetNow.0,INTEGER,1][\r\n</expr>
+                            </var_expr>
+                        </mod>
+                        <mod modtype="replace" hdr="agentip">
+                            <msg_ref type="platform">DUT.CM IP Address</msg_ref>
+                        </mod>
+                        <mod modtype="replace" hdr="version">
+                            <expr>2c</expr>
+                        </mod>
+                    </send>
+                </prelude>
+                <response>
+                    <if>
+                        <eq>
+                            <msg_ref type="utility">Response</msg_ref>
+                            <expr>SNMPRespFailure</expr>
+                        </eq>
+                        <then>
+                            <fail/>
+                        </then>
+                    </if>
+                    <if>
+                        <or>
+                            <eq>
+                                <msg_ref type="sip">REGISTER.Contact.expires</msg_ref>
+                                <expr>0</expr>
+                            </eq>
+                            <eq>
+                                <msg_ref type="sip">REGISTER.Expires.value</msg_ref>
+                                <expr>0</expr>
+                            </eq>
+                        </or>
+                        <then>
+                            <send protocol="sip" msgtype="200-REGISTER"/>
+                        </then>
+                    </if>
+                </response>
+                <transition to="Scenario5" event="TimerExpired"/>
+                <transition to="Capture_Reboot_Wait_5" event="SNMPResp"/>
+                <transition to="Capture_Reboot_Wait_5" event="REGISTER"/>
+                <transition to="END" event="SNMPRespFailure"/>
+            </state>
+
+            <state ID="Scenario5">
+                <prelude once="true">
+                    <stop_capture/>
+
+                    <parse_capture name="eCM_DHCPv4">
+                        <parser_filter protocol="bootp" clientMAC="DUT.CM MAC Address"/>
+                    </parse_capture>
+                    <parse_capture name="eUE_DHCPv6">
+                        <parser_filter protocol="dhcpv6" clientMAC="DUT MAC Address"/>
+                    </parse_capture>
+
+                    <send protocol="utility" msgtype="SNMPGet">
+                        <mod modtype="add" hdr="oids">
+                            <expr>DOCS-CABLE-DEVICE-MIB::docsDevServerBootState.0</expr>
+                        </mod>
+                        <mod modtype="replace" hdr="agentip">
+                            <msg_ref type="platform">UE0.IP</msg_ref>
+                        </mod>
+                    </send>
+                </prelude>
+                <response>
+                    <verify step="18 19 20">
+                        <and>
+                            <contains>
+                                <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                                <expr>1</expr>
+                            </contains>
+                        <and>
+                            <eq>
+                                <capture_ref type="bootp" name="eCM_DHCPv4">Offer.ip.dst_host.show</capture_ref>
+                                <msg_ref type="platform">DUT.CM IP Address</msg_ref>
+                            </eq>
+                            <eq>
+                                <capture_ref type="dhcpv6" name="eUE_DHCPv6">Advertise.ip.dst_host.show</capture_ref>
+                                <msg_ref type="platform">DUT.IP Address</msg_ref>
+                            </eq>
+                        </and>
+                        </and>
+                    </verify>
+                </response>
+                <transition to="Configuration6" event="SNMPResp"/>
+                <transition to="END" event="SNMPRespFailure"/>
+            </state>
+
+
+            <!-- ======================================================================= -->
+            <state ID="Configuration6"
+                   provFile="E-UE_PROV_v6_2.1.2.1_2.bin"
+                   policyFile="MTAFORCW122_test"
+                   nextState="Capture_Reboot_Wait_6"/>
+
+            <state ID="Capture_Reboot_Wait_6" timer="150000">
+                <prelude once="true" >
+                    <start_capture>
+                        <filter>
+                            <var_expr>
+                                <expr>host </expr>
+                                <msg_ref type="platform">DUT.IP</msg_ref>
+                                <expr> || host </expr>
+                                <msg_ref type="platform">DUT.CM IP Address</msg_ref>
+                            </var_expr>
+                        </filter>
+                    </start_capture>
+
+                    <send protocol="utility" msgtype="SNMPSet">
+                        <mod modtype="add" hdr="array">
+                            <var_expr>
+                                <expr>varBind 1 1 3 \r\n ][ , </expr>
+                                <expr>DOCS-CABLE-DEVICE-MIB::docsDevResetNow.0,INTEGER,1][\r\n</expr>
+                            </var_expr>
+                        </mod>
+                        <mod modtype="replace" hdr="agentip">
+                            <msg_ref type="platform">DUT.CM IP Address</msg_ref>
+                        </mod>
+                        <mod modtype="replace" hdr="version">
+                            <expr>2c</expr>
+                        </mod>
+                    </send>
+                </prelude>
+                <response>
+                    <if>
+                        <eq>
+                            <msg_ref type="utility">Response</msg_ref>
+                            <expr>SNMPRespFailure</expr>
+                        </eq>
+                        <then>
+                            <fail/>
+                        </then>
+                    </if>
+                    <if>
+                        <or>
+                            <eq>
+                                <msg_ref type="sip">REGISTER.Contact.expires</msg_ref>
+                                <expr>0</expr>
+                            </eq>
+                            <eq>
+                                <msg_ref type="sip">REGISTER.Expires.value</msg_ref>
+                                <expr>0</expr>
+                            </eq>
+                        </or>
+                        <then>
+                            <send protocol="sip" msgtype="200-REGISTER"/>
+                        </then>
+                    </if>
+                </response>
+                <transition to="Scenario6" event="TimerExpired"/>
+                <transition to="Capture_Reboot_Wait_6" event="SNMPResp"/>
+                <transition to="Capture_Reboot_Wait_6" event="REGISTER"/>
+                <transition to="END" event="SNMPRespFailure"/>
+            </state>
+
+            <state ID="Scenario6">
+                <prelude once="true">
+                    <stop_capture/>
+
+                    <parse_capture name="eCM_DHCPv4">
+                        <parser_filter protocol="bootp" clientMAC="DUT.CM MAC Address"/>
+                    </parse_capture>
+                    <parse_capture name="eUE_DHCPv6">
+                        <parser_filter protocol="dhcpv6" clientMAC="DUT MAC Address"/>
+                    </parse_capture>
+
+                    <send protocol="utility" msgtype="SNMPGet">
+                        <mod modtype="add" hdr="oids">
+                            <expr>DOCS-CABLE-DEVICE-MIB::docsDevServerBootState.0</expr>
+                        </mod>
+                        <mod modtype="replace" hdr="agentip">
+                            <msg_ref type="platform">UE0.IP</msg_ref>
+                        </mod>
+                    </send>
+                </prelude>
+                <response>
+                    <verify step="22 23 24">
+                        <and>
+                            <contains>
+                                <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                                <expr>1</expr>
+                            </contains>
+                        <and>
+                            <eq>
+                                <capture_ref type="bootp" name="eCM_DHCPv4">Offer.ip.dst_host.show</capture_ref>
+                                <msg_ref type="platform">DUT.CM IP Address</msg_ref>
+                            </eq>
+                            <eq>
+                                <capture_ref type="dhcpv6" name="eUE_DHCPv6">Advertise.ip.dst_host.show</capture_ref>
+                                <msg_ref type="platform">DUT.IP Address</msg_ref>
+                            </eq>
+                        </and>
+                        </and>
+                    </verify>
+                </response>
+            </state>
+        </states>
+    </fsm>
+</pc2xml>

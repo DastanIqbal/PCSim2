@@ -1,0 +1,165 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="SIP-UE 1.1.2.2" 
+	descrip="Re-Registration Action to Receiving a 423 Response" 
+	number="SIP-UE 1.1.2.2">
+	
+	<template file="./templates/UERegAndSubTemp.xml" name="Registrar"/>
+	
+	<remove_from fsm="Registrar">
+		<state ID="Authorization"/>
+		<state ID="Registered"/>
+	</remove_from>
+	
+	<add_to fsm="Registrar">
+		<state ID="Authorization">
+			<response>
+				<if>
+					<or>
+						<eq>
+							<msg_ref type="event"/>
+							<expr>AuthenticateSucceed</expr>
+						</eq>
+						<eq>
+							<msg_ref type="event"/>
+							<expr>AuthenticateFailed</expr>
+						</eq>
+					</or>
+					<then>
+						<!-- this is to prevent the AuthenticateFailed from being forwarded
+								to the next state on the AuthenticateSucceed -->
+					</then>
+					<elseif>
+						<and>
+							<eq>
+								<msg_ref type="sip">Request</msg_ref>
+								<expr>REGISTER</expr>
+							</eq>
+							<and>
+								<contains>
+									<msg_ref type="sip">REGISTER</msg_ref>
+									<expr>Authorization</expr>
+								</contains>
+								<digest/>
+							</and>
+						</and>
+						<then>
+							<generate event="AuthenticateSucceed"/>
+							<send protocol="sip" msgtype="200-Register">
+								<!-- Step 2 of test case 1.1.2.2- Expires value is set to 60 sec-->
+								<mod modtype="replace" hdr="Contact" param="expires">
+									<expr>60</expr>
+								</mod>
+							</send>
+						</then>
+						<else>
+							<generate event="AuthenticateFailed"/>
+							<send protocol="sip" msgtype="503-Register"/>
+						</else>
+					</elseif>
+				</if>
+			</response>
+			<transition to="Registered" event="AuthenticateSucceed"/>
+			<transition to="END" event="AuthenticateFailed"/>
+			<transition to="Authorization" event="REGISTER"/>
+		</state>
+		
+		<state ID="Registered">
+			<response>
+				<if>
+					<and>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>SUBSCRIBE</expr>
+						</eq>
+						<contains>
+							<msg_ref type="sip">SUBSCRIBE.Event</msg_ref>
+							<expr>reg</expr>
+						</contains>
+					</and>
+					<then>
+						<send protocol="sip" msgtype="200-SUBSCRIBE"/>
+						<sleep time="100"/>
+						<send protocol="sip" msgtype="NOTIFY"/>
+					</then>
+
+				</if>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>REGISTER</expr>
+					</eq>
+					<then>
+						<verify step="4" requirements="REQ16933, REQ16934">
+							<and>
+								<gte>
+									<msg_ref type="sip">REGISTER.TIMESTAMP</msg_ref>
+									<add_ref type="sip" msg_instance="prev" value="29500">REGISTER.TIMESTAMP</add_ref>
+								</gte>
+								<lte>
+									<msg_ref type="sip">REGISTER.TIMESTAMP</msg_ref>
+									<add_ref type="sip" msg_instance="prev" value="30500">REGISTER.TIMESTAMP</add_ref>
+								</lte>
+							</and>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<transition to="Re-register" event="REGISTER"/>
+			<transition to="Notification" event="SUBSCRIBE"/>
+		</state>
+		
+		<state ID="Re-register">
+			<prelude>
+				<send protocol="sip" msgtype="423-REGISTER">
+					<mod modtype="add" hdr="Min-Expires" param="value">
+						<expr>700000</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<!-- Step 4 of test case 1.1.2.2 -Send a 423  -->
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>REGISTER</expr>
+					</eq>
+					<then>
+						<verify step="5" requirements="REQ16933, REQ16934">
+							<or>
+								<gte>
+									<msg_ref type="sip">Register.Contact.expires</msg_ref>
+									<expr>700000</expr>
+								</gte>
+								<gte>
+									<msg_ref type="sip">Register.Expires.value</msg_ref>
+									<expr>700000</expr>
+								</gte>
+							</or>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<transition to="END" event="REGISTER"/>
+		</state>
+		<transition from="Notification" to="Registered" event="200-NOTIFY"/>
+	</add_to>
+</pc2xml>

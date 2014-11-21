@@ -1,0 +1,144 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+ Change History: (Author & Date)
+	PCPCII-118 : Change the T38FaxMaxDatagram value from 200 to 160. (ghassler 3/2/2009)
+	PCPCII-140 - Update the script to match all of the changes made to the D09 version of the
+		ATP. (ghassler 08/04/2009)
+	PCPCII-175 : Update the script to match the D10 version of the ATP (ghassler 01/28/2010)
+	PCPCIIATP-183 : Allow the packet rate to be either 50 or 50.0 (ghassler 07/20/2010)
+	
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="CODEC-MEDIA_1.3.1.2" 
+	descrip="UE supports T.38 Attributes (UE Terminating)" 
+	number="CODEC-MEDIA_1.3.1.2">
+	
+	<template file="./templates/CallTermAtUETemp.xml" name="UE1"/>
+	<remove_from fsm="UE1">
+		<state ID="Connected"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<state ID="Connected">
+			<prelude once="true">
+				<send protocol="sip" msgtype="ACK"/>
+				<sleep time="5000"/>
+				<send protocol="sip" msgtype="REINVITE">
+					<mod modtype="delete" hdr="audio"/>
+					<mod modtype="delete" hdr="media-modifier"/>
+					<mod modtype="delete" hdr="TIAS-modifier"/>
+					<mod modtype="delete" hdr="max-packet-rate"/>
+					<mod modtype="delete" hdr="rtpmap"/>
+					<mod modtype="delete" hdr="mode"/>
+					<mod modtype="delete" hdr="ptime"/>
+					<mod modtype="add" hdr="SDP">
+						<var_expr>
+							<expr>m=image </expr>
+							<msg_ref type="platform">UE1.SDPPort2</msg_ref>
+							<expr> udptl t38\r\nb=AS:47\r\nb=TIAS:34400\r\na=maxprate:50\r\n</expr>
+							<expr>a=T38FaxRateManagement:transferredTCF\r\n</expr>
+							<!-- PCPCII-118 Change the value of the parameter from 200 to 160 -->
+							<expr>a=T38FaxMaxDatagram:160\r\n</expr>
+							<expr>a=T38FaxVersion:0\r\n</expr>
+							<expr>a=T38FaxUdpEC:t38UDPRedundancy</expr>
+						</var_expr>
+					</mod>
+					<mod modtype="replace" hdr="s" param="name">
+						<expr>VoiceFax</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Response</msg_ref>
+						<expr>200-INVITE</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="ACK"/>
+						<var name="sdp">
+							<msg_ref type="sip">200-Invite.SDP</msg_ref>
+						</var>
+						<!-- STEP 3 -->
+						<verify step="3" requirements="REQ12557, REQ12562, REQ13334, REQ22364">
+							<eq>
+								<msg_ref type="sdp">200-Invite.fax-version.value</msg_ref>
+								<expr>0</expr>
+							</eq>
+						</verify>
+						
+						<!-- STEP 4 -->
+						<verify step="4" requirements="REQ12568">
+							<or>
+								<eq>
+									<msg_ref type="sdp">200-Invite.fax-max-datagram.value</msg_ref>
+									<expr>160</expr>
+								</eq>
+								<lt>
+									<msg_ref type="sdp">200-Invite.fax-max-datagram.value</msg_ref>
+									<expr>160</expr>
+								</lt>
+							</or>
+						</verify>
+						
+						<!-- STEP 5 -->
+						<verify step="5" requirements="REQ12564">
+							<eq>
+								<msg_ref type="sdp">200-Invite.fax-rate-management.value</msg_ref>
+								<expr>transferredTCF</expr>
+							</eq>
+						</verify>
+						
+						<!-- STEP 6 -->
+						<verify step="6" requirements="REQ11532, REQ13355">
+							<eq>
+								<msg_ref type="sdp">200-Invite.fax-udp-ec.value</msg_ref>
+								<expr>t38UDPRedundancy</expr>
+							</eq>
+						</verify>
+						
+						<!-- STEP 7 -->
+						<verify step="7" requirements="REQ13336">
+							<eq>
+								<msg_ref type="sdp">200-Invite.media-modifier.value</msg_ref>
+								<expr>47</expr>
+							</eq>
+						</verify>
+						
+						<verify step="7" requirements="REQ13336">
+							<or>
+								<eq>
+									<msg_ref type="sdp">200-Invite.max-packet-rate.value</msg_ref>
+									<expr>50</expr>
+								</eq>
+								<eq>
+									<msg_ref type="sdp">200-Invite.max-packet-rate.value</msg_ref>
+									<expr>50.0</expr>
+								</eq>
+							</or>
+						</verify>
+						
+						<verify step="7" requirements="REQ13336">
+							<eq>
+								<msg_ref type="sdp">200-Invite.TIAS-modifier.value</msg_ref>
+								<expr>34400</expr>
+							</eq>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<transition to="Connected" event="OffHookComplete"/>
+			<transition to="Releasing" event="200-INVITE"/>
+			<transition to="Connected" event="100-INVITE"/>
+		</state>
+	</add_to>
+</pc2xml>

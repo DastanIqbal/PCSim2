@@ -1,0 +1,130 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+
+<pc2xml version="$Revision: 6076 $" name="UT_HDV_SIP_UE_2.1.1.2" descrip="Unit test for Test case 2.1.1.2" number="1">
+	<template file="./templates/ut/Term_DUT.xml" name="DUT"/>
+	
+	<remove_from fsm="DUT">
+		<state ID="Answer"/>
+	</remove_from>
+	
+	<add_to fsm="DUT">
+		
+		<state ID="Answer" timer="15000">
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="event"/>
+							<expr>TimerExpired</expr>
+						</eq>
+						<then>
+							<!--Sending 200-Invite-->
+							<send protocol="sip" msgtype="200-INVITE" target="UE1" originator="DUT" >
+								<mod modtype="replace" hdr="v" param="number">
+								<var_expr>
+									<msg_ref type="sdp" msg_instance="last">INVITE.v.number</msg_ref>
+								</var_expr>
+								</mod>
+								
+								<mod modtype="replace" hdr="t" param="start">
+								<var_expr>
+									<msg_ref type="sdp" msg_instance="last">INVITE.t.start</msg_ref>
+								</var_expr>
+								</mod>
+								<mod modtype="replace" hdr="t" param="stop">
+								<var_expr>
+									<msg_ref type="sdp" msg_instance="last">INVITE.t.stop</msg_ref>
+								</var_expr>
+								</mod>
+								
+								<mod modtype="replace" hdr="s" param="name">
+								<var_expr>
+									<msg_ref type="sdp" msg_instance="last">INVITE.s.name</msg_ref>
+								</var_expr>
+								</mod>
+								
+								<mod modtype="replace" hdr="c" param="net-type">
+								<var_expr>
+									<msg_ref type="sdp" msg_instance="last">INVITE.c.net-type</msg_ref>
+								</var_expr>
+								</mod>
+								<mod modtype="replace" hdr="c" param="address-type">
+								<var_expr>
+									<msg_ref type="sdp" msg_instance="last">INVITE.c.address-type</msg_ref>
+								</var_expr>
+								</mod>
+								<mod modtype="replace" hdr="c" param="address">
+								<var_expr>
+									<msg_ref type="sdp" msg_instance="last">INVITE.c.address</msg_ref>
+								</var_expr>
+								</mod>
+								
+								<mod modtype="replace" hdr="o" param="user">
+								<msg_ref type="platform">UE0</msg_ref> 
+								 </mod>
+								<mod modtype="replace" hdr="o" param="session-id">
+								<var_expr>
+									<msg_ref type="sdp" msg_instance="last">INVITE.o.session-id</msg_ref>
+								</var_expr>
+								</mod>
+								<mod modtype="replace" hdr="o" param="session-version">
+								<var_expr>
+									<msg_ref type="sdp" msg_instance="last">INVITE.o.session-version</msg_ref>
+								</var_expr>
+								</mod>
+								<mod modtype="replace" hdr="o" param="net-type">
+								<var_expr>
+									<msg_ref type="sdp" msg_instance="last">INVITE.o.net-type</msg_ref>
+								</var_expr>
+								</mod>
+								<mod modtype="replace" hdr="o" param="address-type">
+								<var_expr>
+									<msg_ref type="sdp" msg_instance="last">INVITE.o.address-type</msg_ref>
+								</var_expr>
+								</mod>
+								<mod modtype="replace" hdr="o" param="address">
+								<var_expr>
+									<msg_ref type="sdp" msg_instance="last">INVITE.o.address</msg_ref>
+								</var_expr>
+								</mod>
+
+						</send>
+						</then>
+					</if>
+					<!-- Now test for an UPDATE message -->
+					<!-- Steps 6 and 7 in the Call-Orig-at_UE(DUT) Default Message Flow document. -->
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>UPDATE</expr>
+						</eq>
+						<then>
+							<!--QoS required or supported sending 200-Update message to peer.-->
+							<send protocol="sip" msgtype="200-Update" target="UE1" originator="DUT"/>
+						</then>
+					</if>
+				</response>
+				<!-- Transitions for Answer state -->
+				<transition to="Answer" event="UPDATE"/>
+				<transition to="Answer" event="TimerExpired"/>
+				<transition to="Connected" event="ACK"/>
+			</state>
+	</add_to>	
+</pc2xml>

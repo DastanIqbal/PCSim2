@@ -1,0 +1,971 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+ Change History: (Author & Date)
+-->
+<pc2xml version="$Revision: 7768 $"
+        name="EUE Prov 1.1.2.38"
+        descrip="eUE initiates certificate bootstrapping process when instructed
+                 via configuration file or SNMP."
+        number="EUE Prov 1.1.2.38">
+
+    <template file="./templates/EUE_Prov_B_1_1_1.xml" name="CertificateBootStrap"/>
+
+    <add_to fsm="CertificateBootStrap">
+        <transition from="StartCapture_RebootWait" to="EDVAProvisions" event="TimerExpired"/>
+
+
+<!-- ******************************************************************************** -->
+        <!-- Step 2. E/MTA reports provisioning pass code (1) to provisioning service. -->
+        <!-- Step 6. eUE generates configuration processing events (pass or passWithWarnings) before SIP registration. -->
+        <!-- Note, Step 6. above verifcation occurs in the imported Template. --> 
+        <state ID="EDVAProvisions">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>DOCS-CABLE-DEVICE-MIB::docsDevServerBootState.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">UE0.IP</msg_ref>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="2 6">
+                    <contains>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>1</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="EUECB_Support_1" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+
+        <!-- Step 3. SNMPv3 query of pktcEUECBSupport returns true (1). -->
+        <state ID="EUECB_Support_1">
+            <prelude once="true">
+                <stop_capture/>
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>CL-PKTC-EUE-DEV-MIB::pktcEUECBSupport.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">UE0.IP</msg_ref>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="3">
+                    <contains>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>1</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="EUECB_Data_1" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+
+        <!-- Step 4. SNMPv3 Set on pktcEUECBData to valid HTTP URI. -->
+        <!-- eUE accepts value and reports acceptance of Set operation. -->
+        <state ID="EUECB_Data_1">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPSet">
+                    <mod modtype="add" hdr="array">
+                        <var_expr>
+                            <expr>varBind 1 1 3 \r\n ][ , </expr>
+                            <expr>CL-PKTC-EUE-DEV-MIB::pktcEUECBData.0,INTEGER,http://cablelabs.com][\r\n</expr>
+                        </var_expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP Address</msg_ref>
+                    </mod>
+                    <mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="4">
+                    <contains>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>1</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="EUECB_Enable_1" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+
+        <!-- Step 5. SNMPv3 Set on pktcEUECBEnable to true. -->
+        <!-- eUE accepts value and reports acceptance of Set operation. -->
+        <state ID="EUECB_Enable_1">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPSet">
+                    <mod modtype="add" hdr="array">
+                        <var_expr>
+                            <expr>varBind 1 1 3 \r\n ][ , </expr>
+                            <expr>CL-PKTC-EUE-DEV-MIB::pktcEUECBEnable.0,INTEGER,true][\r\n</expr>
+                        </var_expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP Address</msg_ref>
+                    </mod>
+                    <mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="5">
+                    <contains>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>1</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="VerifyMessaging1" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+
+        <!-- Step 6. eUE attempts to mutually authenticate via URI set in Step 4. -->
+        <!-- After acknowledging SNMP Set on pktcEUECBEnable, eUE attempts to authenticate
+             via TLS with CB server identified by URI contained in pktcEUECBData. -->
+        <state ID="VerifyMessaging1">
+            <prelude once="true">
+                <stop_capture/>
+
+                <parse_capture name="eUE_v6">
+                    <parser_filter protocol="dhcpv6" ip="DUT.IP"/>
+                </parse_capture>
+                <parse_capture name="eUE_Prov">
+                    <parser_filter protocol="snmp" ip="DUT.IP"/>
+                </parse_capture>
+
+                <!-- Note, we (SE PC) don't know how to verify TLS messages yet. -->
+                <verify step="6">
+                    <eq>
+                        <expr>1</expr>
+                        <expr>2</expr>
+                    </eq>
+                </verify>
+                <generate event="SucceedEvent"/>
+            </prelude>
+            <transition to="ReConfigure2" event="SucceedEvent"/>
+        </state>
+
+
+
+
+<!-- ******************************************************************************** -->
+        <!-- Step 7. Reconfigure to file C.1.2.4 -->
+        <state ID="ReConfigure2"
+               provFile="E-UE_PROV_v6_2.1.2.1_2.bin"
+               policyFile="MTAFORCW122_test"
+               nextState="Reset2"/>
+
+
+        <!-- Step 8a. Reset the UE and bring it to an operational state. -->
+        <state ID="Reset2" timer="120000">
+            <prelude once="true">
+                <start_capture>
+                    <filter>
+                        <var_expr>
+                            <expr>host </expr>
+                            <msg_ref type="platform">DUT.IP</msg_ref>
+                        </var_expr>
+                    </filter>
+                </start_capture>
+
+                <send protocol="utility" msgtype="SNMPSet">
+                    <mod modtype="add" hdr="array">
+                        <var_expr>
+                            <expr>varBind 1 1 3 \r\n ][ , </expr>
+                            <expr>PKTC-IETF-MTA-MIB::pktcMtaDevResetNow.0,INTEGER,1][\r\n</expr>
+                        </var_expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP Address</msg_ref>
+                    </mod>
+                    <mod modtype="replace" hdr="version">
+                        <expr>2c</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPRespFailure</expr>
+                    </eq>
+                    <then>
+                        <fail/>
+                    </then>
+                </if>
+                <if>
+                    <or>
+                        <eq>
+                            <msg_ref type="sip">REGISTER.Contact.expires</msg_ref>
+                            <expr>0</expr>
+                        </eq>
+                        <eq>
+                            <msg_ref type="sip">REGISTER.Expires.value</msg_ref>
+                            <expr>0</expr>
+                        </eq>
+                    </or>
+                    <then>
+                        <send protocol="sip" msgtype="200-REGISTER"/>
+                    </then>
+                </if>
+            </response>
+            <transition to="EDVAProvisions2" event="TimerExpired"/>
+            <transition to="Reset2" event="SNMPResp"/>
+            <transition to="Reset2" event="REGISTER"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+
+        <!-- Step 8b. E/MTA reports provisioning pass code (1) to provisioning service. -->
+        <state ID="EDVAProvisions2">
+            <prelude once="true">
+                <stop_capture/>
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>DOCS-CABLE-DEVICE-MIB::docsDevServerBootState.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">UE0.IP</msg_ref>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="8">
+                    <contains>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>1</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="VerifyMessaging2" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+
+        <!-- Step 9. eUE attempts to mutually authenticate with CB server associated with URI
+             contained in its configuration file. -->
+        <!-- eUE attempts to authenticate via TLS with CB server identified by URI contained in pktcEUECBData. -->
+        <state ID="VerifyMessaging2">
+            <prelude once="true">
+                <stop_capture/>
+
+                <parse_capture name="eUE_v6">
+                    <parser_filter protocol="dhcpv6" ip="DUT.IP"/>
+                </parse_capture>
+                <parse_capture name="eUE_Prov">
+                    <parser_filter protocol="snmp" ip="DUT.IP"/>
+                </parse_capture>
+
+                <!-- Note, we (SE PC) don't know how to verify TLS messages yet. -->
+                <verify step="9">
+                    <eq>
+                        <expr>1</expr>
+                        <expr>2</expr>
+                    </eq>
+                </verify>
+                <generate event="SucceedEvent"/>
+            </prelude>
+            <transition to="ReConfigure3" event="SucceedEvent"/>
+        </state>
+
+
+<!-- ******************************************************************************** -->
+        <!-- Step 10. Reconfigure to Common Procedure B.2.2.2. -->
+        <state ID="ReConfigure3"
+               provFile="E-UE_PROV_v6_2.1.2.1_2.bin"
+               policyFile="MTAFORCW122_test"
+               nextState="Reset3"/>
+
+
+        <!-- Step 11a. Reset the UE and bring it to an operational state. -->
+        <!-- Step 12.6. eUE generates configuration processing events (pass or passWithWarnings) before SIP registration. -->
+        <state ID="Reset3" timer="120000">
+            <prelude once="true">
+                <start_capture>
+                    <filter>
+                        <var_expr>
+                            <expr>host </expr>
+                            <msg_ref type="platform">DUT.IP</msg_ref>
+                        </var_expr>
+                    </filter>
+                </start_capture>
+
+                <send protocol="utility" msgtype="SNMPSet">
+                    <mod modtype="add" hdr="array">
+                        <var_expr>
+                            <expr>varBind 1 1 3 \r\n ][ , </expr>
+                            <expr>PKTC-IETF-MTA-MIB::pktcMtaDevResetNow.0,INTEGER,1][\r\n</expr>
+                        </var_expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP Address</msg_ref>
+                    </mod>
+                    <mod modtype="replace" hdr="version">
+                        <expr>2c</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPRespFailure</expr>
+                    </eq>
+                    <then>
+                        <fail/>
+                    </then>
+                </if>
+                <if>
+                    <or>
+                        <eq>
+                            <msg_ref type="sip">REGISTER.Contact.expires</msg_ref>
+                            <expr>0</expr>
+                        </eq>
+                        <eq>
+                            <msg_ref type="sip">REGISTER.Expires.value</msg_ref>
+                            <expr>0</expr>
+                        </eq>
+                    </or>
+                    <then>
+                        <send protocol="sip" msgtype="200-REGISTER"/>
+                    </then>
+                </if>
+            </response>
+            <transition to="EDVAProvisions3" event="TimerExpired"/>
+            <transition to="Reset3" event="SNMPResp"/>
+            <transition to="Reset3" event="REGISTER"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+
+        <!-- Step 11b. E/MTA reports provisioning pass code (1) to provisioning service. -->
+        <state ID="EDVAProvisions3">
+            <prelude once="true">
+                <stop_capture/>
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>DOCS-CABLE-DEVICE-MIB::docsDevServerBootState.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">UE0.IP</msg_ref>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="11">
+                    <contains>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>1</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="EUECB_Support_2" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+
+        <!-- xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+        Step 12. Execute Steps 3 - 6 above. The eUE elicits proper behavior in referenced test steps.
+        xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx -->
+        <!-- Step 12-3. SNMPv3 query of pktcEUECBSupport returns true (1). -->
+        <state ID="EUECB_Support_2">
+            <prelude once="true">
+                <stop_capture/>
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>CL-PKTC-EUE-DEV-MIB::pktcEUECBSupport.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">UE0.IP</msg_ref>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="12-3">
+                    <contains>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>1</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="EUECB_Data_2" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+
+        <!-- Step 12-4. SNMPv3 Set on pktcEUECBData to valid HTTP URI. -->
+        <!-- eUE accepts value and reports acceptance of Set operation. -->
+        <state ID="EUECB_Data_2">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPSet">
+                    <mod modtype="add" hdr="array">
+                        <var_expr>
+                            <expr>varBind 1 1 3 \r\n ][ , </expr>
+                            <expr>CL-PKTC-EUE-DEV-MIB::pktcEUECBData.0,INTEGER,http://cablelabs.com][\r\n</expr>
+                        </var_expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP Address</msg_ref>
+                    </mod>
+                    <mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="12-4">
+                    <contains>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>1</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="EUECB_Enable_2" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+
+        <!-- Step 12-5. SNMPv3 Set on pktcEUECBEnable to true. -->
+        <!-- eUE accepts value and reports acceptance of Set operation. -->
+        <state ID="EUECB_Enable_2">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPSet">
+                    <mod modtype="add" hdr="array">
+                        <var_expr>
+                            <expr>varBind 1 1 3 \r\n ][ , </expr>
+                            <expr>CL-PKTC-EUE-DEV-MIB::pktcEUECBEnable.0,INTEGER,true][\r\n</expr>
+                        </var_expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP Address</msg_ref>
+                    </mod>
+                    <mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="12-5">
+                    <contains>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>1</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="VerifyMessaging3" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+
+        <!-- Step 12-6. eUE attempts to mutually authenticate via URI set in Step 4. -->
+        <!-- After acknowledging SNMP Set on pktcEUECBEnable, eUE attempts to authenticate
+             via TLS with CB server identified by URI contained in pktcEUECBData. -->
+        <state ID="VerifyMessaging3">
+            <prelude once="true">
+                <stop_capture/>
+
+                <parse_capture name="eUE_v6">
+                    <parser_filter protocol="dhcpv6" ip="DUT.IP"/>
+                </parse_capture>
+                <parse_capture name="eUE_Prov">
+                    <parser_filter protocol="snmp" ip="DUT.IP"/>
+                </parse_capture>
+
+                <!-- Note, we (SE PC) don't know how to verify TLS messages yet. -->
+                <verify step="12-6">
+                    <eq>
+                        <expr>1</expr>
+                        <expr>2</expr>
+                    </eq>
+                </verify>
+                <generate event="SucceedEvent"/>
+            </prelude>
+            <transition to="ReConfigure4" event="SucceedEvent"/>
+        </state>
+
+
+
+<!-- ******************************************************************************** -->
+        <!-- Step 13. Reconfigure to C.1.2.4. -->
+        <state ID="ReConfigure4"
+               provFile="E-UE_PROV_v6_2.1.2.1_2.bin"
+               policyFile="MTAFORCW122_test"
+               nextState="Reset4"/>
+
+        <!-- xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+        Step 14. Execute Steps 8 - 9 above. The eUE elicits proper behavior in referenced test steps.
+        xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx -->
+        <!-- Step 14-8a. -->
+        <!-- Reset the UE and bring it to an operational state. -->
+        <state ID="Reset4" timer="120000">
+            <prelude once="true">
+
+                <start_capture>
+                    <filter>
+                        <var_expr>
+                            <expr>host </expr>
+                            <msg_ref type="platform">DUT.IP</msg_ref>
+                        </var_expr>
+                    </filter>
+                </start_capture>
+
+                <send protocol="utility" msgtype="SNMPSet">
+                    <mod modtype="add" hdr="array">
+                        <var_expr>
+                            <expr>varBind 1 1 3 \r\n ][ , </expr>
+                            <expr>PKTC-IETF-MTA-MIB::pktcMtaDevResetNow.0,INTEGER,1][\r\n</expr>
+                        </var_expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP Address</msg_ref>
+                    </mod>
+                    <mod modtype="replace" hdr="version">
+                        <expr>2c</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPRespFailure</expr>
+                    </eq>
+                    <then>
+                        <fail/>
+                    </then>
+                </if>
+                <if>
+                    <or>
+                        <eq>
+                            <msg_ref type="sip">REGISTER.Contact.expires</msg_ref>
+                            <expr>0</expr>
+                        </eq>
+                        <eq>
+                            <msg_ref type="sip">REGISTER.Expires.value</msg_ref>
+                            <expr>0</expr>
+                        </eq>
+                    </or>
+                    <then>
+                        <send protocol="sip" msgtype="200-REGISTER"/>
+                    </then>
+                </if>
+            </response>
+            <transition to="EDVAProvisions4" event="TimerExpired"/>
+            <transition to="Reset4" event="SNMPResp"/>
+            <transition to="Reset4" event="REGISTER"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+
+        <!-- Step 14-8b. E/MTA reports provisioning pass code (1) to provisioning service. -->
+        <state ID="EDVAProvisions4">
+            <prelude once="true">
+                <stop_capture/>
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>DOCS-CABLE-DEVICE-MIB::docsDevServerBootState.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">UE0.IP</msg_ref>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="14-8">
+                    <contains>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>1</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="VerifyMessaging4" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+
+        <!-- Step 14-9. eUE attempts to mutually authenticate with CB server associated with URI
+             contained in its configuration file. -->
+        <!-- eUE attempts to authenticate via TLS with CB server identified by URI contained in pktcEUECBData. -->
+        <state ID="VerifyMessaging4">
+            <prelude once="true">
+                <stop_capture/>
+
+                <parse_capture name="eUE_v6">
+                    <parser_filter protocol="dhcpv6" ip="DUT.IP"/>
+                </parse_capture>
+                <parse_capture name="eUE_Prov">
+                    <parser_filter protocol="snmp" ip="DUT.IP"/>
+                </parse_capture>
+
+                <!-- Note, we (SE PC) don't know how to verify TLS messages yet. -->
+                <verify step="14-9">
+                    <eq>
+                        <expr>1</expr>
+                        <expr>2</expr>
+                    </eq>
+                </verify>
+                <generate event="SucceedEvent"/>
+            </prelude>
+            <transition to="ReConfigure5" event="SucceedEvent"/>
+        </state>
+
+
+<!-- ******************************************************************************** -->
+        <!-- Step 15. Reconfigure to Common Procedure B.2.2.3. -->
+        <state ID="ReConfigure5"
+               provFile="E-UE_PROV_v6_2.1.2.1_2.bin"
+               policyFile="MTAFORCW122_test"
+               nextState="Reset5"/>
+
+
+        <!-- Step 16a. Reset the UE and bring it to an operational state. -->
+        <!-- step 16.6. eUE generates configuration processing events (pass or passWithWarnings) before SIP registration. -->
+        <state ID="Reset5" timer="120000">
+            <prelude once="true">
+
+                <start_capture>
+                    <filter>
+                        <var_expr>
+                            <expr>host </expr>
+                            <msg_ref type="platform">DUT.IP</msg_ref>
+                        </var_expr>
+                    </filter>
+                </start_capture>
+
+                <send protocol="utility" msgtype="SNMPSet">
+                    <mod modtype="add" hdr="array">
+                        <var_expr>
+                            <expr>varBind 1 1 3 \r\n ][ , </expr>
+                            <expr>PKTC-IETF-MTA-MIB::pktcMtaDevResetNow.0,INTEGER,1][\r\n</expr>
+                        </var_expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP Address</msg_ref>
+                    </mod>
+                    <mod modtype="replace" hdr="version">
+                        <expr>2c</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPRespFailure</expr>
+                    </eq>
+                    <then>
+                        <fail/>
+                    </then>
+                </if>
+                <if>
+                    <or>
+                        <eq>
+                            <msg_ref type="sip">REGISTER.Contact.expires</msg_ref>
+                            <expr>0</expr>
+                        </eq>
+                        <eq>
+                            <msg_ref type="sip">REGISTER.Expires.value</msg_ref>
+                            <expr>0</expr>
+                        </eq>
+                    </or>
+                    <then>
+                        <send protocol="sip" msgtype="200-REGISTER"/>
+                    </then>
+                </if>
+            </response>
+            <transition to="EDVAProvisions5" event="TimerExpired"/>
+            <transition to="Reset5" event="SNMPResp"/>
+            <transition to="Reset5" event="REGISTER"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+
+        <!-- Step 16b. E/MTA reports provisioning pass code (1) to provisioning service. -->
+        <state ID="EDVAProvisions5">
+            <prelude once="true">
+                <stop_capture/>
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>DOCS-CABLE-DEVICE-MIB::docsDevServerBootState.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">UE0.IP</msg_ref>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="16">
+                    <contains>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>1</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="EUECB_Support_3" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+
+        <!-- xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+        Step 17. Execute Steps 3 - 6 above. The eUE elicits proper behavior in referenced test steps.
+        xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx -->
+        <!-- Step 17-3. SNMPv3 query of pktcEUECBSupport returns true (1). -->
+        <state ID="EUECB_Support_3">
+            <prelude once="true">
+                <stop_capture/>
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>CL-PKTC-EUE-DEV-MIB::pktcEUECBSupport.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">UE0.IP</msg_ref>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="17-3">
+                    <contains>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>1</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="EUECB_Data_3" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+
+        <!-- Step 17-4. SNMPv3 Set on pktcEUECBData to valid HTTP URI. -->
+        <!-- eUE accepts value and reports acceptance of Set operation. -->
+        <state ID="EUECB_Data_3">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPSet">
+                    <mod modtype="add" hdr="array">
+                        <var_expr>
+                            <expr>varBind 1 1 3 \r\n ][ , </expr>
+                            <expr>CL-PKTC-EUE-DEV-MIB::pktcEUECBData.0,INTEGER,http://cablelabs.com][\r\n</expr>
+                        </var_expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP Address</msg_ref>
+                    </mod>
+                    <mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="17-4">
+                    <contains>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>1</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="EUECB_Enable_3" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+
+        <!-- Step 17-5. SNMPv3 Set on pktcEUECBEnable to true. -->
+        <!-- eUE accepts value and reports acceptance of Set operation. -->
+        <state ID="EUECB_Enable_3">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPSet">
+                    <mod modtype="add" hdr="array">
+                        <var_expr>
+                            <expr>varBind 1 1 3 \r\n ][ , </expr>
+                            <expr>CL-PKTC-EUE-DEV-MIB::pktcEUECBEnable.0,INTEGER,true][\r\n</expr>
+                        </var_expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP Address</msg_ref>
+                    </mod>
+                    <mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="17-5">
+                    <contains>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>1</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="VerifyMessaging5" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+
+        <!-- Step 17-6. eUE attempts to mutually authenticate via URI set in Step 4. -->
+        <!-- After acknowledging SNMP Set on pktcEUECBEnable, eUE attempts to authenticate
+             via TLS with CB server identified by URI contained in pktcEUECBData. -->
+        <state ID="VerifyMessaging5">
+            <prelude once="true">
+                <stop_capture/>
+
+                <parse_capture name="eUE_v6">
+                    <parser_filter protocol="dhcpv6" ip="DUT.IP"/>
+                </parse_capture>
+                <parse_capture name="eUE_Prov">
+                    <parser_filter protocol="snmp" ip="DUT.IP"/>
+                </parse_capture>
+
+                <!-- Note, we (SE PC) don't know how to verify TLS messages yet. -->
+                <verify step="17-6">
+                    <eq>
+                        <expr>1</expr>
+                        <expr>2</expr>
+                    </eq>
+                </verify>
+                <generate event="SucceedEvent"/>
+            </prelude>
+            <transition to="ReConfigure6" event="SucceedEvent"/>
+        </state>
+
+
+<!-- ******************************************************************************** -->
+        <!-- Step 18. Reconfigure to C.1.2.4. -->
+        <state ID="ReConfigure6"
+               provFile="E-UE_PROV_v6_2.1.2.1_2.bin"
+               policyFile="MTAFORCW122_test"
+               nextState="Reset6"/>
+
+        <!-- xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+        Step 19. Execute Steps 8 - 9 above. The eUE elicits proper behavior in referenced test steps.
+        xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx -->
+        <!-- Step 19-8a.  Reset the UE and bring it to an operational state. -->
+        <state ID="Reset6" timer="120000">
+            <prelude once="true">
+
+                <start_capture>
+                    <filter>
+                        <var_expr>
+                            <expr>host </expr>
+                            <msg_ref type="platform">DUT.IP</msg_ref>
+                        </var_expr>
+                    </filter>
+                </start_capture>
+
+                <send protocol="utility" msgtype="SNMPSet">
+                    <mod modtype="add" hdr="array">
+                        <var_expr>
+                            <expr>varBind 1 1 3 \r\n ][ , </expr>
+                            <expr>PKTC-IETF-MTA-MIB::pktcMtaDevResetNow.0,INTEGER,1][\r\n</expr>
+                        </var_expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP Address</msg_ref>
+                    </mod>
+                    <mod modtype="replace" hdr="version">
+                        <expr>2c</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPRespFailure</expr>
+                    </eq>
+                    <then>
+                        <fail/>
+                    </then>
+                </if>
+                <if>
+                    <or>
+                        <eq>
+                            <msg_ref type="sip">REGISTER.Contact.expires</msg_ref>
+                            <expr>0</expr>
+                        </eq>
+                        <eq>
+                            <msg_ref type="sip">REGISTER.Expires.value</msg_ref>
+                            <expr>0</expr>
+                        </eq>
+                    </or>
+                    <then>
+                        <send protocol="sip" msgtype="200-REGISTER"/>
+                    </then>
+                </if>
+            </response>
+            <transition to="EDVAProvisions6" event="TimerExpired"/>
+            <transition to="Reset6" event="SNMPResp"/>
+            <transition to="Reset6" event="REGISTER"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+
+        <!-- Step 19-8b. E/MTA reports provisioning pass code (1) to provisioning service. -->
+        <state ID="EDVAProvisions6">
+            <prelude once="true">
+                <stop_capture/>
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>DOCS-CABLE-DEVICE-MIB::docsDevServerBootState.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">UE0.IP</msg_ref>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="19-8">
+                    <contains>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>1</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="VerifyMessaging6" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+
+        <!-- Step 19-9. eUE attempts to mutually authenticate with CB server associated with URI
+               contained in its configuration file. -->
+        <!-- eUE attempts to authenticate via TLS with CB server identified by URI contained in pktcEUECBData. -->
+        <state ID="VerifyMessaging6">
+            <prelude once="true">
+                <stop_capture/>
+
+                <parse_capture name="eUE_v6">
+                    <parser_filter protocol="dhcpv6" ip="DUT.IP"/>
+                </parse_capture>
+                <parse_capture name="eUE_Prov">
+                    <parser_filter protocol="snmp" ip="DUT.IP"/>
+                </parse_capture>
+
+                <!-- Note, we (SE PC) don't know how to verify TLS messages yet. -->
+                <verify step="19-9">
+                    <eq>
+                        <expr>1</expr>
+                        <expr>2</expr>
+                    </eq>
+                </verify>
+            </prelude>
+        </state>
+    </add_to>
+</pc2xml>

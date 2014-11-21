@@ -1,0 +1,105 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="SIP-UE 1.3.3.1" 
+	descrip="UE Sends Answer in Reliable Response (100rel in require)" 
+	number="SIP-UE 1.3.3.1">
+	
+	<template file="./templates/CallTermAtUETemp.xml" name="UE1"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Setup" sub="prelude"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<state ID="Setup" sub="prelude">
+			<send protocol="sip" msgtype="Invite">
+				<!-- Step 1 of Message Flow from test case 1.3.3.1 - Start a 
+					SIP session by executing steps 1 through 12 of [UE Terminating Case Flow] 
+					with following modification to the INVITE -->
+				<mod modtype="delete" hdr="Supported" param="option-tag">
+					<expr>precondition</expr>
+				</mod>
+				<mod modtype="delete" hdr="Require" param="option-tag">
+					<expr>precondition</expr>
+				</mod>
+				<mod modtype="add" hdr="Require" param="option-tag">
+					<expr>100rel</expr>
+				</mod>
+			</send>
+		</state>
+		
+		<transition from="Answer" to="Verify" event="OffHookComplete"/>
+		
+		<state ID="Verify">
+			<response>
+				<verify step="2" requirements="RFC685, RFC35">
+					<or>
+						<and>
+							<eq>
+								<msg_ref type="sip" msg_instance="any">18x-Invite.Content-Type.media-subtype</msg_ref>
+								<expr>sdp</expr>
+							</eq>
+							<and>
+								<gt>
+									<msg_ref type="sip" msg_instance="any">18x-Invite.Content-Length.value</msg_ref>
+									<expr>0</expr>
+								</gt>
+								<contains>
+									<msg_ref type="sip" msg_instance="any">18x-INVITE.SDP</msg_ref>
+									<expr>rtpmap</expr>
+								</contains>
+							</and>
+						</and>
+						<and>
+							<eq>
+								<msg_ref type="sip" msg_instance="last">200-Invite.Content-Type.media-subtype</msg_ref>
+								<expr>sdp</expr>
+							</eq>
+							<and>
+								<gt>
+									<msg_ref type="sip" msg_instance="last">200-Invite.Content-Length.value</msg_ref>
+									<expr>0</expr>
+								</gt>
+								<contains>
+									<msg_ref type="sip" msg_instance="last">200-INVITE.SDP</msg_ref>
+									<expr>rtpmap</expr>
+								</contains>
+							</and>
+						</and>
+					</or>
+				</verify>
+				<verify step="3" requirements="RFC662, RFC35">
+					<or>
+						<contains>
+							<msg_ref type="sip" msg_instance="last">18x-Invite.Require</msg_ref>
+							<expr>100rel</expr>
+						</contains>
+						<contains>
+							<msg_ref type="sip" msg_instance="last">200-Invite.Require</msg_ref>
+							<expr>100rel</expr>
+						</contains>
+					</or>
+				</verify>
+			</response>
+			<transition to="Connected" event="200-INVITE"/>
+		</state>
+	</add_to>
+</pc2xml>

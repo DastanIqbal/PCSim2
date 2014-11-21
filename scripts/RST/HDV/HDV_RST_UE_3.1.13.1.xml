@@ -1,0 +1,144 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	
+
+
+-->
+<pc2xml version="$Revision: 7085 $" 
+	name="HDV_RST_UE_3.1.13.1" 
+	descrip="Do Not disturb" 
+	number="HDV_RST_UE_3.1.13.1" inspector="disable">
+	
+	<fsm name="UE1">
+		<models>
+			<session/>
+		</models>
+		<NE sim_type="term" elements="UE1 PCSCF2 SCSCF1 PCSCF1" 
+		targets="UE1 0 00 *78"/>
+		
+		<states initialstate="Register">
+			<state ID="Register">
+				<postlude>
+					<sleep time="3000"/>
+				</postlude>
+				<transition to="OffHook1" event="Registered"/>
+			</state>
+			
+			
+			<state ID="OffHook1">
+				<prelude>
+					
+					<send protocol="utility" msgtype="OffHook"/>
+					<sleep time="1000"/>
+					<log promptUser="True" yesExpected="True" verify="True" 
+						step="1" requirements="REQ23401" 
+						expr="Verify that PP display does not show DND is active "/>
+				</prelude>
+				<transition to="Call2" event="OffHookComplete"/>
+			</state>
+			
+			
+			
+			<state ID="Call2">
+				<prelude once="true">
+					<send protocol="utility" msgtype="DialDigits">
+						<mod modtype="add" hdr="number">
+							<expr>*78</expr>
+						</mod>
+					</send>
+					
+					<sleep time="1000"/>
+				</prelude>
+				
+				<response>
+					<if>
+						<eq>
+						<msg_ref type="sip">Request</msg_ref> 
+						<expr>Invite</expr> 
+						</eq>
+ 					<then>
+						<send protocol="sip" msgtype="200-INVITE" /> 
+					</then>
+					</if>
+			</response>
+				<transition to="Call2" event="DialDigitsComplete" /> 
+				<transition to="Call2" event="INVITE" /> 
+				<transition to="EndTheCall" event="ACK" /> 
+		</state>
+		
+		<state ID="EndTheCall" ES="true">
+			<transition to="OffHook2" event="SessionTerminated" />
+			<transition to="OffHook2" event="Invite" /> 
+		</state>
+			
+			<state ID="OffHook2">
+				<prelude>
+					<send protocol="utility" msgtype="OffHook" /> 
+				</prelude>
+			<transition to="VerifyDialTone" event="OffHookComplete" /> 
+			</state>
+			
+			<state ID="Dial1">
+				<prelude>
+					<send protocol="utility" msgtype="DialDigits">
+					</send>
+				</prelude>
+				<transition to="VerifyDialTone" event="DialDigitsComplete" /> 
+			</state>
+			
+			<state ID="VerifyDialTone">
+				<prelude>
+					<send protocol="utility" msgtype="VerifyDialTone" /> 
+				</prelude>
+				<postlude>
+					<verify step="1" requirements="REQ23400">
+						<eq>
+							<msg_ref type="utility">message</msg_ref> 
+							<expr>VerifyDialToneComplete</expr> 
+						</eq>
+					</verify>
+				</postlude>
+				<transition to="OffHook3" event="VerifyDialToneComplete" /> 
+			</state>
+ 	
+			S<state ID="OffHook3" timer="2000">
+				<prelude>
+					
+					
+					<sleep time="1000"/>
+					<log promptUser="True" yesExpected="True" verify="True" 
+						step="1" requirements="REQ23400" 
+						expr="Verify that DND is active"/>
+					<sleep time="1000"/>
+					<log promptUser="True" yesExpected="True" verify="True" 
+						step="1" requirements="REQ23402" 
+						expr="Verify that PP displays the no of voice mail messages"/>
+				</prelude>
+				<transition to="Call3" event="OffHookComplete"/>
+				<transition to="Call3" event="TimerExpired"/>
+			</state>
+			
+			
+			<state ID="Call3" timer="1000">
+				
+				<transition to="EndCall3" event="TimerExpired"/>
+			</state>
+			
+			<state ID="EndCall3" ES="true">
+				<transition to="END" event="SessionTerminated"/>
+			</state>
+		
+		</states>
+	</fsm>
+</pc2xml>

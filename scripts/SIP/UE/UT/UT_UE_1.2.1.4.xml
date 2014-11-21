@@ -1,0 +1,58 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+
+<!-- First are the document type and the attributes for our document -->
+<pc2xml version="$Revision: 8188 $" name="UT_SIP-UE 1.2.1.4" descrip="Unsupported value in Require header" number="UT_SIP-UE 1.2.1.4">
+	<template name="UT_SIP-UE 1.2.1.4" file="./templates/ut/Term_DUT.xml"/>
+	<remove_from fsm="UT_SIP-UE 1.2.1.4">
+		<state ID="Setup" sub="response"/>
+	</remove_from>
+	<add_to fsm="UT_SIP-UE 1.2.1.4">
+		<!-- SETUP State -->
+		<state ID="Setup" sub="response">
+			<!-- Expected responses are 100, 180, 183 or 200 -->
+			
+			<!-- Step 4 from the Default Message Flow Call-Term-at-UE(DUT) Sequence Diagram -
+               Test 18x response for reliability for possible Prack message -->
+			<if>
+				<contains>
+					<msg_ref type="sip">Invite.Require.option-tag</msg_ref>
+					<expr>100junk</expr>
+				</contains>
+				<then>
+					<send protocol="sip" msgtype="420-INVITE" target="UE1" originator="DUT">
+						<mod modtype="add" hdr="Unsupported">
+							<expr>100junk</expr>
+						</mod>
+					</send>
+				</then>
+				<else>
+					<fail/>
+				</else>
+			</if>
+			
+			
+		</state>
+		<transition from="Setup" to="Result" event="INVITE"/>
+		<state ID="Result">
+		   <transition to="END" event="ACK"/>
+		</state>
+	</add_to>
+</pc2xml>

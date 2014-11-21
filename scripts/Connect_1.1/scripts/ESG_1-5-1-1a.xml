@@ -1,0 +1,222 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+ 	2011-11-02	prosenberg-watt - Initial version
+	2011-11-15	Seung Lee - final versionfor
+
+
+
+
+-->
+
+<!-- First are the document type and the attributes for our document -->
+<pc2xml version="$Revision: 1 $" 
+	name="ESG 1.5.1.1a" 
+	descrip="Loop Detection during Calll Forwarding - 2nd part" 
+	number="ESG 1.5.1.1a">
+
+	<!-- The below FSM handles both the cases when we have REAL UE or when we have Simulated UE -->
+	<!-- Next we define all of the network elements and extension 
+     controls to be used in this test -->
+	<fsm name="Call Termination">
+		<models>
+			<!-- By default the SS will release the call after 30 seconds. -->
+			<session/>
+		</models>
+	
+		<NE sim_type="orig" elements="UE1 UE2 SCSCF1 PCSCF1" targets="UE1 UE2"/>
+		<!-- NOTE - The test platform is assumed to be performing the 
+            registrar between tests. The session model requests
+						to be informed when the DUT registers and the fsm
+						will receive the Registered event once the DUT is
+						registered -->
+	
+		<states initialstate="Register">
+
+			<state ID="Register">
+				<prelude>
+					<var name="count">
+						<expr>0</expr>
+					</var>
+					<log promptUser="True" expr="Make sure the UE0 is configured to forward call to UE2 (303-4920025)."/>
+					<start_capture>
+						<filter>
+							<var_expr>
+								<expr>host </expr>
+								<msg_ref type="platform">UE0.IP</msg_ref>
+								<expr> || host </expr>
+								<msg_ref type="platform">UE0.IP2</msg_ref>
+								<expr> || host </expr>
+								<msg_ref type="platform">PCSCF1.IP</msg_ref>
+								<expr> || host </expr>
+								<msg_ref type="platform">UE1.IP</msg_ref>
+							</var_expr>
+						</filter>
+					</start_capture>
+				</prelude>
+				
+
+				
+				<transition to="Setup" event="Registered"/>
+			</state>
+
+			<state ID="Setup">
+				<prelude>
+					<send protocol="sip" msgtype="Invite">
+						<mod modtype="replace" hdr="Request-Line" param="username">
+							<msg_ref type="platform">UE0.phone number 1</msg_ref>
+						</mod>
+					</send>
+				</prelude>
+				<transition to="Proceeding" event="100-INVITE"/>
+				<transition to="Proceeding" event="180-INVITE"/>
+				<transition to="Proceeding" event="183-INVITE"/>
+				<transition to="CreateLoop" event="INVITE"/>
+			</state>
+
+			<state ID="Proceeding">
+				<transition to="Proceeding" event="180-INVITE"/>
+				<transition to="Proceeding" event="183-INVITE"/>
+				<transition to="LoopDetected" event="603-INVITE"/>
+				<transition to="CreateLoop" event="INVITE"/>
+			</state>
+
+			<state ID="CreateLoop">
+				<prelude once="True">
+					<send protocol="sip" msgtype="Invite">
+						<mod modtype="replace" hdr="Request-Line" param="username">
+							<msg_ref type="platform">UE0.phone number 1</msg_ref>
+						</mod>
+						<mod modtype="replace" hdr="Max-Forwards" param="value">
+							<expr>10</expr>
+						</mod>
+						<mod modtype="replace" hdr="History-Info" >
+							<expr>&lt;sip:3034090001@redlab.com&gt;;1,\r\n &lt;sip:3033920025@redlab.com&gt;;1.9 \r\n &lt;sip:3034090025@redlab.com&gt;;1.9.8</expr>
+						</mod>
+					</send>
+					<verify step="14" >
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>INVITE</expr>
+						</eq>
+					</verify>
+				</prelude>
+				<response>
+					
+				</response>
+				<transition to="CheckLoop" event="INVITE"/>
+				<transition to="Proceeding2" event="100-INVITE"/>
+				<transition to="LoopDetected" event="480-INVITE"/>
+				<transition to="LoopDetected" event="603-INVITE"/>
+			</state>
+
+			<state ID="Proceeding2">
+				<transition to="Proceeding2" event="180-INVITE"/>
+				<transition to="Proceeding2" event="183-INVITE"/>
+				<transition to="LoopDetected" event="480-INVITE"/>
+				<transition to="LoopDetected" event="603-INVITE"/>
+				<transition to="CheckLoop" event="INVITE"/>
+			</state>			
+			
+			<state ID="CheckLoop">
+				<prelude>
+					<verify step="17" requirements="REQ23858">
+						<eq>
+							<msg_ref type="sip">INVITE.Max-Forwards.value</msg_ref>
+							<expr>9</expr>
+						</eq>
+					</verify>
+					<send protocol="sip" msgtype="Invite">
+						<mod modtype="replace" hdr="Request-Line" param="username">
+							<msg_ref type="platform">UE0.phone number 1</msg_ref>
+						</mod>
+						<mod modtype="replace" hdr="Max-Forwards" param="value">
+							<expr>8</expr>
+						</mod>
+						<mod modtype="replace" hdr="History-Info" >
+							<expr>&lt;sip:3034090001@redlab.com&gt;;1,\r\n &lt;sip:3033920025@redlab.com&gt;;1,10 \r\n &lt;sip:3034090025@redlab.com&gt;;1,10,9</expr>
+						</mod>
+					</send>
+				</prelude>
+				<response>
+					
+				</response>
+				<transition to="KeepLoop" event="INVITE"/>
+				<transition to="Proceeding3" event="100-INVITE"/>
+				<transition to="LoopDetected" event="480-INVITE"/>
+				<transition to="LoopDetected" event="603-INVITE"/>
+			</state>
+			
+			<state ID="KeepLoop" timer="5000">
+				<prelude>
+					<send protocol="sip" msgtype="Invite">
+						<mod modtype="replace" hdr="Request-Line" param="username">
+							<msg_ref type="platform">UE0.phone number 1</msg_ref>
+						</mod>
+					</send>
+				</prelude>
+				<transition to="KeepLoop" event="INVITE"/>
+				<transition to="Proceeding3" event="100-INVITE"/>
+				<transition to="LoopDetected" event="480-INVITE"/>
+				<transition to="LoopDetected" event="603-INVITE"/>
+				<transition to="END" event="TimerExpired"/>
+			</state>
+			
+			<state ID="Proceeding3">
+				<transition to="Proceeding3" event="180-INVITE"/>
+				<transition to="Proceeding3" event="183-INVITE"/>
+				<transition to="LoopDetected" event="480-INVITE"/>
+				<transition to="LoopDetected" event="603-INVITE"/>
+				<transition to="KeepLoop" event="INVITE"/>
+			</state>
+			
+			<state ID="LoopDetected">
+				<prelude>
+					<verify step="14" >
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>480-INVITE</expr>
+						</eq>
+					</verify>
+					<verify step="15" requirements="REQ23857">
+						<contains>
+							<msg_ref type="sip">480-INVITE</msg_ref>
+							<expr>History-Info</expr>
+						</contains>
+					</verify>
+					<verify step="16" >
+						<and>
+							<contains>
+								<msg_ref type="sip">480-INVITE.Reason</msg_ref>
+								<expr>302</expr>
+							</contains>
+							<contains>
+								<msg_ref type="sip">480-INVITE.Reason</msg_ref>
+								<expr>CFV/SCF</expr>
+							</contains>
+						</and>
+					</verify>
+					<verify>
+					
+					</verify>
+					<generate event="SucceedEvent"/>
+				</prelude>
+				
+				<postlude>
+					<stop_capture/>	
+				</postlude>
+				<transition to="END" event="SucceedEvent"/>
+			</state>
+		</states>
+	</fsm>
+</pc2xml>

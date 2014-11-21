@@ -1,0 +1,264 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+
+<pc2xml version="$Revision: 8188 $" name="UT_RST_UE_1.1.3.3" descrip="Held Media: Held UE " number="1">
+	<template file="./templates/ut/Orig_DUT.xml" name="DUT"/>
+	<remove_from fsm="DUT">
+		<state ID="Connected"/>
+	</remove_from>
+	<add_to fsm="DUT">
+		<state ID="Connected">
+			<prelude>
+				<send protocol="sip" msgtype="ACK" target="UE1" originator="DUT"/>
+			</prelude>
+			<response>
+				<if>
+					<and>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>Invite</expr>
+						</eq>
+						<and>
+							<contains>
+								<msg_ref type="sip">Invite</msg_ref>
+								<expr>sdp</expr>
+							</contains>
+							<contains>
+								<msg_ref type="sdp">Invite.rtpmap.payload-type</msg_ref>
+								<expr>inactive</expr>
+							</contains>
+						</and>
+					</and>
+					<then>
+						<send protocol="sip" msgtype="100-INVITE" bodies="SDP" target="UE1" originator="DUT"/>
+						<sleep time="5000"/>
+						<send protocol="sip" msgtype="200-INVITE" bodies="SDP" target="UE1" originator="DUT">
+							<mod modtype="replace" hdr="rtpmap" param="payload-type">
+								<expr>inactive</expr>
+							</mod>
+						</send>
+					</then>
+				</if>
+			</response>
+			<transition to="HookFlash1" event="Invite"/>
+		</state>
+		<state ID="HookFlash1">
+			<transition to="ReceiveINVITE2" event="ACK"/>
+		</state>
+		<state ID="ReceiveINVITE2">
+			<response>
+				<if>
+					<and>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>Invite</expr>
+						</eq>
+						<and>
+							<contains>
+								<msg_ref type="sip">Invite</msg_ref>
+								<expr>sdp</expr>
+							</contains>
+							<contains>
+								<msg_ref type="sdp">Invite.rtpmap.payload-type</msg_ref>
+								<expr>sendrecv</expr>
+							</contains>
+						</and>
+					</and>
+					<then>
+						<send protocol="sip" msgtype="100-INVITE" bodies="SDP" target="UE1" originator="DUT"/>
+						<sleep time="5000"/>
+						<send protocol="sip" msgtype="200-INVITE" bodies="SDP" target="UE1" originator="DUT">
+							<mod modtype="replace" hdr="rtpmap" param="payload-type">
+								<expr>sendrecv</expr>
+							</mod>
+						</send>
+					</then>
+				</if>
+			</response>
+			<transition to="ReceiveACK2" event="Invite"/>
+		</state>
+		<state ID="ReceiveACK2">
+			<transition to="ReceiveINVITE3" event="ACK"/>
+		</state>
+		<state ID="ReceiveINVITE3">
+			<response>
+				<if>
+					<and>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>Invite</expr>
+						</eq>
+						<and>
+							<contains>
+								<msg_ref type="sip">Invite</msg_ref>
+								<expr>sdp</expr>
+							</contains>
+							<contains>
+								<msg_ref type="sdp">Invite.rtpmap.payload-type</msg_ref>
+								<expr>sendonly</expr>
+							</contains>
+						</and>
+					</and>
+					<then>
+						<send protocol="sip" msgtype="100-INVITE" bodies="SDP" target="UE1" originator="DUT"/>
+						<sleep time="5000"/>
+						<send protocol="sip" msgtype="200-INVITE" bodies="SDP" target="UE1" originator="DUT">
+							<mod modtype="replace" hdr="rtpmap" param="payload-type">
+								<expr>recvonly</expr>
+							</mod>
+						</send>
+					</then>
+				</if>
+			</response>
+			<transition to="ReceiveACK3" event="Invite"/>
+		</state>
+		<state ID="ReceiveACK3">
+			<transition to="ReceiveINVITE4" event="ACK"/>
+		</state>
+		<state ID="ReceiveINVITE4">
+			<response>
+				<if>
+					<and>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>Invite</expr>
+						</eq>
+						<and>
+							<contains>
+								<msg_ref type="sip">Invite</msg_ref>
+								<expr>sdp</expr>
+							</contains>
+							<contains>
+								<msg_ref type="sdp">Invite.rtpmap.payload-type</msg_ref>
+								<expr>sendrecv</expr>
+							</contains>
+						</and>
+					</and>
+					<then>
+						<send protocol="sip" msgtype="100-INVITE" bodies="SDP" target="UE1" originator="DUT"/>
+						<sleep time="5000"/>
+						<send protocol="sip" msgtype="200-INVITE" bodies="SDP" target="UE1" originator="DUT">
+							<mod modtype="replace" hdr="rtpmap" param="payload-type">
+								<expr>sendrecv</expr>
+							</mod>
+						</send>
+					</then>
+				</if>
+			</response>
+			<transition to="ReceiveACK4" event="Invite"/>
+		</state>
+		<state ID="ReceiveACK4">
+			<transition to="ReceiveINVITE5" event="ACK"/>
+		</state>
+		<state ID="ReceiveINVITE5">
+			<response>
+				<if>
+					<and>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>Invite</expr>
+						</eq>
+						<and>
+							<contains>
+								<msg_ref type="sip">Invite</msg_ref>
+								<expr>sdp</expr>
+							</contains>
+							<contains>
+								<msg_ref type="sdp">Invite.rtpmap.payload-type</msg_ref>
+								<expr>sendonly</expr>
+							</contains>
+						</and>
+					</and>
+					<then>
+						<send protocol="sip" msgtype="100-INVITE" bodies="SDP" target="UE1" originator="DUT"/>
+						<sleep time="5000"/>
+						<send protocol="sip" msgtype="200-INVITE" bodies="SDP" target="UE1" originator="DUT">
+							<mod modtype="replace" hdr="rtpmap" param="payload-type">
+								<expr>recvonly</expr>
+							</mod>
+						</send>
+					</then>
+				</if>
+			</response>
+			<transition to="ReceiveACK5" event="Invite"/>
+		</state>
+		<state ID="ReceiveACK5">
+			<transition to="ReceiveINVITE6" event="ACK"/>
+		</state>
+		<state ID="ReceiveINVITE6">
+			<response>
+				<if>
+					<and>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>Invite</expr>
+						</eq>
+						<and>
+							<contains>
+								<msg_ref type="sip">Invite</msg_ref>
+								<expr>sdp</expr>
+							</contains>
+							<contains>
+								<msg_ref type="sdp">Invite.rtpmap.payload-type</msg_ref>
+								<expr>sendrecv</expr>
+							</contains>
+						</and>
+					</and>
+					<then>
+						<send protocol="sip" msgtype="100-INVITE" bodies="SDP" target="UE1" originator="DUT"/>
+						<sleep time="5000"/>
+						<send protocol="sip" msgtype="200-INVITE" bodies="SDP" target="UE1" originator="DUT">
+							<mod modtype="replace" hdr="rtpmap" param="payload-type">
+								<expr>sendrecv</expr>
+							</mod>
+						</send>
+					</then>
+				</if>
+			</response>
+			<transition to="ReceiveACK6" event="Invite"/>
+		</state>
+		<state ID="ReceiveACK6">
+			<transition to="ReceiveINVITE7" event="ACK"/>
+		</state>
+		<state ID="ReceiveINVITE7">
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>Invite</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="100-INVITE" bodies="SDP" target="UE1" originator="DUT"/>
+						<sleep time="5000"/>
+						<send protocol="sip" msgtype="200-INVITE" bodies="SDP" target="UE1" originator="DUT">
+							<mod modtype="replace" hdr="c" param="address">
+								<expr>0.0.0.0</expr>
+							</mod>
+						</send>
+					</then>
+				</if>
+			</response>
+			<transition to="ReceiveACK7" event="Invite"/>
+		</state>
+		<state ID="ReceiveACK7">
+			<transition to="END" event="ACK"/>
+		</state>
+	</add_to>
+</pc2xml>

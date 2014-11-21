@@ -1,0 +1,85 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-UE 1.5.4.11" 
+	descrip="Call Transfer Failure - Transferee  " 
+	number="RST-UE 1.5.4.11" inspector="disable">
+	
+	<template file="./templates/Call_Transfer_Transferee.xml"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="UE1Connected"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<state ID="UE1Connected">
+			<prelude once="true">
+				<send protocol="sip" msgtype="ACK"/>
+				<sleep time="5000"/>
+				<send protocol="sip" msgtype="REINVITE">
+					<mod modtype="replace" hdr="mode" param="value">
+						<expr>inactive</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Response</msg_ref>
+						<expr>200-INVITE</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="ACK"/>
+						<sleep time="3000"/>
+						<send protocol="sip" msgtype="REFER">
+							<mod modtype="replace" hdr="Target-Dialog">
+								<expr>60413135714_UE0@10.1.1.1;local-tag=3D12312;remote-tag=3D5FFE-3994</expr>
+							</mod>
+						</send>
+					</then>
+				</if>
+				<if>
+					<eq>
+						<msg_ref type="sip">Response</msg_ref>
+						<expr>481-REFER</expr>
+					</eq>
+					<then>
+						<verify step="5" requirements="REQ13849, REQ14514">
+							<eq>
+								<msg_ref type="sip">Response</msg_ref>
+								<expr>481-REFER</expr>
+							</eq>
+						</verify>
+						<generate event="SucceedEvent" fsm="UE2"/>
+					</then>
+				</if>
+			</response>
+			<transition to="UE1Connected" event="100-INVITE"/>
+			<transition to="UE1Connected" event="200-INVITE"/>
+			<transition to="END" event="xxx-REFER"/>
+		</state>
+	</add_to>
+	
+	<add_to fsm="UE2">
+		<transition from="UE2WaitingForUE1Transferred" to="UE2ES" event="SucceedEvent"/>
+		
+		<state ID="UE2ES" ES="true" offHookOK="true"/>
+	</add_to>
+</pc2xml>

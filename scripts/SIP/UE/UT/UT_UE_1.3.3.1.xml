@@ -1,0 +1,88 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+
+<!-- First are the document type and the attributes for our document -->
+<pc2xml version="$Revision: 8188 $" name="UT_SIP-UE 1.3.3.1" 
+	descrip="UE Sends Answer in Reliable Response (100rel in require)"
+	number="UT_SIP-UE 1.3.3.1">
+
+	<template file="./templates//ut/Term_DUT.xml" name="DUT"/>
+
+	<add_to fsm="DUT">
+		<NE ext_require="100rel"/>
+		<states initialstate="Setup1"/>
+
+
+ 		<!-- SETUP State -->
+		<state ID="Setup1" timer="5000">
+			<response>
+				<if>
+					<eq>
+          				<msg_ref type="sip">Request</msg_ref>
+						<expr>Invite</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="100-INVITE" target="UE1" originator="DUT"/>
+					</then>
+				</if>
+
+				<if> 
+					<and> 
+						<eq> 	
+							<msg_ref type="extensions">precondition</msg_ref>
+							<expr>require</expr>
+						</eq>
+						<or>
+							<contains>
+								<msg_ref type="sip" hdr_instance="any">Invite.Require</msg_ref>
+								<expr>precondition</expr>
+							</contains>
+							<contains>
+								<msg_ref type="sip" hdr_instance="any">Invite.Supported</msg_ref>
+								<expr>precondition</expr>
+							</contains>
+						</or>
+					</and>
+					<then>
+						<!--Sending 183-Invite with answer-->
+						<sleep time="200"/>
+						<send protocol="sip" msgtype="183-Invite" target="UE1" originator="DUT" bodies="SDP"/>
+					</then>
+					<elseif>
+							<eq>
+								<msg_ref type="sip">Request</msg_ref>
+								<expr>Invite</expr>
+							</eq>
+						<then>
+							<!--Sending 180-Invite with SS not supporting precondition.-->
+							<sleep time="200"/>
+							<send protocol="sip" msgtype="180-Invite" target="UE1" originator="DUT" bodies="SDP"/>
+						</then>
+					</elseif>
+				</if>
+			</response>
+			
+			<!-- Transitions for Setup state -->
+			<transition to="Alerting" event="INVITE"/>
+			<transition to="Register" event="TimerExpired"/>
+		</state>
+	</add_to>
+	
+</pc2xml>	

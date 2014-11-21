@@ -1,0 +1,142 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	PCPCIIAPPSATP-121 : Update the script to the latest version of the test case. Remove the 100rel
+		and preconditon extensions from the INVITE message. (ghassler 05/04/2010)
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-UE 1.1.7.1" 
+	descrip="UE Sends Answer with Compatible CODEC" 
+	number="RST-UE 1.1.7.1">
+	
+	<template file="./templates/CallTermAtUETemp.xml" name="UE1"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Setup"/>
+		<state ID="Proceeding"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<state ID="Setup">
+			<prelude>
+				<send protocol="sip" msgtype="Invite">
+					<mod modtype="replace" hdr="audio" param="payload-type">
+						<expr>8</expr>
+					</mod>
+					<mod modtype="replace" hdr="rtpmap" param="payload-type">
+						<expr>8</expr>
+					</mod>
+					<mod modtype="replace" hdr="rtpmap" param="codec-name">
+						<expr>PCMA</expr>
+					</mod>
+				</send>
+			</prelude>
+			<!-- Expected responses are 100, 180, 183 or 200 -->
+			<response>
+				<if>
+					<and>
+						<contains>
+							<msg_ref type="sip">Response.SDP</msg_ref>
+							<expr>rtpmap</expr>
+						</contains>
+					<or>
+						<eq>
+							<msg_ref type="sip">Response</msg_ref>
+							<expr>180-INVITE</expr>
+						</eq>
+						<eq>
+							<msg_ref type="sip">Response</msg_ref>
+							<expr>183-INVITE</expr>
+						</eq>
+					</or>
+					</and>
+					<then>
+						<verify step="2" requirements="REQ14541" group="payload">
+							<startsWith>
+								<msg_ref type="sdp">18x-INVITE.audio.payload-type</msg_ref>
+								<expr>8</expr>
+							</startsWith>
+						</verify>
+						<verify step="2" requirements="REQ14541" group="rtpmap_payload">
+							<contains>
+								<msg_ref type="sdp">18x-INVITE.rtpmap.payload-type</msg_ref>
+								<msg_ref type="sdp" msg_instance="last">INVITE.rtpmap.payload-type</msg_ref>
+							</contains>
+						</verify>
+						<verify step="2" requirements="REQ14541" group="codec">
+							<eq>
+								<msg_ref type="sdp">18x-INVITE.rtpmap.codec-name</msg_ref>
+								<msg_ref type="sdp" msg_instance="last">INVITE.rtpmap.codec-name</msg_ref>
+							</eq>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<transition to="Proceeding" event="100-INVITE"/>
+			<transition to="END" event="xxx-INVITE"/>
+		</state>
+		
+		<state ID="Proceeding">
+			<!-- Expected responses are 180, 183 or 200 -->
+			<response>
+				<if>
+					<contains>
+						<msg_ref type="sip" hdr_instance="any">18x-Invite.Require</msg_ref>
+						<expr>100rel</expr>
+					</contains>
+					<then>
+						<!--Reliability required for test sending Prack message to peer.-->
+						<send protocol="sip" msgtype="Prack"/>
+					</then>
+				</if>
+				<if>
+					<and>
+						<contains>
+							<msg_ref type="sip">Response.SDP</msg_ref>
+							<expr>rtpmap</expr>
+						</contains>
+					<or>
+						<eq>
+							<msg_ref type="sip">Response</msg_ref>
+							<expr>180-INVITE</expr>
+						</eq>
+						<eq>
+							<msg_ref type="sip">Response</msg_ref>
+							<expr>183-INVITE</expr>
+						</eq>
+					</or>
+					</and>
+					<then>
+						<verify step="2" requirements="REQ14541" group="payload">
+							<startsWith>
+								<msg_ref type="sdp">18x-INVITE.audio.payload-type</msg_ref>
+								<expr>8</expr>
+							</startsWith>
+						</verify>
+						<verify step="2" requirements="REQ14541" group="codec">
+							<eq>
+								<msg_ref type="sdp">18x-INVITE.rtpmap.codec-name</msg_ref>
+								<msg_ref type="sdp" msg_instance="last">INVITE.rtpmap.codec-name</msg_ref>
+							</eq>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<transition to="END" event="xxx-INVITE"/>
+		</state>
+	</add_to>
+</pc2xml>

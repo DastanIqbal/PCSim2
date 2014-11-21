@@ -1,0 +1,166 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-UE 1.5.4.18" 
+	descrip="Call Transfer Incoming Call Only - Transferor" 
+	number="RST-UE 1.5.4.18" inspector="disable">
+	
+	<template file="./templates/Call_Transfer_Transferor.xml"/>
+	
+	<remove_from fsm="UE1 Calls DUT">
+		<state ID="UE1Wait"/>
+	</remove_from>
+	
+	<remove_from fsm="UE2 Calls DUT">
+		<state ID="UE2Setup"/>
+	</remove_from>
+	
+	<add_to fsm="UE1 Calls DUT">
+	   <state ID="UE1Wait" timer="120000">
+			<prelude once="true">
+				<generate event="Branch1Event" fsm="UE2 Calls DUT"/>
+				<send protocol="utility" msgtype="DialDigits">
+					<mod modtype="add" hdr="number">
+						<msg_ref type="platform">UE2.phone number 1</msg_ref>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>REFER</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="202-REFER"/>
+						<send protocol="sip" msgtype="NOTIFY"/>
+						<verify step="4" requirements="REQ24435">
+							<eq>
+								<msg_ref type="sip">Request</msg_ref>
+								<expr>REFER</expr>
+							</eq>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<!-- Transitions for UE1Wait state -->
+			<transition to="UE1Wait" event="REFER"/>
+			<transition to="UE1Wait" event="DialDigitsComplete"/>
+			<transition to="UE1SendRingNotify" event="200-NOTIFY"/>
+			<transition to="UE1SendByeResponse" event="BYE"/>
+		</state>
+			
+		<transition from="UE1SendRingNotify" to="UE1SendByeResponse" event="BYE"/>
+		<transition from="UE1SendNotify" to="UE1SendByeResponse" event="BYE"/>
+		
+		<state ID="UE1SendByeResponse" timer="1000">
+			<prelude once="true">
+				<send protocol="sip" msgtype="200-BYE"/>
+			</prelude>
+			<transition to="END" event="TimerExpired"/>
+		</state>
+	
+	</add_to>
+	
+	<add_to fsm="UE2 Calls DUT">
+		<NE targets="UE2"/>
+		
+		<transition from="DUTRegister" to="WaitDialForUE2" event="Registered"/>
+		
+		<state ID="WaitDialForUE2">
+			<transition to="UE2Setup" event="Branch1Event"/>
+		</state>
+		
+		<state ID="UE2Setup" timer="500">
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>Invite</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="100-INVITE"/>
+					</then>
+				</if>
+				<if>
+					<and>
+						<eq>
+							<msg_ref type="extensions">precondition</msg_ref>
+							<expr>require</expr>
+						</eq>
+						<or>
+							<contains>
+								<msg_ref type="sip" hdr_instance="any">Invite.Require</msg_ref>
+								<expr>precondition</expr>
+							</contains>
+							<contains>
+								<msg_ref type="sip" hdr_instance="any">Invite.Supported</msg_ref>
+								<expr>precondition</expr>
+							</contains>
+						</or>
+					</and>
+					<then>
+						<!--Sending 183-Invite with answer-->
+						<sleep time="200"/>
+						<send protocol="sip" msgtype="183-Invite"/>
+					</then>
+					<elseif>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>Invite</expr>
+						</eq>
+						<then>
+							<sleep time="200"/>
+							<send protocol="sip" msgtype="180-Invite"/>
+						</then>
+					</elseif>
+				</if>
+				<if>
+					<eq>
+						<msg_ref type="event"/>
+						<expr>TimerExpired</expr>
+					</eq>
+					<then>
+						<verify step="3" requirements="REQ24435">
+							<neq>
+								<msg_ref type="event"/>
+								<expr>TimerExpired</expr>
+							</neq>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<transition to="DUTOnHook" event="INVITE"/>
+		</state>
+		
+		
+		<state ID="DUTOnHook">
+			<prelude once="true">
+				<!-- Hang up on DUT..-->
+				<send protocol="utility" msgtype="OnHook"/>
+				<send protocol="sip" msgtype="180-Invite"/>
+				<sleep time="300"/>
+				<send protocol="sip" msgtype="200-Invite"/>
+			</prelude>
+			<transition to="DUTOnHook" event="OnHookComplete"/>
+			<transition to="UE2EndDialog" event="ACK"/>
+		</state>
+		
+		
+	</add_to>
+</pc2xml>

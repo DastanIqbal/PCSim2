@@ -1,0 +1,111 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="SIP-UE 1.6.3.1" 
+	descrip="Verification of a Timely UAS Response to an INVITE Request" 
+	number="SIP-UE 1.6.3.1">
+	
+	<template file="./templates/CallTermAtUETemp.xml" name="UE1"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Setup"/>
+		<state ID="Answer"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<state ID="Setup">
+			<prelude>
+				<send protocol="sip" msgtype="Invite"/>
+				<!-- We want to start the timer immediately after sending the 
+					Invite, so we send it, changes states and wait for the response -->
+				<generate event="Branch1Event"/>
+			</prelude>
+			<transition to="Response" event="Branch1Event"/>
+		</state>
+		
+		<state ID="Response" timer="200">
+			<response>
+				<!-- Expected responses are 100, 180, 183 or 200 -->
+				<if>
+					<contains>
+						<msg_ref type="sip" msg_instance="last">18x-Invite.Require</msg_ref>
+						<expr>100rel</expr>
+					</contains>
+					<then>
+						<!--Reliability required for test sending Prack message to peer.-->
+						<send protocol="sip" msgtype="Prack"/>
+					</then>
+				</if>
+				<verify step="2" requirements="RFC1003">
+					<neq>
+						<msg_ref type="event"/>
+						<expr>TimerExpired</expr>
+					</neq>
+				</verify>
+			</response>
+			<transition to="Proceeding" event="100-INVITE"/>
+			<transition to="Alerting" event="180-INVITE"/>
+			<transition to="Alerting" event="183-INVITE"/>
+			<transition to="Connected" event="200-INVITE"/>
+			<transition to="Fail" event="TimerExpired"/>
+		</state>
+		
+		<state ID="Answer">
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>UPDATE</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="200-Update" compact="true"/>
+					</then>
+				</if>
+				<if>
+					<eq>
+						<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+						<expr>200</expr>
+					</eq>
+					<then>
+						<verify step="3" requirements="RFC1004">
+							<eq>
+								<msg_ref type="sip">Response</msg_ref>
+								<expr>200-INVITE</expr>
+							</eq>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<transition to="Answer" event="UPDATE"/>
+			<transition to="Answer" event="200-PRACK"/>
+			<transition to="Answer" event="18x-INVITE"/>
+			<transition to="Answer" event="OffHookComplete"/>
+			<transition to="Connected" event="200-INVITE"/>
+		</state>
+		
+		<state ID="Fail">
+			<prelude>
+				<fail/>
+				<generate event="FailEvent"/>
+			</prelude>
+			<transition to="END" event="FailEvent"/>
+		</state>
+	</add_to>
+</pc2xml>

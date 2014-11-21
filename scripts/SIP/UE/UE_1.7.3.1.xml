@@ -1,0 +1,322 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	PCPCII-156 : Add logic to only execute the verify when the correct event arrives. (ghassler 11/10/2009)
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="SIP-UE 1.7.3.1" 
+	descrip="Basic Session Establishment using TCP" 
+	number="SIP-UE 1.7.3.1">
+	
+	<template file="./templates/CallOrigAtUETemp.xml" name="UE1"/>
+	<configure name="SIP Default Transport Protocol" value="TCP"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Setup"/>
+		<state ID="Alerting"/>
+		<state ID="Answer"/>
+		<state ID="Connected"/>
+		<state ID="Releasing"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<NE ext_require="100rel"/>
+		<state ID="Setup">
+			<prelude once="true">
+				<send protocol="utility" msgtype="DialDigits">
+					<mod modtype="add" hdr="number">
+						<msg_ref type="platform">UE1.phone number 1</msg_ref>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<!-- PCPCII-156 Add logic to only execute the verify when the correct event arrives -->
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>INVITE</expr>
+					</eq>
+					<then>
+					<!-- Step 3 test case 1.7.3.1 -Verify that the header INVITE→Content-Length IS present -->
+						<verify step="2" requirements="RFC1039">
+							<contains>
+								<msg_ref type="sip">Request</msg_ref>
+								<expr>INVITE</expr>
+							</contains>
+						</verify>
+						<verify step="3" requirements="RFC1147, RFC1076">
+							<contains>
+								<msg_ref type="sip">INVITE</msg_ref>
+								<expr>Content-Length: </expr>
+							</contains>
+						</verify>
+					</then>
+				</if>
+				<!-- This set of tests determines whether to send 183 with Answer
+						 or a 180 to the INVITE -->
+				<if>
+					<and>
+						<eq>
+							<msg_ref type="extensions">precondition</msg_ref>
+							<expr>require</expr>
+						</eq>
+						<or>
+							<contains>
+								<msg_ref type="sip" hdr_instance="any">Invite.Require</msg_ref>
+								<expr>precondition</expr>
+							</contains>
+							<contains>
+								<msg_ref type="sip" hdr_instance="any">Invite.Supported</msg_ref>
+								<expr>precondition</expr>
+							</contains>
+						</or>
+					</and>
+					<then>
+						<!--Sending 183-Invite with answer-->
+						<send protocol="sip" msgtype="100-INVITE"/>
+						<send protocol="sip" msgtype="183-Invite">
+							<!-- Step 4 test case 1.7.3.1 -Continue executing steps 2-3 
+							of [UE Originating Case] with the following -->
+						</send>
+					</then>
+					<elseif>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>Invite</expr>
+						</eq>
+						<then>
+							<!--Sending 180-Invite with SS not supporting precondition.-->
+							<send protocol="sip" msgtype="100-INVITE"/>
+							<send protocol="sip" msgtype="180-Invite">
+								<!-- Step 4 test case 1.7.3.1 -Continue executing steps 2-3 
+								of [UE Originating Case] with the following -->
+							</send>
+						</then>
+					</elseif>
+				</if>
+			</response>
+			<transition to="Setup" event="DialDigitsComplete"/>
+			<transition to="Alerting" event="INVITE"/>
+		</state>
+		
+		<state ID="Alerting">
+			<response>
+				<!-- Step  5,6 test case 1.7.3.1 -If the PRACK request DOES NOT contain a body
+					Verify that PRACK→Content-Length = 0-->
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>PRACK</expr>
+					</eq>
+					<then>
+						<verify step="5" requirements="RFC1147, RFC1076">
+							<contains>
+								<msg_ref type="sip">PRACK</msg_ref>
+								<expr>Content-Length: </expr>
+							</contains>
+						</verify>
+						<verify step="6" requirements="RFC1148">
+							<and>
+								<neq>
+									<msg_ref type="sip">PRACK.Content-Type.media-subtype</msg_ref>
+									<expr>sdp</expr>
+								</neq>
+								<and>
+									<eq>
+										<msg_ref type="sip">PRACK.Content-Length.value</msg_ref>
+										<expr>0</expr>
+									</eq>
+									<dnc>
+										<msg_ref type="sip">PRACK.SDP</msg_ref>
+										<expr>rtpmap</expr>
+									</dnc>
+								</and>
+							</and>
+						</verify>
+					</then>
+				</if>
+				<!-- Now test to see if the incoming message is a PRACK message because
+							 the system is using reliability -->
+				<if>
+					<and>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>PRACK</expr>
+						</eq>
+						<contains>
+							<msg_ref type="sip" msg_instance="last">18x-Invite.Require</msg_ref>
+							<expr>100rel</expr>
+						</contains>
+					</and>
+					<then>
+						<!--Reliability required for test sending 200-Prack message to peer.-->
+						<send protocol="sip" msgtype="200-PRACK"/>
+					</then>
+				</if>
+				<!-- Now test for an UPDATE message -->
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>UPDATE</expr>
+					</eq>
+					<then>
+						<!--QoS required or supported sending 200-Update message to peer.-->
+						<send protocol="sip" msgtype="200-Update"/>
+					</then>
+				</if>
+				<!-- Test whether to send 180 -->
+				<if>
+					<and>
+						<contains>
+							<msg_ref type="sip" msg_instance="last">18x-Invite.Status-Line.status-code</msg_ref>
+							<expr>183</expr>
+						</contains>
+						<eq>
+							<msg_ref type="sdp">Request.qos-curr-remote.direction</msg_ref>
+							<msg_ref type="sdp">Request.qos-des-remote.direction</msg_ref>
+						</eq>
+					</and>
+					<then>
+						<!--Sending 180 for required preconditions.-->
+						<send protocol="sip" msgtype="180-Invite"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Alerting" event="DialDigitsComplete"/>
+			<transition to="Alerting" event="PRACK"/>
+			<transition to="Alerting" event="UPDATE"/>
+			<transition to="Answer" event="ALERTING_UAS"/>
+		</state>
+		
+		<state ID="Answer" timer="15000">
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="event"/>
+						<expr>TimerExpired</expr>
+					</eq>
+					<then>
+						<!--Sending 200-Invite-->
+						<send protocol="sip" msgtype="200-INVITE"/>
+					</then>
+				</if>
+				<!-- Now test for an UPDATE message -->
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>UPDATE</expr>
+					</eq>
+					<then>
+						<!--QoS required or supported sending 200-Update message to peer.-->
+						<send protocol="sip" msgtype="200-Update"/>
+					</then>
+				</if>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>ACK</expr>
+					</eq>
+					<then>
+						<verify step="8" requirements="RFC1147, RFC1076">
+							<contains>
+								<msg_ref type="sip">ACK</msg_ref>
+								<expr>Content-Length: </expr>
+							</contains>
+						</verify>
+						<verify step="9" requirements="RFC1148">
+							<and>
+								<neq>
+									<msg_ref type="sip">ACK.Content-Type.media-subtype</msg_ref>
+									<expr>sdp</expr>
+								</neq>
+							<and>
+								<lte>
+									<msg_ref type="sip">ACK.Content-Length.value</msg_ref>
+									<expr>0</expr>
+								</lte>
+								<dnc>
+									<msg_ref type="sip">ACK.SDP</msg_ref>
+									<expr>rtpmap</expr>
+								</dnc>
+							</and>
+							</and>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<transition to="Answer" event="UPDATE"/>
+			<transition to="Answer" event="PRACK"/>
+			<transition to="Answer" event="TimerExpired"/>
+			<transition to="Connected" event="ACK"/>
+		</state>
+		
+		<state ID="Connected" timer="20000">
+			<transition to="Releasing" event="TimerExpired"/>
+		</state>
+		
+		<state ID="Releasing">
+			<prelude once="true">
+				<send protocol="utility" msgtype="OnHook"/>
+			</prelude>
+			<response>
+				<!--Step 12 test case SIP 1.7.3.1 - If the BYE request DOES NOT contain 
+					a body and BYE→Content-Length IS present. 
+					Verify that BYE→Content-Length = 0-->
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>BYE</expr>
+					</eq>
+					<then>
+						<verify step="12" requirements="RFC1148">
+							<and>
+								<neq>
+									<msg_ref type="sip" msg_instance="last">BYE.Content-Type.media-subtype</msg_ref>
+									<expr>sdp</expr>
+								</neq>
+								<and>
+									<lte>
+										<msg_ref type="sip" msg_instance="last">BYE.Content-Length.value</msg_ref>
+										<expr>0</expr>
+									</lte>
+									<dnc>
+										<msg_ref type="sip">BYE.SDP</msg_ref>
+										<expr>rtpmap</expr>
+									</dnc>
+								</and>
+							</and>
+						</verify>
+						<verify step="12" requirements="RFC1148">
+							<and>
+								<eq>
+									<msg_ref type="sip">Request</msg_ref>
+									<expr>BYE</expr>
+								</eq>
+								<contains>
+									<msg_ref type="sip">BYE</msg_ref>
+									<expr>Content-Length: </expr>
+								</contains>
+							</and>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<transition to="Releasing" event="OnHookComplete"/>
+			<transition to="END" event="BYE"/>
+		</state>
+	</add_to>
+</pc2xml>

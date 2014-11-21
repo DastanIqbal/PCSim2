@@ -1,0 +1,258 @@
+################################################################################
+#// Filename: SEC_11-1-5.test (PACT)
+#// Author:   Matthew Forbes
+#//
+#//
+#//
+#// Creation Date: June 16, 2006
+#// Modified by: 
+################################################################################
+#// Description:
+#//     TC1522 TEST CASE SEC 11.1.5 Retry MTA to MSO KDC
+#//
+#// Objective:
+#//     Verify that the MTA follows the retry mechanism when AS replies containing the
+#//     Provisioning Server ticket are not returned from the KDC after an AS request is made.
+#//     
+#//
+#// PacketCable DUT:
+#//     MTA
+#//
+#// Test Steps:
+#//     - Initial configuration       
+#//     - Reset DUT
+#//     - Check Provisioning state
+#//     - Start sniffer
+#//     - Clear Kerberos tickets using SNMPv3 API
+#//     - Reset DUT
+#//     - Monitor trace for AP-REQ
+#//     - Note time T1 and engine time parameter E1
+#//     - Check for no AP-REP
+#//     - Monitor trace for AP-REQ
+#//     - Note time T2 and engine time parameter E2
+#//     - Check for no AP-REP
+#//     - Monitor trace for AP-REQ
+#//     - Note time T3 and engine time parameter E3
+#//     - Check for no AP-REP
+#//     - Only 3 AP-REQ messages should be sent
+#//     - Stop sniffer
+#//     - Calculate time deltas between real times and compare to deltas for engine times
+#//		03/18/09 WJN
+#//		- Changed removed set for oid_pktcMtaDevResetKrbTickets so platform default would be used
+#//		- Changed reboot to SNMP_set for PC2.0
+#//     
+#//
+#// Notes:
+#//     - Requires provPrimitives.tcl & tftp_primitives.tcl.
+#//     - Requires the specific config file in $BASE_CFG_FILE_PATH in Provisioning Server.
+#//     - Requires parT.tcl parsing tool to parse data from capture file.
+################################################################################
+
+global SCRIPT_VERSION
+set SCRIPT_VERSION { # $Id: SEC_4-1-1_11-1-5.test 7406 2010-07-20 17:17:37Z dthakore $ }
+
+###################### INITIAL CONFIGURATION OF DUT ###########################
+
+DoStep "SEC_11-1-5_1-1" "Initial configuration" {
+    LogMsg "--- Initial PROV module ---"
+    Init_PROV
+    set mtamac [regsub -all {:} $MTA_MAC {}]
+    # ProvCreateConfig 611 $mtamac
+    # PROV_MODIFY_DEVICE $mtamac MTAFORCW122 $mtamac.bin
+    PROV_MODIFY_DEVICE $mtamac MTAFORCW122
+    PROV_DEPLOY_DHCP
+} { PASS_STEP }
+
+
+#################### Reset CM and MTA and Verify Provisioning ####################
+
+DoStep "SEC_11-1-5_2-1" "Reset DUT" {
+    set val [SNMPvN_RESET $CM_IP]
+    LogMsg "Reset of CM and MTA has passed"
+} {
+    IsEqual $val 0
+}
+
+DoStep "SEC_11-1-5_3-1" "pktcMTADevProvisioningState Content Verification" {
+    # Wait for a minute to let CM/MTA starting to reboot
+    actionWait "Wait for CM/MTA to reboot" 60
+    # Get the OID from the MTA and check it using our previously defined
+    set val [GetProvState 1 600]
+    LogMsg "MTA Provisioning State"
+    LogMsg "             - Expected : 1"
+    LogMsg "             - Received : $val"
+} {
+    IsEqual $val 1
+}
+
+################################ Clear Tickets #####################################
+
+DoStep "SEC_11-1-5_4-1" "pktcMtaDevResetKrbTickets Reset Kerberos Tickets" {
+    # Wait for a couple of seconds to let CM/MTA finish rebooting
+    actionWait "Wait for a couple seconds before sending SNMP" 2
+    set val [SNMP_SET $oid_pktcMtaDevResetKrbTickets OCTET-STRING 0xC0 $MTA_IP]
+} {
+    if {$val == 0} {
+        LogMsg "Kerberos Tickets Have been cleared"
+        PASS_STEP
+    } else {
+        FAIL_STEP "Cannot reset Kerberos tickets"
+    }
+}
+
+
+DoStep "SEC_11-1-5_5-1" "Modify configuration" {
+    LogMsg "--- Initial PROV module ---"
+    Init_PROV
+    PROV_MODIFY_DEVICE $mtamac mtatc1316
+    PROV_DEPLOY_DHCP
+    verify_signal "Stop KDC in policy mtatc1316(control c on PROVREALM.COM)"
+} { PASS_STEP }
+
+
+################################ START SNIFFER ###################################
+
+DoStep "SEC_11-1-5_6-1" "Start sniffer" {
+    LogMsg "--- Start sniffer ---"
+    Init_CONTROLLER_LAN
+    SetupCaptureControllerLan "host $MTA_IP || udp port 67 || host $CM_IP"
+    StartCaptureControllerLan
+} {PASS_STEP}
+
+################### Reset CM and MTA and Verify Provisioning ###################
+
+DoStep "SEC_11-1-5_7-1" "Reset DUT" {
+    set val [SNMPvN_RESET $CM_IP]
+    LogMsg "Reset of CM and MTA has passed"
+} {
+    IsEqual $val 0
+}
+
+# DoStep "SEC_11-1-5_8-1" "pktcMTADevProvisioningState Content Verification" {
+    # # Wait for a minute to let CM/MTA starting to reboot
+    # actionWait "Wait for CM/MTA to reboot" 60
+    # # Get the OID from the MTA and check it using our previously defined
+    # set val [GetProvState 1 600]
+    # LogMsg "MTA Provisioning State"
+    # LogMsg "             - Expected : 1"
+    # LogMsg "             - Received : $val"
+# } {
+    # IsEqual $val 1
+# }
+
+########################## VERIFY AS REQ/REP SEQUENCE ###########################
+
+# Matt This step will be automated with later version 
+
+
+DoStep "SEC_11-1-5_9-1" "Monitor sniffer trace" {
+    LogMsg "--- Verify AS REQ with no AS REP ---"
+    verify_signal "Monitor sniffer trace and verify there are 5 AS REQ retries and no AS REP 
+     before returning to MTA1 and note times for the AS REQ messages."
+    LogMsg "--- Verification of AS REQ with no AS REP is complete ---"
+} {PASS_STEP}
+
+##################### STOP SNIFFER AND SAVE CAPTURE FILES #####################
+
+DoStep "SEC_11-1-5" "Stop sniffer" {
+    LogMsg "--- Stop sniffer ---"
+    StopCaptureControllerLan
+    SaveToFileControllerLan
+} { PASS_STEP }
+
+DoStep "SEC_11-1-5_9-2" "Monitor sniffer trace" {
+    LogMsg "--- Calculate time deltas ---"
+    verify_signal "Restart KDC in policy mtatc1316(./kdc_current on PROVREALM.COM)"
+    verify_signal "Calculate the time differences for the AS REQs and verify incremental delay. \
+            (10secs, 20 secs, 30 secs, 30 secs, 30 secs) Are they correct?"
+    LogMsg "--- Verification of time deltas complete ---"
+} {PASS_STEP}
+
+if {000} {
+
+#Matt - 3/8/2005
+DoStep "SEC_11-1-5_9-2" "Analyze flow data" {
+    # Initial PARSER TOOL
+    Init_PART
+    # Set up parser file
+    set PARSERFILE    $ETH_DEFAULT_TXT_FILE
+} { PASS_STEP }
+
+DoStep "SEC_11-1-5_9-3" "Parse all data into database" {
+    #Matt - 3/8/2005
+    set PARAMS_KRB         "{KRB {} {} {} {$MTA_IP $KDC_IP} {} {} {} {} {}}"
+    set PARAMS_PKKM         "{PKKM {} {} {} {$MTA_IP} {} {} {} {} {}}"
+    
+    set msgID_MTA_KRB [ParseFile $PARSERFILE "$PARAMS_KRB $PARAMS_PKKM"]
+} {
+    if { $::PART_RETURN == 0 } {
+        PASS_STEP
+    } else {
+        FAIL_STEP "Cannot find data"
+    }
+}
+
+DoStep "SEC_11-1-5_9-4" "AP REQUEST to CMS1" {
+    LogMsg "Verify AP REQUEST TYPE (msg-id): AP Request"
+} {
+    VerifyValue $msgID_MTA_KRB "INANY PKKM PKKM_AP_REQ HEADERSRCIP" "IS" "$MTA_IP" AND "HEADERDSTIP" "IS" "$CMS_IP"
+}
+
+#Matt - 3/8/2005
+DoStep "SEC_11-1-5_10-1" "Verify 1 and only 1 AS-REQ" {
+    #DECLARE A NEW VARIABLE
+    catch { unset ::MATT }
+    variable ::MATT
+    #CALL INRANGE TO RETURN THE TIMESTAMPS FOR ALL THE AS-REQs PARSED FROM THE FILE AND ORIGINATED BY THE MTA
+    VerifyValue $msgID_MTA_KRB "INRANGEALL(AFTER:-1,BEFORE:-1):(::MATT):(KRB_AS_REQ) KRB KRB_AS_REQ KRB_TYPE" "IS" "AS-REQ"
+    # tk_messageBox -message "DELETEME: The packets which match this type are: $::MATT($msgID_MTA_KRB) "
+    
+    
+    if { [ llength $::MATT($msgID_MTA_KRB) ] != 2 } {
+        verify_signal "ERROR: The capture file captured less/more than 2 AS-REQ. Is this correct?"
+        FAIL_STEP "Incorrect number of AS REQ"
+    }
+} {PASS_STEP}
+
+#Matt - 3/8/2005
+DoStep "SEC_11-1-5_10-2" "Verify 1 and only 1 AS-REP" {
+    #DECLARE A NEW VARIABLE
+    catch { unset ::MATT }
+    variable ::MATT
+    #CALL INRANGE TO RETURN THE TIMESTAMPS FOR ALL THE AS-REQs PARSED FROM THE FILE AND ORIGINATED BY THE MTA
+    VerifyValue $msgID_MTA_KRB "INRANGEALL(AFTER:-1,BEFORE:-1):(::MATT):(KRB_AS_REP) KRB KRB_AS_REP KRB_TYPE" "IS" "AS-REP"
+    # tk_messageBox -message "DELETEME: The packets which match this type are: $::MATT($msgID_MTA_KRB) "
+    
+    
+    if { [ llength $::MATT($msgID_MTA_KRB) ] != 2 } {
+        verify_signal "ERROR: The capture file captured less/more than 2 AS-REP. Is this correct?"
+        FAIL_STEP "Incorrect number of AS REP"
+    }
+} {PASS_STEP}
+
+}
+
+
+################################################################################
+# Cleanup
+################################################################################
+
+DoStep "SEC_11-1-5_10-1" "Modify configuration" {
+    LogMsg "--- Initial PROV module ---"
+    Init_PROV
+    PROV_MODIFY_DEVICE $mtamac MTAFORCW122
+    PROV_DEPLOY_DHCP
+} { PASS_STEP }
+
+DoStep "SEC_11-1-5_10-2" "Reset DUT" {
+    set val [SNMPvN_RESET $CM_IP]
+    LogMsg "Reset of CM and MTA has passed"
+    actionWait "Please wait 60 seconds for DUT to reboot" 60
+} {
+    IsEqual $val 0
+}
+
+Cleanup
+return 0
+
+

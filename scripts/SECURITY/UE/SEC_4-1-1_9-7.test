@@ -1,0 +1,336 @@
+#//**************************************************************************
+#// Filename: SEC_9-7.test
+#// Author: Titintorn Yaemnoi
+#// Creation Date: November 05, 2003
+#// Modified by : 
+#//     Titintorn Yaemnoi on Feburary 10, 2005
+#//     - Add MTA autoconfig file
+#//		03/18/09 WJN
+#//		- Changed removed set for oid_pktcMtaDevResetKrbTickets so platform default would be used
+#//		- Changed reboot to SNMP_set for PC2.0
+#//		- Reomved Auto Config for PC 2.0
+#//**************************************************************************
+#// Description:
+#//    TC830 TEST CASE SEC 9.7 Service Provider Organization Name check 
+#//
+#// Objective:
+#//     Test the usage of MSO Service Provider Organization Name and Telephony
+#//     Service Provider Organization Name.
+#//
+#// PacketCable DUT:
+#//     MTA
+#//**************************************************************************
+global SCRIPT_VERSION
+set SCRIPT_VERSION { # $Id: SEC_4-1-1_9-7.test 7406 2010-07-20 17:17:37Z dthakore $ }
+
+set stepName        "SEC_9-7_"
+set preStepName     "PRESTEP_SEC_9-7_"
+set majorStepCount  1   ;# Major step
+set minorStepCount  1   ;# Minor step
+set servicepro "Nobody Company" ;# Set invalid Service Provider
+##############################################################################
+# PRESTEP_SEC_9-7_1-1: Verify if SNMP is enable or not
+##############################################################################
+DoStep ${preStepName}${majorStepCount}-${minorStepCount} "verify snmp" {
+    puts "--- Verify if SNMP API is started ---" action
+} {
+    if {$SNMP_V3_API} {
+        puts "SNMPv3 API is already started"
+        PASS_STEP
+    } else {
+        puts "\
+            WARNING:
+            It seems as though you do not have a Provisioning server API application.
+            This test can not be executed without a API or sort of SNMPv3 Utility.
+            Please Enable SNMPv3 utility and restart TclSim. " action
+        FAIL_STEP "SNMPv3 API is not started"
+    }
+}
+
+incr minorStepCount
+
+##############################################################################
+# PRESTEP_SEC_9-7_1-2: Configure MTA
+##############################################################################
+DoStep ${preStepName}${majorStepCount}-${minorStepCount} "PACT Configure" {
+    set mtamac [regsub -all {:} $MTA_MAC {}]
+    # PROV_MODIFY_DEVICE $mtamac {} $mtamac.bin
+    PROV_DEPLOY_DHCP
+} {
+    PASS_STEP
+}
+
+set majorStepCount 1
+
+
+##############################################################################
+# SEC_9-7_2-1: Configure MTA
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} "Configure MTA" {
+     if {$AUTOCONFIG_INIT} {
+        AutoCfg_OpenFile $MTA_MAC
+        # Set UnsolicitedKeyNomTimeout to 4000
+        AutoCfg_EditFile add $CLABS_OID.2.2.1.1.3.17.1.6[AsciiToOID $CMS_NAME] INT 4000 $MTA_MAC
+        # Set SolicitedKeyTimeout to 4000
+        AutoCfg_EditFile add $CLABS_OID.2.2.1.1.3.17.1.4[AsciiToOID $CMS_NAME] INT 4000 $MTA_MAC
+        # set Ipsec Ctrl flag for CMS1 to true
+	    AutoCfg_EditFile add $CLABS_OID.2.2.1.1.3.17.1.10[AsciiToOID $CMS_NAME] INT 1 $MTA_MAC
+        # set Endpoint1
+        # AutoCfg_EditFile change $CLABS_OID.2.2.2.1.2.1.1.1.9 STRING $CMS_NAME $MTA_MAC
+        # set Endpoint2
+        # AutoCfg_EditFile change $CLABS_OID.2.2.2.1.2.1.1.1.10 STRING $CMS_NAME $MTA_MAC
+        ######################### For 4 line MTAs ##################################
+        # set Endpoint3
+        # AutoCfg_EditFile change $CLABS_OID.2.2.2.1.2.1.1.1.11 STRING $CMS_NAME $MTA_MAC
+        # set Endpoint4
+        # AutoCfg_EditFile change $CLABS_OID.2.2.2.1.2.1.1.1.12 STRING $CMS_NAME $MTA_MAC
+        ############### For multi-line MTAs ###############
+        # set MTA1_NUMLINES 4
+        set lines $MTA1_NUMLINES
+        for {set ln 1;set index 9} {$ln <= $lines} {incr ln;incr index} {
+            AutoCfg_EditFile add $CLABS_OID.2.2.2.1.2.1.1.1.$index STRING $CMS_NAME $MTA_MAC
+        }
+        ################################################################################
+        # set LABREALM.COM for CMS
+        AutoCfg_EditFile add $CLABS_OID.2.2.1.1.3.17.1.2[AsciiToOID $CMS_NAME] STRING $CMS_REALM $MTA_MAC
+        # set RealmOrgName for CMS1
+        AutoCfg_EditFile change $CLABS_OID.2.2.1.1.3.16.1.4[AsciiToOID $CMS_REALM] STRING $servicepro $MTA_MAC
+        # set RealmOrgName
+        AutoCfg_EditFile add $CLABS_OID.2.2.1.1.3.16.1.4[AsciiToOID $CMS_PROVREALM] STRING $PROV_REALM_PROVREALM_ORGNAME $MTA_MAC
+        # save config file for MTA
+        AutoCfg_CloseSaveFile $MTA_MAC
+    } else {
+	    verify_signal "
+            - Ensure that the Service Provider is set to Nobody Company"
+    }
+} {
+    PASS_STEP
+}
+        
+#} {
+#    verify_signal "
+#    1. set REALM on MSO and Telephony to be different
+#    2. set MSO Service Provider RealmOrgName to Nobody Company (not valid)
+#    3. Telephony Service Provider RealmOrgName is still valid
+#    4. Click 'YES' when done"
+#}
+incr majorStepCount
+
+##############################################################################
+# SEC_9-7_2-1: Start sniffer and Reset MTA
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} "Start sniffer and Reset MTA" {  
+    # Start sniffer
+    LogMsg "--- Start sniffer ---"
+    Init_CONTROLLER_LAN
+    SetupCaptureControllerLan "host $MTA_IP"
+    StartCaptureControllerLan 
+
+    LogMsg "--- Reset Tickets ---"
+    # set oid_pktcMtaDevResetKrbTickets .1.3.6.1.4.1.4491.2.2.1.1.3.19.0
+    Init_PROV
+    set retCode [SNMP_SET $oid_pktcMtaDevResetKrbTickets \
+                          OCTET-STRING \
+                          0xC0 \
+                          $MTA_IP]
+# 
+    # LogMsg "--- Reset MTA ---"
+    # SNMP_RESET $MTA_IP
+    # 
+    # LogMsg "Wait Provisioning complete"
+    # set retCode [WaitProvCompletion 120]
+    # 
+    
+    SNMP_SET $oid_pktcMtaDevResetNow INTEGER 1 $MTA_IP
+    
+    
+    actionWait "Wait for Provisioning message" 90
+    set retCode [SNMP_GET $oid_pktcMtaDevProvisioningState $MTA_IP]
+    
+} {PASS_STEP}
+
+incr majorStepCount
+
+##############################################################################
+#  SEC_9-7_3-1: Verify PktcMtaDevProvisioningState = 3
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} "PktcMtaDevProvisioningState = 3" {    
+#    set val [SNMP_GET .1.3.6.1.4.1.4491.2.2.1.1.1.9.0 $MTA_IP]
+        set val [SNMP_GET $oid_pktcMtaDevProvisioningState $MTA_IP]
+} {
+    if { $val == 3 } {
+        LogMsg "--- Provisiong State = $val (failConfigFileError) ---"
+        PASS_STEP
+    } else {
+       FAIL_STEP "MTA does not set pktcMtaDevProvisioningState MIB Object = 3"
+    }
+}
+incr minorStepCount
+
+##############################################################################
+# SEC_9-7_3-2: Stop sniffer
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} "Stop sniffer" {
+    # No sending message
+} {
+    LogMsg "--- Stop sniffer ---" action
+    StopCaptureControllerLan
+    SaveToFileControllerLan _CHANGE-MSO-REALMORGNAME
+}
+incr majorStepCount
+set minorStepCount 1
+
+##############################################################################
+# SEC_9-7_4-1: Configure MTA
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} "Configure MTA" {
+    if {$AUTOCONFIG_INIT} {
+        AutoCfg_OpenFile $MTA_MAC
+        # Set UnsolicitedKeyNomTimeout to 4000
+        AutoCfg_EditFile add $CLABS_OID.2.2.1.1.3.17.1.6[AsciiToOID $CMS_NAME] INT 4000 $MTA_MAC
+        # Set SolicitedKeyTimeout to 4000
+        AutoCfg_EditFile add $CLABS_OID.2.2.1.1.3.17.1.4[AsciiToOID $CMS_NAME] INT 4000 $MTA_MAC
+        # set Ipsec Ctrl flag for CMS1 to true
+	    AutoCfg_EditFile add $CLABS_OID.2.2.1.1.3.17.1.10[AsciiToOID $CMS_NAME] INT 1 $MTA_MAC
+        # set Endpoint1
+        # AutoCfg_EditFile change $CLABS_OID.2.2.2.1.2.1.1.1.9 STRING $CMS_NAME $MTA_MAC
+        # set Endpoint2
+        # AutoCfg_EditFile change $CLABS_OID.2.2.2.1.2.1.1.1.10 STRING $CMS_NAME $MTA_MAC
+        ######################### For 4 line MTAs ##################################
+        # set Endpoint3
+        # AutoCfg_EditFile change $CLABS_OID.2.2.2.1.2.1.1.1.11 STRING $CMS_NAME $MTA_MAC
+        # set Endpoint4
+        # AutoCfg_EditFile change $CLABS_OID.2.2.2.1.2.1.1.1.12 STRING $CMS_NAME $MTA_MAC
+        ############### For multi-line MTAs ###############
+	# commented this out, for test purposes only - mforbes 11/6/07
+        # set MTA1_NUMLINES 4
+        set lines $MTA1_NUMLINES
+        for {set ln 1;set index 9} {$ln <= $lines} {incr ln;incr index} {
+            AutoCfg_EditFile change $CLABS_OID.2.2.2.1.2.1.1.1.$index STRING $CMS_NAME $MTA_MAC
+        }
+        ################################################################################
+        # set LABREALM.COM for CMS
+        AutoCfg_EditFile change $CLABS_OID.2.2.1.1.3.17.1.2[AsciiToOID $CMS_NAME] STRING $CMS_PROVREALM $MTA_MAC
+        # set RealmOrgName for CMS1
+        AutoCfg_EditFile change $CLABS_OID.2.2.1.1.3.16.1.4[AsciiToOID $CMS_REALM] STRING $PROV_REALM_ORGNAME $MTA_MAC
+        # set RealmOrgName
+        AutoCfg_EditFile change $CLABS_OID.2.2.1.1.3.16.1.4[AsciiToOID $CMS_PROVREALM] STRING $servicepro $MTA_MAC
+        # save config file for MTA
+        AutoCfg_CloseSaveFile $MTA_MAC
+    } else {
+	    verify_signal "
+            - Ensure that the Service Provider is set to Nobody Company"
+    }
+} {
+    PASS_STEP
+}
+
+#} {
+#    verify_signal "
+#    1. set REALM on MSO and Telephony to be different
+#    2. set Telephony Service Provider RealmOrgName to Nobody Company(not valid)
+#    3. MSO Service Provider RealmOrgName is still valid
+#    3. Click 'YES' when done"
+#}
+incr majorStepCount 2
+
+##############################################################################
+# SEC_9-7_6-1: Start sniffer and Reset MTA
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} "Start sniffer and Reset MTA" {  
+    # Start sniffer
+    LogMsg "--- Start sniffer ---"
+    Init_CONTROLLER_LAN
+    SetupCaptureControllerLan "host $MTA_IP"
+    StartCaptureControllerLan 
+
+    LogMsg "--- Reset MTA ---"
+    #SNMP_RESET $MTA_IP
+    SNMP_SET $oid_pktcMtaDevResetNow INTEGER 1 $MTA_IP
+    
+    #LogMsg "Wait Provisioning complete"
+    # set retCode [WaitProvCompletion 120]
+
+    actionWait "Wait for Provisioning message" 90
+    set retCode [SNMP_GET $oid_pktcMtaDevProvisioningState $MTA_IP]
+
+} {PASS_STEP}
+
+
+incr majorStepCount
+##############################################################################
+#  SEC_9-7_7-1: Verify PktcMtaDevProvisioningState = 1
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} "PktcMtaDevProvisioningState = 1" {    
+    set val [SNMP_GET $PktcMtaDevProvisioningState $MTA_IP]
+} {
+    if { $val == 1 } {
+        LogMsg "--- Provisiong State = $val (Pass) ---"
+        PASS_STEP
+    } else {
+       FAIL_STEP "MTA fail to set pktcMtaDevProvisioningState MIB Object = 1"
+    }
+}
+
+incr majorStepCount
+
+##############################################################################
+# SEC_9-7_8-1: Stop sniffer
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} "Stop sniffer" {
+    # No sending message
+} {
+    LogMsg "--- Stop sniffer ---" action
+    StopCaptureControllerLan
+    SaveToFileControllerLan _CHANGE-TELEPHONY-REALMORGNAME
+}
+incr minorStepCount
+
+#############################################################################
+# SEC_9-7_8-2: Verify AS Request for both Provisioning and CMS
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} "Verify AS/AP Request" {
+    # No message to send
+} {
+    LogMsg "--- Check there MUST have AS messages and NO AP message ---"
+    set ::FILE_PARSER_INPUT $::ETH_DEFAULT_TXT_FILE
+    Init_PARSER_LAN "CHECKS" ""
+    ParseKerberos
+    
+    set AsRequestFrame [FindAsRequest]
+    LogMsg "AS Request frame = $AsRequestFrame" 
+    set TftpFrame [FindTftp "$TFTP_REQUEST"]
+    LogMsg "TftpFrame = $TFTP_REQUEST" 
+    set cmsApRequestFrame [FindApRequestCMS]
+    LogMsg "AP Request frame for CMS server = $cmsApRequestFrame" 
+    
+    if { ($AsRequestFrame != -1) && 
+         ($cmsApRequestFrame == -1) } {
+        PASS_STEP
+    } else {
+        FAIL_STEP "FAIL"
+    }
+
+} 
+
+##############################################################################
+# Cleanup
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} "Configure MTA" {
+    if {$AUTOCONFIG_INIT} {
+        AutoCfg_OpenFile $MTA_MAC
+        # set LABREALM.COM for CMS
+        AutoCfg_EditFile change $CLABS_OID.2.2.1.1.3.17.1.2[AsciiToOID $CMS_NAME] STRING $CMS_REALM $MTA_MAC
+        # set RealmOrgName
+        AutoCfg_EditFile delete $CLABS_OID.2.2.1.1.3.16.1.4[AsciiToOID $CMS_PROVREALM] $MTA_MAC
+        # save config file for MTA
+        AutoCfg_CloseSaveFile $MTA_MAC
+    } else {
+	    verify_signal "
+            - Ensure that the Service Provider is set to Nobody Company"
+    }
+} {
+    PASS_STEP
+}
+
+Cleanup

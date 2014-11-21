@@ -1,0 +1,347 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	2011-11-15	Seung Lee - final versionfor
+
+
+
+
+-->
+<pc2xml version="$Revision: 1 $" 
+	name="ESG 1.1.1.4" 
+	descrip="Static Mode via DNS When TLS is Enabled" 
+	number="ESG 1.1.1.4">
+	
+	<template file="./templates/Proxy_Term_At_DUT.xml" name="UE1"/>
+
+	<remove_from fsm="UE1">
+		<state ID="Register"/>
+		<state ID="Alerting"/>
+		<state ID="Connected"/>
+		<state ID="OnHookUE1"/>
+	</remove_from>
+
+		<!-- Delay until first FSM is complete -->
+	<add_to fsm="UE1" >
+		<state ID="Register">
+			<prelude>
+				<log promptUser="True" expr="Reset SP-SSE or otherwise trigger it to perform a DNS SRV query to resolve the domain name of the SIP-PBX."/>
+				<sleep time="3000"/>
+				<log promptUser="True" expr="Please, click OK when your SP-SSE is ready."/>
+				<start_capture>
+					<filter>
+						<var_expr>
+							<expr>host </expr>
+							<msg_ref type="platform">UE0.IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">UE0.IP2</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">PCSCF1.IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">UE1.IP</msg_ref>
+						</var_expr>
+					</filter>
+				</start_capture>
+				<generate event="SucceedEvent"/>
+			</prelude>
+			<transition to="OffHook" event="SucceedEvent"/>
+		</state>
+		
+		<state ID="Alerting" timer="6000">
+		
+			<prelude once="true">
+			<verify step="3" requirements="REQ ">
+				<eq>
+					<msg_ref type="sip">Response</msg_ref>
+					<expr>xxx-INVITE</expr>
+				</eq>
+			</verify>
+			</prelude>
+			
+			<response>
+				<if>
+					<or>
+						<eq>
+							<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+							<msg_ref type="platform">UE1.IP</msg_ref>
+						</eq>
+						<eq>
+							<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+							<msg_ref type="platform">UE1.IP</msg_ref>						
+						</eq>
+					</or>
+					<then>
+						<proxy target="UE0"/>
+					</then>
+					<elseif>
+						<or>
+							<eq>
+								<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE0.IP</msg_ref>
+							</eq>
+							<eq>
+								<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE0.IP</msg_ref>
+							</eq>
+						</or>
+						<then>
+							<proxy target="UE1"/>
+						</then>
+					</elseif>
+				</if>
+				<if>
+					<eq>
+						<msg_ref type="event"/>
+						<expr>TimerExpired</expr>
+					</eq>
+					<then>
+						<send protocol="utility" msgtype="OffHook">
+							<mod modtype="replace" hdr="voiceport">
+								<msg_ref type="platform">Platform.voiceport0</msg_ref>
+							</mod>
+						</send>
+					</then>
+				</if>
+			</response>
+			<transition to="Alerting" event="INVITE"/>
+			<transition to="Alerting" event="OPTIONS"/>
+			<transition to="Alerting" event="200-OPTIONS"/>
+			<transition to="Alerting" event="PRACK"/>
+			<transition to="Alerting" event="200-PRACK"/>
+			<transition to="Alerting" event="UPDATE"/>
+			<transition to="Alerting" event="200-UPDATE"/>
+			<transition to="Alerting" event="xxx-INVITE"/>
+			<transition to="Alerting" event="OffHookComplete"/>
+			<transition to="Connected" event="ACK"/>
+		</state>
+		
+		<state ID="Connected" timer="10000">
+			<prelude>
+				<log promptUser="True" verify="True" step="4" requirements="REQ24040, REQ24041" expr="Go off hook and verify voice path."/>			
+			</prelude>
+			<transition to="OnHook" event="TimerExpired"/>
+		</state>
+		
+		<state ID="OnHookUE1">
+			<prelude>
+				<send protocol="utility" msgtype="OnHook"/>
+			</prelude>
+			<transition to="OffHookUE0" event="OnHookComplete" fsm="CallOrig"/>
+		</state>
+					
+		<state ID="OffHookUE0">
+			<prelude>
+				<send protocol="utility" msgtype="OffHook"/>
+			</prelude>
+			<transition to="SetupUE0" event="OffHookComplete"/>
+		</state>
+
+		<state ID="SetupUE0">
+			<prelude once="true">
+				<send protocol="utility" msgtype="DialDigits">
+					<mod modtype="add" hdr="number">
+						<msg_ref type="platform">UE1.phone number 1</msg_ref>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+			<if>
+				<or>
+					<eq>
+						<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+						<msg_ref type="platform">UE1.IP</msg_ref>
+					</eq>
+					<eq>
+						<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+						<msg_ref type="platform">UE1.IP</msg_ref>
+					</eq>
+				</or>
+				<then>
+					<proxy target="UE0"/>
+				</then>
+				<elseif>
+						<or>
+							<eq>
+								<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE0.IP</msg_ref>
+							</eq>
+							<eq>
+								<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE0.IP</msg_ref>
+							</eq>
+						</or>
+						<then>
+							<proxy target="UE1"/>
+						</then>
+					</elseif>
+				</if>
+			</response>
+			<transition to="SetupUE0" event="DialDigitsComplete"/>
+			<transition to="SetupUE0" event="INVITE"/>
+			<transition to="AlertingUE1" event="CANCEL"/>
+			<transition to="AlertingUE1" event="xxx-INVITE"/>
+			<transition to="SetupUE0" event="OffHookComplete"/>
+		</state>
+
+		<state ID="AlertingUE1" timer="6000">
+			<response>
+				<if>
+					<and>
+						<null>
+							<msg_ref type="sip">200-INVITE.SDP</msg_ref>
+						</null>
+						<or>
+							<eq>
+								<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE1.IP</msg_ref>
+							</eq>
+							<eq>
+								<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE1.IP</msg_ref>
+							</eq>
+						</or>
+					</and>
+					<then>
+						<proxy target="UE0"/>
+					</then>
+
+					<elseif>
+					<and>
+						<eq>
+							<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+							<msg_ref type="platform">UE1.IP</msg_ref>
+						</eq>
+							<notnull>
+								<msg_ref type="sip">200-INVITE.SDP</msg_ref>
+							</notnull>
+						</and>
+						<then>
+							<proxy target="UE0"/>
+						</then>	
+					</elseif>
+					<elseif>
+						<or>
+							<eq>
+								<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE0.IP</msg_ref>
+							</eq>
+							<eq>
+								<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE0.IP</msg_ref>
+							</eq>
+						</or>
+							<then>
+								<proxy target="UE1"/>
+							</then>
+					</elseif>
+				</if>
+				<if>
+					<eq>
+						<msg_ref type="event"/>
+						<expr>TimerExpired</expr>
+					</eq>
+					<then>
+						<send protocol="utility" msgtype="OffHook">
+							<mod modtype="replace" hdr="voiceport">
+								<msg_ref type="platform">Platform.voiceport1</msg_ref>
+							</mod>
+						</send>
+					</then>
+				</if>
+			</response>
+			<transition to="AlertingUE1" event="INVITE"/>
+			<transition to="AlertingUE1" event="OPTIONS"/>
+			<transition to="AlertingUE1" event="200-OPTIONS"/>
+			<transition to="AlertingUE1" event="PRACK"/>
+			<transition to="AlertingUE1" event="200-PRACK"/>
+			<transition to="AlertingUE1" event="UPDATE"/>
+			<transition to="AlertingUE1" event="200-UPDATE"/>
+			<transition to="AlertingUE1" event="xxx-INVITE"/>
+			<transition to="AlertingUE1" event="OffHookComplete"/>
+			<transition to="ConnectedUE1" event="ACK"/>
+		</state>
+
+		<state ID="ConnectedUE1" timer="10000">
+			<prelude>
+				<log promptUser="True" verify="True" step="6" requirements="REQ24040, REQ24041" expr="Go off hook and verify voice path."/>			
+			</prelude>
+			<transition to="OnHookUE0" event="TimerExpired"/>
+		</state>
+	
+		<state ID="OnHookUE0">
+			<prelude once="true">
+				<send protocol="utility" msgtype="OnHook"/>
+			</prelude>
+			<response>
+				<if>
+					<or>
+						<eq>
+							<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+							<msg_ref type="platform">UE1.IP</msg_ref>
+						</eq>
+						<eq>
+							<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+							<msg_ref type="platform">UE1.IP</msg_ref>
+						</eq>
+					</or>
+					<then>
+							<proxy target="UE0"/>
+					</then>
+					<elseif>
+						<or>
+							<eq>
+								<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE0.IP</msg_ref>
+							</eq>
+							<eq>
+								<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE0.IP</msg_ref>
+							</eq>
+						</or>
+						<then>
+							<proxy target="UE1"/>
+						</then>
+					</elseif>
+				</if>
+			</response>
+			<transition to="OnHookUE1again" event="OnHookComplete"/>
+			<transition to="OnHookUE1again" event="Bye"/>
+			<transition to="OnHookUE1again" event="200-Bye"/>
+		</state>
+			<!-- OnHook State -->
+		<state ID="OnHookUE1again">
+			<prelude>
+				<send protocol="utility" msgtype="OnHook">
+					<mod modtype="replace" hdr="voiceport">
+						<msg_ref type="platform">Platform.voiceport1</msg_ref>
+					</mod>
+				</send>
+			</prelude>
+			
+			<postlude>
+				<stop_capture/>	
+			</postlude>
+			
+			<transition to="END" event="OnHookComplete"/>
+		</state>
+
+			<!--log promptUser="True" verify="True" step="1" requirements="REQ, REQ"
+				 expr="Open the captures for WAN (SP-SSE) and LAN (SIP-PBX) sides and find RTP
+				 packets for outbound call"/>
+			<log promptUser="True" verify="True" step="1" yesExpected="true" requirements="REQ, REQ"
+				 expr="Verify WAN side upstream SIP packets have DSCP value of 3 as configured"/-->
+
+	</add_to>
+	
+
+</pc2xml>

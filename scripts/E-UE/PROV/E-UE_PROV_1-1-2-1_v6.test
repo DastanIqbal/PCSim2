@@ -1,0 +1,260 @@
+#/*****************************************************************************
+#// Filename: PROV_5-1.test
+#// Author:   Matthew Forbes
+#// Creation Date: October 26, 2004
+#// Modified by: Matthew Forbes-Updated per CTP 1/24/05
+#//                 Made popups and position for query for sysuptime verification - 10/2/08 - MLF
+#/*****************************************************************************
+#// Description:
+#//     TC331 TEST CASE PROV 5.1 Configuration of Different Voice and Data Providers
+#//     (two subnets for CM and MTA)
+#//
+#// Objective:
+#//     Test that the MTA can be configured with different voice and data providers.
+#//     
+#//
+#// PacketCable DUT:
+#//     MTA
+#//
+#// Test Steps:
+#//     - Initial Configuration: Cfg. 291, Configure 2 DHCP servers to select secure prov flow.
+#//     - Each server should use a different subnet, one for data and the other for telephony.
+#//     - Start sniffer
+#//     - Reset DUT
+#//     - Check Provisioning state of MTA  
+#//     - Stop sniffer
+#//     - Invoke parsing tool and validate using Pass/Fail scripts
+#//     - Delete MTA config file
+#//
+#// Notes:
+#//     - Requires provPrimitives.tcl & tftp_primitives.tcl.
+#//     - Requires the specific config file in $BASE_CFG_FILE_PATH in Provisioning Server.
+#//     - Requires parT.tcl parsing tool to parse data from capture file.
+#/*****************************************************************************
+global SCRIPT_VERSION
+set SCRIPT_VERSION { # $Id: E-UE_PROV_1-1-2-1_v6.test 7406 2010-07-20 17:17:37Z dthakore $ }
+
+DoStep "PROV_5-1_PreStep-1" "Initialize Test Platform" {
+    Init_PROV
+    Init_CONTROLLER_LAN
+    # Initialize PARSING TOOL
+    Init_PART
+} { PASS_STEP }
+
+DoStep "PROV_5-1_1-1" "Initial configuration" {
+    LogMsg "--- Initial configuration ---"
+    ProvCreateConfig 291 $MTA_MAC
+} { PASS_STEP }
+
+
+DoStep "PROV_5-1_2-1" "Configure DHCP servers and CMTS" {
+    verify_signal "Configure TWO - DHCP SERVERS(add IP helper-address $PROV_DHCP2_IP on CMTS and enter DUT on this server): \n\
+            1st DHCP SERVER: Exclude CM ($PROV_DHCP1_IP, list devices, then check box by $CM_MAC then click exclude & ok)"
+            # 2nd DHCP SERVER: Option 122.1 for CM DHCP Offer pointed to 1st DHCP server IP = $PROV_DHCP1_IP \n\
+            # (List devices, click on $CM_MAC & set policy ID to CMTC331 then save) \n\
+            # and normal policy for MTA (List devices, click on $MTA_MAC & set policy ID to MTAFORCW_122 then save & deploy dhcp)"
+    PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122 $MTA_MAC.bin
+    PROV_DEPLOY_DHCP
+    PACT_SWITCH_PROV_TO $PROV_DHCP2_IP
+    ProvCreateConfig 291 $MTA_MAC
+    PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122 $MTA_MAC.bin
+    PROV_MODIFY_DEVICE $CM_MAC CMTC331
+    PROV_DEPLOY_DHCP
+    PACT_SWITCH_PROV_BACK
+} {PASS_STEP}
+
+set msgStr "Start Sniffer"
+DoStep "PROV_5-1_2-2" $msgStr {
+    LogMsg "--- $msgStr ---"
+    SetupCaptureControllerLan "host $MTA_IP || udp port 67 || host $CM_IP"
+    StartCaptureControllerLan
+} {PASS_STEP}
+
+DoStep "PROV_5-1_3-1" "Reset CM/MTA" {
+    SNMPvN_RESET $CM_IP
+    LogMsg "Reset CM/MTA has passed"
+} {PASS_STEP}
+
+DoStep "PROV_5-1_4-1" "pktcMTADevProvisioningState Content Verification" {
+    # Wait for a minute to let CM/MTA starting to reboot
+    actionWait "Wait for CM/MTA to reboot" 60
+    # Get the OID from the MTA and check it using our previously defined
+    set val [GetProvState 1 600]
+    LogMsg "MTA Provisioning State"
+    LogMsg "             - Expected : 1"
+    LogMsg "             - Received : $val"
+} {IsEqual $val 1}
+
+DoStep "PROV_5-1_4-2" "Stop Sniffer" {
+    LogMsg "--- Stop Sniffer ---"
+    StopCaptureControllerLan
+    SaveToFileControllerLan
+} {PASS_STEP}
+
+
+########################## INVOKE PARSING TOOL ##################################
+
+DoStep "PROV_5-1_4-3" "Analyze flow data" {
+    # Set up parser file
+    set PARSERFILE    $ETH_DEFAULT_TXT_FILE
+} { PASS_STEP }
+
+DoStep "PROV_5-1_4-4" "Parse all data into database" {
+    # Parse data
+    set PARAMS_DHCPV6         "{DHCPv6 {} {} {} {} {} {} {} {}}"
+    set PARAMS_CM_SRC       "{{} {} {} {} $CM_IP {} {} {} {}}"
+    set PARAMS_CM_DST       "{{} {} {} {} {} {} {} $CM_IP {}}"
+    set msgID_CM            [ParseFile $PARSERFILE "$PARAMS_DHCPV6 $PARAMS_CM_SRC $PARAMS_CM_DST"]
+    set PARAMS_MTA_SRC      "{{} {} {} {} $MTA_IP {} {} {} {}}"
+    set PARAMS_MTA_DST      "{{} {} {} {} {} {} {} $MTA_IP {}}"
+    set msgID_MTA           [ParseFile $PARSERFILE "$PARAMS_DHCPV6 $PARAMS_MTA_SRC $PARAMS_MTA_DST"]
+} {
+    if { $::PART_RETURN == 0 } {
+        PASS_STEP
+    } else {
+        FAIL_STEP "Cannot find data"
+    }
+}
+
+DoStep "PROV_5-1_4-5" "Note the IP address for the Data Service Provider" {
+    LogMsg "Note the IP address for the Data Service Provider"
+    set CONTINUE_PAST_STEP_ERROR 1
+    # Find CM MAC with colons
+    set CM_MAC_COL [AddColMac $CM_MAC]
+} {
+    # Get the IP address for server that sends ACK to CM
+    set dhcp1 [GetValue $msgID_CM "INANY DHCPv6 REPLY HEADERSRCIP" AND \
+            "OPTIONCLIENTHWADDRESS" "IS" "$CM_MAC_COL"]
+    IsEqual $dhcp1 $PROV_DHCP2_IP    
+}
+
+DoStep "PROV_5-1_4-6" "Note the IP address for the CM" {
+    LogMsg "Note the IP address for the CM"
+set cmip [GetValue $msgID_CM "INANY DHCPv6 REPLY OPTIONCLIENTIPADDRESS" AND \
+        "OPTIONCLIENTHWADDRESS" "IS" "$CM_MAC_COL"]
+set cmip [string trimright $cmip " (*)"]
+} {
+    LogMsg "CM IP is $cmip"
+}
+
+DoStep "PROV_5-1_2-1" "DHCPv6 SOLICIT: OPTION 60: EXISTS" {
+    LogMsg "Verify DHCPv6 SOLICIT: OPTION 60: EXISTS"
+    # Find MTA MAC with colons
+    set MTA_MAC_COL [AddColMac $MTA_MAC]
+} {
+    # Verify OPTION 60 EXISTS
+    VerifyValue $msgID_MTA "INANY DHCPv6 SOLICIT OPTION60" "IS" "\\\"pktc(2.0).*" AND \
+            "OPTIONCLIENTHWADDRESS" "IS" "$MTA_MAC_COL"
+}
+
+DoStep "PROV_5-1_5-1" "DHCPv6 REPLY: Source IP matches 122.1(telephony server)" {
+    LogMsg "Verify DHCPv6 REPLY: Source IP matches 122.1(telephony server)"
+} {
+    # Verify source IP
+    set dhcp2 [GetValue $msgID_CM "INANY DHCPv6 REPLY OPTION122SUBOPTION1" AND \
+            "OPTIONCLIENTHWADDRESS" "IS" "$CM_MAC_COL"]
+    set dhcp2 [string trimright $dhcp2 " (16 bytes)"]
+    # Find MTA MAC with colons
+    set MTA_MAC_COL [AddColMac $MTA_MAC]
+    set val [GetValue $msgID_MTA "INANY DHCPv6 REPLY HEADERSRCIP" AND \
+            "OPTIONCLIENTHWADDRESS" "IS" "$MTA_MAC_COL"]
+    IsEqual $val $dhcp2
+    LogMsg "DHCPv6 REPLY: Source IP($val) matches 122.1(telephony server)($dhcp2)"
+}
+
+DoStep "PROV_5-1_6-1" "Verify MTA receives ACK from telephony server." {
+    LogMsg "Verify MTA receives ACK from telephony server."
+    VerifyValue $msgID_MTA "INANY DHCPv6 REPLY HEADERSRCIP" "IS" "$dhcp2" AND \
+                           "OPTIONCLIENTHWADDRESS" "IS" "$MTA_MAC_COL"
+} {
+    LogMsg "MTA receives ACK from $dhcp2"
+}
+
+DoStep "PROV_5-1_6-2" "Note the IP address for the MTA" {
+    LogMsg "Note the IP address for the MTA"
+set mtaip [GetValue $msgID_MTA "INANY DHCPv6 REPLY OPTIONCLIENTIPADDRESS" AND \
+        "OPTIONCLIENTHWADDRESS" "IS" "$MTA_MAC_COL"]
+set mtaip [string trimright $mtaip " (*)"]
+} {
+    LogMsg "MTA IP is $mtaip"
+}
+
+DoStep "PROV_5-1_7-1" "Verify CM DHCP server Source IP and MTA DHCP server Source IP are different" {
+    LogMsg "Verify CM DHCP server Source IP and MTA DHCP server Source IP are different"
+} {
+    IsNotEqual $dhcp1 $dhcp2
+    LogMsg "CM DHCP server Source IP($dhcp1) and MTA DHCP server Source IP($dhcp2) are different"
+}
+
+DoStep "PROV_5-1_7-2" "Compare CM and MTA subnets" {
+    set cmsubnet [regsub -all {\:} $cmip { }]
+    set mtasubnet [regsub -all {\:} $mtaip { }]
+
+	
+# Which bytes must be compared to decide if E-DVA and CM are in different subnets?????############
+	set cmsubnet [lindex $cmsubnet ?]
+    set mtasubnet [lindex $mtasubnet ?]
+######################################################################################
+} {
+    IsNotEqual $cmsubnet $mtasubnet
+    LogMsg "CM Subnet($cmsubnet) and MTA Subnet($mtasubnet) are different."
+}
+
+DoStep "PROV_5-1_5-1" "Verify MTA Prov" {
+    set val [GetProvState 1 20]
+    LogMsg "MTA Provisioning State"
+    LogMsg "             - Expected : 1"
+    LogMsg "             - Received : $val"
+} {
+    IsEqual $val 1
+}
+
+DoStep "PROV_5-1_7-3" "sysUpTime (SNMPv2) Content Verification" {
+    set cmip [GetValue $msgID_CM "INANY DHCPv6 REPLY OPTIONCLIENTIPADDRESS" AND \
+            "OPTIONCLIENTHWADDRESS" "IS" "$CM_MAC_COL"]
+    set cmip [string trimright $cmip " (*)"]
+    # Made popup for sysuptime verification
+    set valv2 [SNMPvN_GET 1.3.6.1.2.1.1.3.0 $cmip 2c private 1]
+    set cmpv2 [string match .*:.*:.*:.*\..* $valv2]
+    IsEqual $cmpv2 1
+} {verify_signal "sysUpTime (SNMPv3) is $valv2 (1/100th sec), is this correct?"}
+    
+DoStep "PROV_5-1_7-4" "sysUpTime (SNMPv3) Content Verification" {
+    set valv3 [SNMP_GET .1.3.6.1.2.1.1.3.0 $MTA_IP 10 1]
+    # Made popup for sysuptime verification
+    set cmpv3 [string match *seconds $valv3]
+    IsEqual $cmpv3 1
+} {verify_signal "sysUpTime (SNMPv3) is $valv3 (1/100th sec), is this correct?"}
+
+################################################################################
+# Cleanup
+################################################################################
+
+DoStep "PROV_5-1-PostStep-1" "Restore DHCP server policies and CMTS (CMFORCW122 and IP helper)" {
+    verify_signal "Restore DHCP server policies and CMTS:
+    1st DHCP SERVER: Include CM ($PROV_DHCP1_IP, list devices, then check box by $CM_MAC then click include & ok)
+    2nd DHCP SERVER: Exclude CM & IP Helper-address ($PROV_DHCP2_IP, remove ip helper-address from cmts,
+    list devices on PACT, then check box by $CM_MAC & $MTA_MAC then click exclude & ok)"
+    PACT_SWITCH_PROV_TO $PROV_DHCP2_IP
+    PROV_MODIFY_DEVICE $CM_MAC CMFORCW_122
+    PROV_DEPLOY_DHCP
+    PACT_SWITCH_PROV_BACK
+    ProvCreateConfig 291 $MTA_MAC
+    PROV_DEPLOY_DHCP    
+} {
+    verify_signal "Reset (hard reboot) DUT"    
+}
+
+DoStep "PROV_5-1_PostStep-2" "pktcMTADevProvisioningState Content Verification" {
+    # Wait for a minute to let CM/MTA starting to reboot
+    actionWait "Wait for CM/MTA to reboot" 70
+    # Get the OID from the MTA and check it using our previously defined
+    set val [GetProvState 1 600]
+    LogMsg "MTA Provisioning State"
+    LogMsg "             - Expected : 1"
+    LogMsg "             - Received : $val"
+} {
+    IsEqual $val 1
+}
+
+Cleanup

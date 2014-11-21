@@ -1,0 +1,97 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="SECURITY 1.1.2" 
+	descrip="UE ignores any unrecognized directive in WWW-Authenticate Response Header" 
+	number="SECURITY 1.1.2">
+	
+	<template file="./templates/UERegAndSubTemp.xml" name="Registrar"/>
+	
+	<remove_from fsm="Registrar">
+		<state ID="PendingRegistration"/>
+		<state ID="Registered"/>
+	</remove_from>
+	
+	<add_to fsm="Registrar">
+		<state ID="PendingRegistration">
+			<response>
+				<if>
+					<eq>
+						<!--Step 2 test case SIP 1.1.1.2 -The UE initiates the registration 
+						process as specified in A.1.1.  -->
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>REGISTER</expr>
+					</eq>
+					<!-- Step-3 f test case SIP 1.1.1.2 - The SS challenges the UE with a 
+						401–Unauthorized-Message (step 5 of A.1.1).  The 401–Unauthorized-Message→qop 
+						contains the string “auth, auth-int�?-->
+					<then>
+						<send protocol="sip" msgtype="401-REGISTER">
+							<mod modtype="replace" hdr="WWW-Authenticate" param="bogus-dir">
+								<expr>bogus-value</expr>
+							</mod>
+						</send>
+					</then>
+				</if>
+			</response>
+			<transition to="Authorization" event="REGISTER"/>
+		</state>
+		
+		<state ID="Registered">
+			<prelude>
+				<verify step="3" requirements="RFC2403">
+					<eq>
+						<msg_ref type="sip" msg_instance="last">Request</msg_ref>
+						<expr>REGISTER</expr>
+					</eq>
+				</verify>
+				<send protocol="sip" msgtype="200-Register"/>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="event"/>
+						<expr>FailEvent</expr>
+					</eq>
+					<then/>
+					<elseif>
+						<and>
+							<eq>
+								<msg_ref type="sip">Request</msg_ref>
+								<expr>SUBSCRIBE</expr>
+							</eq>
+							<contains>
+								<msg_ref type="sip">SUBSCRIBE.Event</msg_ref>
+								<expr>reg</expr>
+							</contains>
+						</and>
+						<then>
+							<send protocol="sip" msgtype="200-SUBSCRIBE"/>
+							<sleep time="100"/>
+							<send protocol="sip" msgtype="NOTIFY"/>
+						</then>
+					</elseif>
+				</if>
+			</response>
+			<transition to="Notification" event="SUBSCRIBE"/>
+		</state>
+		<transition from="Notification" to="END" event="200-NOTIFY"/>
+	</add_to>
+</pc2xml>

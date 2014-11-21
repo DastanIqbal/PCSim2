@@ -1,0 +1,184 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+-->
+
+<!-- First are the document type and the attributes for our document -->
+<pc2xml version="$Revision: 6675 $" 
+	name="SIPE2E 4.9.1" 
+	descrip="This test determines how the SF queries the ENUM via the SIP query for SIP messages with Options." 
+	number="1">
+	
+	<fsm name="UE1">
+		<models>
+			<session/>
+		</models>
+	
+		<NE sim_type="orig" elements="UE1" targets="UE1"/>
+	
+		<states initialstate="WaitUE2Register">
+			<state ID="WaitUE2Register">
+				<transition to="UE1Registering" event="Registered"/>
+			</state>
+			
+			<state ID="UE1Registering">
+				<prelude>
+					<send protocol="sip" msgtype="Register" target="PCSCF1"/>
+				</prelude>
+				<transition to="UE1Digest" event="401-Register"/>
+				<transition to="UE1Subscribe" event="200-Register"/>
+			</state>
+			
+			<state ID="UE1Digest">
+				<prelude>
+					<send protocol="sip" msgtype="Register" target="PCSCF1"/>
+				</prelude>
+				<transition to="UE1Subscribe" event="200-Register"/>
+			</state>
+			
+			<state ID="UE1Subscribe">
+				<prelude once="true">
+					<send protocol="sip" msgtype="SUBSCRIBE" subscribeType="reg" target="PCSCF1"/>
+				</prelude>
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>NOTIFY</expr>
+						</eq>
+						<then>
+							<send protocol="sip" msgtype="200-NOTIFY" target="PCSCF1"/>
+							<generate event="Registered" fsm="UE2"/>
+						</then>
+					</if>
+				</response>
+				<transition to="UE1Subscribe" event="200-SUBSCRIBE"/>
+				<transition to="UE1Option" event="NOTIFY"/>
+			</state>
+					
+			<state ID="UE1Option">
+				<prelude>
+					<send protocol="sip" msgtype="OPTIONS" target="PCSCF1" destination="UE2"/>
+				</prelude>
+				<transition to="Call1Complete" event="200-OPTIONS"/>
+			</state>
+			
+			<state ID="Call1Complete" ES="true">
+				<transition to="WaitUE2Option" event="SessionTerminated"/>
+			</state>
+			
+			<state ID="WaitUE2Option">
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>Options</expr>
+						</eq>
+						<then>
+							<send protocol="sip" msgtype="200-OPTIONS" target="PCSCF1" destination="UE2"/>
+						</then>
+					</if>
+				</response>
+				<transition to="Call2Complete" event="OPTIONS"/>
+			</state>
+			
+			<state ID="Call2Complete" ES="true"/>
+		</states>
+	</fsm>
+	
+	<fsm name="UE2" sipStack="SIP Stack 2">
+		<models>
+			<session/>
+		</models>
+		<NE sim_type="term" elements="UE2" targets="UE2"/>
+		
+		<states initialstate="UE2Registering">
+		
+			<state ID="UE2Registering">
+				<prelude>
+					<log promptUser="true" expr="Configure the SF to preform SIP Queries to the ENUM Server."/>
+					<start_capture/>
+					<sleep time="1000"/>
+					<send protocol="sip" msgtype="Register" target="PCSCF2"/>
+				</prelude>
+				<transition to="UE2Digest" event="401-Register"/>
+				<transition to="UE2Subscribe" event="200-Register"/>
+			</state>
+			
+			<state ID="UE2Digest">
+				<prelude>
+					<send protocol="sip" msgtype="Register" target="PCSCF2"/>
+				</prelude>
+				<transition to="UE2Subscribe" event="200-Register"/>
+			</state>
+			
+			<state ID="UE2Subscribe">
+				<prelude once="true">
+					<send protocol="sip" msgtype="SUBSCRIBE"  subscribeType="reg" target="PCSCF2"/>
+				</prelude>
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>NOTIFY</expr>
+						</eq>
+						<then>
+							<send protocol="sip" msgtype="200-NOTIFY" target="PCSCF2"/>
+							<generate event="Registered" fsm="UE2"/>
+						</then>
+					</if>
+				</response>
+				<transition to="UE2Subscribe" event="200-SUBSCRIBE"/>
+				<transition to="UE2Registered" event="NOTIFY"/>
+			</state>
+			
+			<state ID="UE2Registered">
+				<prelude>
+					<generate event="Registered" fsm="UE1"/>
+				</prelude>
+				<transition to="UE2Option" event="Registered"/>
+			</state>
+			
+			<state ID="UE2Option">
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>Options</expr>
+						</eq>
+						<then>
+							<send protocol="sip" msgtype="200-OptionS" target="PCSCF2" destination="UE1"/>
+						</then>
+					</if>
+				</response>
+				<transition to="UE2CallComplete" event="OPTIONS"/>
+			</state>
+			
+			<state ID="UE2CallComplete" ES="true" offHookOK="true">
+				<transition to="SendOption" event="SessionTerminated"/>
+			</state>
+			
+			<state ID="SendOption">
+				<prelude>
+					<sleep time="1000"/>
+					<send protocol="sip" msgtype="OPTIONS" target="PCSCF2" destination="UE1"/>
+				</prelude>
+				<transition to="END" event="200-OPTIONS"/>
+			</state>
+		</states>
+	</fsm>
+</pc2xml>

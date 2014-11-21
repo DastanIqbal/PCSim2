@@ -1,0 +1,85 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+
+<pc2xml version="$Revision: 8188 $" name="UT_UE_1.13.6" descrip="This is a unit test script for testing the UE_1.13.6 test script." number="1">
+	<fsm name="UE0">
+		<models>
+			<session/>
+		</models>
+		<NE sim_type="term" elements="DUT" targets="UE0 DUT"/>
+		<states initialstate="Options">
+			<!-- REGISTER State -->
+			<state ID="Register">
+				<prelude>
+					<!-- If this is part of a batch it will allow the platform to clean up between
+						tests. -->
+					<sleep time="3000"/>
+					<send protocol="sip" msgtype="Register" target="PCSCF1" originator="DUT"/>
+				</prelude>
+				<transition to="Digest" event="401-Register"/>
+				<transition to="Options" event="200-Register"/>
+			</state>
+			<state ID="Digest">
+				<prelude>
+					<send protocol="sip" msgtype="Register" target="PCSCF1" originator="DUT"/>
+				</prelude>
+				<postlude>
+					<sleep time="5000"/>
+				</postlude>
+				<transition to="Options" event="200-Register"/>
+			</state>
+			<!-- SETUP STATE -->
+			<state ID="Options" timer="5000">
+				<!-- Step 1 from the Default Message Flow Call-Term-at-UE(DUT) Sequence Diagram -
+               Test 18x response for reliability for possible Prack message- send Invite -->
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="event"/>
+							<expr>TimerExpired</expr>
+						</eq>
+						<then/>
+						<elseif>
+							<dnc>
+								<msg_ref type="sip" hdr_instance="any">OPTIONS.Require</msg_ref>
+								<expr>precondition</expr>
+							</dnc>
+							<then>
+								<fail/>
+							</then>
+							<else>
+								<send protocol="sip" msgtype="200-OPTIONS" bodies="SDP">
+									<mod modtype="add" hdr="qos-des-local">
+										<expr>a=des: qos none local sendrecv</expr>
+									</mod>
+									<mod modtype="add" hdr="qos-des-remote">
+										<expr>a=des: qos none remote sendrecv</expr>
+									</mod>
+								</send>
+							</else>
+						</elseif>
+					</if>
+				</response>
+				<transition to="Register" event="TimerExpired"/>
+				<transition to="END" event="OPTIONS"/>
+			</state>
+		</states>
+	</fsm>
+</pc2xml>

@@ -1,0 +1,69 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	PCPCII-131 : Change the VSC code dialed and allowed for the test to *68 instead of *67. (ghassler 06/11/2009)
+	PCPCII-139 : Update the Voicetronix modifiers to use the new values. (ghassler 07/10/2009)
+	PCPCII-174 : Update the script to the D11 version of the ATP. (ghassler 01/26/2010)
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-UE 1.2.4.2" 
+	descrip="Caller ID Per-Call Blocking Error Condition (CIDS-Suppression)  " 
+	number="RST-UE 1.2.4.2">
+	
+	<fsm name="UE1">
+		<models>
+			<session/>
+		</models>
+		
+		<NE sim_type="term" elements="UE1 PCSCF2 SCSCF1 PCSCF1" targets="UE1"/>
+		
+		<states initialstate="Register">
+			<state ID="Register">
+				<transition from="Register" to="OffHook" event="Registered"/>
+			</state>
+			
+			<state ID="OffHook">
+				<prelude>
+					<sleep time="5000"/>
+					<send protocol="utility" msgtype="OffHook"/>
+				</prelude>
+				<transition from="OffHook" to="Dial" event="OffHookComplete"/>
+			</state>
+			
+			<state ID="Dial">
+				<prelude>
+					<!-- Step 1 of test case 1.2.4.2-->
+					<send protocol="utility" msgtype="DialDigits">
+						<mod modtype="add" hdr="number">
+							<expr>*68</expr>
+						</mod>
+					</send>
+				</prelude>
+				<transition to="VerifyDialTone" event="DialDigitsComplete"/>
+			</state>
+			
+			<state ID="VerifyDialTone">
+				<prelude>
+					<!-- Step 1 of test case 1.2.4.2-->
+					<log promptUser="True" yesExpected="True" verify="True" 
+						step="1" requirements="REQ13526, REQ13528" 
+						expr="Confirm if you hear error tone?"/>
+					<generate event="Branch1Event"/>
+				</prelude>
+				<transition to="END" event="Branch1Event"/>
+			</state>
+		</states>
+	</fsm>
+</pc2xml>

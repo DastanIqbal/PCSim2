@@ -1,0 +1,194 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-UE 1.1.11.1" 
+	descrip="Originating a Call in IPv6 mode" 
+	number="RST-UE 1.1.11.1">
+	
+	<template file="./templates/Proxy.xml" name="Proxy"/>
+	
+	<remove_from fsm="Proxy">
+		<state ID="OffHook"/>
+		<state ID="Setup"/>
+		<state ID="Connected"/>
+	</remove_from>
+	
+	<add_to fsm="Proxy">
+		
+		<state ID="OffHook">
+			<prelude>
+				<send protocol="utility" msgtype="OffHook"/>
+			</prelude>
+			<transition to="VerifyDialTone" event="OffHookComplete"/>
+		</state>
+		
+		<state ID="VerifyDialTone">
+			<prelude>
+				<send protocol="utility" msgtype="VerifyDialTone"/>
+			</prelude>
+			<response>
+				<verify step="1" requirements="REQ13418, REQ14443, REQ14444">
+					<eq>
+						<msg_ref type="utility">Response</msg_ref>
+						<expr>VerifyDialToneComplete</expr>
+					</eq>
+				</verify>
+			</response>
+			<transition to="Setup" event="VerifyDialToneComplete"/>
+		</state>
+		
+		<state ID="Setup">
+			<prelude once="true">
+				<send protocol="utility" msgtype="DialDigits">
+					<mod modtype="add" hdr="number">
+						<msg_ref type="platform">UE1.phone number 1</msg_ref>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<or>
+						<eq>
+							<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+							<msg_ref type="platform">UE1.IP</msg_ref>
+						</eq>
+						<eq>
+							<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+							<msg_ref type="platform">UE1.IP</msg_ref>
+						</eq>
+					</or>
+					<then>
+						<proxy target="UE0"/>
+					</then>
+					<elseif>
+						<or>
+							<eq>
+								<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE0.IP</msg_ref>
+							</eq>
+							<eq>
+								<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE0.IP</msg_ref>
+							</eq>
+						</or>
+						<then>
+							<proxy target="UE1"/>
+						</then>
+					</elseif>
+				</if>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>INVITE</expr>
+					</eq>
+					<then>
+						<verify step="2" requirements="REQ14445, REQ14446, REQ14447, REQ13419, REQ13432, REQ14448, REQ14292, REQ16726, REQ16727">
+							<and>
+								<ipv6>
+									<msg_ref type="sip">INVITE.Via.sent-by</msg_ref>
+								</ipv6>
+								<eq>
+									<msg_ref type="sip">INVITE.Via.sent-by</msg_ref>
+									<msg_ref type="platform">DUT.IP</msg_ref>
+								</eq>
+							</and>
+						</verify>
+						<verify step="2" requirements="REQ14445, REQ14446, REQ14447, REQ13419, REQ13432, REQ14448, REQ14292, REQ16726, REQ16727">
+							<and>
+								<ipv6>
+									<msg_ref type="sip">INVITE.Router.domain</msg_ref>
+								</ipv6>
+								<eq>
+									<msg_ref type="sip">INVITE.Router.domain</msg_ref>
+									<msg_ref type="platform">DUT.IP</msg_ref>
+								</eq>
+							</and>
+						</verify>
+						<verify step="2" requirements="REQ14445, REQ14446, REQ14447, REQ13419, REQ13432, REQ14448, REQ14292, REQ16726, REQ16727">
+							<and>
+								<ipv6>
+									<msg_ref type="sip">INVITE.To.domain</msg_ref>
+								</ipv6>
+								<eq>
+									<msg_ref type="sip">INVITE.To.domain</msg_ref>
+									<msg_ref type="platform">DUT.IP</msg_ref>
+								</eq>
+							</and>
+						</verify>
+						<verify step="2" requirements="REQ14445, REQ14446, REQ14447, REQ13419, REQ13432, REQ14448, REQ14292, REQ16726, REQ16727">
+							<and>
+								<ipv6>
+									<msg_ref type="sip">INVITE.From.domain</msg_ref>
+								</ipv6>
+								<eq>
+									<msg_ref type="sip">INVITE.From.domain</msg_ref>
+									<msg_ref type="platform">DUT.IP</msg_ref>
+								</eq>
+							</and>
+						</verify>
+						<verify step="2" requirements="REQ14445, REQ14446, REQ14447, REQ13419, REQ13432, REQ14448, REQ14292, REQ16726, REQ16727">
+							<and>
+								<ipv6>
+									<msg_ref type="sip">INVITE.Contact.domain</msg_ref>
+								</ipv6>
+								<eq>
+									<msg_ref type="sip">INVITE.Contact.domain</msg_ref>
+									<msg_ref type="platform">DUT.IP</msg_ref>
+								</eq>
+							</and>
+						</verify>
+					</then>
+				</if>
+						 
+			</response>
+			<transition to="Setup" event="DialDigitsComplete"/>
+			<transition to="Setup" event="INVITE"/>
+			<transition to="Alerting" event="CANCEL"/>
+			<transition to="Alerting" event="xxx-INVITE"/>
+			<transition to="Setup" event="OffHookComplete"/>
+		</state>
+		
+		<state ID="Connected" timer="10000">
+			<transition to="VerifyVoicePath2Way" event="TimerExpired"/>
+		</state>
+		
+		<state ID="VerifyVoicePath2Way">
+			<prelude>
+				<send protocol="utility" msgtype="VerifyVoicePath2Way">
+					<mod modtype="replace" hdr="from voiceport">
+						<msg_ref type="platform">Platform.voiceport0</msg_ref>
+					</mod>
+					<mod modtype="replace" hdr="to voiceport">
+						<msg_ref type="platform">Platform.voiceport1</msg_ref>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="2" requirements="REQ14445, REQ14446, REQ14447, REQ13419, REQ13432, REQ14448, REQ14292, REQ16726, REQ16727">
+					<eq>
+						<msg_ref type="utility">Response</msg_ref>
+						<expr>VERIFYVOICEPATH2WAYCOMPLETE</expr>
+					</eq>
+				</verify>
+			</response>
+			<transition to="OnHook" event="VERIFYVOICEPATH2WAYCOMPLETE"/>
+		</state>
+	</add_to>
+</pc2xml>

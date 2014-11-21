@@ -1,0 +1,328 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+
+<pc2xml version="$Revision: 6076 $" name="UT_RST_UE_1.6.3.2" descrip="Distinctive Alerting feature enabled" number="1">
+        <fsm name="DUT">
+                <models>
+                        <session /> 
+                </models>
+        <NE sim_type="term" elements="DUT" targets="UE0 DUT" /> 
+                <states initialstate="Register">
+ <!--  REGISTER State 
+  --> 
+                <state ID="Register">
+                        <prelude>
+                                <send protocol="sip" msgtype="Register" target="PCSCF1" originator="DUT" /> 
+                        </prelude>
+                        <transition to="Digest" event="401-Register" /> 
+                        <transition to="SendInvite" event="200-Register" /> 
+                </state>
+                
+                <state ID="Digest">
+                        <prelude>
+                                <send protocol="sip" msgtype="Register" target="PCSCF1" originator="DUT" /> 
+                        </prelude>
+                        <transition to="SendInvite" event="200-Register" /> 
+                </state>
+<!--  SETUP State 
+  -->
+                <state ID="SendInvite">
+                        <prelude>
+                                <sleep time="1000"/>
+				<send protocol="sip" msgtype="INVITE" target="UE1" originator="DUT">
+					<mod modtype="replace" hdr="Request-Line" param="Request-URI">
+					<var_expr>
+						<expr>sip:*61@</expr> 
+						<msg_ref type="platform">UE1.domain</msg_ref> 
+						<expr>;user=dialstring</expr> 
+					 </var_expr>
+					</mod>
+				    </send>
+			</prelude>
+			<transition to="SendAck" event="200-Invite"/>
+                </state>
+                
+                <state ID="SendAck">
+                        <prelude once="true">
+                                <send protocol="sip" msgtype="ACK" target="UE1" originator="DUT"/>
+                        </prelude>
+                                <response>
+                                        <if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>Bye</expr>
+						</eq>
+					<then>
+						<send protocol="sip" msgtype="200-Bye" target="UE1" originator="DUT"/>
+					</then>
+                                        </if>
+				</response>
+			<transition to="Setup" event="Invite"/>
+                        <transition to="Setup" event="BYE"/>
+                </state>
+                
+                <state ID="Setup" timer="20000">
+                                <response>
+                                        <if>
+                                                <eq>
+                                                        <msg_ref type="sip">Request</msg_ref> 
+                                                        <expr>Invite</expr> 
+                                                </eq>
+                                        <then>
+                                                <send protocol="sip" msgtype="100-INVITE" target="UE1" originator="DUT" /> 
+                                        </then>
+                                        </if>
+                                        <if>
+                                                <and>
+                                                        <eq>
+                                                        <msg_ref type="extensions">precondition</msg_ref> 
+                                                        <expr>require</expr> 
+                                                        </eq>
+                                                <or>
+                                                <contains>
+                                                        <msg_ref type="sip" hdr_instance="any">Invite.Require</msg_ref> 
+                                                        <expr>precondition</expr> 
+                                                </contains>
+                                                <contains>
+                                                        <msg_ref type="sip" hdr_instance="any">Invite.Supported</msg_ref> 
+                                                        <expr>precondition</expr> 
+                                                </contains>
+                                                </or>
+                                                </and>
+                                                <then>
+                                                    <send protocol="sip" msgtype="183-Invite" target="UE1" originator="DUT" /> 
+                                                </then>
+                                                <elseif>
+                                                        <eq>
+                                                        <msg_ref type="sip">Request</msg_ref> 
+                                                        <expr>Invite</expr> 
+                                                        </eq>
+                                                <then>
+                                                        <send protocol="sip" msgtype="180-Invite" target="UE1" originator="DUT" /> 
+                                                </then>
+                                                </elseif>
+                                        </if>
+                                </response>
+                        <transition to="Send200" event="INVITE" /> 
+                        <transition to="Register" event="TimerExpired" /> 
+                </state>
+ 
+                <state ID="Send200" timer="15000">
+                        <prelude>
+				<send protocol="sip" msgtype="200-INVITE" target="UE1" originator="DUT" />
+				</prelude>
+			 <transition to="Setup1" event="ACK" /> 
+			 <transition to="Setup1" event="INVITE" /> 
+                </state>
+
+                <state ID="Setup1" timer="20000">
+                        
+			<response>
+                                <if>
+                                        <eq>
+                                        <msg_ref type="sip">Request</msg_ref> 
+                                        <expr>Invite</expr> 
+                                        </eq>
+                                <then>
+                                        <send protocol="sip" msgtype="180-INVITE" target="UE2" originator="DUT" /> 
+                                </then>
+                                </if>
+                                
+                        </response>
+			
+			<transition to="Connected1" event="INVITE" />
+			<transition to="Register" event="TimerExpired" /> 
+                        
+                </state>
+ 
+                 
+                <state ID="Connected1" timer="2000">
+			
+                        <response>
+                                <if>
+                                        <eq>
+                                                <msg_ref type="sip">Request</msg_ref> 
+                                                <expr>BYE</expr> 
+                                        </eq>
+                                        <then>
+                                                <send protocol="sip" msgtype="200-BYE" target="UE1" originator="DUT" /> 
+                                        </then>
+                                </if>
+                        </response>
+			<transition to="Connected2" event="BYE" />
+			<transition to="Connected1" event="TimerExpired" /> 
+		<transition to="Connected2" event="CANCEL" />
+		
+                 
+                </state>
+ 
+		<state ID="Connected2" timer="2000">
+			
+                        <response>
+                                <if>
+                                        <eq>
+                                                <msg_ref type="sip">Request</msg_ref> 
+                                                <expr>BYE</expr> 
+                                        </eq>
+                                        <then>
+						<send protocol="sip" msgtype="200-BYE" target="UE1" originator="DUT" />
+						<sleep time="300"/>
+                                                <send protocol="sip" msgtype="200-CANCEL" target="UE2" originator="DUT" />
+						<sleep time="300"/>
+						<send protocol="sip" msgtype="487-INVITE" target="UE2" originator="DUT" />
+                                        </then>
+                                </if>
+                        </response>
+			<transition to="Connected2" event="BYE" />
+			<transition to="Setup2" event="CANCEL" /> 
+			
+			<transition to="Setup2" event="ACK" /> 
+                </state>	 
+              
+                 
+                <state ID="Setup2" timer="5000">
+                        <response>
+                                <if>
+                                        <eq>
+                                                <msg_ref type="sip">Request</msg_ref> 
+                                                <expr>Invite</expr> 
+                                        </eq>
+                                        <then>
+                                                <send protocol="sip" msgtype="100-INVITE" target="UE1" originator="DUT" /> 
+                                        </then>
+                                </if>
+                                <if>
+                                        <contains>
+                                                <msg_ref type="sip" hdr_instance="any">Invite.Require</msg_ref> 
+                                                <expr>100rel</expr> 
+                                        </contains>
+                                        <then>
+                                                <send protocol="sip" msgtype="183-Invite" target="UE1" originator="DUT">
+                                                        <mod modtype="add" hdr="Require" param="precondition">
+                                                        <expr>100rel</expr> 
+                                                        </mod>
+                                                </send>
+                                        </then>
+                                <elseif>
+                                        <eq>
+                                        <msg_ref type="sip">Request</msg_ref> 
+                                        <expr>Invite</expr> 
+                                        </eq>
+                                        <then>
+                                                <send protocol="sip" msgtype="180-Invite" target="UE1" originator="DUT" /> 
+                                        </then>
+                                </elseif>
+                                </if>
+                        </response>
+			<transition to="Setup2" event="ACK" /> 
+                        <transition to="Send2002" event="INVITE" /> 
+                </state>
+                
+                <state ID="Send2002" timer="15000">
+                        <response>
+                                <if>
+                                        <eq>
+                                        <msg_ref type="sip">Request</msg_ref> 
+                                        <expr>CANCEL</expr> 
+                                        </eq>
+                                <then>
+                                        <send protocol="sip" msgtype="200-CANCEL" target="UE2" originator="DUT" />
+                                        <sleep time="200"/>
+                                        <send protocol="sip" msgtype="487-INVITE" target="UE2" originator="DUT" />
+                                </then>
+                                </if>
+                        </response>
+                        <transition to="EndCall2" event="CANCEL" />
+                                                        
+                </state>
+                <state ID="EndCall2" timer="15000">
+                        <transition to="Setup3" event="ACK" />
+                        <transition to="Setup3" event="TimerExpired" />
+                </state>
+                <state ID="Setup3" timer="12000">
+                        <response>
+                                <if>
+                                        <eq>
+                                        <msg_ref type="sip">Request</msg_ref> 
+                                        <expr>Invite</expr> 
+                                        </eq>
+                                <then>
+                                        <send protocol="sip" msgtype="100-INVITE" target="UE1" originator="DUT" /> 
+                                </then>
+                                </if>
+                                <if>
+                                <and>
+                                        <eq>
+                                                <msg_ref type="extensions">precondition</msg_ref> 
+                                                <expr>require</expr> 
+                                        </eq>
+                                <or>
+                                        <contains>
+                                                <msg_ref type="sip" hdr_instance="any">Invite.Require</msg_ref> 
+                                                <expr>precondition</expr> 
+                                        </contains>
+                                        <contains>
+                                                <msg_ref type="sip" hdr_instance="any">Invite.Supported</msg_ref> 
+                                                <expr>precondition</expr> 
+                                        </contains>
+                                </or>
+                                </and>
+                                <then>
+                                            <send protocol="sip" msgtype="183-Invite" target="UE1" originator="DUT" /> 
+                                </then>
+                                <elseif>
+                                        <eq>
+                                                <msg_ref type="sip">Request</msg_ref> 
+                                                <expr>Invite</expr> 
+                                        </eq>
+                                <then>
+                                        <send protocol="sip" msgtype="180-Invite" target="UE1" originator="DUT" /> 
+                                </then>
+                                </elseif>
+                                </if>
+                        </response>
+                        <transition to="Send2003" event="INVITE" /> 
+                        <transition to="Setup3" event="TimerExpired" />
+                </state>
+ 
+                <state ID="Send2003" timer="15000">
+                        <response>
+                                <if>
+                                        <eq>
+                                                <msg_ref type="sip">Request</msg_ref> 
+                                                <expr>CANCEL</expr> 
+                                        </eq>
+                                <then>
+                                        <send protocol="sip" msgtype="200-CANCEL" target="UE2" originator="DUT" />
+                                        <sleep time="200"/>
+                                        <send protocol="sip" msgtype="487-INVITE" target="UE2" originator="DUT" /> 
+                                </then>
+                                </if>
+                                
+                        </response>
+                        <transition to="EndCall3" event="CANCEL" />  
+                </state>
+                <state ID="EndCall3" timer="15000">
+                        <transition to="END" event="ACK" />
+                        <transition to="END" event="TimerExpired" />
+                </state>
+        </states>
+        </fsm>
+  </pc2xml>

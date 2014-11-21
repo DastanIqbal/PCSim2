@@ -1,0 +1,808 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+ Change History: (Author & Date)
+-->
+<!-- Document type and attributes. -->
+<pc2xml version="$Revision: 6076 $"
+        name="E-UE_DATA_1.2.1.2"
+        descrip="eUE ability to properly implement pktcEUEDevDnsTable defined in CL-PKTC-EUE-DEV-MIB."
+        number="E-UE_DATA_1.2.1.2">
+
+
+    <!-- Reset UE; start capture. -->
+    <template file="./templates/EUE_Prov_B_1_1_1.xml" name="EUEDevOpTable"/>
+
+
+    <add_to fsm="EUEDevOpTable">
+        <transition from="StartCapture_RebootWait" to="EUEProvisions1" event="TimerExpired"/>
+
+
+<!-- vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv -->
+<!-- ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ -->
+        <!-- SECURE -->
+        <!-- 13 If eUE supports IPv6, continue with Step 15. -->
+        <state ID="EUEProvisions1">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvisioningState.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="15">
+                    <eq>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>1</expr>
+                    </eq>
+                </verify>
+            </response>
+            <transition to="MIBWalk1" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+
+        <!-- 16 SNMPv3 repeat Steps 3 - 5 above. -->
+        <!-- 16-3 SNMPv3 perform SNMP Walk on pktcEUEDevDnsTable.
+                  eUE processes operation successfully and returns these objects and values.
+                      pktcEUEDevDnsAddrType = ipv6(2)
+                      pktcEUEDevDnsAddr = DNS IPv6 address
+                      pktcEUEDevDnsRowStatus = active(1) -->
+        <state ID="MIBWalk1">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPGetTable">
+                    <mod modtype="add" hdr="oids">
+                        <expr>CL-PKTC-EUE-DEV-MIB::pktcEUEDevDnsTable</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPRespFailure</expr>
+                    </eq>
+                <then>
+                    <fail/>
+                </then>
+                </if>
+                <verify step="16-3">
+                    <and>
+                       <eq>
+                           <!-- pktcEUEDevDnsAddrType -->
+                           <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                           <expr>2</expr>
+                       </eq>
+                    <and>
+                       <eq>
+							<!-- pktcEUEDevDnsAddr -->
+							<msg_ref type="utility" index="0 1 2">SNMPResp.varBind</msg_ref>
+							<!--IPv6 address is in different format. Until finding solution, string will be used.-->
+							<!--msg_ref type="platform">DUT.DNS Server IP</msg_ref-->
+							<expr>FC 00 05 04 07 00 00 00 00 10 00 32 00 00 00 18</expr>
+                       </eq>
+                       <eq>
+                           <!-- pktcEUEDevDnsRowStatus -->
+                           <msg_ref type="utility" index="0 2 2">SNMPResp.varBind</msg_ref>
+                           <expr>1</expr>
+                       </eq>
+                    </and>
+                    </and>
+                </verify>
+            </response>
+            <transition to="SNMPSet1" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+
+        <!-- 16-4 SNMPv3 Set on pktcEUEDevDnsAddrType to another valid value.
+                  The eUE must reject Set operation on this object. -->
+        <state ID="SNMPSet1" timer="10000">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPSet">
+                    <mod modtype="add" hdr="array">
+                        <var_expr>
+                            <expr>varBind 1 1 3 \r\n ][ , </expr>
+                            <expr>CL-PKTC-EUE-DEV-MIB::pktcEUEDevDnsAddrType.1,INTEGER,1][\r\n</expr>
+                        </var_expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+                    <mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPResp</expr>
+                    </eq>
+                <then>
+                    <fail/>
+                </then>
+                </if>
+
+                <!-- NonWritable(17) -->
+                <verify step="16-4">
+					<contains>
+                        <msg_ref type="utility">SNMPRespFailure.errorString</msg_ref>
+                        <expr>notWritable</expr>
+                    </contains>
+                </verify>
+            </response>
+			<postlude>
+			    <stop_capture/>
+			</postlude>
+            <transition to="DNSQuery1" event="SNMPResp"/>
+            <!-- Until CLAB-TOPO-MIB error is resolved, if SNMPSet1 fails, transition to DNSQuery1 instead of END -->
+			<!-- <transition to="END" event="SNMPRespFailure"/> -->
+			<transition to="DNSQuery1" event="SNMPRespFailure"/>
+        </state>
+
+
+        <!-- 16-5 Stop IP capture and save trace file.
+                  Verify E-UE used DNS server IP address provided in configuration file. -->
+        <state ID="DNSQuery1">
+            <prelude once="true">
+                <parse_capture name="eUE_DNS1">
+                    <parser_filter protocol="dns" ip="DUT.IP"/>
+                </parse_capture>
+				<verify step="16-5">
+                    <eq>
+                        <capture_ref type="dns" name="eUE_DNS1">Query.ipv6.dst_host.show</capture_ref>
+                        <msg_ref type="platform">DUT.DNS Server IP</msg_ref>
+                    </eq>
+                </verify>
+				<generate event="SucceedEvent"/>
+            </prelude>
+            <transition to="ReConfigure2" event="SucceedEvent"/>
+			<!-- Until previous SNMPSet1 error is resolved, transition to ReConfigure2 instead of END -->
+            <!-- <transition to="END" event="SNMPRespFailure"/> -->
+			<transition to="ReConfigure2" event="SNMPRespFailure"/>
+        </state>
+
+
+<!-- vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv -->
+<!-- ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ -->
+
+        <!-- 17 ReConfigure. -->
+        <!-- 18 Reset. The E-UE provisions successfully and becomes operational. -->
+        <!-- <state ID="ReConfigure2"
+               provFile="E-UE_PROV_v6_2.1.2.1_2.bin"
+               policyFile="MTAFORCW122_test"
+               nextState="Reset2"/>  -->
+
+		<state ID="ReConfigure2">
+			<prelude>
+				<log promptUser="true" expr="Section 2: Configure the device with Bin File: v6.C.1.2.8.bin and Policy: X_eUEv6, Save, Deploy DHCPv6 and click OK."/>
+				<generate event="Branch1Event"/>
+			</prelude>
+			<transition to="Reset2" event="Branch1Event"/>
+		</state>
+		
+        <state ID="Reset2" timer="120000">
+            <prelude once="true">
+                <start_capture>
+                    <filter>
+                        <var_expr>
+							<expr>host </expr>
+							<msg_ref type="platform">DUT.IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.CM IP Address</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.DHCP Server IP</msg_ref>
+						</var_expr>
+                    </filter>
+                </start_capture>
+
+                <send protocol="utility" msgtype="SNMPSet">
+                    <mod modtype="add" hdr="array">
+                        <var_expr>
+                            <expr>varBind 1 1 3 \r\n ][ , </expr>
+                            <expr>DOCS-CABLE-DEVICE-MIB::docsDevResetNow.0,INTEGER,1][\r\n</expr>
+                        </var_expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.CM IP Address</msg_ref>
+                    </mod>
+                    <!-- Always use version 2c for a CM reset -->
+					<mod modtype="replace" hdr="version">
+						<expr>2c</expr>
+					</mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPRespFailure</expr>
+                    </eq>
+                    <then>
+                        <fail/>
+                    </then>
+                </if>
+                <if>
+                    <or>
+                        <eq>
+                            <msg_ref type="sip">REGISTER.Contact.expires</msg_ref>
+                            <expr>0</expr>
+                        </eq>
+                        <eq>
+                            <msg_ref type="sip">REGISTER.Expires.value</msg_ref>
+                            <expr>0</expr>
+                        </eq>
+                    </or>
+                    <then>
+                        <send protocol="sip" msgtype="200-REGISTER"/>
+                    </then>
+                </if>
+            </response>
+            <transition to="EUEProvisions2" event="TimerExpired"/>
+            <transition to="Reset2" event="SNMPResp"/>
+            <transition to="Reset2" event="REGISTER"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+        <state ID="EUEProvisions2">
+            <prelude once="true">
+                <stop_capture/>
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvisioningState.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="18">
+                    <eq>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>1</expr>
+                    </eq>
+                </verify>
+            </response>
+            <transition to="MIBWalk2" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+
+        <!-- 19 SNMPv3 Walk on pktcEUEDevDnsTable.
+                    pktcEUEDevDnsAddrType = unknown(0)
+                    pktcEUEDevDnsAddr =
+                    pktcEUEDevDnsRowStatus = active(1) -->
+        <state ID="MIBWalk2">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPGetTable">
+                    <mod modtype="add" hdr="oids">
+                            <expr>CL-PKTC-EUE-DEV-MIB::pktcEUEDevDnsTable</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPRespFailure</expr>
+                    </eq>
+                <then>
+                    <fail/>
+                </then>
+                </if>
+                <verify step="19">
+                    <and>
+                       <eq>
+                           <!-- pktcEUEDevDnsAddrType -->
+                           <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                           <expr>0</expr>
+                       </eq>
+                    <and>
+						<or>
+							<contains>
+								<!-- pktcEUEDevDnsAddr -->
+								<msg_ref type="utility" index="0 1 0">SNMPResp.varBind</msg_ref>
+								<expr>""</expr>
+							</contains>
+							<eq>
+								<msg_ref type="utility" index="0 1 2">SNMPResp.varBind</msg_ref>
+								<expr>ERROR</expr>
+							</eq>
+						</or>
+                       <eq>
+                           <!-- pktcEUEDevDnsRowStatus -->
+                           <msg_ref type="utility" index="0 2 2">SNMPResp.varBind</msg_ref>
+                           <expr>1</expr>
+                       </eq>
+                    </and>
+                    </and>
+                </verify>
+            </response>
+			<postlude>
+			    <stop_capture/>
+			</postlude>
+			<transition to="DNSQuery2" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+		
+        <!-- 20 Stop IP capture and save trace file.
+                Verify EUE used server IP in DHCP OPTION_DNS_SERVERS(23) for DNS Query. -->
+        <state ID="DNSQuery2">
+            <prelude once="true">
+                <parse_capture name="eUE_DNS2">
+                    <parser_filter protocol="dns" ip="DUT.IP"/>
+                </parse_capture>
+				<verify step="20">
+                    <eq>
+                        <capture_ref type="dns" name="eUE_DNS2">Query.ipv6.dst_host.show</capture_ref>
+                         <msg_ref type="platform">DUT.DNS Server IP</msg_ref>
+                    </eq>
+                </verify>
+				<generate event="SucceedEvent"/>
+				<transition to="ReConfigure3" event="SucceedEvent"/>
+				<transition to="END" event="SNMPRespFailure"/>
+			</prelude>
+        </state>
+
+
+<!-- vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv -->
+<!-- ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ -->
+
+        <!-- 21 Reconfigure. -->
+        <!-- 22 Reset. The E-UE provisions successfully and becomes operational. -->
+        <!-- <state ID="ReConfigure3"
+               provFile="E-UE_PROV_v6_2.1.2.1_2.bin"
+               policyFile="MTAFORCW122_test"
+               nextState="Reset3"/> -->
+
+		<state ID="ReConfigure3">
+			<prelude>
+				<log promptUser="true" expr="Section 3: Configure the device with Bin File: v6.C.1.2.11_Hybrid.bin and Policy: X_eUEv6_Hybrid, Save, Deploy DHCPv6 and click OK."/>
+				<generate event="Branch1Event"/>
+			</prelude>
+			<transition to="Reset3" event="Branch1Event"/>
+		</state>
+		
+        <state ID="Reset3" timer="120000">
+            <prelude once="true">
+                <start_capture>
+                    <filter>
+                        <var_expr>
+							<expr>host </expr>
+							<msg_ref type="platform">DUT.IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.CM IP Address</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.DHCP Server IP</msg_ref>
+						</var_expr>
+                    </filter>
+                </start_capture>
+
+                <send protocol="utility" msgtype="SNMPSet">
+                    <mod modtype="add" hdr="array">
+                        <var_expr>
+                            <expr>varBind 1 1 3 \r\n ][ , </expr>
+                            <expr>DOCS-CABLE-DEVICE-MIB::docsDevResetNow.0,INTEGER,1][\r\n</expr>
+                        </var_expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.CM IP Address</msg_ref>
+                    </mod>
+                    <!-- Always use version 2c for a CM reset -->
+					<mod modtype="replace" hdr="version">
+						<expr>2c</expr>
+					</mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPRespFailure</expr>
+                    </eq>
+                    <then>
+                        <fail/>
+                    </then>
+                </if>
+                <if>
+                    <or>
+                        <eq>
+                            <msg_ref type="sip">REGISTER.Contact.expires</msg_ref>
+                            <expr>0</expr>
+                        </eq>
+                        <eq>
+                            <msg_ref type="sip">REGISTER.Expires.value</msg_ref>
+                            <expr>0</expr>
+                        </eq>
+                    </or>
+                    <then>
+                        <send protocol="sip" msgtype="200-REGISTER"/>
+                    </then>
+                </if>
+            </response>
+            <transition to="EUEProvisions3" event="TimerExpired"/>
+            <transition to="Reset3" event="SNMPResp"/>
+            <transition to="Reset3" event="REGISTER"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+        <state ID="EUEProvisions3">
+            <prelude once="true">
+                <stop_capture/>
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvisioningState.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+					<!-- Always use version 2c for Hybrid mode -->
+					<mod modtype="replace" hdr="version">
+						<expr>2c</expr>
+					</mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="22">
+                    <eq>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>1</expr>
+                    </eq>
+                </verify>
+            </response>
+            <transition to="MIBWalk3" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+
+        <!-- 23 Using SNMPv2 repeat Step 16 above. -->
+        <!-- 23-16 SNMPv3 repeat Steps 3 - 5 above. -->
+        <!-- 23-3 SNMPv3 perform SNMP Walk on pktcEUEDevDnsTable.
+                  eUE processes operation successfully and returns these objects and values.
+                      pktcEUEDevDnsAddrType = ipv6(2)
+                      pktcEUEDevDnsAddr = DNS IPv6 address
+                      pktcEUEDevDnsRowStatus = active(1) -->
+        <state ID="MIBWalk3">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPGetTable">
+                    <mod modtype="add" hdr="oids">
+                        <!-- <var_expr>
+                            <expr>varBind 1 1 3 \r\n ][ , </expr> -->
+                            <expr>CL-PKTC-EUE-DEV-MIB::pktcEUEDevDnsTable</expr>
+                        <!-- </var_expr> -->
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+                    <!-- Always use version 2c for Hybrid mode -->
+					<mod modtype="replace" hdr="version">
+						<expr>2c</expr>
+					</mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPRespFailure</expr>
+                    </eq>
+                <then>
+                    <fail/>
+                </then>
+                </if>
+                <verify step="23-16(3)">
+                    <and>
+                       <eq>
+                           <!-- pktcEUEDevDnsAddrType -->
+                           <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                           <expr>2</expr>
+                       </eq>
+                    <and>
+                       <eq>
+                            <!-- pktcEUEDevDnsAddr -->
+                            <msg_ref type="utility" index="0 1 2">SNMPResp.varBind</msg_ref>
+						   	<!--IPv6 address is in different format. Until finding solution, string will be used.-->
+                            <!--msg_ref type="platform">DUT.DNS Server IP</msg_ref-->
+                            <expr>FC 00 05 04 07 00 00 00 00 10 00 32 00 00 00 18</expr>
+                       </eq>
+                       <eq>
+                           <!-- pktcEUEDevDnsRowStatus -->
+                           <msg_ref type="utility" index="0 2 2">SNMPResp.varBind</msg_ref>
+                           <expr>1</expr>
+                       </eq>
+                    </and>
+                    </and>
+                </verify>
+            </response>
+            <transition to="SNMPSet2" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+
+        <!-- 23-4 SNMPv3 Set on pktcEUEDevDnsAddrType to another valid value.
+                  The eUE must reject Set operation on this object. -->
+        <state ID="SNMPSet2" timer="10000">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPSet">
+                    <mod modtype="add" hdr="array">
+                        <var_expr>
+                            <expr>varBind 1 1 3 \r\n ][ , </expr>
+                            <expr>CL-PKTC-EUE-DEV-MIB::pktcEUEDevDnsAddrType.1,INTEGER,1][\r\n</expr>
+                        </var_expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+                    <!-- Always use version 2c for Hybrid mode -->
+					<mod modtype="replace" hdr="version">
+						<expr>2c</expr>
+					</mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPResp</expr>
+                    </eq>
+                <then>
+                    <fail/>
+                </then>
+                </if>
+
+                <!-- NonWritable(17) -->
+                <verify step="23-16(4)">
+					<contains>
+                        <msg_ref type="utility">SNMPRespFailure.errorString</msg_ref>
+                        <expr>notWritable</expr>
+                    </contains>
+                </verify>
+            </response>
+			<postlude>
+			    <stop_capture/>
+			</postlude>
+            <transition to="DNSQuery3" event="SNMPResp"/>
+            <transition to="DNSQuery3" event="SNMPRespFailure"/>
+        </state>
+
+
+        <!-- 23-5 Stop IP capture and save trace file.
+                  Verify E-UE used DNS server IP address provided in configuration file. -->
+        <state ID="DNSQuery3">
+            <prelude once="true">
+                <parse_capture name="eUE_DNS3">
+                    <parser_filter protocol="dns" ip="DUT.IP"/>
+                </parse_capture>
+				<verify step="23-16(5)">
+                    <eq>
+                        <capture_ref type="dns" name="eUE_DNS3">Query.ipv6.dst_host.show</capture_ref>
+                        <msg_ref type="platform">DUT.DNS Server IP</msg_ref>
+                    </eq>
+                </verify>
+				<generate event="SucceedEvent"/>
+            </prelude>
+            <transition to="ReConfigure4" event="SucceedEvent"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+
+<!-- vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv -->
+<!-- ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ -->
+
+        <!-- HYBRID -->
+        <!-- 24 Reconfigure. Reset. The E-UE provisions successfully and becomes operational. -->
+        <!-- <state ID="ReConfigure4"
+               provFile="E-UE_PROV_v6_2.1.2.1_2.bin"
+               policyFile="MTAFORCW122_test"
+               nextState="Reset4"/> -->
+
+		<state ID="ReConfigure4">
+			<prelude>
+				<log promptUser="true" expr="Section 4: Configure the device with Bin File: v6.C.1.2.8_Hybrid.bin and Policy: X_eUEv6_Hybrid, Save, Deploy DHCPv6 and click OK."/>
+				<generate event="Branch1Event"/>
+			</prelude>
+			<transition to="Reset4" event="Branch1Event"/>
+		</state>			   
+			   
+        <state ID="Reset4" timer="120000">
+            <prelude once="true">
+                <start_capture>
+                    <filter>
+                        <var_expr>
+							<expr>host </expr>
+							<msg_ref type="platform">DUT.IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.CM IP Address</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.DHCP Server IP</msg_ref>
+						</var_expr>
+                    </filter>
+                </start_capture>
+
+                <send protocol="utility" msgtype="SNMPSet">
+                    <mod modtype="add" hdr="array">
+                        <var_expr>
+                            <expr>varBind 1 1 3 \r\n ][ , </expr>
+                            <expr>DOCS-CABLE-DEVICE-MIB::docsDevResetNow.0,INTEGER,1][\r\n</expr>
+                        </var_expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.CM IP Address</msg_ref>
+                    </mod>
+                    <!-- Always use version 2c for a CM reset -->
+					<mod modtype="replace" hdr="version">
+						<expr>2c</expr>
+					</mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPRespFailure</expr>
+                    </eq>
+                    <then>
+                        <fail/>
+                    </then>
+                </if>
+                <if>
+                    <or>
+                        <eq>
+                            <msg_ref type="sip">REGISTER.Contact.expires</msg_ref>
+                            <expr>0</expr>
+                        </eq>
+                        <eq>
+                            <msg_ref type="sip">REGISTER.Expires.value</msg_ref>
+                            <expr>0</expr>
+                        </eq>
+                    </or>
+                    <then>
+                        <send protocol="sip" msgtype="200-REGISTER"/>
+                    </then>
+                </if>
+            </response>
+            <transition to="EUEProvisions4" event="TimerExpired"/>
+            <transition to="Reset4" event="SNMPResp"/>
+            <transition to="Reset4" event="REGISTER"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+        <state ID="EUEProvisions4">
+            <prelude once="true">
+                <stop_capture/>
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvisioningState.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+					<!-- Always use version 2c for Hybrid mode -->
+					<mod modtype="replace" hdr="version">
+						<expr>2c</expr>
+					</mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="24">
+                    <eq>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>1</expr>
+                    </eq>
+                </verify>
+            </response>
+            <transition to="MIBWalk4" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+
+        <!-- 25 Using SNMPv2 repeat Steps 19 - 20 above. -->
+        <!-- 25-19 SNMPv3 Walk on pktcEUEDevDnsTable.
+                      pktcEUEDevDnsAddrType = unknown(0)
+                      pktcEUEDevDnsAddr =
+                      pktcEUEDevDnsRowStatus = active(1) -->
+        <state ID="MIBWalk4">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPGetTable">
+                    <mod modtype="add" hdr="oids">
+                        <!-- <var_expr>
+                            <expr>varBind 1 1 3 \r\n ][ , </expr> -->
+                            <expr>CL-PKTC-EUE-DEV-MIB::pktcEUEDevDnsTable</expr>
+                        <!-- </var_expr> -->
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+                    <!-- Always use version 2c for Hybrid mode -->
+					<mod modtype="replace" hdr="version">
+						<expr>2c</expr>
+					</mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPRespFailure</expr>
+                    </eq>
+                <then>
+                    <fail/>
+                </then>
+                </if>
+                <verify step="25-19">
+                    <and>
+                       <eq>
+                           <!-- pktcEUEDevDnsAddrType -->
+                           <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                           <expr>0</expr>
+                       </eq>
+                    <and>
+						<or>
+							<contains>
+								<!-- pktcEUEDevDnsAddr -->
+								<msg_ref type="utility" index="0 1 0">SNMPResp.varBind</msg_ref>
+								<expr>""</expr>
+							</contains>
+							<eq>
+								<msg_ref type="utility" index="0 1 2">SNMPResp.varBind</msg_ref>
+								<expr>ERROR</expr>
+							</eq>
+						</or>
+                       <eq>
+                           <!-- pktcEUEDevDnsRowStatus -->
+                           <msg_ref type="utility" index="0 2 2">SNMPResp.varBind</msg_ref>
+                           <expr>1</expr>
+                       </eq>
+                    </and>
+                    </and>
+                </verify>
+            </response>
+			<postlude>
+			    <stop_capture/>
+			</postlude>
+			<transition to="DNSQuery4" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+		
+        <!-- 25-20 Stop IP capture and save trace file.
+                   Verify EUE used server IP in DHCP OPTION_DNS_SERVERS(23) for DNS Query. -->
+        <state ID="DNSQuery4">
+            <prelude once="true">
+                <parse_capture name="eUE_DNS4">
+                    <parser_filter protocol="dns" ip="DUT.IP"/>
+                </parse_capture>
+				<verify step="25-20">
+                    <eq>
+                        <capture_ref type="dns" name="eUE_DNS4">Query.ipv6.dst_host.show</capture_ref>
+                        <msg_ref type="platform">DUT.DNS Server IP</msg_ref>
+                    </eq>
+                </verify>
+				<generate event="SucceedEvent"/>
+            </prelude>
+            <transition to="END" event="SucceedEvent"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+    </add_to>
+</pc2xml>

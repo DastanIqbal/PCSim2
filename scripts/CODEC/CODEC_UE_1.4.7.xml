@@ -1,0 +1,171 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+ Change History: (Author & Date)
+	PCPCIIATP-106 : Verify that the answer sends a payload type of 120 (ghassler 01/06/2010)
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="CODEC-MEDIA_1.4.7" 
+	descrip="UE Originating-Negotiation for Payload Types" 
+	number="CODEC-MEDIA_1.4.7">
+	
+	<template file="./templates/CallOrigAtUETemp.xml" name="UE1"/>
+
+	<remove_from fsm="UE1">
+		<state ID="Setup"/>
+		<state ID="Answer"/>
+		<state ID="Connected"/>
+	</remove_from>
+
+	<add_to fsm="UE1">
+		<state ID="Setup">
+			<prelude once="true">
+				<start_capture>
+						<filter>
+							<var_expr>
+							<expr>host </expr>
+							<msg_ref type="platform">DUT.IP</msg_ref>
+						</var_expr>
+					</filter>
+				</start_capture>
+				<send protocol="utility" msgtype="DialDigits">
+					<mod modtype="add" hdr="number">
+						<msg_ref type="platform">UE1.phone number 1</msg_ref>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>Invite</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="100-INVITE"/>
+						
+					</then>
+				</if>
+				<!--  This operation is to provide the correct data for the prompt in
+					step 8 -->
+				<if>
+					<notnull>
+						<msg_ref type="sdp">INVITE.ptime.value</msg_ref>
+					</notnull>
+					<then>
+						<var name="rate">
+							<msg_ref type="sdp">INVITE.ptime.value</msg_ref>
+						</var>
+					</then>
+					<else>
+						<var name="rate">
+							<expr>20</expr>
+						</var>
+					</else>
+				</if>
+				
+				<if>
+					<and>
+						<eq>
+							<msg_ref type="extensions">precondition</msg_ref>
+							<expr>require</expr>
+						</eq>
+						<or>
+							<contains>
+								<msg_ref type="sip" hdr_instance="any">Invite.Require</msg_ref>
+								<expr>precondition</expr>
+							</contains>
+							<contains>
+								<msg_ref type="sip" hdr_instance="any">Invite.Supported</msg_ref>
+								<expr>precondition</expr>
+							</contains>
+						</or>
+					</and>
+					<then>
+						<!--Sending 183-Invite with answer-->
+						<sleep time="200"/>
+						<send protocol="sip" msgtype="183-Invite">
+							<mod modtype="replace" hdr="audio" param="payload-type">
+								<expr>120</expr>
+							</mod>
+							<mod modtype="replace" hdr="rtpmap" param="payload-type">
+								<expr>120</expr>
+							</mod>
+						</send>
+					</then>
+					<elseif>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>Invite</expr>
+						</eq>
+						<then>
+							<!--Sending 180-Invite with SS not supporting precondition.-->
+							<sleep time="200"/>
+							<send protocol="sip" msgtype="180-Invite"/>
+						</then>
+					</elseif>
+				</if>
+			</response>
+			<transition to="Setup" event="DialDigitsComplete"/>
+			<transition to="Alerting" event="INVITE"/>
+		</state>
+		
+		<state ID="Answer" timer="15000">
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="event"/>
+						<expr>TimerExpired</expr>
+					</eq>
+					<then>
+						<!--Sending 200-Invite-->
+						<send protocol="sip" msgtype="200-INVITE">
+							<mod modtype="replace" hdr="audio" param="payload-type">
+								<expr>120</expr>
+							</mod>
+							<mod modtype="replace" hdr="rtpmap" param="payload-type">
+								<expr>120</expr>
+							</mod>
+						</send>
+					</then>
+				</if>
+				<!-- Now test for an UPDATE message -->
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>UPDATE</expr>
+					</eq>
+					<then>
+						<!--QoS required or supported sending 200-Update message to peer.-->
+						<send protocol="sip" msgtype="200-Update"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Answer" event="UPDATE"/>
+			<transition to="Answer" event="TimerExpired"/>
+			<transition to="Connected" event="ACK"/>
+		</state>
+		
+		
+		<state ID="Connected" timer="20000">
+			<postlude>
+				<stop_capture/>
+				<log step="5" requirements="REQ12544"
+					promptUser="true" verify="true"
+					expr="In the capture file, verify that the payload-type used in the RTP packets is 120.\n"/>
+			</postlude>
+			<transition to="Releasing" event="TimerExpired"/>
+		</state>
+	</add_to>
+</pc2xml>

@@ -1,0 +1,1020 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+ Change History: (Author & Date)
+
+-->
+<!-- First are the document type and the attributes for our document -->
+<pc2xml version="$Revision: 8378 $" name="EUE Prov B.2.2.4" descrip="This implements the common procedures for appendix B.2.2.4	of the EUE Prov ATP." number="EUE Prov B.2.2.4">
+	<!-- Next we define the each of state machines -->
+	<template file="./templates/EUE_Prov_B_2_1_x.xml" name="BasicUE"/>
+	<add_to fsm="BasicUE">
+		<!-- First test the eCM provisioning so have each of the v4 or v6 states
+			create a new Branch event as they are exiting and go to a state
+			to test for step 3 -->
+		<transition from="DHCPv4 Server" to="CMProvisioned" event="SNMPResp"/>
+		<transition from="DHCPv6 Server" to="CMProvisioned" event="SNMPResp"/>
+		<state ID="DHCPv4 Server" sub="postlude">
+			<generate event="Branch1Event"/>
+		</state>
+		<state ID="DHCPv6 Server" sub="postlude">
+			<generate event="Branch2Event"/>
+		</state>
+			
+		<state ID="CMProvisioned">
+			<!--  We should be processing the Branch1Event or Branch2Event from 
+				the operations added above -->
+			<prelude>
+				<parse_capture name="eUE_DHCP">
+					<parser_filter protocol="bootp" clientMAC="DUT.MAC Address"/>
+				</parse_capture>
+				<parse_capture name="eUE_DHCPv6">
+					<parser_filter protocol="dhcpv6" clientMAC="DUT.MAC Address"/>
+				</parse_capture>
+				<parse_capture name="eUE_Prov">
+					<parser_filter ip="DUT.IP"/>
+				</parse_capture>
+			</prelude>
+			<response>
+				<verify step="2 3">
+					<or>
+						<eq>
+							<capture_ref type="snmp" name="eUE_Prov" msg_instance="last">Inform Request.1-3-6-1-2-1-140-1-1-8-0.int.show</capture_ref>
+							<expr>1</expr>
+						</eq>
+						<eq>
+							<capture_ref type="snmp" name="eUE_Prov" msg_instance="last">Inform Request.RFC1213-MIB::mib-2-140-1-1-8-0.int.show</capture_ref>
+							<expr>1</expr>
+						</eq>
+					</or>
+				</verify>
+			</response>
+			<transition to="IP4 Provision" event="Branch1Event"/>
+			<transition to="IP6 Provision" event="Branch2Event"/>
+		</state>
+		
+		
+		<state ID="IP4 Provision">
+			<prelude>
+				<send protocol="utility" msgtype="SNMPGet">
+					<mod modtype="add" hdr="oids">
+						<expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvisioningState.0</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<!--  Step 5 of B.2.2.4 executes steps 5-9 of Common Procedure B.2.2.1  -->
+				
+				<!--  The first three tests are only here to provide a matching group test for
+					tests that occur in the IPv6 provisioning -->
+				<!--  We need a matching group verify for Local-link -->
+				<verify step="5" group="Local-link">
+					<gt>
+						<capture_ref type="bootp" name="eUE_DHCP">Discover.num</capture_ref>
+						<expr>0</expr>
+					</gt>
+				</verify>
+				<!--  We need a matching group verify for No Duplicate Address -->
+				<verify step="5" group="No Duplicate Address">
+					<null>
+						<capture_ref type="dns" name="eUE_Prov">Neighbor Solicitation.num</capture_ref>
+					</null>
+				</verify>
+				<!--  We need a matching group verify for Router Solicit -->
+				<verify step="5" group="Router Solicit">
+					<null>
+						<capture_ref type="dns" name="eUE_Prov">Router Solicitation.num</capture_ref>
+					</null>
+				</verify>
+				
+				<verify step="5" group="eUE after eCM">
+					<and>
+						<lt>
+							<capture_ref type="bootp" name="eCM_V4">ACK.num</capture_ref>
+							<capture_ref type="bootp" name="eUE_DHCP">Discover.num</capture_ref>
+						</lt>
+					<and>
+						<startsWith>
+							<capture_ref type="bootp" name="eUE_DHCP">Discover.Option60.vendor_class_id.show</capture_ref>
+							<expr>pktc2.0:</expr>
+						</startsWith>
+					<and>
+						<contains>
+							<capture_ref type="bootp" name="eUE_DHCP">Discover.Option60.suboption1.show</capture_ref>
+							<expr>PacketCable 2.0</expr>
+						</contains>
+					<and>
+						<notnull>
+							<capture_ref type="bootp" name="eUE_DHCP">Discover.Option55.suboption6</capture_ref>
+						</notnull>
+					<and>
+						<notnull>
+							<capture_ref type="bootp" name="eUE_DHCP">Discover.Option55.suboption7</capture_ref>
+						</notnull>
+					<and>
+						<notnull>
+							<capture_ref type="bootp" name="eUE_DHCP">Discover.Option55.suboption12</capture_ref>
+						</notnull>
+					<and>
+						<notnull>
+							<capture_ref type="bootp" name="eUE_DHCP">Discover.Option55.suboption15</capture_ref>
+						</notnull>
+					<and>
+						<notnull>
+							<capture_ref type="bootp" name="eUE_DHCP">Discover.Option55.suboption99</capture_ref>
+						</notnull>
+					<and>
+						<notnull>
+							<capture_ref type="bootp" name="eUE_DHCP">Discover.Option55.suboption122</capture_ref>
+						</notnull>
+					<and>
+						<notnull>
+							<capture_ref type="bootp" name="eUE_DHCP">Discover.Option61</capture_ref>
+						</notnull>
+						<eq>
+							<capture_ref type="bootp" name="eUE_DHCP">Discover.Option43.suboption2.device_type.show</capture_ref>
+							<expr>EDVA</expr>
+						</eq>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+				</verify>
+				<verify step="5" group="MACAddr">
+					<eq ignoreCase="true">
+						<capture_ref type="bootp" name="eUE_DHCP">Discover.mac_addr</capture_ref>
+						<msg_ref type="platform">DUT.MAC Address</msg_ref>
+					</eq>
+				</verify>
+				<verify step="5" group="Settings">
+					<and>
+						<lt>
+							<capture_ref type="bootp" name="eUE_DHCP">Discover.num</capture_ref>
+							<capture_ref type="bootp" name="eUE_DHCP">Offer.num</capture_ref>
+						</lt>
+					<and>
+						<notnull>
+							<capture_ref type="bootp" name="eUE_DHCP">Offer.Option122.suboption3</capture_ref>
+						</notnull>
+					<and>
+						<contains>
+							<capture_ref type="bootp" name="eUE_DHCP">Offer.Option122.suboption3.show</capture_ref>
+							<msg_ref type="platform">DUT.SNMP FQDN</msg_ref>
+						</contains>
+					<and>
+						<notnull>
+							<capture_ref type="bootp" name="eUE_DHCP">Offer.Option122.suboption6</capture_ref>
+						</notnull>
+					<and>
+						<contains>
+							<capture_ref type="bootp" name="eUE_DHCP">Offer.Option122.suboption6.show</capture_ref>
+							<msg_ref type="platform">DUT.BP File</msg_ref>
+						</contains>
+					<and>
+						<notnull>
+							<capture_ref type="bootp" name="eUE_DHCP">Offer.Option6</capture_ref>
+						</notnull>
+					<and>
+						<notnull>
+							<capture_ref type="bootp" name="eUE_DHCP">Offer.Option7</capture_ref>
+						</notnull>
+					<and>
+						<notnull>
+							<capture_ref type="bootp" name="eUE_DHCP">Offer.Option12</capture_ref>
+						</notnull>
+					<and>
+						<notnull>
+							<capture_ref type="bootp" name="eUE_DHCP">Offer.Option15</capture_ref>
+						</notnull>	
+					<and>
+						<contains>
+							<capture_ref type="bootp" name="eUE_DHCP">Offer.Option12.hostname.show</capture_ref>
+							<msg_ref type="platform">DUT.Host Name</msg_ref>
+						</contains>	
+						<contains>
+							<capture_ref type="bootp" name="eUE_DHCP">Offer.Option15.domain_name.show</capture_ref>
+							<msg_ref type="platform">DUT.domain</msg_ref>
+						</contains>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+				</verify>	
+				<verify step="5" group="AddrReq">
+					<and>
+						<contains>
+							<capture_ref type="bootp" name="eCM_V4">Offer.Option122.suboption1.show</capture_ref>
+							<capture_ref type="bootp" name="eUE_DHCP">Request.ip.dst_host.show</capture_ref>
+						</contains>
+					<and>
+						<notnull>
+							<capture_ref type="bootp" name="eUE_DHCP">Request.Option55.suboption6</capture_ref>
+						</notnull>
+					<and>
+						<notnull>
+							<capture_ref type="bootp" name="eUE_DHCP">Request.Option55.suboption7</capture_ref>
+						</notnull>	
+					<and>
+						<notnull>
+							<capture_ref type="bootp" name="eUE_DHCP">Request.Option55.suboption12</capture_ref>
+						</notnull>
+					<and>
+						<notnull>
+							<capture_ref type="bootp" name="eUE_DHCP">Request.Option55.suboption15</capture_ref>
+						</notnull>		
+					<and>
+						<notnull>
+							<capture_ref type="bootp" name="eUE_DHCP">Request.Option55.suboption99</capture_ref>
+						</notnull>	
+						<notnull>
+							<capture_ref type="bootp" name="eUE_DHCP">Request.Option43</capture_ref>
+						</notnull>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+				</verify>	
+				<verify step="5" group="AddrResp">	
+					<and>
+						<lt>
+							<capture_ref type="bootp" name="eUE_DHCP">Request.num</capture_ref>
+							<capture_ref type="bootp" name="eUE_DHCP">ACK.num</capture_ref>
+						</lt>
+					<and>
+						<eq>
+							<capture_ref type="bootp" name="eUE_DHCP">ACK.your.show</capture_ref>
+							<msg_ref type="platform">DUT.IP</msg_ref>
+						</eq>	
+					<and>
+						<contains>
+							<capture_ref type="bootp" name="eUE_DHCP">ACK.Option12.hostname.show</capture_ref>
+							<msg_ref type="platform">DUT.Host Name</msg_ref>
+						</contains>	
+						<contains>
+							<capture_ref type="bootp" name="eUE_DHCP">ACK.Option15.domain_name.show</capture_ref>
+							<msg_ref type="platform">DUT.domain</msg_ref>
+						</contains>
+					</and>
+					</and>
+					</and>
+				</verify>
+				
+				<verify step="6" group="SNMP FQDN">
+					<and>
+						<eq>
+							<capture_ref type="dns" name="eUE_Prov" hdr_instance="any">Query.qry.name.show</capture_ref>
+							<msg_ref type="platform">DUT.SNMP FQDN</msg_ref>
+						</eq>
+					<and>
+						<eq>
+							<capture_ref type="dns" name="eUE_Prov">Query.ip.dst.show</capture_ref>
+							<msg_ref type="platform">DUT.DNS Server IP</msg_ref>
+						</eq>
+						<contains>
+							<capture_ref type="dns" name="eUE_Prov" hdr_instance="any">Response.resp.addr.show</capture_ref>
+							<msg_ref type="platform">DUT.DNS Server IP</msg_ref>
+						</contains>
+					</and>
+					</and>
+				</verify>
+				<verify step="7" group="TFTP Read">
+					<and>
+						<eq>
+							<capture_ref type="tftp" name="eUE_Prov">Read Request.source_file.show</capture_ref>
+							<msg_ref type="platform">DUT.BC File</msg_ref>
+						</eq>
+				     	<eq>
+							<capture_ref type="tftp" name="eUE_Prov">Read Request.ip.dst_host.show</capture_ref>
+							<msg_ref type="platform">DUT.TFTP Server IP</msg_ref>
+						</eq>
+					</and>
+				</verify>
+				
+				<verify step="8" group="TFTP Completes">
+					<and>
+						<lt>
+							<capture_ref type="tftp" name="eUE_Prov">Read Request.num</capture_ref>
+							<capture_ref type="tftp" name="eUE_Prov">Data Packet.num</capture_ref>
+						</lt>
+						<lt>
+							<capture_ref type="tftp" name="eUE_Prov" msg_instance="last">Data Packet.num</capture_ref>
+							<capture_ref type="tftp" name="eUE_Prov" msg_instance="last">Acknowledgement.num</capture_ref>
+						</lt>
+					</and>
+				</verify>
+				
+				<verify step="9" group="Syslog">
+					<and>
+						<contains>
+							<capture_ref type="syslog" name="eUE_Prov" msg_instance="any">syslog.msg.show</capture_ref>
+							<expr>Provisioning Complete</expr>
+						</contains>
+					<and>
+						<contains>
+							<capture_ref type="bootp" name="eUE_DHCP">ACK.Option7.log_server.show</capture_ref>
+							<msg_ref type="platform">DUT.Syslog IP</msg_ref>
+						</contains>
+						<eq>
+							<capture_ref type="syslog" name="eUE_Prov">syslog.ip.dst.show</capture_ref>
+							<msg_ref type="platform">DUT.Syslog IP</msg_ref>
+						</eq>
+					</and>
+					</and>
+				</verify>
+				
+				<verify step="10" group="Inform">
+					<and>
+						<or>
+							<eq ignoreCase="true">
+								<capture_ref type="snmp" name="eUE_Prov" msg_instance="last">Inform Request.1-3-6-1-2-1-2-2-1-6-1.octets.value</capture_ref>
+								<msg_ref type="platform">DUT.MAC Address</msg_ref>
+							</eq>
+							<eq ignoreCase="true">
+								<capture_ref type="snmp" name="eUE_Prov" msg_instance="last">Inform Request.IF-MIB::ifPhysAddress-1.ifPhysAddress.octets.value</capture_ref>
+								<msg_ref type="platform">DUT.MAC Address</msg_ref>
+							</eq>
+						</or>
+					<and>
+						<or>
+							<notnull>
+								<capture_ref type="snmp" name="eUE_Prov" msg_instance="last">Inform Request.1-3-6-1-2-1-140-1-3-3-0.g32.show</capture_ref>
+							</notnull>
+							<notnull>
+								<capture_ref type="snmp" name="eUE_Prov" msg_instance="last">Inform Request.RFC1213-MIB::mib-2-140-1-3-3-0.g32.show</capture_ref>
+							</notnull>	
+						</or>
+					<and>
+						<or>
+							<eq>
+								<capture_ref type="snmp" name="eUE_Prov" msg_instance="last">Inform Request.1-3-6-1-2-1-140-1-1-8-0.int.show</capture_ref>
+								<expr>1</expr>
+							</eq>
+							<eq>
+								<capture_ref type="snmp" name="eUE_Prov" msg_instance="last">Inform Request.RFC1213-MIB::mib-2-140-1-1-8-0.int.show</capture_ref>
+								<expr>1</expr>
+							</eq>
+						</or>
+
+							<lt>
+								<capture_ref type="tftp" name="eUE_Prov" msg_instance="last">Acknowledgement.num</capture_ref>
+								<capture_ref type="snmp" name="eUE_Prov" msg_instance="last">Inform Request.num</capture_ref>	
+							</lt>
+
+
+					</and>
+					</and>
+					</and>
+				</verify>
+				
+				<verify step="11" group="Prov State">
+					<eq>
+						<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+						<expr>1</expr>
+					</eq>
+				</verify>
+				
+			</response>
+			<transition to="END" event="SNMPResp"/>
+			<transition to="END" event="SNMPRespFailure"/>
+		</state>
+				
+        <state ID="IP6 Provision Step">
+			<prelude>
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvisioningState.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">UE0.IP</msg_ref>
+                    </mod>
+                    <mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>			
+				<sleep time="10000"/>
+			</prelude>
+			<response>
+				<!-- Step 3 of B.2.2.2 -->
+				<verify step="B.2.2.2 Step 3" group="Prov State">
+					<eq>
+						<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+						<expr>1</expr>
+					</eq>
+				</verify>
+			</response>
+			<postlude>
+				<!-- Send this query for use in state IP6 Options' to verify  Solicit Option17.suboption2172 -->
+				<send protocol="utility" msgtype="SNMPGet">
+					<mod modtype="add" hdr="oids">
+						<expr>PKTC-IETF-MTA-MIB::pktcMtaDevCorrelationId.0</expr>
+					</mod>
+					<mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+				</send>
+				<sleep time="3000"/>
+			</postlude>
+			<transition to="IP6 Options" event="SNMPResp"/>
+			<transition to="IP6 Options" event="SNMPRespFailure"/>
+		</state>
+
+		<state ID="IP6 Options">
+			<prelude>
+			    <!-- Note, these steps must be verified with a capture of the RF side of the network. -->
+				<!--  Step 5 of B.2.2.2 -->
+				<verify step="5" group="No Duplicate Address">
+					<log promptUser="true" yesExpected="True" verify="True" expr="Verify Step 5, Neightbor Solicitation - No Duplicate Address."/>
+				</verify>
+				<!--  Step 6 of B.2.2.2 -->
+				<verify step="6" group="Link-Local">
+					<log promptUser="true" yesExpected="True" verify="True" expr="Verify Step 6, Neighbor Solicitation Link-Local address."/>
+				</verify>
+				<!--  Step 7 of B.2.2.2 -->
+				<verify step="7" group="Router Solicit">
+					<log promptUser="true" yesExpected="True" verify="True" expr="Verify Step 7, Router Solicitation."/>
+				</verify>
+			</prelude>
+			
+			<response>
+				<!--  Step 8 of B.2.2.2 -->
+				<verify step="8" group="eUE after eCM">
+					<and>
+						<notnull>
+							<capture_ref type="dhcpv6" name="eUE_DHCPv6">Solicit.Relay.Option1</capture_ref>
+						</notnull>
+					<and>
+						<contains ignoreCase="true">
+							<capture_ref type="dhcpv6" name="eUE_DHCPv6">Solicit.Relay.Option1</capture_ref>
+							<msg_ref type="platform">DUT.MAC Address</msg_ref>
+						</contains>
+					<and>
+						<notnull>
+							<capture_ref type="dhcpv6" name="eUE_DHCPv6">Solicit.Relay.Option3</capture_ref>
+						</notnull>
+					<and>
+						<notnull>
+							<capture_ref type="dhcpv6" name="eUE_DHCPv6">Solicit.Relay.Option6</capture_ref>
+						</notnull>
+					<and>
+						<contains>
+						<!-- BRIAN, need to fix wireshark to make a h-ref for each requested option code -->
+							<capture_ref type="dhcpv6" name="eUE_DHCPv6">Solicit.Relay.Option6.requested_option_code.showname</capture_ref>
+							<expr>17</expr>
+						</contains>
+					<and>
+						<contains>
+							<capture_ref type="dhcpv6" name="eUE_DHCPv6">Solicit.Relay.Option6.requested_option_code.showname</capture_ref>
+							<expr>23</expr>
+						</contains>
+					<and>
+						<contains>
+							<capture_ref type="dhcpv6" name="eUE_DHCPv6">Solicit.Relay.Option6.requested_option_code.showname</capture_ref>
+							<expr>39</expr>
+						</contains>
+					<and>
+						<notnull>
+							<capture_ref type="dhcpv6" name="eUE_DHCPv6">Solicit.Relay.Option16</capture_ref>
+						</notnull>
+					<and>
+						<contains>
+							<capture_ref type="dhcpv6" name="eUE_DHCPv6">Solicit.Relay.Option16.enterprise.showname</capture_ref>
+							<expr>4491</expr>
+						</contains>
+					<and>
+						<contains>
+							<capture_ref type="dhcpv6" name="eUE_DHCPv6">Solicit.Relay.Option16.data.show</capture_ref>
+							<expr>pktc2.0</expr>
+						</contains>
+					<and>
+						<notnull>
+							<capture_ref type="dhcpv6" name="eUE_DHCPv6">Solicit.Relay.Option17</capture_ref>
+						</notnull>
+					<and>
+						<notnull>
+							<capture_ref type="dhcpv6" name="eUE_DHCPv6">Solicit.Relay.Option17.suboption1</capture_ref>
+						</notnull>
+					<and>
+						<contains>
+							<capture_ref type="dhcpv6" name="eUE_DHCPv6">Solicit.Relay.Option17.suboption1.showname</capture_ref>
+							<expr>32</expr>						
+						</contains>
+					<and>
+						<contains>
+							<capture_ref type="dhcpv6" name="eUE_DHCPv6">Solicit.Relay.Option17.suboption1.showname</capture_ref>
+							<expr>32</expr>						
+						</contains>
+					<and>
+						<contains>
+							<capture_ref type="dhcpv6" name="eUE_DHCPv6">Solicit.Relay.Option17.suboption1.showname</capture_ref>
+							<expr>34</expr>						
+						</contains>
+					<and>
+						<contains>
+							<capture_ref type="dhcpv6" name="eUE_DHCPv6">Solicit.Relay.Option17.suboption1.showname</capture_ref>
+							<expr>2171</expr>
+						</contains>
+					<and>
+						<notnull>
+							<capture_ref type="dhcpv6" name="eUE_DHCPv6">Solicit.Relay.Option17.suboption2</capture_ref>
+						</notnull>
+					<and>
+						<notnull>
+							<capture_ref type="dhcpv6" name="eUE_DHCPv6">Solicit.Relay.Option17.suboption4</capture_ref>
+						</notnull>
+					<and>
+						<notnull>
+							<capture_ref type="dhcpv6" name="eUE_DHCPv6">Solicit.Relay.Option17.suboption5</capture_ref>
+						</notnull>
+					<and>
+						<notnull>
+							<capture_ref type="dhcpv6" name="eUE_DHCPv6">Solicit.Relay.Option17.suboption6</capture_ref>					
+						</notnull>
+					<and>
+						<notnull>
+							<capture_ref type="dhcpv6" name="eUE_DHCPv6">Solicit.Relay.Option17.suboption7</capture_ref>
+						</notnull>
+					<and>
+						<notnull>
+							<capture_ref type="dhcpv6" name="eUE_DHCPv6">Solicit.Relay.Option17.suboption8</capture_ref>
+						</notnull>
+					
+					<and>
+					<!-- Note 5: CL_OPTION_VENDOR_OUI(8) must be represented as an ascii-encoded 6-byte octet string.
+					    About the best we can do is verify length of the string by testing for the position of the "s.
+					    The next two 'ands' perform this test. -->
+						<eq>
+							<capture_ref type="dhcpv6" name="eUE_DHCPv6" substring="48 length-7">Solicit.Relay.Option17.suboption8.showname</capture_ref>		
+							<expr>"</expr>
+						</eq>
+					<and>
+						<eq>
+							<capture_ref type="dhcpv6" name="eUE_DHCPv6" substring="55">Solicit.Relay.Option17.suboption8.showname</capture_ref>			
+							<expr>"</expr>
+						</eq>
+					<and>				
+						<notnull>
+							<capture_ref type="dhcpv6" name="eUE_DHCPv6">Solicit.Relay.Option17.suboption9</capture_ref>
+						</notnull>
+					<and>
+						<notnull>
+							<capture_ref type="dhcpv6" name="eUE_DHCPv6">Solicit.Relay.Option17.suboption10</capture_ref>
+						</notnull>
+					<and>
+						<notnull>
+							<capture_ref type="dhcpv6" name="eUE_DHCPv6">Solicit.Relay.Option17.suboption35</capture_ref>
+						</notnull>
+					<and>
+						<notnull>
+							<capture_ref type="dhcpv6" name="eUE_DHCPv6">Solicit.Relay.Option17.suboption36</capture_ref>
+						</notnull>
+					<and>
+						<notnull>
+							<capture_ref type="dhcpv6" name="eUE_DHCPv6">Solicit.Relay.Option17.suboption2172</capture_ref>
+						</notnull>
+					<and>
+						<eq>
+							<capture_ref type="dhcpv6" name="eUE_DHCPv6" substring="45">Solicit.Relay.Option17.suboption2172.showname</capture_ref>
+							<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+						</eq>
+					<and>
+						<contains>
+							<capture_ref type="dhcpv6" name="eUE_DHCPv6">Solicit.Relay.Option17.enterprise.show</capture_ref>
+							<expr>4491</expr>
+						</contains>
+					<and>						
+						<notnull>
+							<capture_ref type="dhcpv6" name="eUE_DHCPv6">Solicit.Relay.Option39</capture_ref>
+						</notnull>
+					<and>
+						<contains>
+							<!-- Note 2: OPTION_FQDN(39) "domain-name" field is empty -->
+							<capture_ref type="dhcpv6" name="eUE_DHCPv6">Solicit.Relay.Option39.reserved.show</capture_ref>
+							<expr>0</expr>
+						</contains>
+					<and>
+						<contains>
+							<!-- Note 2: OPTION_FQDN(39) "flags" field is: S=1, O=0, N=0. -->
+							<capture_ref type="dhcpv6" name="eUE_DHCPv6">Solicit.Relay.Option39.s.show</capture_ref>
+							<expr>1</expr>
+						</contains>
+					<and>
+						<contains>
+							<!-- Note 2: OPTION_FQDN(39) "flags" field is: S=1, O=0, N=0. -->
+							<capture_ref type="dhcpv6" name="eUE_DHCPv6">Solicit.Relay.Option39.o.show</capture_ref>
+							<expr>0</expr>
+						</contains>
+						<contains>
+							<!-- Note 2: OPTION_FQDN(39) "flags" field is: S=1, O=0, N=0. -->
+							<capture_ref type="dhcpv6" name="eUE_DHCPv6">Solicit.Relay.Option39.n.show</capture_ref>
+							<expr>0</expr>
+						</contains>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+				</verify>
+
+				
+				<!--  Step 9 of B.2.2.2 -->
+				<verify step="9" group="Advertise">
+					<lt>
+						<capture_ref type="dhcpv6" name="eUE_DHCPv6">Solicit.num</capture_ref>
+						<capture_ref type="dhcpv6" name="eUE_DHCPv6">Advertise.num</capture_ref>
+					</lt>
+				</verify>
+
+				
+				<!--  Step 10 of B.2.2.2 -->
+				<verify step="10" group="AddrReq">
+					<and>
+						<notnull>
+							<capture_ref type="dhcpv6" name="eUE_DHCPv6">Request.Relay.Option1</capture_ref>
+						</notnull>
+					<and>
+						<contains ignoreCase="true">
+							<capture_ref type="dhcpv6" name="eUE_DHCPv6">Request.Relay.Option1</capture_ref>
+							<msg_ref type="platform">DUT.MAC Address</msg_ref>
+						</contains>
+					<and>
+						<notnull>
+							<capture_ref type="dhcpv6" name="eUE_DHCPv6">Request.Relay.Option3</capture_ref>
+						</notnull>
+					<and>
+						<notnull>
+							<capture_ref type="dhcpv6" name="eUE_DHCPv6">Request.Relay.Option6</capture_ref>
+						</notnull>
+					<and>
+						<contains>
+						<!-- BRIAN, need to fix wireshark to make a h-ref for each requested option code -->
+							<capture_ref type="dhcpv6" name="eUE_DHCPv6" hdr_instance="2">Request.Relay.Option6.requested_option_code.showname</capture_ref>
+							<expr>17</expr>
+						</contains>
+					<and>
+						<contains>
+							<capture_ref type="dhcpv6" name="eUE_DHCPv6" hdr_instance="any">Request.Relay.Option6.requested_option_code.showname</capture_ref>
+							<expr>23</expr>
+						</contains>
+					<and>
+						<contains>
+							<capture_ref type="dhcpv6" name="eUE_DHCPv6" hdr_instance="any">Request.Relay.Option6.requested_option_code.showname</capture_ref>
+							<expr>39</expr>
+						</contains>
+					<and>
+						<notnull>
+							<capture_ref type="dhcpv6" name="eUE_DHCPv6">Request.Relay.Option16</capture_ref>
+						</notnull>
+					<and>
+						<contains>
+							<capture_ref type="dhcpv6" name="eUE_DHCPv6">Request.Relay.Option16.enterprise.showname</capture_ref>
+							<expr>4491</expr>
+						</contains>
+					<and>
+						<contains>
+							<capture_ref type="dhcpv6" name="eUE_DHCPv6">Request.Relay.Option16.data.show</capture_ref>
+							<expr>pktc2.0</expr>
+						</contains>
+					<and>
+						<notnull>
+							<capture_ref type="dhcpv6" name="eUE_DHCPv6">Request.Relay.Option17</capture_ref>
+						</notnull>
+					<and>
+						<notnull>
+							<capture_ref type="dhcpv6" name="eUE_DHCPv6">Request.Relay.Option17.suboption1</capture_ref>
+						</notnull>
+					<and>
+						<contains>
+							<capture_ref type="dhcpv6" name="eUE_DHCPv6">Request.Relay.Option17.suboption1.showname</capture_ref>
+							<expr>32</expr>						
+						</contains>
+					<and>
+						<contains>
+							<capture_ref type="dhcpv6" name="eUE_DHCPv6">Request.Relay.Option17.suboption1.showname</capture_ref>
+							<expr>32</expr>						
+						</contains>
+					<and>
+						<contains>
+							<capture_ref type="dhcpv6" name="eUE_DHCPv6">Request.Relay.Option17.suboption1.showname</capture_ref>
+							<expr>34</expr>						
+						</contains>
+					<and>
+						<contains>
+							<capture_ref type="dhcpv6" name="eUE_DHCPv6">Request.Relay.Option17.suboption1.showname</capture_ref>
+							<expr>2171</expr>
+						</contains>
+					<and>
+						<notnull>
+							<capture_ref type="dhcpv6" name="eUE_DHCPv6">Request.Relay.Option17.suboption2</capture_ref>
+						</notnull>
+					<and>
+						<notnull>
+							<capture_ref type="dhcpv6" name="eUE_DHCPv6">Request.Relay.Option17.suboption4</capture_ref>
+						</notnull>
+					<and>
+						<notnull>
+							<capture_ref type="dhcpv6" name="eUE_DHCPv6">Request.Relay.Option17.suboption5</capture_ref>
+						</notnull>
+					<and>
+						<notnull>
+							<capture_ref type="dhcpv6" name="eUE_DHCPv6">Request.Relay.Option17.suboption6</capture_ref>					
+						</notnull>
+					<and>
+						<notnull>
+							<capture_ref type="dhcpv6" name="eUE_DHCPv6">Request.Relay.Option17.suboption7</capture_ref>
+						</notnull>
+					<and>
+						<notnull>
+							<capture_ref type="dhcpv6" name="eUE_DHCPv6">Request.Relay.Option17.suboption8</capture_ref>
+						</notnull>
+					
+					<and>
+					<!-- Note 5: CL_OPTION_VENDOR_OUI(8) must be represented as an ascii-encoded 6-byte octet string.
+					    About the best we can do is verify length of the string by testing for the position of the "s.
+					    The next two 'ands' perform this test. -->
+						<eq>
+							<capture_ref type="dhcpv6" name="eUE_DHCPv6" substring="48 length-7">Request.Relay.Option17.suboption8.showname</capture_ref>		
+							<expr>"</expr>
+						</eq>
+					<and>
+						<eq>
+							<capture_ref type="dhcpv6" name="eUE_DHCPv6" substring="55">Request.Relay.Option17.suboption8.showname</capture_ref>			
+							<expr>"</expr>
+						</eq>
+					<and>				
+						<notnull>
+							<capture_ref type="dhcpv6" name="eUE_DHCPv6">Request.Relay.Option17.suboption9</capture_ref>
+						</notnull>
+					<and>
+						<notnull>
+							<capture_ref type="dhcpv6" name="eUE_DHCPv6">Request.Relay.Option17.suboption10</capture_ref>
+						</notnull>
+					<and>
+						<notnull>
+							<capture_ref type="dhcpv6" name="eUE_DHCPv6">Request.Relay.Option17.suboption35</capture_ref>
+						</notnull>
+					<and>
+						<notnull>
+							<capture_ref type="dhcpv6" name="eUE_DHCPv6">Request.Relay.Option17.suboption36</capture_ref>
+						</notnull>
+					<and>
+						<notnull>
+							<capture_ref type="dhcpv6" name="eUE_DHCPv6">Request.Relay.Option17.suboption2172</capture_ref>
+						</notnull>
+					<and>
+						<eq>
+						    <!-- BRIAN, need to convert hex in 'show.' -->
+							<capture_ref type="dhcpv6" name="eUE_DHCPv6" substring="45">Request.Relay.Option17.suboption2172.showname</capture_ref>
+							<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+						</eq>
+					<and>
+						<contains>
+							<capture_ref type="dhcpv6" name="eUE_DHCPv6">Request.Relay.Option17.enterprise.show</capture_ref>
+							<expr>4491</expr>
+						</contains>
+					<and>						
+						<notnull>
+							<capture_ref type="dhcpv6" name="eUE_DHCPv6">Request.Relay.Option39</capture_ref>
+						</notnull>
+					<and>
+						<contains>
+							<!-- Note 2: OPTION_FQDN(39) "domain-name" field is empty -->
+							<capture_ref type="dhcpv6" name="eUE_DHCPv6">Request.Relay.Option39.reserved.show</capture_ref>
+							<expr>0</expr>
+						</contains>
+					<and>
+						<contains>
+							<!-- Note 2: OPTION_FQDN(39) "flags" field is: S=1, O=0, N=0. -->
+							<capture_ref type="dhcpv6" name="eUE_DHCPv6">Request.Relay.Option39.s.show</capture_ref>
+							<expr>1</expr>
+						</contains>
+					<and>
+						<contains>
+							<!-- Note 2: OPTION_FQDN(39) "flags" field is: S=1, O=0, N=0. -->
+							<capture_ref type="dhcpv6" name="eUE_DHCPv6">Request.Relay.Option39.o.show</capture_ref>
+							<expr>0</expr>
+						</contains>
+						<contains>
+							<!-- Note 2: OPTION_FQDN(39) "flags" field is: S=1, O=0, N=0. -->
+							<capture_ref type="dhcpv6" name="eUE_DHCPv6">Request.Relay.Option39.n.show</capture_ref>
+							<expr>0</expr>
+						</contains>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>
+				</verify>
+				
+				<!--  Step 11 of B.2.2.2 -->
+				<verify step="11" group="AddrResp">
+					<lt>
+						<capture_ref type="dhcpv6" name="eUE_DHCPv6">Request.num</capture_ref>
+						<capture_ref type="dhcpv6" name="eUE_DHCPv6">Reply.num</capture_ref>
+					</lt>
+				</verify>
+                  
+                <!--  From step 24, 25 & 26 of B.2.2.1 -->
+  				<var name="tftp_ip">
+  					<var_expr>
+  						<expr>tftp://</expr>
+  						<msg_ref type="platform">DUT.TFTP Server IP</msg_ref>
+  						<expr>/</expr>
+  						<msg_ref type="platform">DUT.SC File</msg_ref>
+  					</var_expr>
+  				</var>
+  				
+  				<var name="tftp_fqdn">
+  					<var_expr>
+  						<expr>tftp://</expr>
+  						<msg_ref type="platform">DUT.TFTP FQDN</msg_ref>
+  						<expr>/</expr>
+  						<msg_ref type="platform">DUT.SC File</msg_ref>
+  					</var_expr>
+  				</var>
+	            
+	             <!-- From step 27 of B.2.2.3 -->
+	            <verify step="16" group="TFTP Read">
+           			<eq>
+						<capture_ref type="tftp" name="eUE_Prov">Read Request.source_file.show</capture_ref>
+						<msg_ref type="platform">DUT.SC File</msg_ref>
+					</eq>
+				</verify>
+	            
+	            <!-- From step 28 of B.2.2.3 -->
+				<verify step="16" group="TFTP Completes">
+					<lt>
+						<capture_ref type="tftp" name="eUE_Prov">Read Request.num</capture_ref>
+						<capture_ref type="tftp" name="eUE_Prov">Data Packet.num</capture_ref>
+					</lt>
+				</verify>
+	            
+	            <!-- From step 29 of B.2.2.3 -->
+				<verify step="16" group="Syslog">
+					<and>
+						<contains>
+							<capture_ref type="syslog" name="eUE_Prov" msg_instance="last">syslog.msg.showname</capture_ref>
+							<expr>Provisioning Complete</expr>
+						</contains>
+					<and>
+						<contains>
+							<capture_ref type="dhcpv6" name="eUE_DHCPv6">Reply.Relay.Option17.suboption34.ipv6_server.showname</capture_ref>
+							<msg_ref type="platform">DUT.Syslog IP</msg_ref>
+						</contains>
+						<contains>
+							<capture_ref type="syslog" name="eUE_Prov" msg_instance="last">syslog.ipv6.dst.showname</capture_ref>
+							<msg_ref type="platform">DUT.Syslog IP</msg_ref>
+						</contains>
+					</and>
+					</and>
+				</verify>
+	            
+	            <!-- From step 30 of B.2.2.3 -->
+				<verify step="16" group="Inform">
+					<and>
+					<or>
+						<eq ignoreCase="true">
+							<capture_ref type="snmp" name="eUE_Prov" msg_instance="last">Inform Request.IF-MIB::ifPhysAddress-1.ifPhysAddress.value</capture_ref>
+							<msg_ref type="platform">DUT.MAC Address</msg_ref>
+						</eq>
+						<eq ignoreCase="true">
+							<capture_ref type="snmp" name="eUE_Prov" msg_instance="last">Inform Request.msgData.plaintext_element.data.informRequest_element.variable_bindings.1-3-6-1-2-1-2-2-1-6-1.octets.value</capture_ref>
+							<msg_ref type="platform">DUT.MAC Address</msg_ref>
+						</eq>
+					</or>
+					<and>
+					<or>
+						<notnull>
+							<capture_ref type="snmp" name="eUE_Prov" msg_instance="last">Inform Request.RFC1213-MIB::mib-2-140-1-3-3-0.g32.show</capture_ref>
+							<msg_ref type="platform">DUT.MAC Address</msg_ref>
+						</notnull>
+						<notnull>
+							<capture_ref type="snmp" name="eUE_Prov" msg_instance="last">Inform Request.msgData.plaintext_element.data.informRequest_element.variable_bindings.1-3-6-1-2-1-140-1-3-3-0.g32</capture_ref>
+							<msg_ref type="platform">DUT.MAC Address</msg_ref>
+						</notnull>
+					</or>
+					<and>
+					<or>
+						<notnull>
+							<capture_ref type="snmp" name="eUE_Prov" msg_instance="last">Inform Request.RFC1213-MIB::mib-2-140-1-1-8-0.int.show</capture_ref>
+							<msg_ref type="platform">DUT.MAC Address</msg_ref>
+						</notnull>
+						<notnull>
+							<capture_ref type="snmp" name="eUE_Prov" msg_instance="last">Inform Request.msgData.plaintext_element.data.informRequest_element.variable_bindings..1-3-6-1-2-1-140-1-1-8-0</capture_ref>
+							<msg_ref type="platform">DUT.MAC Address</msg_ref>
+						</notnull>
+					</or>
+					    <lt>
+							<capture_ref type="tftp" name="eUE_Prov">Acknowledgement.num</capture_ref>
+							<capture_ref type="snmp" name="eUE_Prov" msg_instance="last">Inform Request.num</capture_ref>	
+					    </lt>
+					</and>
+					</and>
+					</and>
+				</verify>
+				
+               	 <!-- Step 17 of B.2.2.2 -->
+				<verify step="17" group="Different IPs">
+					<neq>
+						<capture_ref type="dhcpv6" name="eCM_V6">Reply.ipv6.dst.show</capture_ref>
+						<capture_ref type="dhcpv6" name="eUE_DHCPv6">Reply.ipv6.dst.show</capture_ref>
+					</neq>
+				</verify>
+				<postlude>
+					<verify step="16" group="Global_Address">
+						<log promptUser="true" yesExpected="True" verify="True" expr="Verify global address in AS REQ, SNMP Inform, TFTP Read, and further DNS Requests."/>
+					</verify>
+					<verify>
+						<log promptUser="true" yesExpected="True" verify="True" expr="Verify TFTP Read Request 'opc' = 1."/>
+						<log promptUser="true" yesExpected="True" verify="True" expr="Verify TFTP Read Request 'blksize = '1428'."/>
+					</verify>
+				</postlude>
+			</response>
+			
+			<transition to="END" event="SNMPResp"/>
+			<transition to="END" event="SNMPRespFailure"/>
+		</state>
+	<!--</states>-->
+	</add_to>
+</pc2xml>

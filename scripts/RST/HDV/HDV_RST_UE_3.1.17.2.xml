@@ -1,0 +1,280 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+ Change History: (Author & Date)
+	
+
+
+
+  --> 
+<pc2xml version="$Revision: 7085 $" name="HDV_RST_UE_3.1.17.2" descrip="Outbound Call with Multiline" number="HDV_RST_UE_3.1.17.2" inspector="disable">
+    <fsm name="UE1">
+        <models>
+            <session /> 
+        </models>
+    <NE sim_type="term" elements="UE1 PCSCF2 SCSCF1 PCSCF1" targets="UE1" /> 
+        <states initialstate="OffHook1">
+            <state ID="OffHook1" timer="500">
+                <prelude>
+		    <log expr="Take the line 1 of the DUT off hook." />
+               </prelude>
+	    <transition to="Call1" event="TimerExpired" />
+            </state>
+            
+        <state ID="Call1">
+                <prelude once="true">
+                  <log expr="Dial the 3035550000 from line 1 of the DUT."/>
+               </prelude>
+                <response>
+                    <if>
+                        <eq>
+                            <msg_ref type="sip">Request</msg_ref> 
+                            <expr>Invite</expr> 
+                        </eq>
+                <then>
+		    <verify step="1" requirements="REQ23584">
+			<eq>
+			    <msg_ref type="sip">Invite.P-Preferred-Identity</msg_ref> 
+			    <expr>&quot;LINE 1&quot; &lt;sip:server.phone.com&gt;</expr> 
+			</eq>
+		    </verify>
+		     <!--sleep time="1000" /> 
+			<log promptUser="True" yesExpected="True" verify="True" step="1" requirements="REQ23584" expr="Verify the INVITE from DVA message has the P-Preferred-Identity." /--> 
+                    <sleep time="1000" />
+                            <send protocol="sip" msgtype="100-INVITE" />
+                    <sleep time="1000" />
+                            <send protocol="sip" msgtype="180-INVITE" />
+                    <sleep time="1000" />
+                            <send protocol="sip" msgtype="200-INVITE" /> 
+                 </then>
+                    </if>
+                </response>
+        <transition to="Call1" event="DialDigitsComplete" /> 
+        <transition to="Call1" event="INVITE" /> 
+        <transition to="SessionEstablished" event="ACK" /> 
+        </state>
+        
+        <state ID="SessionEstablished" timer="2000">
+                <prelude>
+                    <log promptUser="True" yesExpected="True" verify="True" step="1" requirements="REQ23580" expr="Verify a session is established on line 1." /> 
+        
+        <transition to="Finish" event="TimerExpired" />
+        </prelude>
+        </state>
+	
+	<state ID="Finish" >
+                <prelude>
+                <generate event="SucceedEvent" fsm="UE2" />
+                </prelude>
+        </state>
+        
+ </states>
+  </fsm>
+    
+    
+ <fsm name="UE2">
+        <models>
+            <session /> 
+        </models>
+            <NE sim_type="orig" elements="UE2 PCSCF2 SCSCF1 PCSCF1" targets="UE2" /> 
+            <states initialstate="WaitSucceedEvent">
+                <state ID="WaitSucceedEvent">
+                <transition to="OffHook2" event="SucceedEvent" /> 
+                </state>
+                <state ID="OffHook2" timer="500">
+                    <prelude>
+			<log expr="Take the line 2 of the DUT off hook." />
+                        
+                    </prelude>    
+               
+		<transition to="VerifyDialTone" event="TimerExpired" />
+                </state> 
+                
+                <state ID="VerifyDialTone">
+                        <prelude>
+                                <send protocol="utility" msgtype="VerifyDialTone" /> 
+                        </prelude>
+                        <postlude>
+                                <verify step="2" requirements="REQ23580">
+                                    <eq>
+                                    <msg_ref type="utility">message</msg_ref> 
+                                    <expr>VerifyDialToneComplete</expr> 
+                                    </eq>
+                                </verify>
+                        </postlude>
+                <transition to="Call2" event="VerifyDialToneComplete" /> 
+                </state>
+
+                <state ID="Call2">
+		    <prelude once="true">
+                                <log expr="Dial the 3035551000 from line 2 of the DUT." />
+                        </prelude>
+                         <response>
+                            <if>
+                                <eq>
+                                    <msg_ref type="sip">Request</msg_ref> 
+                                    <expr>Invite</expr> 
+                                </eq>
+                                <then>
+				    <verify step="3" requirements="REQ23584">
+ 					<eq>
+					    <msg_ref type="sip">Invite.P-Preferred-Identity</msg_ref> 
+					    <expr>&quot;LINE 2&quot; &lt;sip:server.phone.com&gt;</expr> 
+					</eq>
+				    </verify>
+                                <!--sleep time="1000" /> 
+                                <log promptUser="True" yesExpected="True" verify="True" step="3" requirements="REQ23584" expr="Verify the INVITE from DVA message has the P-Preferred-Identity." /--> 
+                                <sleep time="1000" />
+                                <send protocol="sip" msgtype="100-INVITE" />
+                                <sleep time="1000" />
+                                <send protocol="sip" msgtype="180-INVITE" />
+                                <sleep time="1000" />
+                                <send protocol="sip" msgtype="200-INVITE" /> 
+                                </then>
+                            </if>
+                        </response>
+                <transition to="Call2" event="DialDigitsComplete" /> 
+                <transition to="Call2" event="INVITE" /> 
+                <transition to="SessionEstablished2" event="ACK" /> 
+                </state>
+                
+                <state ID="SessionEstablished2" timer="2000">
+                        <prelude>
+                            <log promptUser="True" yesExpected="True" verify="True" step="3" requirements="REQ23580" expr="Verify a session is established on line 2." /> 
+                        </prelude>
+                
+                <transition to="Next" event="TimerExpired" />        
+                </state>
+  
+                
+                <state ID="Next">
+                        <prelude>
+                            <generate event="SucceedEvent" fsm="UE3" /> 
+                        </prelude>
+               </state>
+                
+                
+            </states>
+	</fsm>    
+	    <fsm name="UE3">
+        <models>
+            <session /> 
+        </models>
+            <NE sim_type="term" elements="UE3 DUT PCSCF2 SCSCF2 PCSCF2" targets="UE3" />
+	    <states initialstate="WaitSucceedEvent">
+                <state ID="WaitSucceedEvent">
+                <transition to="Setuponce" event="SucceedEvent" />
+		</state>
+		
+		<state ID="Setuponce" timer="3000">
+    
+		<prelude once="true">
+                    <send protocol="sip" msgtype="INVITE" >
+		    <mod modtype="replace" hdr="Request-Line" param="Request-URI">
+			<var_expr>
+			<expr>sip:3035550000@</expr>
+			<msg_ref type="platform">DUT.domain</msg_ref> 
+			</var_expr>
+		    </mod>
+		    </send>
+                    <sleep time="2000" /> 
+                    <log promptUser="True" yesExpected="True" verify="True" step="4" requirements="REQ23580 " expr="Verify the PP-1 plays call waiting alert." /> 
+                    <sleep time="500" />
+                    <log promptUser="True" yesExpected="True" verify="True" step="4" requirements="REQ23582" expr="Verify the PP-2 does not play any call waiting alert." />
+                    
+                    
+                </prelude>
+		<transition to="Setuponce" event="180-INVITE" />
+                <transition to="SendAc" event="TimerExpired" />
+        
+        </state>
+         <state ID="SendAc" timer="2000">
+                <prelude once="true">
+                        <send protocol="sip" msgtype="CANCEL" >
+			<mod modtype="replace" hdr="Request-Line" param="Request-URI">
+			<var_expr>
+			<expr>sip:3035550000@</expr>
+			<msg_ref type="platform">DUT.domain</msg_ref> 
+			</var_expr>
+		    </mod>
+		    </send>
+                </prelude>
+	<transition to="SendAc" event="200-CANCEL" /> 	
+         <transition to="SendAck1" event="487-INVITE" />   
+        </state>
+        <state ID="SendAck1" timer="2000">
+                <prelude>
+                        <sleep time="1000" />
+                        <send protocol="sip" msgtype="ACK" >
+			<mod modtype="replace" hdr="Request-Line" param="Request-URI">
+			<var_expr>
+			<expr>sip:3035550000@</expr>
+			<msg_ref type="platform">DUT.domain</msg_ref> 
+			</var_expr>
+		    </mod>
+		    </send>
+                </prelude>
+         <transition to="Setup3" event="TimerExpired" />  
+        </state>
+	<state ID="Setup3" timer="3000">
+                        <prelude once="true">
+                    <send protocol="sip" msgtype="INVITE" >
+		    <mod modtype="replace" hdr="Request-Line" param="Request-URI">
+			<var_expr>
+			<expr>sip:3035551000@</expr>
+			<msg_ref type="platform">DUT.domain</msg_ref> 
+			</var_expr>
+		    </mod>
+		    </send>
+
+                    <sleep time="2000" /> 
+                    <log promptUser="True" yesExpected="True" verify="True" step="5" requirements="REQ23580 " expr="Verify the PP-1 does not play any call waiting alert." /> 
+                    <sleep time="500" />
+                    <log promptUser="True" yesExpected="True" verify="True" step="5" requirements="REQ23582" expr="Verify the PP-2 plays call waiting alert." />
+                      </prelude>
+		<transition to="Setup3" event="180-INVITE" />
+                <transition to="SendAc2" event="TimerExpired" />
+                 
+                </state>
+              <state ID="SendAc2" timer="2000">
+               <prelude once="true">
+                        <send protocol="sip" msgtype="CANCEL" >
+			<mod modtype="replace" hdr="Request-Line" param="Request-URI">
+			<var_expr>
+			<expr>sip:3035551000@</expr>
+			<msg_ref type="platform">DUT.domain</msg_ref> 
+			</var_expr>
+			</mod>
+			</send>
+                </prelude>
+		<transition to="SendAc2" event="200-CANCEL" />
+		<transition to="SendAck2" event="487-INVITE" />
+		</state>
+                <state ID="SendAck2" timer="2000" >
+                <prelude>
+                        <sleep time="1000" />
+                        <send protocol="sip" msgtype="ACK" >
+			    <mod modtype="replace" hdr="Request-Line" param="Request-URI">
+			    <var_expr>
+			    <expr>sip:3035551000@</expr>
+			    <msg_ref type="platform">DUT.domain</msg_ref> 
+			    </var_expr>
+			    </mod>
+			</send>
+                </prelude>
+         <transition to="NextEvent2" event="TimerExpired" />  
+        </state>
+                <state ID="NextEvent2" ES="true">
+                    <transition to="END" event="SessionTerminated" />
+                </state>
+                </states>
+            </fsm>
+  </pc2xml>
+

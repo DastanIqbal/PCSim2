@@ -1,0 +1,246 @@
+#//**************************************************************************
+#//    Filename: PROV_5-57.test
+#//    Author:   Matt Forbes
+#//    Creation Date: 29-zpct-2008
+#//
+#//    Modified: Matthew Forbes, 12/8/04, added parT to verify sequencing
+#//		 Matthew Forbes, Changed modify to mta instead of cm - 3/12/08 in second part of test
+#//**************************************************************************
+#//    Description:
+#//
+#//       Test Script for TC1318: Verification if MTA follows the failure 
+#//       logic in Provisioning Flows MTA1-MTA4 
+#//       
+#//**************************************************************************
+
+global SCRIPT_VERSION
+set SCRIPT_VERSION { # $Id: E-UE-PROV_1-1-3-13.test 7406 2010-07-20 17:17:37Z dthakore $ }
+
+Init_PROV
+
+set testCaseID E-UE-PROV_1-1-3-13
+set testCaseNumber TC-2810
+set testStep 1
+
+
+DoStep "${testCaseID}_${testStep}" "$testCaseNumber -> Modify DHCP" {
+} {
+    # verify_signal "Modify DHCP service in such a way that the MTA will not send DHCP REQUEST
+                  # (modify overide.props, MTAMAC.OFFER122=provserver FQDN, MTAMAC.INVALIDOFFER=truE,reload)."
+    # ProvCreateConfig 291 $MTA_MAC
+    PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122 Device_Level_Secure.cfg
+    PROV_MODIFY_DEVICE_NEG $CM_MAC CMTC1318
+    PROV_DEPLOY_DHCP
+}
+incr testStep
+
+###########################################
+# Start sniffer
+###########################################
+DoStep "${testCaseID}" "Start sniffer" {
+    LogMsg "--- Start sniffer ---"
+    Init_CONTROLLER_LAN
+    SetupCaptureControllerLan "host $PROV_DHCP1_IP"
+    StartCaptureControllerLan 
+} {PASS_STEP}
+
+###########################################
+#  RESET MTA
+###########################################
+DoStep "${testCaseID}_${testStep}" "$testCaseNumber->Hard reboot of CM and MTA: CM Reset action" {
+    set val [SNMPvN_RESET $CM_IP]
+    LogMsg "Hard reboot of CM and MTA has passed"
+} {
+    IsEqual $val 0
+}
+
+incr testStep
+
+DoStep "${testCaseID}_${testStep}-1" "$testCaseNumber -> Monitor Ethernet Trace" {
+} {
+    actionWait "Wait 90 seconds for MTA to attempt to provision" 90
+    # verify_signal "Monitor the Ethernet Trace to see if MTA sends the \n
+    # DHCP DISCOVER and does NOT send DHCP REQUEST."
+}
+
+###########################################
+# Stop sniffer
+###########################################
+DoStep "${testCaseID}" "Stop sniffer" {
+    LogMsg "--- Stop sniffer ---"
+    StopCaptureControllerLan
+    SaveToFileControllerLan "_InvalidDHCPOffer"
+} {PASS_STEP}
+
+########################## INVOKE PARSING TOOL ##################################
+
+DoStep "${testCaseID}" "$testCaseNumber ->Analyze flow data" {
+    # Initial PARSER TOOL
+    Init_PART
+    
+    # Set up parser file
+    set PARSERFILE    $ETH_DEFAULT_TXT_FILE
+} { PASS_STEP }
+
+DoStep "${testCaseID}" "$testCaseNumber ->Parse all data into database" {
+    # Parse data
+    set PARAMS_DHCP         "{DHCP {} {} {} {} {} {} {} {}}"
+    set PARAMS_MTA_SRC      "{{} {} {} {} $MTA_IP {} {} {} {}}"
+    set PARAMS_MTA_DST      "{{} {} {} {} {} {} {} $MTA_IP {}}"
+    set msgID_MTA           [ParseFile $PARSERFILE "$PARAMS_DHCP $PARAMS_MTA_SRC $PARAMS_MTA_DST"]
+} {
+    if { $::PART_RETURN == 0 } {
+        PASS_STEP
+    } else {
+        FAIL_STEP "Cannot find data"
+    }
+}
+
+DoStep "${testCaseID}_${testStep}-2" "$testCaseNumber ->Verify MTA Sequence" {
+    LogMsg "Verify MTA Sequence"
+    # Find MTA MAC with colons
+    set MTA_MAC_COL [AddColMac $MTA_MAC]
+    # Set MTA SEQUENCE to check
+    set MTA_SEQUENCE "DHCP:DISCOVER,DHCP:OFFER,DHCP:DISCOVER,DHCP:OFFER,\
+            DHCP:DISCOVER,DHCP:OFFER,DHCP:DISCOVER,DHCP:OFFER"
+    # Remove whitespace
+    regsub -all { } $MTA_SEQUENCE {} MTA_SEQUENCE
+} {
+    # Verify Sequence
+    VerifyValue $msgID_MTA "SEQUENCE $MTA_SEQUENCE" "" ""
+    # Verify DHCP REQUEST does not exist
+    VerifyNotValue $msgID_MTA "INANY DHCP REQUEST OPTIONCLIENTHWADDRESS" "IS" "$MTA_MAC_COL"
+}
+
+incr testStep
+
+DoStep "${testCaseID}_${testStep}" "$testCaseNumber -> Configure DHCP" {
+} {
+    # verify_signal "Modify the DHCP Service in such a way that it will send DHCP OFFER
+    # for MTA but will not send DHCP ACK (modify overide.props, MTAMAC.OFFER122=provserver FQDN,
+    # MTAMAC.NODHCPACK=true, reload)."
+    PROV_MODIFY_DEVICE $CM_MAC CMFORCW_122
+    PROV_MODIFY_DEVICE_NEG $CM_MAC {""}   
+    # PROV_MODIFY_DEVICE_NEG $CM_MAC {} true
+    # Changed modify to mta instead of cm - 3/12/08 - M.Forbes
+    PROV_MODIFY_DEVICE_NEG $MTA_MAC {} true
+    PROV_DEPLOY_DHCP
+}
+
+###########################################
+# Start sniffer
+###########################################
+DoStep "${testCaseID}" "Start sniffer" {
+    LogMsg "--- Start sniffer ---"
+    SetupCaptureControllerLan "host $PROV_DHCP1_IP"
+    StartCaptureControllerLan
+} {PASS_STEP}
+
+###########################################
+#  RESET MTA
+###########################################
+
+incr testStep
+DoStep "${testCaseID}_${testStep}" "$testCaseNumber->Hard reboot of CM and MTA: CM Reset action" {
+    set val [SNMPvN_RESET $CM_IP]
+    LogMsg "Hard reboot of CM and MTA has passed"
+} {
+    IsEqual $val 0
+}
+
+incr testStep
+DoStep "${testCaseID}_${testStep}-1" "$testCaseNumber -> Monitor Ethernet Trace" {
+} {
+    actionWait "Wait 90 seconds for MTA to attempt to provision" 90
+    #Long duration due to some MTAs taking this long to return to MTA-1
+    # verify_signal "Monitor the Ethernet Trace to see if MTA sends the \n
+    # DHCP DISCOVER and DHCP REQUEST, but returns to MTA1 when it does not receive an DHCP ACK."
+}
+
+################################################################################
+# DoStep "${testCaseID}_${testStep}-2" "$testCaseNumber ->Verify MTA Sequence" {
+#     LogMsg "Verify MTA Sequence"
+#     verify_signal "Monitor trace: verify MTA sends DHCP discover and request/s, but receives
+#     no ack and returns to MTA1(dhcp discover)"
+# } {PASS_STEP}
+# 
+################################################################################
+
+###########################################
+# Stop sniffer
+###########################################
+DoStep "${testCaseID}" "Stop sniffer" {
+    LogMsg "--- Stop sniffer ---"
+    StopCaptureControllerLan
+    SaveToFileControllerLan "_NoDHCPAck"
+} {PASS_STEP}
+
+DoStep "${testCaseID}" "$testCaseNumber ->Parse all data into database" {
+    # Parse data
+    set PARAMS_DHCP         "{DHCP {} {} {} {} {} {} {} {}}"
+    
+    set PARAMS_MTA_SRC      "{{} {} {} {} $MTA_IP {} {} {} {}}"
+    set PARAMS_MTA_DST      "{{} {} {} {} {} {} {} $MTA_IP {}}"
+    set msgID_MTA           [ParseFile $PARSERFILE "$PARAMS_DHCP $PARAMS_MTA_SRC $PARAMS_MTA_DST"]
+} {
+    if { $::PART_RETURN == 0 } {
+        PASS_STEP
+    } else {
+        FAIL_STEP "Cannot find data"
+    }
+}
+
+################################################################################
+# # These steps will verify MTA sequence, but the time required for some chipsets to return
+# # to MTA 1 is much longer than others so manual verification for now
+################################################################################
+
+################################################################################
+# DoStep "${testCaseID}_${testStep}-2" "$testCaseNumber ->Verify MTA Sequence" {
+# LogMsg "Verify MTA Sequence"
+# 
+# # Set MTA SEQUENCE to check
+# set MTA_SEQUENCE "DHCP:DISCOVER,DHCP:OFFER,DHCP:REQUEST,DHCP:REQUEST,\
+# DHCP:DISCOVER,DHCP:OFFER,DHCP:REQUEST,DHCP:REQUEST"
+# # Remove whitespace
+# regsub -all { } $MTA_SEQUENCE {} MTA_SEQUENCE
+# } {
+# # Verify Sequence
+# VerifyValue $msgID_MTA "SEQUENCE $MTA_SEQUENCE" "" ""
+# }
+
+
+DoStep "${testCaseID}_${testStep}-3" "$testCaseNumber ->Verify MTA Sequence" {
+LogMsg "Verify MTA Sequence"
+# Set alternative MTA SEQUENCE2 to check
+set MTA_SEQUENCE2 "DHCP:DISCOVER,DHCP:OFFER,DHCP:REQUEST"
+# Remove whitespace
+regsub -all { } $MTA_SEQUENCE2 {} MTA_SEQUENCE2
+} {
+# Verify Sequence    
+VerifyValue $msgID_MTA "SEQUENCE $MTA_SEQUENCE2" "" ""   
+}
+
+################################################################################
+
+
+incr testStep
+DoStep "${testCaseID}_${testStep}" "$testCaseNumber -> Verify DHCP ACK does not exist" {
+    # Verify DHCP ACK does not exist
+    VerifyNotValue $msgID_MTA "INANY DHCP ACK OPTIONCLIENTIPADDRESS" "IS" "$MTA_IP" AND \
+        "OPTIONCLIENTHWADDRESS" "IS" "$MTA_MAC_COL"
+} {PASS_STEP}
+
+DoStep "${testCaseID}_${testStep}" "$testCaseNumber -> Restore DHCP service" {
+} {
+    # verify_signal "Restore the DHCP Service (modify overide.props, comment out changes)."
+    
+    PROV_MODIFY_DEVICE_NEG $MTA_MAC {} false
+    PROV_DEPLOY_DHCP
+    actionWait "Wait 40 seconds for MTA to recover" 40
+}
+                           
+
+
+Cleanup
+

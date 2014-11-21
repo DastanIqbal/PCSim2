@@ -1,0 +1,270 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+ Change History: (Author & Date)
+-->
+
+<!-- Document type and attributes. -->
+<pc2xml version="$Revision: 6076 $"
+        name="E-UE_PROV_2.1.1.2"
+        descrip="eUE disallows SNMPv2, management when provisioned in secure mode using SNMPv3."
+        number="E-UE_PROV_2.1.1.2">
+
+    <!-- Reset UE; start capture. -->
+    <template file="./templates/EUE_Prov_B_1_1_1.xml" name="SNMPVersions"/>
+
+    <add_to fsm="SNMPVersions">
+        <transition from="StartCapture_RebootWait" to="Verify1" event="TimerExpired"/>
+
+
+        <!-- Step 3. Setup the SNMPv2 workstation to point to the CM IP address and display the ifTable.
+                     Only interfaces associated with the CM should be present in the list of interfaces.
+                     Interface 16 identifying the PacketCable E-MTA must also be present. -->
+        <state ID="Verify1">
+            <prelude once="true">
+				<send protocol="utility" msgtype="SNMPGetTable">
+						<mod modtype="add" hdr="oids">
+							<expr>IF-MIB::ifIndex</expr>
+						</mod>
+						<mod modtype="replace" hdr="agentip">
+							<msg_ref type="platform">DUT.CM IP Address</msg_ref>
+						</mod>
+						<!-- ATP requires SNMPv2c for this SNMPGet -->
+						<mod modtype="replace" hdr="version">
+							<expr>2c</expr>
+						</mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="3">
+					<and>
+						<notnull>
+							<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+						</notnull>
+						<and>
+							<notnull>
+								<msg_ref type="utility" index="1 0 2">SNMPResp.varBind</msg_ref>
+							</notnull>
+							<and>
+								<notnull>
+									<msg_ref type="utility" index="2 0 2">SNMPResp.varBind</msg_ref>
+								</notnull>
+								<and>
+								<notnull>
+									<msg_ref type="utility" index="3 0 2">SNMPResp.varBind</msg_ref>
+								</notnull>
+									<and>
+										<notnull>
+											<msg_ref type="utility" index="4 0 2">SNMPResp.varBind</msg_ref>
+										</notnull>
+										<eq>
+											<msg_ref type="utility" index="5 0 2">SNMPResp.varBind</msg_ref>
+											<expr>16</expr>
+										</eq>
+									</and>
+								</and>
+							</and>
+						</and>
+					</and>
+                </verify>
+            </response>
+            <transition to="Verify2" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+
+        <!-- Setp 4. Setup the SNMP2 workstation to point to the MTA IP address and display the ifTable
+                     and other PacketCbale related SNMP oids.
+                     No objects are/can be listed. -->
+        <state ID="Verify2">
+            <prelude once="true">
+				<send protocol="utility" msgtype="SNMPGetTable">
+					<mod modtype="add" hdr="oids">
+						<expr>IF-MIB::ifIndex</expr>
+					</mod>
+					<mod modtype="replace" hdr="agentip">
+						<msg_ref type="platform">DUT.IP</msg_ref>
+					</mod>
+					<!-- ATP requires SNMPv2c for this SNMPGet -->
+					<mod modtype="replace" hdr="version">
+						<expr>2c</expr>
+					</mod>
+				</send>
+            </prelude>
+            <response>
+                <verify step="4">
+					<eq>
+						<msg_ref type="utility">Response</msg_ref>
+						<expr>SNMPRespFailure</expr>
+					</eq>
+                </verify>
+            </response>
+            <transition to="Verify3" event="SNMPResp"/>
+            <transition to="Verify3" event="SNMPRespFailure"/>
+        </state>
+
+
+        <!-- Step 5. Setup the SNMPv3 workstation to point to the MTA IP address and display the ifTable.
+                     Only MTA related interfaces/objects are present. MTA end-point interfaces must start at 9.
+                     The SNMPv3 view should contain the following rows:
+                          ifIndex=1
+                          ifIndex=9
+                          and possibly 10, 11, ..etc. -->
+        <state ID="Verify3">
+            <prelude once="true">
+				<send protocol="utility" msgtype="SNMPGetTable">
+					<mod modtype="add" hdr="oids">
+						<expr>IF-MIB::ifIndex</expr>
+					</mod>
+					<mod modtype="replace" hdr="agentip">
+						<msg_ref type="platform">DUT.IP</msg_ref>
+					</mod>
+				</send>
+            </prelude>
+            <response>
+                <verify step="5">
+					<and>
+						<eq>
+							<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+							<expr>1</expr>
+						</eq>
+						<eq>
+							<msg_ref type="utility" index="1 0 2">SNMPResp.varBind</msg_ref>
+							<expr>9</expr>
+						</eq>
+					</and>
+                </verify>
+            </response>
+            <transition to="Verify4" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+
+        <!-- Step 6. Access the MIB esafeProvisioningStatusProgress from SNMPv2 station.
+                     It must show finished(3) -->
+        <state ID="Verify4">
+            <prelude once="true">
+				<send protocol="utility" msgtype="SNMPGetTable">
+					<mod modtype="add" hdr="oids">
+						<expr>ESAFE-MIB::esafeProvisioningStatusProgress</expr>
+					</mod>
+					<mod modtype="replace" hdr="agentip">
+						<msg_ref type="platform">DUT.CM IP Address</msg_ref>
+					</mod>
+					<mod modtype="replace" hdr="version">
+						<expr>2c</expr>
+					</mod> 
+				</send>
+            </prelude>
+            <response>
+				<verify step="6">
+					<eq>
+						<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+						<expr>3</expr>
+					</eq>
+				</verify>
+            </response>
+            <transition to="Verify5" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+
+        <!-- Step 7. Access the MIB esafeProvisioningStatusFailureFound from SNMPv2 station
+                     It must not be true(1) -->
+        <state ID="Verify5">
+            <prelude once="true">
+				<send protocol="utility" msgtype="SNMPGetTable">
+					<mod modtype="add" hdr="oids">
+						<expr>ESAFE-MIB::esafeProvisioningStatusFailureFound</expr>
+					</mod>
+					<mod modtype="replace" hdr="agentip">
+						<msg_ref type="platform">DUT.CM IP Address</msg_ref>
+					</mod>
+					<mod modtype="replace" hdr="version">
+						<expr>2c</expr>
+					</mod> 
+				</send>
+            </prelude>
+            <response>
+				<verify step="7">
+					<neq>
+						<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+						<expr>1</expr>
+					</neq>
+				</verify>
+            </response>
+            <transition to="Verify6" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+
+        <!-- Step 8. Access the MIB esafeProvisioningStatusFailureFlow from SNMPv2 station
+                     It must be empty -->
+        <state ID="Verify6">
+            <prelude once="true">
+				<send protocol="utility" msgtype="SNMPGetTable">
+					<mod modtype="add" hdr="oids">
+						<expr>ESAFE-MIB::esafeProvisioningStatusFailureFlow</expr>
+					</mod>
+					<mod modtype="replace" hdr="agentip">
+						<msg_ref type="platform">DUT.CM IP Address</msg_ref>
+					</mod>
+					<mod modtype="replace" hdr="version">
+						<expr>2c</expr>
+					</mod> 
+				</send>
+            </prelude>
+            <response>
+				<verify step="8">
+					<or>
+						<null>
+							<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+						</null>
+						<eq>
+							<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+							<expr>ERROR</expr>
+						</eq>
+					</or>
+				</verify>
+            </response>
+            <transition to="Verify7" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+
+        <!-- Step 9. Access the MIB esafeProvisioningStatusFailureEventID from SNMPv2 station
+                     Value zero is seen -->
+        <state ID="Verify7">
+            <prelude once="true">
+				<send protocol="utility" msgtype="SNMPGetTable">
+					<mod modtype="add" hdr="oids">
+						<expr>ESAFE-MIB::esafeProvisioningStatusFailureEventID</expr>
+					</mod>
+					<mod modtype="replace" hdr="agentip">
+						<msg_ref type="platform">DUT.CM IP Address</msg_ref>
+					</mod>
+					<mod modtype="replace" hdr="version">
+						<expr>2c</expr>
+					</mod> 
+				</send>
+            </prelude>
+            <response>
+				<verify step="9">
+					<eq>
+						<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+						<expr>0</expr>
+					</eq>
+				</verify>
+            </response>
+            <transition to="END" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+    </add_to>
+</pc2xml>

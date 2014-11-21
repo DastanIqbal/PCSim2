@@ -1,0 +1,247 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+ 	2011-11-20	Seung Lee - Final version
+
+
+
+
+-->
+
+<!-- First are the document type and the attributes for our document -->
+<pc2xml version="%Revision$" name="GlobalRegistrar" 
+        descrip="This document defines the functionality for the global registrar processing within the PCSim2 platform when enabled through the Platform settings." 
+		number="1.0">
+
+	<fsm name="GlobalRegistrar">
+		<models>
+				<registrar/>
+		</models>
+		
+		<!-- Next we define all of the network elements -->
+		<NE sim_type="term" elements="SCSCF1 PCSCF1" targets="PCSCF1"/>
+
+		<states initialstate="PendingRegistration">
+
+			<!-- PENDINGREGISTRATION State - Default Message Flow - UE Registration (DUT) Sequence Diagram-->
+			<state ID="PendingRegistration"> 
+				<prelude>
+					<generate event="Registered"/>
+				</prelude>
+				<!-- Step 1 from the Default Message Flow - 
+					UE Registration (DUT) Sequence Diagram - 
+					received REGISTER message-->
+				<response>
+					<if>
+						<eq>
+						  <msg_ref type="sip">Request</msg_ref>
+						  <expr>REGISTER</expr>
+						</eq>
+						<!-- Step-2 from the Default Message Flow - UE Registration (DUT) Sequence Diagram- send 401-REGISTER-->
+						<then>
+							    <send protocol="sip" msgtype="401-REGISTER"/>
+						</then>
+				 	</if>
+				</response>
+				<transition to="PendingRegistration" event="SNMPResp"/>
+				<transition to="PendingRegistration" event="SNMPRespFailure"/>
+				<transition to="Authorization" event="REGISTER"/>
+				<transition to="PendingRegistration" event="NoResponseTimeout"/>
+				<transition to="PendingRegistration" event="AutoRebootEvent"/>
+			</state>
+
+			<!--State changes from PENDINGREGISTRATION to AUTHORIZATION on 
+                   receiving (Step-3) REGISTER message-->
+			<!-- AUTHORIZATION State -->
+			<!-- Step-3 from the Default Message Flow - 
+             UE Registration (DUT) Sequence Diagram - 
+             received REGISTER message-->
+			<state ID="Authorization">
+				<response>
+					<if>
+						<or>
+							<eq>
+								<msg_ref type="event"/>
+								<expr>Registered</expr>
+							</eq>
+						<or>
+							<eq>
+								<msg_ref type="event"/>
+								<expr>AutoRebootEvent</expr>
+							</eq>
+							<eq>
+								<msg_ref type="event"/>
+								<expr>RegistrationLost</expr>
+							</eq>
+						</or>
+						</or>
+						<then>
+								<!-- this is to prevent the AuthenticateFailed from being forwarded
+										 to the next state on the AuthenticateSucceed -->
+						</then>
+					<elseif>
+						<and>
+						  <eq>
+								<msg_ref type="sip">Request</msg_ref>
+								<expr>REGISTER</expr>
+							</eq>
+							<and>
+								<contains>
+						      <msg_ref type="sip">REGISTER</msg_ref>
+							    <expr>Authorization</expr>
+						    </contains>
+						    <digest/>
+			        </and>
+				    </and>
+						<then>
+							 <generate event="Registered"/>
+							 <send protocol="sip" msgtype="200-Register"/>
+						</then>
+						<else>
+							 <generate event="AuthenticateFailed"/>
+							 <send protocol="sip" msgtype="503-Register"/>
+						</else>
+			    </elseif>
+					</if>
+				</response>
+			
+				<transition to="Authorization" event="REGISTER"/>
+				<transition to="Registered" event="Registered"/>
+				<transition to="PendingRegistration" event="AuthenticateFailed"/>
+				<transition to="PendingRegistration" event="NoResponseTimeout"/>
+				<transition to="PendingRegistration" event="AutoRebootEvent"/>
+			</state>
+			
+
+			<!-- REGISTERED State  - Default Message Flow - 
+            UE Registration (DUT) Sequence Diagram -->
+			<state ID="Registered" timer="10000">
+			<!-- Step  4, send 200-REGISTER upon AuthenticateSucceed event  - 
+                Default Message Flow - UE Registration (DUT) Sequence Diagram-->
+				<response>
+					<if>
+						<and>
+							<eq>
+								<msg_ref type="sip">Request</msg_ref>
+								<expr>Register</expr>
+							</eq>
+							<or>
+								<eq>
+									<msg_ref type="sip">Register.Expires.value</msg_ref>
+									<expr>0</expr>
+								</eq>
+								<eq>
+									<msg_ref type="sip">Register.Contact.expires</msg_ref>
+									<expr>0</expr>
+								</eq>
+							</or>
+						</and>
+						<then>
+							<generate event="RegistrationLost"/>
+							<send protocol="sip" msgtype="200-Register"/>
+						</then>
+						<elseif >
+							<eq>
+								<msg_ref type="sip">Request</msg_ref>
+								<expr>Register</expr>
+							</eq>
+							<then>
+								<send protocol="sip" msgtype="200-Register"/>
+								<generate event="Registered"/>
+							</then>
+						</elseif>
+						<elseif>
+							<and>
+								<eq>
+									<msg_ref type="sip">Request</msg_ref>
+									<expr>SUBSCRIBE</expr>
+								</eq>
+								<eq>
+									<msg_ref type="sip">SUBSCRIBE.Event.event-type</msg_ref>
+									<expr>reg</expr>
+								</eq>
+							</and>
+							<then>
+								<send protocol="sip" msgtype="200-SUBSCRIBE"/>
+								<send protocol="sip" msgtype="NOTIFY"/>
+							</then>
+						</elseif>
+						<elseif>
+							<and>
+								<eq>
+									<msg_ref type="sip">Request</msg_ref>
+									<expr>SUBSCRIBE</expr>
+								</eq>
+								<eq>
+									<msg_ref type="sip">SUBSCRIBE.Event.event-type</msg_ref>
+									<expr>ua-profile</expr>
+								</eq>
+							</and>
+							<then>
+								<send protocol="sip" msgtype="200-SUBSCRIBE"/>
+								<send protocol="sip" msgtype="NOTIFY" subscribeType="ua-profile"/>
+							</then>
+						</elseif>
+						<elseif>
+							<and>
+								<eq>
+									<msg_ref type="sip">Request</msg_ref>
+									<expr>SUBSCRIBE</expr>
+								</eq>
+								<eq>
+									<msg_ref type="sip">SUBSCRIBE.Event.event-type</msg_ref>
+									<expr>message-summary</expr>
+								</eq>
+							</and>
+							<then>
+								<send protocol="sip" msgtype="500-SUBSCRIBE"/>
+							</then>
+						</elseif>
+								
+					</if>
+					
+				</response>
+				
+				<transition to="Registered" event="REGISTER"/>
+				<transition to="Registered" event="Subscribe"/>
+				<transition to="Registered" event="200-Notify"/>
+				<transition to="ReRegister" event="TimerExpired"/>
+				<transition to="PendingRegistration" event="NoResponseTimeout"/>
+				<transition to="Registered" event="Registered"/>
+				<transition to="PendingRegistration" event="RegistrationLost"/>
+				<transition to="PendingRegistration" event="AutoRebootEvent"/>
+			</state>
+
+			<!-- State changes from SUBSCRIBE to SUBSCRIBE RESPONSE on 
+              receiving SUBSCRIBE message-->
+			<state ID="ReRegister">
+				<response>
+					<if>
+						<eq>
+							  <msg_ref type="sip">Request</msg_ref>
+							  <expr>REGISTER</expr>
+						</eq>
+						<!-- Step-2 from the Default Message Flow - UE Registration (DUT) Sequence Diagram- send 401-REGISTER-->
+						<then>
+							    <generate event="RegistrationLost"/>
+							    <send protocol="sip" msgtype="401-REGISTER"/>
+						</then>
+				   </if>
+				 </response>
+				<transition to="Authorization" event="REGISTER"/>
+				<transition to="PendingRegistration" event="AutoRebootEvent"/>
+			</state>
+
+		</states>
+	</fsm>
+</pc2xml>

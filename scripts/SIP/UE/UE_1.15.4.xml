@@ -1,0 +1,71 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	PCPCII-135 : UPdate the script to accommodate a de-register message during the reboot. (ghassler 06/24/2009)
+	
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="SIP-UE 1.15.4" 
+	descrip="Out-of-Order NOTIFY Request" 
+	number="SIP-UE 1.15.4">
+	
+	<template file="./templates/UERegAndSubTemp.xml" name="Registrar"/>
+	
+	<remove_from fsm="Registrar">
+		<state ID="Registered" sub="response"/>
+	</remove_from>
+	
+	<add_to fsm="Registrar">
+		<state ID="Registered" sub="response">
+			<if>
+				<eq>
+					<msg_ref type="event"/>
+					<expr>FailEvent</expr>
+				</eq>
+				<then/>
+				<elseif>
+					<and>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>SUBSCRIBE</expr>
+						</eq>
+						<contains>
+							<msg_ref type="sip">SUBSCRIBE.Event</msg_ref>
+							<expr>reg</expr>
+						</contains>
+					</and>
+					<then>
+						<send protocol="sip" msgtype="NOTIFY"/>
+						<send protocol="sip" msgtype="200-SUBSCRIBE"/>
+					</then>
+				</elseif>
+			</if>
+		</state>
+		
+		<transition from="Notification" to="END" event="200-NOTIFY"/>
+		
+		<state ID="Notification" sub="response">
+			<verify step="2" requirements="REQ1546">
+				<eq>
+					<msg_ref type="sip">Response</msg_ref>
+					<expr>200-NOTIFY</expr>
+				</eq>
+			</verify>
+		</state>
+			
+	</add_to>
+</pc2xml>

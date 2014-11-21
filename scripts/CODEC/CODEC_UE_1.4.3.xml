@@ -1,0 +1,150 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	PCPCIIATP-93 : Correct verifications of fmtp line from m= to a=. Also corrected the TIAS and 
+		level values in the SDP body. (ghassler 01/06/2010)
+	PCPCII-335 : Update the prompt to state if there is any RTP traffic on the SDPPort2 setting. (ghassler 05/18/2010)
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="CODEC-MEDIA_1.4.3" 
+	descrip="UE Termination Protocol Operation-Offer Rejection" 
+	number="CODEC-MEDIA_1.4.3">
+	
+	<template file="./templates/CallTermAtUETemp.xml" name="UE1"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Setup" sub="prelude"/>
+		<state ID="Connected"/>
+		<state ID="OnHook"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<state ID="Setup" sub="prelude">
+			<!--  STEP 1 -->
+			<start_capture>
+				<filter>
+					<var_expr>
+						<expr>host </expr>
+						<msg_ref type="platform">UE0.IP</msg_ref>
+						<expr> || host </expr>
+						<msg_ref type="platform">Platform.SIP Stack 1 IP Address</msg_ref>
+					</var_expr>
+				</filter>
+			</start_capture>
+			
+			<!-- STEP 2 -->
+			<send protocol="sip" msgtype="Invite">
+				<mod modtype="add" hdr="SDP">
+					<var_expr>
+						<expr>m=video </expr>
+						<msg_ref type="platform">UE1.SDPPort2</msg_ref>
+						<expr> RTP/AVP 98\r\nb=TIAS:2048000\r\na=rtpmap:98 H263-2000/90000\r\na=fmtp:98 profile=0;level=40</expr>
+					</var_expr>
+				</mod>
+			</send>
+			<var name="port">
+				<msg_ref type="platform">UE1.SDPPort2</msg_ref>
+			</var>
+		</state>
+		
+		<state ID="Connected" timer="5000">
+			<prelude once="true">
+				<send protocol="sip" msgtype="ACK"/>
+			</prelude>
+			<response>
+				<if>
+					<and>
+						<eq>
+							<msg_ref type="event"/>
+							<expr>DIALOG_CONFIRMED_UAC</expr>
+						</eq>
+						<contains>
+							<msg_ref type="sip" msg_instance="last">18x-Invite.SDP</msg_ref>
+							<expr>m=audio</expr>
+						</contains>
+					</and>
+					<then>
+						<var name="answer">
+							<msg_ref type="sip" msg_instance="last">18x-Invite.SDP</msg_ref>
+						</var>
+					</then>
+					<elseif>
+						<and>
+							<eq>
+								<msg_ref type="event"/>
+								<expr>DIALOG_CONFIRMED_UAC</expr>
+							</eq>
+							<contains>
+								<msg_ref type="sip" msg_instance="last">200-UPDATE.SDP</msg_ref>
+								<expr>m=audio</expr>
+							</contains>
+						</and>
+						<then>
+							<var name="answer">
+								<msg_ref type="sip" msg_instance="last">200-UPDATE.SDP</msg_ref>
+							</var>
+						</then>
+					</elseif>
+					<elseif>
+						<and>
+							<eq>
+								<msg_ref type="event"/>
+								<expr>DIALOG_CONFIRMED_UAC</expr>
+							</eq>
+							<contains>
+								<msg_ref type="sip" msg_instance="last">200-Invite.SDP</msg_ref>
+								<expr>m=audio</expr>
+							</contains>
+						</and>
+						<then>
+							<var name="answer">
+								<msg_ref type="sip" msg_instance="last">200-INVITE.SDP</msg_ref>
+							</var>
+						</then>
+					</elseif>
+				</if>
+				<if>
+					<eq>
+						<msg_ref type="event"/>
+						<expr>DIALOG_CONFIRMED_UAC</expr>
+					</eq>
+					<then>
+						<verify step="2" requirements="RFC2290, RFC2275">
+							<eq>
+								<var_ref name="answer" protocol="sdp" hdr="video" param="port"/>
+								<expr>0</expr>
+							</eq>
+						</verify>	
+					</then>
+				</if>
+			</response>
+			<transition to="Connected" event="OffHookComplete"/>
+			<transition to="Releasing" event="TimerExpired"/>
+		</state>	
+						
+		<state ID="OnHook">
+			<prelude>
+				<stop_capture/>
+				<send protocol="utility" msgtype="OnHook"/>
+			</prelude>
+			<postlude>
+				<log promptUser="true" verify="true" yesExpected="false" step="3" 
+				requirements="RFC2290, RFC2375"
+				expr="Are there any RTP or RTCP packets being sent by the DUT to port $port within the capture file?"/>
+			</postlude>				
+			<transition to="END" event="OnHookComplete"/>
+		</state>
+	</add_to>
+</pc2xml>

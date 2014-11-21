@@ -1,0 +1,253 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+ Change History: (Author & Date)
+		PCPCIIATP-114 : Update the fmtp media line to use '=' instead of ':' between a parameter and its 
+			value. (ghassler 01/13/2010)
+		PCPCII-175 : Update the script to match the D10 version of the ATP (ghassler 01/28/2010)
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="CODEC-MEDIA_1.3.2.1" 
+	descrip="UE Selects T.38 instead of V.152" 
+	number="CODEC-MEDIA_1.3.2.1">
+	
+	<template file="./templates/Proxy.xml" name="Core"/>
+	
+	<remove_from fsm="Core">
+		<state ID="Connected"/>
+	</remove_from>
+		
+	<add_to fsm="Core">
+		<state ID="Register" sub="prelude">
+			<log promptUser="true" expr="Connect fax machines with phones to UE0 and UE1."/>
+		</state>
+		
+		<state ID="Connected" timer="30000">
+			<prelude once="true">
+				<var name="audio">
+					<var_expr>
+						<expr>m=audio RTP/AVP 0 </expr>
+						<msg_ref type="platform">UE0.T38 Codec</msg_ref>
+					</var_expr>
+				</var>
+				<var name="gpmd">
+					<var_expr>
+						<expr>a=gpmd:</expr>
+						<msg_ref type="platform">UE0.T38 Codec</msg_ref>
+						<expr> vbd=no</expr>
+					</var_expr>
+				</var>
+				<var name="gpmd2">
+					<var_expr>
+						<expr>a=gpmd:</expr>
+						<msg_ref type="platform">UE0.T38 Codec</msg_ref>
+					</var_expr>
+				</var>
+				<var name="gpmdyes">
+					<var_expr>
+						<expr>a=gpmd:</expr>
+						<msg_ref type="platform">UE0.T38 Codec</msg_ref>
+						<expr> vbd=yes</expr>
+					</var_expr>
+				</var>
+				<var name="rtpmap2">
+					<var_expr>
+						<expr>a=rtpmap:</expr>
+						<msg_ref type="platform">UE0.T38 Codec</msg_ref>
+						<expr> RED/8000</expr>
+					</var_expr>
+				</var>
+				<var name="t38map">
+					<var_expr>
+						<expr>a=rtpmap:</expr>
+						<msg_ref type="platform">UE0.T38 Codec</msg_ref>
+						<expr> t38/8000</expr>
+					</var_expr>
+				</var>
+				<var name="fmtp">
+					<var_expr>
+						<expr>a=fmtp:</expr>
+						<msg_ref type="platform">UE0.T38 Codec</msg_ref>
+						<expr> 0/0</expr>
+					</var_expr>
+				</var>
+			</prelude>	
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>REINVITE</expr>
+					</eq>
+					<then>
+						<verify step="2" requirements="REQ14822, REQ12622, REQ12623, REQ12624, REQ12626">
+							<contains>
+								<msg_ref type="sip">REINVITE.SDP</msg_ref>
+								<expr>a=pmft:T38</expr>
+							</contains>
+						</verify>
+					
+						<verify step="2" requirements="REQ14822, REQ12622, REQ12623, REQ12624, REQ12626">
+							<contains>
+								<msg_ref type="sip">REINVITE.SDP</msg_ref>
+								<var_ref name="audio"/>
+							</contains>
+						</verify>
+						
+						<verify step="2" requirements="REQ14822, REQ12622, REQ12623, REQ12624, REQ12626">
+							<contains>
+								<msg_ref type="sip">REINVITE.SDP</msg_ref>
+								<var_ref name="t38map"/>
+							</contains>
+						</verify>
+						
+						<verify step="2" requirements="REQ14822, REQ12622, REQ12623, REQ12624, REQ12626">
+							<contains>
+								<msg_ref type="sip">REINVITE.SDP</msg_ref>
+								<var_ref name="gpmdyes"/>
+							</contains>
+						</verify>
+						
+						<verify step="2" requirements="REQ14822, REQ12622, REQ12623, REQ12624, REQ12626">
+							<contains>
+								<msg_ref type="sip">REINVITE.SDP</msg_ref>
+								<var_ref name="rtpmap2"/>
+							</contains>
+						</verify>
+						
+						<verify step="2" requirements="REQ14822, REQ12622, REQ12623, REQ12624, REQ12626">
+							<contains>
+								<msg_ref type="sip">REINVITE.SDP</msg_ref>
+								<var_ref name="fmtp"/>
+							</contains>
+						</verify>
+						
+						<verify step="2" requirements="REQ14822, REQ12622, REQ12623, REQ12624, REQ12626">
+							<or>
+								<contains>
+									<msg_ref type="sip">REINVITE.SDP</msg_ref>
+									<expr>a=ptime:20</expr>
+								</contains>
+								<dnc>
+									<msg_ref type="sip">REINVITE.SDP</msg_ref>
+									<expr>a=ptime:</expr>
+								</dnc>
+							</or>
+						</verify>
+					</then>
+				</if>
+				<if>
+					<eq>
+						<msg_ref type="sip">Response</msg_ref>
+						<expr>200-INVITE</expr>
+					</eq>
+					<then>
+						<verify step="2" requirements="REQ14822, REQ12622, REQ12623, REQ12624, REQ12626">
+							<contains>
+								<msg_ref type="sip">200-INVITE.SDP</msg_ref>
+								<expr>a=pmft:T38</expr>
+							</contains>
+						</verify>
+					
+						<verify step="2" requirements="REQ14822, REQ12622, REQ12623, REQ12624, REQ12626">
+							<contains>
+								<msg_ref type="sip">200-INVITE.SDP</msg_ref>
+								<var_ref name="audio"/>
+							</contains>
+						</verify>
+						
+						<verify step="2" requirements="REQ14822, REQ12622, REQ12623, REQ12624, REQ12626">
+							<contains>
+								<msg_ref type="sip">200-INVITE.SDP</msg_ref>
+								<var_ref name="t38map"/>
+							</contains>
+						</verify>
+						
+						<verify step="2" requirements="REQ14822, REQ12622, REQ12623, REQ12624, REQ12626">
+							<or>
+								<contains>
+									<msg_ref type="sip">200-INVITE.SDP</msg_ref>
+									<var_ref name="gpmd"/>
+								</contains>
+								<contains>
+									<msg_ref type="sip">200-INVITE.SDP</msg_ref>
+									<var_ref name="gpmd2"/>
+								</contains>
+							</or>
+						</verify>
+						
+						<verify step="2" requirements="REQ14822, REQ12622, REQ12623, REQ12624, REQ12626">
+							<contains>
+								<msg_ref type="sip">200-INVITE.SDP</msg_ref>
+								<var_ref name="rtpmap2"/>
+							</contains>
+						</verify>
+						
+						<verify step="2" requirements="REQ14822, REQ12622, REQ12623, REQ12624, REQ12626">
+							<contains>
+								<msg_ref type="sip">200-INVITE.SDP</msg_ref>
+								<var_ref name="fmtp"/>
+							</contains>
+						</verify>
+						
+						<verify step="2" requirements="REQ14822, REQ12622, REQ12623, REQ12624, REQ12626">
+							<or>
+								<contains>
+									<msg_ref type="sip">200-INVITE.SDP</msg_ref>
+									<expr>a=ptime:20</expr>
+								</contains>
+								<dnc>
+									<msg_ref type="sip">200-INVITE.SDP</msg_ref>
+									<expr>a=ptime:</expr>
+								</dnc>
+							</or>
+						</verify>
+						
+						<verify step="2" requirements="REQ14822, REQ12622, REQ12623, REQ12624, REQ12626">
+							<and>
+								<contains>
+									<msg_ref type="sip">200-INVITE.SDP</msg_ref>
+									<expr>T38FaxRateManagement=transferedTCF</expr>
+								</contains>
+							<and>
+								<contains>
+									<msg_ref type="sip">200-INVITE.SDP</msg_ref>
+									<expr>T38FaxMaxDatagram=173</expr>
+								</contains>
+							<or>
+								<contains>
+									<msg_ref type="sip">200-INVITE.SDP</msg_ref>
+									<expr>T38FaxVersion=0</expr>
+								</contains>
+							<or>
+								<contains>
+									<msg_ref type="sip">200-INVITE.SDP</msg_ref>
+									<expr>T38FaxVersion=1</expr>
+								</contains>
+								<contains>
+									<msg_ref type="sip">200-INVITE.SDP</msg_ref>
+									<expr>T38FaxVersion=2</expr>
+								</contains>
+							</or>
+							</or>
+							</and>
+							</and>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<transition to="OnHook" event="TimerExpired"/>
+			
+		</state>
+	</add_to>
+</pc2xml>

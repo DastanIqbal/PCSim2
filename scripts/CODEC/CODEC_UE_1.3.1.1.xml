@@ -1,0 +1,235 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	PCPCII-140 - Update the script to match all of the changes made to the D09 version of the
+		ATP. (ghassler 08/04/2009)
+	PCPCII-316 - Updated the values being tested and eliminate the testing of the 200-OK message as the platform
+		is generating it. (ghassler 05/18/2010)
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="CODEC-MEDIA_1.3.1.1" 
+	descrip="UE supports T.38 (UDPTL)" 
+	number="CODEC-MEDIA_1.3.1.1">
+	
+	<template file="./templates/Proxy.xml" name="SCSCF1"/>
+	
+	<remove_from fsm="SCSCF1">
+		<state ID="Connected"/>
+	</remove_from>
+	
+	<add_to fsm="SCSCF1">
+		<state ID="Register" sub="prelude">
+			<!-- User reminder -->
+			<log promptUser="true" expr="Connect fax machines with phones to UE0 and UE1."/>
+		</state>
+		
+		<state ID="Connected">
+			<prelude once="true">
+				<!-- STEP 1 -->
+				<start_capture>
+					<filter>
+						<var_expr>
+							<expr>host </expr>
+							<msg_ref type="platform">PCSCF1.IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">UE0.IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">UE1.IP</msg_ref>
+						</var_expr>
+					</filter>
+				</start_capture>
+				<!-- Step - 1 test case Appendix B.8 Common Test Procedures -->
+				<log expr="Press start on UE-0 so that the fax is transmitted to UE-1."/>
+			</prelude>
+			<response>
+				<if>
+					<or>
+						<eq>
+							<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+							<msg_ref type="platform">UE1.IP</msg_ref>
+						</eq>
+						<eq>
+							<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+							<msg_ref type="platform">UE1.IP</msg_ref>
+						</eq>
+					</or>
+					<then>
+						<proxy target="UE0"/>
+					</then>
+					<elseif>
+						<or>
+							<eq>
+								<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE0.IP</msg_ref>
+							</eq>
+							<eq>
+								<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE0.IP</msg_ref>
+							</eq>
+						</or>
+						<then>
+							<proxy target="UE1"/>
+						</then>
+					</elseif>
+				</if>
+				<!-- Test the Offer -->
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>REINVITE</expr>
+					</eq>
+					<then>
+						<!-- STEP 3 from B.8 Common Procedure -->
+						<verify step="3" requirements="REQ12557, REQ12559, REQ12560, REQ13334"> 
+							<or>
+								<contains>
+									<msg_ref type="sip">Request.SDP</msg_ref>
+									<expr>a=T38FaxVersion:0\r\n</expr>
+								</contains>
+							<or>
+								<contains>
+									<msg_ref type="sip">Request.SDP</msg_ref>
+									<expr>a=T38FaxVersion:1\r\n</expr>
+								</contains>
+								<contains>
+									<msg_ref type="sip">Request.SDP</msg_ref>
+									<expr>a=T38FaxVersion:2\r\n</expr>
+								</contains>
+					
+							</or>
+							</or>
+						</verify>
+										
+						<!-- STEP 4 from B.8 Common Procedure -->
+						<verify step="3" requirements="REQ12563, REQ12564"> 
+							<contains>
+								<msg_ref type="sip">Request.SDP</msg_ref>
+								<expr>a=T38FaxRateManagement:transferredTCF\r\n</expr>
+							</contains>
+						</verify>
+						
+						<!-- STEP 5 and 6 from B.8 Common Procedure -->
+						<verify step="3" requirements="REQ12566, REQ16641, REQ12551, REQ12552"> 
+							<or>
+								<contains>
+									<msg_ref type="sip">Request.SDP</msg_ref>
+									<expr>a=T38FaxMaxDatagram:160\r\n</expr>
+								</contains>
+								<contains>
+									<msg_ref type="sip">Request.SDP</msg_ref>
+									<expr>a=T38FaxMaxDatagram:354\r\n</expr>
+								</contains>
+							</or>
+						</verify>
+				
+						<!-- STEP 7 from B.8 Common Procedure -->
+						<verify step="3" requirements="REQ13334, REQ13355, REQ12572, REQ11532"> 
+							<contains>
+								<msg_ref type="sip">Request.SDP</msg_ref>
+								<expr>a=T38FaxUdpEC:t38UDPRedundancy\r\n</expr>
+							</contains>
+						</verify>
+				
+						<!-- STEP 8 from B.8 Common Procedure -->
+						<verify	step="3" requirements="REQ12579, REQ12581, REQ12712">
+							<and>	
+								<dnc>
+									<msg_ref type="sip">Request.SDP</msg_ref>
+									<expr>a=T38FaxTranscodingMMR</expr>
+								</dnc>
+							<and>	
+								<dnc>
+									<msg_ref type="sip">Request.SDP</msg_ref>
+									<expr>a=T38FaxTranscodingJBIG</expr>
+								</dnc>
+								<dnc>
+									<msg_ref type="sip">Request.SDP</msg_ref>
+									<expr>a=T38FaxMaxBuffer</expr>
+								</dnc>
+							</and>
+							</and>
+						</verify>
+					</then>
+				</if>
+			
+			</response>
+			<transition to="ResumeAudio" event="ACK"/>
+			<transition to="Connected" event="200-INVITE"/>
+			<transition to="Connected" event="100-INVITE"/>
+			<transition to="Connected" event="REINVITE"/>
+			
+		</state>
+		
+		<state ID="ResumeAudio" timer="115000">
+			<response>
+				<if>
+					<or>
+						<eq>
+							<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+							<msg_ref type="platform">UE1.IP</msg_ref>
+						</eq>
+						<eq>
+							<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+							<msg_ref type="platform">UE1.IP</msg_ref>
+						</eq>
+					</or>
+					<then>
+						<proxy target="UE0"/>
+					</then>
+					<elseif>
+						<or>
+							<eq>
+								<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE0.IP</msg_ref>
+							</eq>
+							<eq>
+								<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE0.IP</msg_ref>
+							</eq>
+						</or>
+						<then>
+							<proxy target="UE1"/>
+						</then>
+					</elseif>
+				</if>
+				<if>
+					<or>
+						<eq>
+							<msg_ref type="event"/>
+							<expr>TimerExpired</expr>
+						</eq>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>ACK</expr>
+						</eq>
+					</or>
+					<then>
+						<!-- STEP 1 from B.8 Common Procedure -->
+						<stop_capture/>
+						<log step="3" requirements="REQ16632" 
+							promptUser="True" yesExpected="True" verify="True" 
+							expr="Verify that all pages are received without any distortions."/>
+					</then>
+				</if>
+			</response>
+			<transition to="OnHook" event="TimerExpired"/>
+			<transition to="ResumeAudio" event="REINVITE"/>
+			<transition to="ResumeAudio" event="100-INVITE"/>
+			<transition to="OnHook" event="ACK"/>
+			<transition to="ResumeAudio" event="200-INVITE"/>
+		</state>
+	</add_to>
+</pc2xml>

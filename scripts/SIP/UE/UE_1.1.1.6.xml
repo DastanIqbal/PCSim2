@@ -1,0 +1,200 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="SIP-UE 1.1.1.6" 
+	descrip="Registration Action to Receiving a 401 Response " 
+	number="SIP-UE 1.1.1.6">
+	
+	<template file="./templates/UERegTemp.xml" name="Registrar"/>
+	<remove_from fsm="Registrar">
+		<state ID="Authorization"/>
+		<state ID="Registered"/>
+	</remove_from>
+	
+	<add_to fsm="Registrar">
+		<state ID="Authorization">
+			<response>
+				<if>
+					<or>
+						<eq>
+							<msg_ref type="event"/>
+							<expr>AuthenticateSucceed</expr>
+						</eq>
+						<eq>
+							<msg_ref type="event"/>
+							<expr>AuthenticateFailed</expr>
+						</eq>
+					</or>
+					<then>
+						<!-- this is to prevent the AuthenticateFailed from being forwarded
+									to the next state on the AuthenticateSucceed -->
+					</then>
+					<elseif>
+						<and>
+							<eq>
+								<msg_ref type="sip">Request</msg_ref>
+								<expr>REGISTER</expr>
+							</eq>
+							<and>
+								<contains>
+									<msg_ref type="sip">REGISTER</msg_ref>
+									<expr>Authorization</expr>
+								</contains>
+								<digest/>
+							</and>
+						</and>
+						<then>
+							<generate event="AuthenticateSucceed"/>
+						</then>
+						<else>
+							<generate event="AuthenticateFailed"/>
+							<send protocol="sip" msgtype="503-Register"/>
+						</else>
+					</elseif>
+				</if>
+				<if>
+					<or>
+						<eq>
+							<msg_ref type="event"/>
+							<expr>AuthenticateSucceed</expr>
+						</eq>
+						<eq>
+							<msg_ref type="event"/>
+							<expr>AuthenticateFailed</expr>
+						</eq>
+					</or>
+					<then>
+						<!-- this is to prevent the AuthenticateFailed from being forwarded
+									to the next state on the AuthenticateSucceed -->
+					</then>
+					<else>
+						<verify step="4" requirements="REQ19722">
+							<contains>
+								<msg_ref type="sip">REGISTER.To.name-addr</msg_ref>
+								<msg_ref type="platform">DUT.pui</msg_ref>
+							</contains>
+						</verify>
+						<verify step="3" requirements="REQ16932, REQ16948, REQ19722">
+							<contains>
+								<msg_ref type="sip">REGISTER.From.name-addr</msg_ref>
+								<msg_ref type="platform">DUT.pui</msg_ref>
+							</contains>
+						</verify>
+						<verify step="5" requirements="REQ19722">
+							<or>
+								<contains>
+									<msg_ref type="sip">REGISTER.Contact.name-addr</msg_ref>
+									<msg_ref type="platform">DUT.FQDN</msg_ref>
+								</contains>
+								<contains>
+									<msg_ref type="sip">REGISTER.Contact.name-addr</msg_ref>
+									<msg_ref type="platform">DUT.IP</msg_ref>
+								</contains>
+							</or>
+						</verify>
+						<verify step="6" requirements="REQ19722">
+							<or>
+								<contains>
+									<msg_ref type="sip">REGISTER.Via.sent-by</msg_ref>
+									<msg_ref type="platform">DUT.FQDN</msg_ref>
+								</contains>
+								<contains>
+									<msg_ref type="sip">REGISTER.Via.sent-by</msg_ref>
+									<msg_ref type="platform">DUT.IP</msg_ref>
+								</contains>
+							</or>
+						</verify>
+						<verify step="7" requirements="REQ19722">
+							<or>
+								<eq>
+									<msg_ref type="sip">REGISTER.Expires.value</msg_ref>
+									<expr>600000</expr>
+								</eq>
+								<eq>
+									<msg_ref type="sip">REGISTER.Contact.expires</msg_ref>
+									<expr>600000</expr>
+								</eq>
+							</or>
+						</verify>
+						<verify step="8" requirements="REQ19722">
+							<contains>
+								<msg_ref type="sip">REGISTER.Request-Line</msg_ref>
+								<expr>sip:</expr>
+							</contains>
+						</verify>
+						<verify step="8" requirements="REQ19722">
+							<contains>
+								<msg_ref type="sip">REGISTER.Request-Line.Request-URI</msg_ref>
+								<msg_ref type="platform">DUT.domain</msg_ref>
+							</contains>
+						</verify>
+						<verify step="9" requirements="REQ19722">
+							<contains>
+								<msg_ref type="sip" hdr_instance="any">REGISTER.Supported</msg_ref>
+								<expr>path</expr>
+							</contains>
+						</verify>
+						<verify step="10" requirements="REQ19722">
+							<contains>
+								<msg_ref type="sip">REGISTER.Authorization.username</msg_ref>
+								<msg_ref type="platform">DUT.prui</msg_ref>
+							</contains>
+						</verify>
+						<verify step="11" requirements="REQ16959, REQ16960">
+							<dnc>
+								<msg_ref type="sip">REGISTER</msg_ref>
+								<expr>Security-Client:</expr>
+							</dnc>
+						</verify>
+						<verify step="11" requirements="REQ16959, REQ16960">
+							<dnc>
+								<msg_ref type="sip">REGISTER</msg_ref>
+								<expr>Security-Verify:</expr>
+							</dnc>
+						</verify>
+						<verify step="11" requirements="REQ16959, REQ16960">
+							<dnc>
+								<msg_ref type="sip">REGISTER</msg_ref>
+								<expr>Security-Server:</expr>
+							</dnc>
+						</verify>
+						<verify step="12" requirements="REQ16961">
+							<eq>
+								<msg_ref type="sip">REGISTER.Call-ID.value</msg_ref>
+								<msg_ref type="sip" msg_instance="last">401-REGISTER.Call-ID.value</msg_ref>
+							</eq>
+						</verify>
+					</else>
+				</if>
+			</response>
+			<transition to="Registered" event="AuthenticateSucceed"/>
+			<transition to="END" event="AuthenticateFailed"/>
+			<transition to="Authorization" event="REGISTER"/>
+		</state>
+		
+		<state ID="Registered" timer="1000">
+			<prelude>
+				<send protocol="sip" msgtype="200-Register"/>
+				<generate event="SucceedEvent"/>
+			</prelude>
+			<transition to="END" event="SucceedEvent"/>
+		</state>
+	</add_to>
+</pc2xml>

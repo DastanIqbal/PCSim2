@@ -1,0 +1,165 @@
+#//****************************************************************************
+#// Filename: E-UE-DATA_1-1-1-3.test
+#// Author:   Matthew Forbes
+#// Creation Date: 11/06/2008
+#// Modified by:
+#//
+#//
+#//
+#//****************************************************************************
+#// Description:
+#//     TC2735 TEST CASE E-UE-DATA 1.1.1.3 Ability of eUE to Support Battery Backup MIBs
+#//        (Scenario 2)
+#//
+#// Objective:
+#//     If the eUE supports battery backup, this test verifies the read-only and read-write functionality
+#//     for a subset of battery backup MIB objects. Additionally, this test checks functionality for specific
+#//     battery usage.
+#//
+#// PacketCable DUT:
+#//     EDVA
+#//
+#// Test Steps:
+#//     - Initial configuration
+#//     - Start sniffer
+#//     - Reset EDVA
+#//     - Check Provisioning state
+#//     - Check values MIB values
+#//     - Check read-write capablities
+#//     - Stop Sniffer
+#//
+#// Notes:
+#//     - Requires provPrimitives.tcl & tftp_primitives.tcl.
+#//     - Requires the specific config file in $BASE_CFG_FILE_PATH in Provisioning Server.
+#//****************************************************************************
+
+
+
+
+set SCRIPT_VERSION { # $Id: E-UE-DATA_1-1-1-3.test 7406 2010-07-20 17:17:37Z dthakore $ }
+global SCRIPT_VERSION
+
+#
+# Verify SNMPv3 API is loaded
+#
+if {!$SNMP_V3_API} {
+    DoStep "verify snmp" "verify snmp" {
+    } {
+        verify_signal "It seems as though you do not have a Provisioning server API application.\nThis test can not be executed without a API or sort of SNMPv3 Utility.\
+                to integrate your own SNMPv3 Utility, you must write your own code to inteface with that utility."
+    }
+}
+
+
+DoStep "E-UE-DATA_1-1-1-3_1-1" "Configure DUT" {
+    LogMsg "--- Configure DUT ---"
+    Init_PROV
+    PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122 Device_Level_Secure.cfg
+    PROV_DEPLOY_DHCP
+} {PASS_STEP}
+
+DoStep "E-UE-DATA_1-1-1-3_1-2" "Verify Battery" {
+    tk_messageBox -message "Please ensure a battery is installed in the EDVA and AC power is connected, then press OK"
+} {
+    PASS_STEP
+}
+
+################################# START SNIFFER ###############################
+
+DoStep "E-UE-DATA_1-1-1-3_1-3" "Start sniffer" {
+    LogMsg "--- Start sniffer ---"
+    Init_CONTROLLER_LAN
+    SetupCaptureControllerLan "host $MTA_IP || udp port 67 || host $CM_IP"
+    StartCaptureControllerLan
+} {PASS_STEP}
+
+################ RESET CM and MTA and VERIFY PROVISIONING STATE ################
+
+DoStep "E-UE-DATA_1-1-1-3_1-4" "Reset EDVA" {
+    set val [SNMPvN_RESET $CM_IP]
+    LogMsg "Reset of CM and DVA has passed"
+} {
+    IsEqual $val 0
+}
+DoStep "E-UE-DATA_1-1-1-3_1-5" "pktcMtaDevProvisioningState Content Verification" {
+    actionWait "Wait for MTA to reboot" 65
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMP_GET $oid_pktcMtaDevProvisioningState $MTA_IP 20]
+    LogMsg "The Value of EDVA Provisioning State is: $val"
+} {
+    IsEqual $val 1
+}
+
+#
+# Retrieve upsBatteryStatus MIB
+#
+DoStep "E-UE-DATA_1-1-1-3.2" "Verify upsBatteryStatus Content" {
+    set result [SNMPvN_GET .1.3.6.1.2.1.33.1.2.1.0 $CM_IP]
+} {
+    compare_value $result 2 ;# Verify value is 'batteryNormal(2)'
+}
+
+#
+# Attempt SNMP Set, verify failure
+#
+DoStep "E-UE-DATA_1-1-1-3.3" "Attempt SNMP Set" {
+    set type  INTEGER
+    set newValue 4
+    set oid ".1.3.6.1.2.1.33.1.2.1.0"
+    LogMsg "Attempting SNMP set on CM   = $CM_IP" 49
+    LogMsg "                       Value = $newValue" 49
+    LogMsg "                       Type  = $type " 49
+    LogMsg "                       OID   = $oid" 49
+    set result [SNMPvN_SET $oid $type $newValue $CM_IP]
+} {
+    compare_value $result 2 ;# check MIB is not writable
+}
+
+#
+# Retrieve upsEstimatedMinutesRemaining MIB
+#
+DoStep "E-UE-DATA_1-1-1-3.2" "Verify upsEstimatedMinutesRemaining Content" {
+    set result [SNMPvN_GET .1.3.6.1.2.1.33.1.2.3.0 $CM_IP]
+    LogMsg "--- upsEstimatedMinutesRemaining value is: $result"
+} {
+    verify_signal "upsEstimatedMinutesRemaining value is: $result (should be a positive integer)"
+}
+
+
+DoStep "E-UE-DATA_1-1-1-3.2" "Set upsConfigLowBattTime Content" {
+    set lobattime [expr $result+1]
+    set result [SNMPvN_SET .1.3.6.1.2.1.33.1.9.7.0 INTEGER $lobattime $CM_IP]
+} {
+    compare_value $result 0
+}
+
+DoStep "E-UE-DATA_1-1-1-3.2" "Verify upsBatteryStatus Content" {
+    set result [SNMPvN_GET .1.3.6.1.2.1.33.1.2.1.0 $CM_IP]
+} {
+    compare_value $result 3
+}
+
+DoStep "E-UE-DATA_1-1-1-3.2" "Set upsConfigLowBattTime Content" {
+    set lobattime [expr $lobattime-3]
+    set result [SNMPvN_SET .1.3.6.1.2.1.33.1.9.7.0 INTEGER $lobattime $CM_IP]
+} {
+    compare_value $result 0
+}
+
+DoStep "E-UE-DATA_1-1-1-3.2" "Verify upsBatteryStatus Content" {
+    set result [SNMPvN_GET .1.3.6.1.2.1.33.1.2.1.0 $CM_IP]
+} {
+    compare_value $result 2
+}
+
+
+##################### STOP SNIFFER AND SAVE CAPTURE FILES #####################
+
+DoStep "E-UE-DATA_1-1-1-3_35-1" "Stop sniffer" {
+    LogMsg "--- Stop sniffer ---"
+    StopCaptureControllerLan
+    SaveToFileControllerLan
+} { PASS_STEP }
+
+
+Cleanup

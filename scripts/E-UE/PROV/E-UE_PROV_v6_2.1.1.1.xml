@@ -1,0 +1,239 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+ Change History: (Author & Date)
+
+
+
+-->
+<!-- Document type and attributes. -->
+<pc2xml version="$Revision: 6076 $"
+        name="E-UE_PROV_2.1.1.1"
+        descrip="E/MTA DUT accessible by MTA IP address via SNMPv3 and SNMPv2."
+        number="E-UE_PROV_2.1.1.1">
+
+
+    <!-- Reset UE; start capture. -->
+    <template file="./templates/EUE_Prov_B_1_1_1.xml" name="SNMPVersions"/>
+
+    <add_to fsm="SNMPVersions">
+        <transition from="StartCapture_RebootWait" to="EDVAProvisions" event="TimerExpired"/>
+
+
+        <!-- E/MTA DUT reports provisioning pass code (1) to the provisioning service (SNMP Entity). -->
+        <state ID="EDVAProvisions">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvisioningState.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">UE0.IP</msg_ref>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="3">
+                    <contains>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>1</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="ProvTimer_1" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+
+        <!-- Do SNMPv2c Get on pktcMtaDevProvisioningTimer. -->
+        <state ID="ProvTimer_1">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvisioningTimer.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP Address</msg_ref>
+                    </mod>
+                    <!-- ATP requires SNMPv2c for this SNMPGet -->
+                    <mod modtype="replace" hdr="version">
+                        <expr>2c</expr>
+                    </mod>
+					<mod modtype="replace" hdr="community">
+                        <expr>public2</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <!-- Value 10 is returned in the initial SNMPv2cGet. -->
+                <verify step="4">
+                    <eq>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>10</expr>
+                    </eq>
+                </verify>
+            </response>
+            <transition to="SetProvTimer_2" event="SNMPResp"/>
+        </state>
+
+
+        <!-- Do SNMPv2c SET to change the value on PktcDevProvisioningTimer to 20. -->
+        <state ID="SetProvTimer_2">
+            <prelude once="true" >
+                <send protocol="utility" msgtype="SNMPSet">
+                    <mod modtype="add" hdr="array">
+                        <var_expr>
+                            <expr>varBind 1 1 3 \r\n ][ , </expr>
+                            <expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvisioningTimer.0,Unsigned32,20][\r\n</expr>
+                        </var_expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP Address</msg_ref>
+                    </mod>
+                    <!-- ATP requires SNMPv2c for this SNMPSet -->
+                    <mod modtype="replace" hdr="version">
+                        <expr>2c</expr>
+                    </mod>
+					<mod modtype="replace" hdr="community">
+                        <expr>public2</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="4">
+                    <neq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPRespFailure</expr>
+                    </neq>
+                </verify>
+            </response>
+            <transition to="ProvTimer_2" event="SNMPResp"/>
+        </state>
+
+
+        <!-- Do SNMPv2c Get on pktcMtaDevProvisioningTimer. -->
+        <state ID="ProvTimer_2">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvisioningTimer.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP Address</msg_ref>
+                    </mod>
+                    <!-- ATP requires SNMPv2c for this SNMPGet -->
+                    <mod modtype="replace" hdr="version">
+                        <expr>2c</expr>
+                    </mod>
+					<mod modtype="replace" hdr="community">
+                        <expr>public2</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <!-- Value 20 is returned in the second SNMPv2cGet. -->
+                <verify step="4">
+                    <eq>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>20</expr>
+                    </eq>
+                </verify>
+            </response>
+            <transition to="ProvTimer_3" event="SNMPResp"/>
+        </state>
+
+
+        <!-- Do SNMPv3 Get on pktcMtaDevProvisioningTimer. -->
+        <state ID="ProvTimer_3">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvisioningTimer.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP Address</msg_ref>
+                    </mod>
+                    <!-- ATP requires SNMPv2c for this SNMPGet -->
+                    <mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <!-- Value 20 is returned in the SNMPv3Get. -->
+                <verify step="6">
+                    <eq>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>20</expr>
+                    </eq>
+                </verify>
+            </response>
+            <transition to="SetProvTimer_3" event="SNMPResp"/>
+        </state>
+
+
+        <!-- Do SNMPv3 SET to change the value on PktcDevProvisioningTimer to 15. -->
+        <state ID="SetProvTimer_3">
+            <prelude once="true" >
+                <send protocol="utility" msgtype="SNMPSet">
+                    <mod modtype="add" hdr="array">
+                        <var_expr>
+                            <expr>varBind 1 1 3 \r\n ][ , </expr>
+                            <expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvisioningTimer.0,Unsigned32,15][\r\n</expr>
+                        </var_expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP Address</msg_ref>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <!-- The MTA must accept the SNMP SET operation. -->
+                <verify step="6">
+                    <neq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPRespFailure</expr>
+                    </neq>
+                </verify>
+            </response>
+            <transition to="ProvTimer_4" event="SNMPResp"/>
+        </state>
+
+
+        <!-- Do SNMPv3 Get on pktcMtaDevProvisioningTimer. -->
+        <state ID="ProvTimer_4">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvisioningTimer.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP Address</msg_ref>
+                    </mod>
+                    <!-- ATP requires SNMPv2c for this SNMPGet -->
+                    <mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <!-- Value 10 is returned in the initial SNMPv2cGet. -->
+                <verify step="6">
+                    <eq>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>15</expr>
+                    </eq>
+                </verify>
+            </response>
+			<transition to="END" event="SNMPResp"/>
+        </state>
+    </add_to>
+</pc2xml>

@@ -1,0 +1,118 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	2011-11-15	Seung Lee - final version
+
+
+
+
+-->
+
+<!-- First are the document type and the attributes for our document -->
+<pc2xml version="$Revision: 6076 $" name="ProxyHF_mod4ESG Template" descrip="Template for the Proxy with Hook Flash Operations " number="1">
+	<!-- Next we define the each of state mahcines -->
+	<template file="./templates/Proxy_mod4ESG.xml" name="ProxyHF_mod4ESG"/>
+	<add_to fsm="ProxyHF_mod4ESG">
+			
+		<transition from="Connected" to="Mute" event="TimerExpired"/>
+		
+		<state ID="Mute">
+			<prelude once="true">
+				<send protocol="utility" msgtype="HookFlash"/>
+			</prelude>
+			<response>
+				<if>
+					<or>
+						<eq>
+							<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+							<msg_ref type="platform">UE1.IP</msg_ref>
+						</eq>
+						<eq>
+							<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+							<msg_ref type="platform">UE1.IP</msg_ref>
+						</eq>
+					</or>
+					<then>
+						<proxy target="UE0"/>
+					</then>
+					<elseif>
+						<or>
+							<eq>
+								<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE0.IP</msg_ref>
+							</eq>
+							<eq>
+								<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE0.IP</msg_ref>
+							</eq>
+						</or>
+						<then>
+							<proxy target="UE1"/>
+						</then>
+					</elseif>
+				</if>
+			</response>
+			<transition to="Mute" event="HookFlashComplete"/>
+			<transition to="Mute" event="REINVITE"/>
+			<transition to="Mute" event="xxx-INVITE"/>
+			<transition to="Muted" event="ACK"/>
+		</state>
+		<state ID="Muted" timer="3000">
+			<transition to="Unmute" event="TimerExpired"/>
+		</state>
+		<state ID="Unmute">
+			<prelude once="true">
+				<send protocol="utility" msgtype="HookFlash"/>
+			</prelude>
+			<response>
+				<if>
+					<or>
+						<eq>
+							<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+							<msg_ref type="platform">UE1.IP</msg_ref>
+						</eq>
+						<eq>
+							<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+							<msg_ref type="platform">UE1.IP</msg_ref>
+						</eq>
+					</or>
+					<then>
+						<proxy target="UE0"/>
+					</then>
+					<elseif>
+						<or>
+							<eq>
+								<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE0.IP</msg_ref>
+							</eq>
+							<eq>
+								<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE0.IP</msg_ref>
+							</eq>
+						</or>
+						<then>
+							<proxy target="UE1"/>
+						</then>
+					</elseif>
+				</if>
+			</response>
+			<transition to="Unmute" event="HookFlashComplete"/>
+			<transition to="Unmute" event="REINVITE"/>
+			<transition to="Unmute" event="xxx-INVITE"/>
+			<transition to="MediaResumed" event="ACK"/>
+		</state>
+		<state ID="MediaResumed" timer="5000">
+			<transition to="OnHook" event="TimerExpired"/>
+		</state>
+	</add_to>
+</pc2xml>

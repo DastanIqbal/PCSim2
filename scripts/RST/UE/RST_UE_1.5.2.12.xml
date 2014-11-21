@@ -1,0 +1,119 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+<pc2xml version="$Revision: 6686 $" 
+	name="RST-UE 1.5.2.12" 
+	descrip=" Held Media: Controlling UE " 
+	number="RST-UE 1.5.2.12">
+	
+	<template file="./templates/CallOrigAtUETemp.xml" name="UE1"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Connected"/>
+		<state ID="OnHook"/>
+		<state ID="Releasing"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<states initialstate="OffHook"/>
+		
+		<state ID="Connected">
+			<transition to="HookFlash" event="DIALOG_CONFIRMED_UAS"/>
+		</state>
+		
+		<state ID="HookFlash">
+			<prelude once="true">
+				<send protocol="utility" msgtype="HookFlash"/>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>REINVITE</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="100-INVITE"/>
+						<sleep time="200"/>
+						<send protocol="sip" msgtype="200-INVITE"/>
+					</then>
+				</if>
+			</response>
+			<transition to="HookFlash" event="HookFlashComplete"/>
+			<transition to="HookFlash" event="REINVITE"/>
+			<transition to="DialVSC" event="ACK"/>
+		</state>
+		
+		<state ID="DialVSC">
+			<prelude once="true">
+				<send protocol="utility" msgtype="DialDigits">
+					<mod modtype="add" hdr="number">
+						<expr>*52</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="utility">Response</msg_ref>
+						<expr>DialDigitsComplete</expr>
+					</eq>
+					<then>
+						<send protocol="utility" msgtype="VerifyReorder"/>
+					</then>
+				</if>
+				<if>
+					<eq>
+						<msg_ref type="utility">Response</msg_ref>
+						<expr>VerifyReorderComplete</expr>
+					</eq>
+					<then>
+						<verify step="3" requirements="REQ23703">
+							<eq>
+								<msg_ref type="utility">Response</msg_ref>
+								<expr>VerifyReorderComplete</expr>
+							</eq>
+						</verify>
+					</then>
+				</if>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>REINVITE</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="100-INVITE"/>
+						<sleep time="200"/>
+						<send protocol="sip" msgtype="200-INVITE"/>
+						<verify step="3" requirements="REQ23703">
+							<eq>
+								<msg_ref type="sdp">REINVITE.mode.value</msg_ref>
+								<expr>sendrecv</expr>
+							</eq>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<transition to="DialVSC" event="DialDigitsComplete"/>
+			<transition to="DialVSC" event="VerifyReorderComplete"/>
+			<transition to="DialVSC" event="VerifyReorderError"/>
+			<transition to="DialVSC" event="REINVITE"/>
+			<transition to="END" event="ACK"/>
+		</state>
+	</add_to>
+</pc2xml>

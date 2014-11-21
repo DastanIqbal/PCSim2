@@ -1,0 +1,106 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+Change History: (Author & Date)
+-->
+
+<pc2xml version="$Revision: 6076 $" name="UT_RST_UE_1.2.6.1" descrip="Caller ID with Call Waiting" number="1">
+
+	<template file="./templates/ut/Orig_DUT.xml" name="UT_RST_UE_1.2.6.1"/>
+
+	<remove_from fsm="UT_RST_UE_1.2.6.1">
+		<state ID="Connected"/>
+	</remove_from>
+
+
+	<add_to fsm="UT_RST_UE_1.2.6.1">
+		<state ID="Connected">
+			<prelude>
+				<send protocol="sip" msgtype="ACK" target="UE1" originator="DUT"/>
+			</prelude>
+			<transition to="RespondToUE2" event="INVITE"/>
+		</state>
+
+
+		<state ID="RespondToUE2">
+			<prelude once="true">
+				<send protocol="sip" msgtype="100-INVITE" target="UE2" originator="DUT"/>
+				<send protocol="sip" msgtype="180-INVITE" target="UE2" originator="DUT"/>
+			</prelude>
+			<transition to="SendBYE" event="CANCEL"/>
+		</state>
+
+
+		<state ID="SendBYE">
+			<prelude>
+				<send protocol="sip" msgtype="BYE" target="UE2" originator="DUT"/>
+				<sleep time="10000"/>
+				<send protocol="sip" msgtype="BYE" target="UE1" originator="DUT" origReq="INVITE" orig_instance="1"/>
+			</prelude>
+			<transition to="Register2" event="200-BYE"/>
+			<postlude>
+				<sleep time="125000"/>
+			</postlude>
+		</state>
+
+
+		<state ID="Register2">
+			<prelude>
+				<send protocol="sip" msgtype="Register" target="PCSCF1" originator="DUT"/>
+			</prelude>
+			<transition to="MakeCall2" event="200-Register"/>
+			<transition to="Register2" event="401-Register"/>
+		</state>
+
+
+		<state ID="MakeCall2">
+			<prelude once="true">
+				<sleep time="60000"/>
+				<send protocol="sip" msgtype="Invite" target="UE1" originator="DUT"/>
+			</prelude>
+			<transition from="MakeCall2" to="MakeCall2" event="100-INVITE"/>
+			<transition from="MakeCall2" to="MakeCall2" event="180-INVITE"/>
+			<transition from="MakeCall2" to="MakeCall2" event="183-INVITE"/>
+			<transition from="MakeCall2" to="Connected2" event="200-INVITE"/>
+		</state>
+
+
+		<state ID="Connected2">
+			<prelude>
+				<send protocol="sip" msgtype="ACK" target="UE1" originator="DUT"/>
+			</prelude>
+			<transition to="RespondToUE2-2" event="INVITE"/>
+		</state>
+
+
+		<state ID="RespondToUE2-2">
+			<prelude once="true">
+				<send protocol="sip" msgtype="100-INVITE" target="UE2" originator="DUT"/>
+				<send protocol="sip" msgtype="180-INVITE" target="UE2" originator="DUT"/>
+			</prelude>
+			<transition to="WaitForBYE2" event="CANCEL"/>
+		</state>
+
+
+		<state ID="WaitForBYE2">
+			<transition to="Send200BYE2" event="BYE"/>
+		</state>
+
+
+		<state ID="Send200BYE2">
+			<prelude>
+				<send protocol="sip" msgtype="200-BYE" target="UE1" originator="DUT"/>
+				<generate event="SucceedEvent"/>
+			</prelude>
+			<transition to="END" event="SucceedEvent"/>
+		</state>
+	</add_to>
+</pc2xml>

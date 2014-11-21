@@ -1,0 +1,80 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+
+<!-- First are the document type and the attributes for our document -->
+<pc2xml version="$Revision: 8188 $" name="NAT-UE 1.1.1.1" descrip="STUN Binding Request ( usage - signaling keep alive)" number="UE-NAT 1.1.1.1">
+  <!-- Next we define the each of state machines -->
+  <fsm name="STUN1">
+    <models>
+      <stun />
+    </models>
+    <!-- Next we define all of the network elements-->
+    <NE sim_type="term" elements="SCSCF1 PCSCF1" targets="SCSCF1" />
+    <!-- All of the states for the test. References to "Step x" from the
+     Default Message Flow - UE Registration (DUT) Sequence Diagram -->
+    <states initialstate="BindingReq">
+      <!-- BINDINGREQ State -->
+      <state ID="BindingReq">
+        <!-- Test NAT_UE-1.1.1.1 Step 1 -->
+        <!-- The transaction id greater than 0 and less than 2^96 -1 is
+					automatically tested by the platform. -->
+        <!-- The FINGERPRINT attribute being the last attribute is automatically
+					tested by the platform. -->
+        <response>
+          <verify step="1" requirements="REQ19326, RFC4192, RFC4270">
+            <eq>
+              <msg_ref type="stun">Request</msg_ref>
+              <expr>BindingRequest</expr>
+            </eq>
+          </verify>
+        </response>
+        <postlude>
+          <!-- Test NAT_UE-1.1.1.1 Step 2 -->
+          <send protocol="stun" msgtype="BindingResponse" />
+        </postlude>
+        <!-- Transitions for BindingReq state -->
+        <transition to="Re-BindingReq" event="BindingRequest" />
+      </state>
+      <!-- Re-BINDINGREQ State -->
+      <state ID="Re-BindingReq">
+        <response>
+          <verify step="3" requirements="REQ19326, RFC4193">
+            <eq>
+              <msg_ref type="stun">Request</msg_ref>
+              <expr>BindingRequest</expr>
+            </eq>
+          </verify>
+          <verify step="3" requirements="REQ19326, RFC4193">
+            <neq>
+              <msg_ref type="stun">BindingRequest.Header.transaction_id</msg_ref>
+              <msg_ref type="stun" msg_instance="1">BindingRequest.Header.transaction_id</msg_ref>
+            </neq>
+          </verify>
+        </response>
+        <postlude>
+          <!-- Test NAT_UE-1.1.1.1 Step 3 -->
+          <send protocol="stun" msgtype="BindingResponse" />
+        </postlude>
+        <!-- Transitions for Re-BindingReq state -->
+        <transition to="END" event="BindingRequest" />
+      </state>
+    </states>
+  </fsm>
+</pc2xml>

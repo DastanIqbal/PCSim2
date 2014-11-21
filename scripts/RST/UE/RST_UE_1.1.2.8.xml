@@ -1,0 +1,159 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	PCPCII-134 : correct the times and add 4th sequence tone question to the script for step 2. 
+		Also change logic to use the utility messages for dial tone prompt in step 4. (ghassler 06/22/2009)
+	PCPCII-139 : Update the Voicetronix modifiers to use the new values. (ghassler 07/10/2009)
+	PCPCII-174 : Update the script to the D11 version of the ATP (ghassler 01/26/2010)
+	PCPCIIAPPSATP - 114 : Update the script verify 20 seconds silence, 10 seconds error tone, and the rest of
+		times for the permanent sequence tones. (ghassler 03/11/2010)
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-UE 1.1.2.8" 
+	descrip="Extended Off Hook Processing Call Terminating" 
+	number="RST-UE 1.1.2.8">
+
+	<template file="./templates/CallOrigAtUETemp.xml" name="UE1"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="OnHook"/>
+	</remove_from>
+
+	<add_to fsm="UE1">
+		<transition from="Releasing" to="PSTVerify" event="200-Bye"/>
+		
+		<state ID="PSTVerify">
+			<prelude>
+				<log promptUser="True" yesExpected="True" verify="True" 
+					step="2" requirements="REQ13444, REQ13445"
+					expr="Verify that the UE is silent for 20 seconds?"/>
+				<log promptUser="True" yesExpected="True" verify="True" 
+					step="2" requirements="REQ13444, REQ13445"
+					expr="Verify that the UE plays an error tone is played for 10 seconds?"/>
+				<log promptUser="True" yesExpected="True" verify="True" 
+					step="2" requirements="REQ13444, REQ13445"
+					expr="Verify that the UE plays permanent sequence tone 1 is played for 10 seconds?"/>
+				<log promptUser="True" yesExpected="True" verify="True" 
+					step="2" requirements="REQ13444, REQ13445"
+					expr="Verify that the UE plays permanent sequence tone 2 is played for 10 seconds?"/>
+				<log promptUser="True" yesExpected="True" verify="True" 
+					step="2" requirements="REQ13444, REQ13445" 
+					expr="Verify that the UE plays permanent sequence tone 3 is played for 15 seconds?"/>
+				<log promptUser="True" yesExpected="True" verify="True" 
+					step="2" requirements="REQ13444, REQ13445"
+					expr="Verify that the UE plays permanent sequence tone 4 is played for 60 seconds?"/>
+				<generate event="Branch1Event"/>
+			</prelude>
+			<transition to="EndTheCall" event="Branch1Event"/>
+		</state>
+		
+		<state ID="EndTheCall" ES="true">
+			<transition to="2ndOffHook" event="SessionTerminated"/>
+		</state>
+		
+		<state ID="2ndOffHook">
+			<prelude>
+				<send protocol="utility" msgtype="OffHook"/>
+			</prelude>
+			<!-- Transitions for OffHook state -->
+			<transition to="VerifyTone1" event="OffHookComplete"/>
+		</state>
+		
+		<state ID="VerifyTone1">
+			<prelude>
+				<send protocol="utility" msgtype="VerifyDialTone">
+					<mod modtype="add" hdr="voiceExpected">
+						<expr>no</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="4" requirements="REQ13446, REQ13448">
+					<eq>
+						<msg_ref type="utility">Response</msg_ref>
+						<expr>VerifyDialToneComplete</expr>
+					</eq>
+				</verify>
+			</response>
+			<transition to="OnHookWait" event="VerifyDialToneError"/>
+			<transition to="OnHookWait" event="VerifyDialToneComplete"/>
+		</state>
+			
+		<state ID="OnHookWait">
+			<prelude once="true">
+				<send protocol="utility" msgtype="OnHook"/>
+			</prelude>
+			<transition to="OffHook2" event="OnHookComplete"/>
+		</state>
+		
+		<state ID="OffHook2">
+			<prelude>
+				<sleep time="5000"/>
+				<send protocol="utility" msgtype="OffHook"/>
+			</prelude>
+			<transition to="VerifyTone2" event="OffHookComplete"/>
+		</state>
+		
+		<state ID="VerifyTone2">
+			<prelude>
+				<send protocol="utility" msgtype="VerifyDialTone">
+					<mod modtype="add" hdr="voiceExpected">
+						<expr>no</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="6" requirements="REQ13446, REQ13448">
+					<eq>
+						<msg_ref type="utility">Response</msg_ref>
+						<expr>VerifyDialToneComplete</expr>
+					</eq>
+				</verify>
+			</response>
+			<transition to="OnHookWait2" event="VerifyDialToneError"/>
+			<transition to="OnHookWait2" event="VerifyDialToneComplete"/>
+		</state>
+		
+		<state ID="OnHookWait2">
+			<prelude>
+				<send protocol="utility" msgtype="OnHook"/>
+			</prelude>
+			<transition to="OffHook3" event="OnHookComplete"/>
+		</state>
+		
+		<state ID="OffHook3">
+			<prelude>
+				<sleep time="15000"/>
+				<send protocol="utility" msgtype="OffHook"/>
+			</prelude>
+			<transition to="VerifyTone3" event="OffHookComplete"/>
+		</state>
+		
+		<state ID="VerifyTone3">
+			<prelude>
+				<send protocol="utility" msgtype="VerifyDialTone"/>
+			</prelude>
+			<response>
+				<verify step="8" requirements="REQ13449">
+					<eq>
+						<msg_ref type="utility">Response</msg_ref>
+						<expr>VerifyDialToneComplete</expr>
+					</eq>
+				</verify>
+			</response>
+			<transition to="END" event="VerifyDialToneError"/>
+			<transition to="END" event="VerifyDialToneComplete"/>
+		</state>
+	</add_to>
+</pc2xml>

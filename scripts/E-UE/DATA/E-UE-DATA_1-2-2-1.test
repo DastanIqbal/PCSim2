@@ -1,0 +1,682 @@
+################################################################################
+#// Filename: E-UE-DATA_1-2-2-1.test (PACT)
+#// Author:   Matthew Forbes
+#//
+#//
+#//
+#// Creation Date: Feb 26, 2009
+#// Modified by:
+################################################################################
+#// Description:
+#//     TC2744 TEST CASE E-UE-DATA 1.2.2.1 - Ability of eUE to Implement the
+#//	    User IMPU Table
+#//
+#// Objective:
+#//     TThis test verifies the eUE ability to properly implement the pktcEUEUsrIMPUTable defined in
+#//     CL-PKTC-EUE-USER-MIB. It also verifies that the eUE properly reports its user profile version.
+#//
+#//
+#// PacketCable DUT:
+#//     EDVA
+#//
+#// Test Steps:
+#//     - Initial configuration
+#//     - Start sniffer
+#//     - Reset DUT
+#//     - Check Provisioning state
+#//     - Invoke SNMPv3 API and query MIB objects and validate values
+#//     - Stop sniffer
+#//     - Hybrid configuration
+#//     - Start sniffer
+#//     - Reset DUT
+#//     - Check Provisioning state
+#//     - Invoke SNMPv2 API and bulk query MIB objects and validate values
+#//     - Stop sniffer
+#//
+#//
+#// Notes:
+#//     - Requires provPrimitives.tcl
+#//
+#//
+################################################################################
+global SCRIPT_VERSION
+set SCRIPT_VERSION { # $Id: E-UE-DATA_1-2-2-1.test 7483 2010-08-09 17:25:23Z ghassler $ }
+
+set test_case E-UE-DATA_1-2-2-1-
+set step_num 1
+
+Init_PROV
+Init_PART
+
+
+set NON_WRITABLE 2
+set index 1
+
+
+DoStep ${test_case}${step_num} "Initial Configuration" {
+    LogMsg "--- Init PROV module ---"
+    # PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122 Secure_Flow_BasicCall_DigitMap.cfg
+    PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122 C.1.2.7.bin
+    PROV_DEPLOY_DHCP
+} {PASS_STEP}
+
+DoStep ${test_case}[incr step_num]_1 "Start sniffer" {
+    LogMsg "--- Start sniffer ---"
+    Init_CONTROLLER_LAN
+    SetupCaptureControllerLan "host $MTA_IP || udp port 67"
+    StartCaptureControllerLan
+} {PASS_STEP}
+
+DoStep ${test_case}${step_num}_2 "Reset CM/MTA" {
+    set val [SNMPvN_RESET $CM_IP]
+    LogMsg "--- Reset of CM and MTA has passed ---"
+} {
+    IsEqual $val 0
+}
+
+DoStep ${test_case}${step_num}_3 "pktcMTADevProvisioningState Content Verification" {
+    # Wait for a minute to let CM/MTA starting to reboot
+    actionWait "Wait for CM/MTA to reboot" 60
+    # Get the OID from the MTA and check it using our previously defined
+    set val [GetProvState 1 600]
+    LogMsg "MTA Provisioning State"
+    LogMsg "             - Expected : 1"
+    LogMsg "             - Received : $val"
+} {
+    IsEqual $val 1
+}
+
+## Get all the values and verify
+
+DoStep ${test_case}[incr step_num] "pktcEUEUsrProfileVersion Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMP_GET $oid_pktcEUEUsrProfileVersion $MTA_IP]
+    LogMsg "The Value pktcEUEUsrProfileVersion is: $val"
+} {IsEqual $val "1.0"}
+
+
+DoStep ${test_case}[incr step_num] "pktcEUEUsrProfileVersion Content set" {
+    # Try to set the read only parameter
+    set val [SNMP_SET $oid_pktcEUEUsrProfileVersion STRING "2.0" $MTA_IP]
+    LogMsg "The Value of pktcEUEUsrProfileVersion is: $val"
+} {IsEqual $val $NON_WRITABLE}
+
+## Get all the values and verify
+
+DoStep ${test_case}[incr step_num]_1 "pktcEUEUsrIMPUIdType Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMP_TABLE_GET $table_pktcEUEUsrIMPUTable $MTA_IP 1]
+    LogMsg "The Value pktcEUEUsrIMPUIdType is: $val"
+} {IsEqual $val 3}
+
+DoStep ${test_case}${step_num}_2 "pktcEUEUsrIMPUId Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMP_TABLE_GET $table_pktcEUEUsrIMPUTable $MTA_IP 2]
+    LogMsg "The Value pktcEUEUsrIMPUId is: $val"
+} {
+    # verify_signal "The value of pktcEUEUsrIMPUId is $val, should be similar to sip:7205551301@redlab.com"
+    # set impuid $val
+    IsEqual $val sip:7205551301@redlab.com
+}
+
+DoStep ${test_case}${step_num}_3 "pktcEUEUsrIMPUIMPIIndexRef Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMP_TABLE_GET $table_pktcEUEUsrIMPUTable $MTA_IP 3]
+    LogMsg "The Value pktcEUEUsrIMPUIMPIIndexRef is: $val"
+} {IsEqual $val 1}
+
+DoStep ${test_case}${step_num}_4 "pktcEUEUsrIMPUDispInfo Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMP_TABLE_GET $table_pktcEUEUsrIMPUTable $MTA_IP 4]
+    LogMsg "The Value pktcEUEUsrIMPUDispInfo is: $val"
+} {IsEqual $val ""}
+
+DoStep ${test_case}${step_num}_5 "pktcEUEUsrIMPUOpIndexRefs Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMP_TABLE_GET $table_pktcEUEUsrIMPUTable $MTA_IP 5]
+    LogMsg "The Value pktcEUEUsrIMPUOpIndexRefs is: $val"
+} {IsEqual $val ""}
+
+DoStep ${test_case}${step_num}_6 "pktcEUEUsrIMPUAdminStat Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMP_TABLE_GET $table_pktcEUEUsrIMPUTable $MTA_IP 6]
+    LogMsg "The Value pktcEUEUsrIMPUAdminStat is: $val"
+} {IsEqual $val 2}
+
+DoStep ${test_case}${step_num}_7 "pktcEUEUsrIMPUAdminStatInfo Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMP_TABLE_GET $table_pktcEUEUsrIMPUTable $MTA_IP 7]
+    LogMsg "The Value pktcEUEUsrIMPUAdminStatInfo is: $val"
+} {IsEqual $val ""}
+
+DoStep ${test_case}${step_num}_8 "pktcEUEUsrIMPUOperStat Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMP_TABLE_GET $table_pktcEUEUsrIMPUTable $MTA_IP 8]
+    LogMsg "The Value pktcEUEUsrIMPUOperStat is: $val"
+} {IsEqual $val 2}
+
+DoStep ${test_case}${step_num}_9 "pktcEUEUsrIMPUOpertStatInfo Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMP_TABLE_GET $table_pktcEUEUsrIMPUTable $MTA_IP 9]
+    LogMsg "The Value pktcEUEUsrIMPUOpertStatInfo is: $val"
+} {IsEqual $val ""}
+
+DoStep ${test_case}${step_num}_10 "pktcEUEUsrIMPUSigSecurity Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMP_TABLE_GET $table_pktcEUEUsrIMPUTable $MTA_IP 10]
+    LogMsg "The Value pktcEUEUsrIMPUSigSecurity is: $val"
+} {IsEqual $val 2}
+
+DoStep ${test_case}${step_num}_11 "pktcEUEUsrIMPUAdditionalInfo Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMP_TABLE_GET $table_pktcEUEUsrIMPUTable $MTA_IP 11]
+    LogMsg "The Value pktcEUEUsrIMPUAdditionalInfo is: $val"
+} {
+    IsEqual $val "IEP#9;OEP#9"
+}
+
+DoStep ${test_case}${step_num}_12 "pktcEUEUsrIMPURowStatus Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMP_TABLE_GET $table_pktcEUEUsrIMPUTable $MTA_IP 12]
+    LogMsg "The Value pktcEUEUsrIMPURowStatus is: $val"
+} {IsEqual $val 1}
+
+DoStep ${test_case}[incr step_num] "pktcEUEUsrIMPUId Content set" {
+    # Try to set the read only parameter
+    set val [SNMP_SET $oid_pktcEUEUsrIMPUId.$index STRING sip:13032345678@cablelabs.com $MTA_IP]
+    LogMsg "The Value of pktcEUEUsrIMPUId SNMP SET is: $val"
+} {IsEqual $val $NON_WRITABLE}
+
+DoStep ${test_case}[incr step_num] "pktcEUEUsrIMPUIdType Content set" {
+    # Try to set the read only parameter
+    set val [SNMP_SET $oid_pktcEUEUsrIMPUIdType.$index INTEGER 2 $MTA_IP]
+    LogMsg "The Value of pktcEUEUsrIMPUIdType SNMP SET is: $val"
+} {IsEqual $val $NON_WRITABLE}
+
+DoStep ${test_case}[incr step_num] "Stop Sniffer" {
+    LogMsg "--- Stop Sniffer ---"
+    StopCaptureControllerLan
+    SaveToFileControllerLan "_Secure_Prov"
+} { PASS_STEP }
+
+
+DoStep ${test_case}${step_num} "Initial Configuration" {
+    LogMsg "--- Init PROV module ---"
+    # PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122 Secure_Flow_BasicCall_DigitMap_new_IMPUId.cfg
+    PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122 C.1.2.7_New_IMPUId.bin
+    PROV_DEPLOY_DHCP
+} {PASS_STEP}
+
+DoStep ${test_case}[incr step_num]_1 "Start sniffer" {
+    LogMsg "--- Start sniffer ---"
+    Init_CONTROLLER_LAN
+    SetupCaptureControllerLan "host $MTA_IP || udp port 67"
+    StartCaptureControllerLan
+} {PASS_STEP}
+
+DoStep ${test_case}${step_num}_2 "Reset CM/MTA" {
+    set val [SNMPvN_RESET $CM_IP]
+    LogMsg "--- Reset of CM and MTA has passed ---"
+} {
+    IsEqual $val 0
+}
+
+DoStep ${test_case}${step_num}_3 "pktcMTADevProvisioningState Content Verification" {
+    # Wait for a minute to let CM/MTA starting to reboot
+    actionWait "Wait for CM/MTA to reboot" 60
+    # Get the OID from the MTA and check it using our previously defined
+    set val [GetProvState 1 600]
+    LogMsg "MTA Provisioning State"
+    LogMsg "             - Expected : 1"
+    LogMsg "             - Received : $val"
+} {
+    IsEqual $val 1
+}
+
+## Get all the values and verify
+
+DoStep ${test_case}[incr step_num] "pktcEUEUsrProfileVersion Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMP_GET $oid_pktcEUEUsrProfileVersion $MTA_IP]
+    LogMsg "The Value pktcEUEUsrProfileVersion is: $val"
+} {IsEqual $val "1.0"}
+
+
+DoStep ${test_case}[incr step_num] "pktcEUEUsrProfileVersion Content set" {
+    # Try to set the read only parameter
+    set val [SNMP_SET $oid_pktcEUEUsrProfileVersion STRING "2.0" $MTA_IP]
+    LogMsg "The Value of pktcEUEUsrProfileVersion is: $val"
+} {IsEqual $val $NON_WRITABLE}
+
+## Get all the values and verify
+
+DoStep ${test_case}[incr step_num]_1 "pktcEUEUsrIMPUIdType Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMP_TABLE_GET $table_pktcEUEUsrIMPUTable $MTA_IP 1]
+    LogMsg "The Value pktcEUEUsrIMPUIdType is: $val"
+} {IsEqual $val 3}
+
+DoStep ${test_case}${step_num}_2 "pktcEUEUsrIMPUId Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMP_TABLE_GET $table_pktcEUEUsrIMPUTable $MTA_IP 2]
+    LogMsg "The Value pktcEUEUsrIMPUId is: $val"
+} {
+    # verify_signal "The value of pktcEUEUsrIMPUId is $val, should be similar to $impuid, but not the same"
+    IsEqual $val sip:7205551302@redlab.com
+}
+
+DoStep ${test_case}${step_num}_3 "pktcEUEUsrIMPUIMPIIndexRef Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMP_TABLE_GET $table_pktcEUEUsrIMPUTable $MTA_IP 3]
+    LogMsg "The Value pktcEUEUsrIMPUIMPIIndexRef is: $val"
+} {IsEqual $val 1}
+
+DoStep ${test_case}${step_num}_4 "pktcEUEUsrIMPUDispInfo Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMP_TABLE_GET $table_pktcEUEUsrIMPUTable $MTA_IP 4]
+    LogMsg "The Value pktcEUEUsrIMPUDispInfo is: $val"
+} {IsEqual $val ""}
+
+DoStep ${test_case}${step_num}_5 "pktcEUEUsrIMPUOpIndexRefs Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMP_TABLE_GET $table_pktcEUEUsrIMPUTable $MTA_IP 5]
+    LogMsg "The Value pktcEUEUsrIMPUOpIndexRefs is: $val"
+} {IsEqual $val ""}
+
+DoStep ${test_case}${step_num}_6 "pktcEUEUsrIMPUAdminStat Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMP_TABLE_GET $table_pktcEUEUsrIMPUTable $MTA_IP 6]
+    LogMsg "The Value pktcEUEUsrIMPUAdminStat is: $val"
+} {IsEqual $val 2}
+
+DoStep ${test_case}${step_num}_7 "pktcEUEUsrIMPUAdminStatInfo Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMP_TABLE_GET $table_pktcEUEUsrIMPUTable $MTA_IP 7]
+    LogMsg "The Value pktcEUEUsrIMPUAdminStatInfo is: $val"
+} {IsEqual $val ""}
+
+DoStep ${test_case}${step_num}_8 "pktcEUEUsrIMPUOperStat Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMP_TABLE_GET $table_pktcEUEUsrIMPUTable $MTA_IP 8]
+    LogMsg "The Value pktcEUEUsrIMPUOperStat is: $val"
+} {IsEqual $val 2}
+
+DoStep ${test_case}${step_num}_9 "pktcEUEUsrIMPUOpertStatInfo Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMP_TABLE_GET $table_pktcEUEUsrIMPUTable $MTA_IP 9]
+    LogMsg "The Value pktcEUEUsrIMPUOpertStatInfo is: $val"
+} {IsEqual $val ""}
+
+DoStep ${test_case}${step_num}_10 "pktcEUEUsrIMPUSigSecurity Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMP_TABLE_GET $table_pktcEUEUsrIMPUTable $MTA_IP 10]
+    LogMsg "The Value pktcEUEUsrIMPUSigSecurity is: $val"
+} {IsEqual $val 2}
+
+DoStep ${test_case}${step_num}_11 "pktcEUEUsrIMPUAdditionalInfo Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMP_TABLE_GET $table_pktcEUEUsrIMPUTable $MTA_IP 11]
+    LogMsg "The Value pktcEUEUsrIMPUAdditionalInfo is: $val"
+} {
+    IsEqual $val "IEP#9;OEP#9"
+}
+
+DoStep ${test_case}${step_num}_12 "pktcEUEUsrIMPURowStatus Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMP_TABLE_GET $table_pktcEUEUsrIMPUTable $MTA_IP 12]
+    LogMsg "The Value pktcEUEUsrIMPURowStatus is: $val"
+} {IsEqual $val 1}
+
+DoStep ${test_case}[incr step_num] "pktcEUEUsrIMPUId Content set" {
+    # Try to set the read only parameter
+    set val [SNMP_SET $oid_pktcEUEUsrIMPUId.$index STRING sip:13032345678@cablelabs.com $MTA_IP]
+    LogMsg "The Value of pktcEUEUsrIMPUId SNMP SET is: $val"
+} {IsEqual $val $NON_WRITABLE}
+
+DoStep ${test_case}[incr step_num] "pktcEUEUsrIMPUIdType Content set" {
+    # Try to set the read only parameter
+    set val [SNMP_SET $oid_pktcEUEUsrIMPUIdType.$index INTEGER 2 $MTA_IP]
+    LogMsg "The Value of pktcEUEUsrIMPUIdType SNMP SET is: $val"
+} {IsEqual $val $NON_WRITABLE}
+
+DoStep ${test_case}[incr step_num] "Stop Sniffer" {
+    LogMsg "--- Stop Sniffer ---"
+    StopCaptureControllerLan
+    SaveToFileControllerLan "_Secure_Prov2"
+} { PASS_STEP }
+
+################################################################################
+# Run MIB checks for Hybrid flow type
+################################################################################
+set step_num 1
+
+DoStep ${test_case}[incr step_num]h "Configure Provisioning Server" {
+    # PROV_MODIFY_DEVICE $MTA_MAC HYBRID2 HybridFlow_BasicCall_DigitMap_Inactive.cfg
+    PROV_MODIFY_DEVICE $MTA_MAC HYBRID2 C.1.2.7.bin
+    PROV_DEPLOY_DHCP
+} { PASS_STEP }
+
+
+DoStep ${test_case}[incr step_num]h_1 "Start sniffer" {
+    LogMsg "--- Start sniffer ---"
+    # Init_CONTROLLER_LAN
+    SetupCaptureControllerLan "host $MTA_IP || udp port 67 || host $CM_IP"
+    StartCaptureControllerLan
+} {PASS_STEP}
+
+############### Reset CM and MTA and Verify Provisioning ################
+
+DoStep ${test_case}${step_num}h_2 "Reset CM/MTA" {
+    set val [SNMPvN_RESET $CM_IP]
+    LogMsg "--- Reset of CM and MTA has passed ---"
+} {
+    IsEqual $val 0
+}
+
+DoStep ${test_case}${step_num}h_3 "pktcMTADevProvisioningState Content Verification" {
+    # Wait for a minute to let CM/MTA starting to reboot
+    actionWait "Wait for CM/MTA to reboot" 120
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMPvN_GET $oid_pktcMtaDevProvisioningState $MTA_IP]
+    LogMsg "MTA Provisioning State"
+    LogMsg "             - Expected : 1"
+    LogMsg "             - Received : $val"
+} {
+    IsEqual $val 1
+}
+
+## Get all the values and verify
+
+DoStep ${test_case}[incr step_num]h "pktcEUEUsrProfileVersion Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMPvN_GET $oid_pktcEUEUsrProfileVersion $MTA_IP]
+    LogMsg "The Value pktcEUEUsrProfileVersion is: $val"
+} {IsEqual $val "1.0"}
+
+
+DoStep ${test_case}[incr step_num]h "pktcEUEUsrProfileVersion Content set" {
+    # Try to set the read only parameter
+    set val [SNMPvN_SET $oid_pktcEUEUsrProfileVersion STRING "2.0" $MTA_IP]
+    LogMsg "The Value of pktcEUEUsrProfileVersion is: $val"
+} {IsEqual $val $NON_WRITABLE}
+
+## Get all the values and verify
+
+DoStep ${test_case}[incr step_num]_1 "pktcEUEUsrIMPUIdType Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMPvN_TABLE_GET $table_pktcEUEUsrIMPUTable $MTA_IP 1]
+    LogMsg "The Value pktcEUEUsrIMPUIdType is: $val"
+} {IsEqual $val 3}
+
+DoStep ${test_case}${step_num}_2 "pktcEUEUsrIMPUId Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMPvN_TABLE_GET $table_pktcEUEUsrIMPUTable $MTA_IP 2]
+    LogMsg "The Value pktcEUEUsrIMPUId is: $val"
+} {
+    # verify_signal "The value of pktcEUEUsrIMPUId is $val, should be similar to sip:7205551301@redlab.com"
+    # set impuid $val
+    IsEqual $val sip:7205551301@redlab.com
+}
+
+DoStep ${test_case}${step_num}_3 "pktcEUEUsrIMPUIMPIIndexRef Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMPvN_TABLE_GET $table_pktcEUEUsrIMPUTable $MTA_IP 3]
+    LogMsg "The Value pktcEUEUsrIMPUIMPIIndexRef is: $val"
+} {IsEqual $val 1}
+
+DoStep ${test_case}${step_num}_4 "pktcEUEUsrIMPUDispInfo Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMPvN_TABLE_GET $table_pktcEUEUsrIMPUTable $MTA_IP 4]
+    LogMsg "The Value pktcEUEUsrIMPUDispInfo is: $val"
+} {IsEqual $val ""}
+
+DoStep ${test_case}${step_num}_5 "pktcEUEUsrIMPUOpIndexRefs Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMPvN_TABLE_GET $table_pktcEUEUsrIMPUTable $MTA_IP 5]
+    LogMsg "The Value pktcEUEUsrIMPUOpIndexRefs is: $val"
+} {IsEqual $val ""}
+
+DoStep ${test_case}${step_num}_6 "pktcEUEUsrIMPUAdminStat Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMPvN_TABLE_GET $table_pktcEUEUsrIMPUTable $MTA_IP 6]
+    LogMsg "The Value pktcEUEUsrIMPUAdminStat is: $val"
+} {IsEqual $val 2}
+
+DoStep ${test_case}${step_num}_7 "pktcEUEUsrIMPUAdminStatInfo Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMPvN_TABLE_GET $table_pktcEUEUsrIMPUTable $MTA_IP 7]
+    LogMsg "The Value pktcEUEUsrIMPUAdminStatInfo is: $val"
+} {IsEqual $val ""}
+
+DoStep ${test_case}${step_num}_8 "pktcEUEUsrIMPUOperStat Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMPvN_TABLE_GET $table_pktcEUEUsrIMPUTable $MTA_IP 8]
+    LogMsg "The Value pktcEUEUsrIMPUOperStat is: $val"
+} {IsEqual $val 2}
+
+DoStep ${test_case}${step_num}_9 "pktcEUEUsrIMPUOpertStatInfo Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMPvN_TABLE_GET $table_pktcEUEUsrIMPUTable $MTA_IP 9]
+    LogMsg "The Value pktcEUEUsrIMPUOpertStatInfo is: $val"
+} {IsEqual $val ""}
+
+DoStep ${test_case}${step_num}_10 "pktcEUEUsrIMPUSigSecurity Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMPvN_TABLE_GET $table_pktcEUEUsrIMPUTable $MTA_IP 10]
+    LogMsg "The Value pktcEUEUsrIMPUSigSecurity is: $val"
+} {IsEqual $val 2}
+
+DoStep ${test_case}${step_num}_11 "pktcEUEUsrIMPUAdditionalInfo Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMPvN_TABLE_GET $table_pktcEUEUsrIMPUTable $MTA_IP 11]
+    LogMsg "The Value pktcEUEUsrIMPUAdditionalInfo is: $val"
+} {
+    IsEqual $val "IEP#9;OEP#9"
+}
+
+DoStep ${test_case}${step_num}_12 "pktcEUEUsrIMPURowStatus Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMPvN_TABLE_GET $table_pktcEUEUsrIMPUTable $MTA_IP 12]
+    LogMsg "The Value pktcEUEUsrIMPURowStatus is: $val"
+} {IsEqual $val 1}
+
+DoStep ${test_case}[incr step_num]h "pktcEUEUsrIMPUId Content set" {
+    # Try to set the read only parameter
+    set val [SNMPvN_SET $oid_pktcEUEUsrIMPUId.$index STRING sip:13032345678@cablelabs.com $MTA_IP]
+    LogMsg "The Value of pktcEUEUsrIMPUId SNMP SET is: $val"
+} {IsEqual $val $NON_WRITABLE}
+
+DoStep ${test_case}[incr step_num]h "pktcEUEUsrIMPUIdType Content set" {
+    # Try to set the read only parameter
+    set val [SNMPvN_SET $oid_pktcEUEUsrIMPUIdType.$index INTEGER 2 $MTA_IP]
+    LogMsg "The Value of pktcEUEUsrIMPUIdType SNMP SET is: $val"
+} {IsEqual $val $NON_WRITABLE}
+
+DoStep ${test_case}[incr step_num] "Stop Sniffer" {
+    LogMsg "--- Stop Sniffer ---"
+    StopCaptureControllerLan
+    SaveToFileControllerLan "_Hybrid_Prov1"
+} { PASS_STEP }
+
+DoStep ${test_case}[incr step_num]h "Configure Provisioning Server" {
+    # PROV_MODIFY_DEVICE $MTA_MAC HYBRID2 HybridFlow_BasicCall_DigitMap_Inactive_new_IMPUId.cfg
+    PROV_MODIFY_DEVICE $MTA_MAC HYBRID2 C.1.2.7_New_IMPUId.bin
+    PROV_DEPLOY_DHCP
+} { PASS_STEP }
+
+
+DoStep ${test_case}[incr step_num]h_1 "Start sniffer" {
+    LogMsg "--- Start sniffer ---"
+    # Init_CONTROLLER_LAN
+    SetupCaptureControllerLan "host $MTA_IP || udp port 67 || host $CM_IP"
+    StartCaptureControllerLan
+} {PASS_STEP}
+
+############### Reset CM and MTA and Verify Provisioning ################
+
+DoStep ${test_case}${step_num}h_2 "Reset CM/MTA" {
+    set val [SNMPvN_RESET $CM_IP]
+    LogMsg "--- Reset of CM and MTA has passed ---"
+} {
+    IsEqual $val 0
+}
+
+DoStep ${test_case}${step_num}h_3 "pktcMTADevProvisioningState Content Verification" {
+    # Wait for a minute to let CM/MTA starting to reboot
+    actionWait "Wait for CM/MTA to reboot" 120
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMPvN_GET $oid_pktcMtaDevProvisioningState $MTA_IP]
+    LogMsg "MTA Provisioning State"
+    LogMsg "             - Expected : 1"
+    LogMsg "             - Received : $val"
+} {
+    IsEqual $val 1
+}
+
+## Get all the values and verify
+
+DoStep ${test_case}[incr step_num]h "pktcEUEUsrProfileVersion Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMPvN_GET $oid_pktcEUEUsrProfileVersion $MTA_IP]
+    LogMsg "The Value pktcEUEUsrProfileVersion is: $val"
+} {IsEqual $val "1.0"}
+
+
+DoStep ${test_case}[incr step_num]h "pktcEUEUsrProfileVersion Content set" {
+    # Try to set the read only parameter
+    set val [SNMPvN_SET $oid_pktcEUEUsrProfileVersion STRING "2.0" $MTA_IP]
+    LogMsg "The Value of pktcEUEUsrProfileVersion is: $val"
+} {IsEqual $val $NON_WRITABLE}
+
+## Get all the values and verify
+
+DoStep ${test_case}[incr step_num]_1 "pktcEUEUsrIMPUIdType Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMPvN_TABLE_GET $table_pktcEUEUsrIMPUTable $MTA_IP 1]
+    LogMsg "The Value pktcEUEUsrIMPUIdType is: $val"
+} {IsEqual $val 3}
+
+DoStep ${test_case}${step_num}_2 "pktcEUEUsrIMPUId Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMPvN_TABLE_GET $table_pktcEUEUsrIMPUTable $MTA_IP 2]
+    LogMsg "The Value pktcEUEUsrIMPUId is: $val"
+} {
+    # verify_signal "The value of pktcEUEUsrIMPUId is $val, should be similar to $impuid, but not the same"
+    IsEqual $val sip:7205551302@redlab.com
+}
+
+DoStep ${test_case}${step_num}_3 "pktcEUEUsrIMPUIMPIIndexRef Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMPvN_TABLE_GET $table_pktcEUEUsrIMPUTable $MTA_IP 3]
+    LogMsg "The Value pktcEUEUsrIMPUIMPIIndexRef is: $val"
+} {IsEqual $val 1}
+
+DoStep ${test_case}${step_num}_4 "pktcEUEUsrIMPUDispInfo Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMPvN_TABLE_GET $table_pktcEUEUsrIMPUTable $MTA_IP 4]
+    LogMsg "The Value pktcEUEUsrIMPUDispInfo is: $val"
+} {IsEqual $val ""}
+
+DoStep ${test_case}${step_num}_5 "pktcEUEUsrIMPUOpIndexRefs Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMPvN_TABLE_GET $table_pktcEUEUsrIMPUTable $MTA_IP 5]
+    LogMsg "The Value pktcEUEUsrIMPUOpIndexRefs is: $val"
+} {IsEqual $val ""}
+
+DoStep ${test_case}${step_num}_6 "pktcEUEUsrIMPUAdminStat Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMPvN_TABLE_GET $table_pktcEUEUsrIMPUTable $MTA_IP 6]
+    LogMsg "The Value pktcEUEUsrIMPUAdminStat is: $val"
+} {IsEqual $val 2}
+
+DoStep ${test_case}${step_num}_7 "pktcEUEUsrIMPUAdminStatInfo Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMPvN_TABLE_GET $table_pktcEUEUsrIMPUTable $MTA_IP 7]
+    LogMsg "The Value pktcEUEUsrIMPUAdminStatInfo is: $val"
+} {IsEqual $val ""}
+
+DoStep ${test_case}${step_num}_8 "pktcEUEUsrIMPUOperStat Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMPvN_TABLE_GET $table_pktcEUEUsrIMPUTable $MTA_IP 8]
+    LogMsg "The Value pktcEUEUsrIMPUOperStat is: $val"
+} {IsEqual $val 2}
+
+DoStep ${test_case}${step_num}_9 "pktcEUEUsrIMPUOpertStatInfo Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMPvN_TABLE_GET $table_pktcEUEUsrIMPUTable $MTA_IP 9]
+    LogMsg "The Value pktcEUEUsrIMPUOpertStatInfo is: $val"
+} {IsEqual $val ""}
+
+DoStep ${test_case}${step_num}_10 "pktcEUEUsrIMPUSigSecurity Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMPvN_TABLE_GET $table_pktcEUEUsrIMPUTable $MTA_IP 10]
+    LogMsg "The Value pktcEUEUsrIMPUSigSecurity is: $val"
+} {IsEqual $val 2}
+
+DoStep ${test_case}${step_num}_11 "pktcEUEUsrIMPUAdditionalInfo Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMPvN_TABLE_GET $table_pktcEUEUsrIMPUTable $MTA_IP 11]
+    LogMsg "The Value pktcEUEUsrIMPUAdditionalInfo is: $val"
+} {
+    IsEqual $val "IEP#9;OEP#9"
+}
+
+DoStep ${test_case}${step_num}_12 "pktcEUEUsrIMPURowStatus Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMPvN_TABLE_GET $table_pktcEUEUsrIMPUTable $MTA_IP 12]
+    LogMsg "The Value pktcEUEUsrIMPURowStatus is: $val"
+} {IsEqual $val 1}
+
+DoStep ${test_case}[incr step_num]h "pktcEUEUsrIMPUId Content set" {
+    # Try to set the read only parameter
+    set val [SNMPvN_SET $oid_pktcEUEUsrIMPUId.$index STRING sip:13032345678@cablelabs.com $MTA_IP]
+    LogMsg "The Value of pktcEUEUsrIMPUId SNMP SET is: $val"
+} {IsEqual $val $NON_WRITABLE}
+
+DoStep ${test_case}[incr step_num]h "pktcEUEUsrIMPUIdType Content set" {
+    # Try to set the read only parameter
+    set val [SNMPvN_SET $oid_pktcEUEUsrIMPUIdType.$index INTEGER 2 $MTA_IP]
+    LogMsg "The Value of pktcEUEUsrIMPUIdType SNMP SET is: $val"
+} {IsEqual $val $NON_WRITABLE}
+
+DoStep ${test_case}[incr step_num] "Stop Sniffer" {
+    LogMsg "--- Stop Sniffer ---"
+    StopCaptureControllerLan
+    SaveToFileControllerLan "_Hybrid_Prov2"
+} { PASS_STEP }
+
+DoStep ${test_case}[incr step_num] "Configure Provisioning Server" {
+    PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122 Device_Level_Secure.cfg
+    PROV_DEPLOY_DHCP
+} { PASS_STEP }
+
+
+############### Reset CM and MTA and Verify Provisioning ################
+
+DoStep ${test_case}[incr step_num] "Reset CM/MTA" {
+    set val [SNMPvN_RESET $CM_IP]
+    LogMsg "--- Reset of CM and MTA has passed ---"
+} {
+    IsEqual $val 0
+}
+
+DoStep ${test_case}[incr step_num] "pktcMTADevProvisioningState Content Verification" {
+    # Wait for a minute to let CM/MTA starting to reboot
+    actionWait "Wait for CM/MTA to reboot" 60
+    # Get the OID from the MTA and check it using our previously defined
+    set val [GetProvState 1 600]
+    LogMsg "MTA Provisioning State"
+    LogMsg "             - Expected : 1"
+    LogMsg "             - Received : $val"
+} {
+    IsEqual $val 1
+}
+
+
+################################################################################
+# Cleanup
+################################################################################
+set CONTINUE_PAST_STEP_ERROR 0
+Cleanup
+
+

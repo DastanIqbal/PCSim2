@@ -1,0 +1,76 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+
+<pc2xml version="$Revision: 8188 $" name="UT_UE_1.17.2" descrip="This is a unit test script for the UE_1.17.2 test script." number="1">
+	<template name="RegUE0" file="$UT_PATH/Templates/ut/RegSub_DUT.xml"/>
+	<template name="UE0" file="$UT_PATH/Templates/ut/Orig_DUT.xml"/>
+	<remove_from fsm="RegUE0">
+		<state ID="RecvNotify"/>
+	</remove_from>
+	<add_to fsm="RegUE0">
+		<state ID="RecvNotify">
+			<response>
+				<if>
+					<contains>
+						<msg_ref type="reginfo+xml">NOTIFY.gruu</msg_ref>
+						<msg_ref type="platform">UE0.opaque uuid</msg_ref>
+					</contains>
+					<then>
+						<generate event="Registered" fsm="UE0"/>
+						<send protocol="sip" msgtype="200-Notify" target="PCSCF1" originator="DUT"/>
+					</then>
+					<else>
+						<fail/>
+					</else>
+				</if>
+			</response>
+			<postlude>
+				<send protocol="sip" msgtype="200-Notify" target="PCSCF1" originator="DUT"/>
+			</postlude>
+			<transition to="EndReg" event="NOTIFY"/>
+		</state>
+		<state ID="EndReg" ES="true"/>
+	</add_to>
+	<add_to fsm="UE0">
+		<NE ext_require="gruu"/>
+		<state ID="WaitRegistration">
+			<transition to="Setup" event="Registered"/>
+		</state>
+		<states initialstate="WaitRegistration"/>
+	</add_to>
+	<remove_from fsm="UE0">
+		<state ID="Setup" sub="prelude"/>
+	</remove_from>
+	<add_to fsm="UE0">
+		<state ID="Setup" sub="prelude">
+			<sleep time="3000"/>
+			<send protocol="sip" msgtype="Invite" target="UE1" originator="DUT">
+				<!--mod modtype="delete" hdr="Contact" param="opaque"/>
+				<mod modtype="replace" hdr="Contact" param="name-addr">
+					<msg_ref type="reginfo+xml" msg_instance="last" xml_value="true" fsm="RegUE0">NOTIFY.gruu</msg_ref>
+				</mod-->
+				<mod modtype="replace" hdr="Contact" param="addr-spec">
+					<expr>sip:DUT@pclab.com</expr>
+				</mod>
+			</send>
+		</state>
+		<transition from="Setup" to="END" event="5xx-INVITE"/>
+	</add_to>
+</pc2xml>

@@ -1,0 +1,202 @@
+##############################################################################
+#// Filename: RST E-UE PROV 3-1-3-9.test (PACT)
+#// Author:   Matthew Forbes
+#//
+#//
+#//
+#// Creation Date: March 12, 2009
+#// Modified by:
+#//            Matthew Forbes 2/5/10 - changed config file
+################################################################################
+#// Description:
+#//     TC2906 TEST CASE RST E-UE PROV 3.1.3.9 - Ability of eUE to Implement the
+#//	    User Call Transfer Feature Table
+#//
+#//
+#// Objective:
+#//     This test verifies the eUE ability to properly implement the pktcEUERSTCallXfrTable
+#//     as defined in CL-PKTC-EUE-RST-MIB.
+#//     
+#//
+#// PacketCable DUT:
+#//     EDVA
+#//
+#// Test Steps:
+#//     - Initial configuration
+#//     - Start sniffer
+#//     - Reset DUT
+#//     - Check Provisioning state
+#//     - Invoke SNMPv3 API and query MIB objects and validate values
+#//     - Stop sniffer
+#//     - Hybrid configuration
+#//     - Start sniffer
+#//     - Reset DUT
+#//     - Check Provisioning state
+#//     - Invoke SNMPv2 API and bulk query MIB objects and validate values
+#//     - Stop sniffer
+#//
+#//
+#// Notes:
+#//     - Requires provPrimitives.tcl
+#//
+#//
+################################################################################
+
+global SCRIPT_VERSION
+set SCRIPT_VERSION { # $Id: RST_E-UE_PROV_3-1-3-9.test 7468 2010-08-06 17:18:30Z ghassler $ }
+
+
+set test_case RST_E-UE_PROV_3-1-3-9-
+set step_num 1
+set NON_WRITABLE 2
+
+Init_PROV
+
+DoStep ${test_case}${step_num} "Initial Configuration" {
+    LogMsg "--- Init PROV module ---"
+    # PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122 SecureFlow_BasicCall_DigitMap_CX.cfg
+    PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122 C.1.1.18.bin
+    PROV_DEPLOY_DHCP
+} {PASS_STEP}
+
+DoStep ${test_case}[incr step_num]_1 "Start sniffer" {
+    LogMsg "--- Start sniffer ---"
+    Init_CONTROLLER_LAN
+    SetupCaptureControllerLan "host $MTA_IP || udp port 67"
+    StartCaptureControllerLan
+} {PASS_STEP}
+
+DoStep ${test_case}${step_num}_2 "Reset CM/MTA" {
+    set val [SNMPvN_RESET $CM_IP]
+    LogMsg "--- Reset of CM and MTA has passed ---"
+} {
+    IsEqual $val 0
+}
+
+DoStep ${test_case}${step_num}_3 "pktcMTADevProvisioningState Content Verification" {
+    # Wait for a minute to let CM/MTA starting to reboot
+    actionWait "Wait for CM/MTA to reboot" 60
+    # Get the OID from the MTA and check it using our previously defined
+    set val [GetProvState 1 600]
+    LogMsg "MTA Provisioning State"
+    LogMsg "             - Expected : 1"
+    LogMsg "             - Received : $val"
+} {
+    IsEqual $val 1
+}
+
+
+DoStep ${test_case}[incr step_num]_1 "pktcEUERSTCXNtfyTimeout Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMP_TABLE_GET $table_pktcEUERSTCallXfrTable.1 $MTA_IP 1]
+    LogMsg "The Value of pktcEUERSTCXNtfyTimeout is: $val"
+} {
+    IsEqual $val 30
+}
+
+DoStep ${test_case}${step_num}_2 "pktcEUERSTCXStatusVerification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMP_TABLE_GET $table_pktcEUERSTCallXfrTable.1 $MTA_IP 2]
+    LogMsg "The Value of pktcEUERSTCXStatus is: $val"
+} {
+    IsEqual $val 1
+}
+
+DoStep ${test_case}[incr step_num] "Stop Sniffer" {
+    LogMsg "--- Stop Sniffer ---"
+    StopCaptureControllerLan
+    SaveToFileControllerLan "_Secure"
+} { PASS_STEP }
+
+set step_num 1
+
+DoStep ${test_case}${step_num}h "Initial Configuration" {
+    LogMsg "--- Init PROV module ---"
+    PROV_MODIFY_DEVICE $MTA_MAC HYBRID2
+    PROV_DEPLOY_DHCP
+} {PASS_STEP}
+
+DoStep ${test_case}[incr step_num]h_1 "Start sniffer" {
+    LogMsg "--- Start sniffer ---"
+    Init_CONTROLLER_LAN
+    SetupCaptureControllerLan "host $MTA_IP || udp port 67"
+    StartCaptureControllerLan
+} {PASS_STEP}
+
+DoStep ${test_case}[incr step_num]h_2 "Reset CM/MTA" {
+    set val [SNMPvN_RESET $CM_IP]
+    LogMsg "--- Reset of CM and MTA has passed ---"
+} {
+    IsEqual $val 0
+}
+
+DoStep ${test_case}${step_num}h_3 "pktcMTADevProvisioningState Content Verification" {
+    # Wait for a minute to let CM/MTA starting to reboot
+    actionWait "Wait for CM/MTA to reboot" 120
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMPvN_GET $oid_pktcMtaDevProvisioningState $MTA_IP]
+    LogMsg "MTA Provisioning State"
+    LogMsg "             - Expected : 1"
+    LogMsg "             - Received : $val"
+} {
+    IsEqual $val 1
+}
+
+DoStep ${test_case}[incr step_num]h_1 "pktcEUERSTCXNtfyTimeout Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMPvN_TABLE_GET $table_pktcEUERSTCallXfrTable.1 $MTA_IP 1]
+    LogMsg "The Value of pktcEUERSTCXNtfyTimeout is: $val"
+} {
+    IsEqual $val 30
+}
+
+DoStep ${test_case}${step_num}h_2 "pktcEUERSTCXStatusVerification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMPvN_TABLE_GET $table_pktcEUERSTCallXfrTable.1 $MTA_IP 2]
+    LogMsg "The Value of pktcEUERSTCXStatus is: $val"
+} {
+    IsEqual $val 1
+}
+
+
+DoStep ${test_case}[incr step_num]h "Stop Sniffer" {
+    LogMsg "--- Stop Sniffer ---"
+    StopCaptureControllerLan
+    SaveToFileControllerLan "_Hybrid"
+} { PASS_STEP }
+
+DoStep ${test_case}[incr step_num] "Configure Provisioning Server" {
+    PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122 Device_Level_Secure.cfg
+    PROV_DEPLOY_DHCP
+} { PASS_STEP }
+
+
+############### Reset CM and MTA and Verify Provisioning ################
+
+DoStep ${test_case}[incr step_num] "Reset CM/MTA" {
+    set val [SNMPvN_RESET $CM_IP]
+    LogMsg "--- Reset of CM and MTA has passed ---"
+} {
+    IsEqual $val 0
+}
+
+DoStep ${test_case}[incr step_num] "pktcMTADevProvisioningState Content Verification" {
+    # Wait for a minute to let CM/MTA starting to reboot
+    actionWait "Wait for CM/MTA to reboot" 60
+    # Get the OID from the MTA and check it using our previously defined
+    set val [GetProvState 1 600]
+    LogMsg "MTA Provisioning State"
+    LogMsg "             - Expected : 1"
+    LogMsg "             - Received : $val"
+} {
+    IsEqual $val 1
+}
+
+
+################################################################################
+# Cleanup
+################################################################################
+set CONTINUE_PAST_STEP_ERROR 0
+Cleanup
+
+

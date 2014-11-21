@@ -1,0 +1,18 @@
+To download ANT
+    1. Goto http://ant.apache.org/bindownload.cgi and download latest version 
+        (as of today 1.7 is latest).
+    2. You would get a package such as 
+        apache-ant-1.7.0-bin.zip or apache-ant-1.7.0-bin.tar.gz
+    3. Now extract the contents of this package to c:\ or /usr/local/
+    4. Now your ant-home directory would be 
+        c:\apache-ant-1.7.0 or /usr/local/apache-ant-1.7.0
+    5. In your environment set ANT_HOME above directory
+    6. Set PATH environment variable to include ANT_HOME/bin
+
+To use ANT, at the command prompt, do the following
+    1. set variable JAVA_HOME to the value of java install dir
+    2. set variable ANT_HOME to the value of ant-home dir
+    3. In the path include, JAVA_HOME/bin and ANT_HOME/bin
+    4. And goto the project directory (where build.xml file exists) and run
+        a. ant # to build PCSim2 and parser.jar
+        b. ant utils # to build the bns_utility_protocol.jar and bns_logger.jar

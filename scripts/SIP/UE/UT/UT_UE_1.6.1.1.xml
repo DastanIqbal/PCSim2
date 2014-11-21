@@ -1,0 +1,122 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+
+<pc2xml version="$Revision: 8188 $" name="UT_UE_1.6.1.1" descrip="This is a unit test script for testing the UE_1.6.1.1 test script." number="1">
+	<fsm name="UE0">
+		<models>
+			<session/>
+		</models>
+		<NE sim_type="term" elements="DUT" targets="UE0 DUT"/>
+		<states initialstate="Register">
+			<!-- REGISTER State -->
+			<state ID="Register">
+				<prelude>
+					<!-- If this is part of a batch it will allow the platform to clean up between
+						tests. -->
+					<sleep time="3000"/>
+					<send protocol="sip" msgtype="Register" target="PCSCF1" originator="DUT"/>
+				</prelude>
+				<transition to="Digest" event="401-Register"/>
+				<transition to="Setup" event="200-Register"/>
+			</state>
+			<state ID="Digest">
+				<prelude>
+					<send protocol="sip" msgtype="Register" target="PCSCF1" originator="DUT"/>
+				</prelude>
+				<postlude>
+					<sleep time="5000"/>
+				</postlude>
+				<transition to="Setup" event="200-Register"/>
+			</state>
+			<!-- SETUP STATE -->
+			<state ID="Setup" timer="450">
+				<!-- Step 1 from the Default Message Flow Call-Term-at-UE(DUT) Sequence Diagram -
+               Test 18x response for reliability for possible Prack message- send Invite -->
+				<prelude>
+					<send protocol="sip" msgtype="Invite" target="UE1" originator="DUT"/>
+				</prelude>
+				<transition to="Invite2" event="TimerExpired"/>
+				<transition to="Fail" event="5xx-INVITE"/>
+			</state>
+			<state ID="Invite2" timer="450">
+				<prelude>
+					<retransmit protocol="sip" msgtype="Invite"/>
+				</prelude>
+				<transition to="Invite3" event="TimerExpired"/>
+				<transition to="Fail" event="5xx-INVITE"/>
+			</state>
+			<state ID="Invite3" timer="1000">
+				<prelude>
+					<retransmit protocol="sip" msgtype="Invite"/>
+				</prelude>
+				<transition to="Invite4" event="TimerExpired"/>
+				<transition to="Fail" event="5xx-INVITE"/>
+			</state>
+			<state ID="Invite4" timer="2000">
+				<prelude>
+					<retransmit protocol="sip" msgtype="Invite"/>
+				</prelude>
+				<transition to="Invite5" event="TimerExpired"/>
+				<transition to="Fail" event="5xx-INVITE"/>
+			</state>
+			<state ID="Invite5" timer="4000">
+				<prelude>
+					<retransmit protocol="sip" msgtype="Invite"/>
+				</prelude>
+				<transition to="Invite6" event="TimerExpired"/>
+				<transition to="Fail" event="5xx-INVITE"/>
+			</state>
+			<state ID="Invite6" timer="8000">
+				<prelude>
+					<retransmit protocol="sip" msgtype="Invite"/>
+				</prelude>
+				<transition to="Invite7" event="TimerExpired"/>
+				<transition to="Fail" event="5xx-INVITE"/>
+			</state>
+			<state ID="Invite7" timer="16000">
+				<prelude>
+					<retransmit protocol="sip" msgtype="Invite"/>
+				</prelude>
+				<transition to="Invite8" event="TimerExpired"/>
+				<transition to="Fail" event="5xx-INVITE"/>
+			</state>
+			<state ID="Invite8">
+				<prelude>
+					<retransmit protocol="sip" msgtype="Invite"/>
+				</prelude>
+				<transition to="Fail" event="5xx-INVITE"/>
+				<transition to="Wait" event="404-INVITE"/>
+			</state>
+			<!-- This state is only here to keep the unit test timing the same as 
+				the actual test script -->
+			<state ID="Wait" timer="10000">
+				<transition to="END" event="TimerExpired"/>
+			</state>
+			<state ID="Fail">
+				<prelude>
+					<fail/>
+					<generate event="FailEvent"/>
+				</prelude>
+				<!-- Transitions for Fail state -->
+				<transition to="END" event="FailEvent"/>
+			</state>
+		</states>
+	</fsm>
+</pc2xml>

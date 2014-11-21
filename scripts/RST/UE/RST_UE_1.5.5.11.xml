@@ -1,0 +1,117 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	PCPCII-139 : Update the Voicetronix modifiers to use the new values. (ghassler 07/10/2009)
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-UE 1.5.5.11" 
+	descrip=" 3 Way Conference – Third hook flash after Third-Party PSAP answers" 
+	number="RST-UE 1.5.5.11" inspector="disable">
+	
+	<template file="./templates/Three_way_conf_template_controller.xml"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="UE1Muted"/>
+	</remove_from>          
+	
+	<add_to fsm="UE1">
+		<state ID="UE1Muted">
+			<prelude once="true">
+				<send protocol="utility" msgtype="DialDigits">
+					<mod modtype="add" hdr="number">
+						<expr>911</expr>
+					</mod>
+				</send>
+			</prelude>
+			<!-- Transitions for UE1Muted state -->
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>REINVITE</expr>
+					</eq>
+					<then>
+						<!-- HookFlash Step 2 and 3 -Sending 100-Invite and 200-Invite to Invite -->
+						<send protocol="sip" msgtype="100-INVITE"/>
+						<send protocol="sip" msgtype="200-INVITE"/>
+					</then>
+				</if>
+			</response>
+			<transition to="UE1Muted" event="DialDigitsComplete"/>
+			<transition to="UE1GoOffHold" event="REINVITE"/>
+		</state>
+		
+		<transition from="UE1GoOffHold" to="HookFlash2" event="ACK"/>
+		
+		<state ID="HookFlash2">
+			<prelude>
+				<generate event="Branch2Event" fsm="UE2"/>
+				<send protocol="utility" msgtype="HookFlash"/>
+			</prelude>
+			<transition to="UE1Wait" event="HookFlashComplete"/>
+		</state>
+		
+		<state ID="UE1Wait">
+			<transition to="UE1GoOnHook" event="Branch3Event"/>
+		</state>
+	</add_to>
+
+	<remove_from fsm="UE2">
+		<state ID="UE2_3WayCall"/>
+	</remove_from>          
+		
+
+	<add_to fsm="UE2">
+		<NE targets="service:sos"/>
+		
+		<transition from="UE2GoOnHold" to="WaitMediaResumed" event="HookFlashComplete"/>
+		
+		<state ID="WaitMediaResumed">
+			<transition to="NoBye" event="Branch2Event"/>
+		</state>
+		
+		<state ID="NoBye" timer="5000">
+			<response>
+				<verify step="5" requirements="REQ13878">
+					<and>
+						<eq>
+							<msg_ref type="event"/>
+							<expr>TimerExpired</expr>
+						</eq>
+						<neq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>BYE</expr>
+						</neq>
+					</and>
+				</verify>
+			</response>
+			<postlude>
+				<generate event="Branch3Event" fsm="UE1"/>
+			</postlude>
+			<transition to="UE2_3WayCall" event="TimerExpired"/>
+			<transition to="UE2EndSession" event="BYE"/>
+		</state>
+		
+		<state ID="UE2_3WayCall">
+			<prelude>
+				<send protocol="sip" msgtype="BYE"/>
+				<generate event="SucceedEvent" fsm="UE1"/>			
+			</prelude>
+			<transition to="UE2EndSession" event="200-BYE"/>
+		</state>
+	</add_to>
+</pc2xml>

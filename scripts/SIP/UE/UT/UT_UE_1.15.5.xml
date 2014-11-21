@@ -1,0 +1,41 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+
+<pc2xml version="$Revision: 8188 $" name="UT_UE_1.15.5" descrip="This is a unit test script for testing the UE_1.15.5 test script." number="1">
+	<template name="UE0" file="$UT_PATH/Templates/ut/RegSub_DUT.xml"/>
+	<remove_from fsm="UE0">
+		<state ID="Register2"/>
+	</remove_from>
+	<add_to fsm="UE0">
+		<state ID="Register2">
+			<prelude>
+				<sleep time="30000"/>
+				<send protocol="sip" msgtype="Register" target="PCSCF1" originator="DUT"/>
+			</prelude>
+			<transition to="Auth" event="401-Register"/>
+		</state>
+		<state ID="Auth">
+			<prelude>
+				<send protocol="sip" msgtype="Register" target="PCSCF1" originator="DUT"/>
+			</prelude>
+			<transition to="END" event="200-Register"/>
+		</state>
+	</add_to>
+</pc2xml>

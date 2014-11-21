@@ -1,0 +1,113 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-UE 1.5.5.2" 
+	descrip="3 Way Conference(Conference (Controller) - Held Call Disconnects" 
+	number="RST-UE 1.5.5.2" inspector="disable">
+	
+	<template file="./templates/Three_way_conf_template_controller.xml"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="UE1Muted"/>
+		<state ID="UE1WaitSucceed" sub="prelude"/>
+	</remove_from>
+	
+	<remove_from fsm="UE2">
+		<state ID="UE2Connected"/>
+		<state ID="UE2EndSession"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<state ID="UE1Muted">
+			<prelude once="true">
+				<send protocol="utility" msgtype="DialDigits">
+					<mod modtype="add" hdr="number">
+						<msg_ref type="platform">UE2.phone number 1</msg_ref>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="event"/>
+						<expr>Branch1Event</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="BYE"/>
+					</then>
+				</if>
+			</response>
+			<transition to="UE1Muted" event="DialDigitsComplete"/>
+			<transition to="UE1WaitFor200Bye" event="Branch1Event"/>
+		</state>
+		<state ID="UE1WaitFor200Bye">
+			<response>
+				<verify step="4" requirements="REQ13861">
+					<eq>
+						<msg_ref type="sip">Response</msg_ref>
+						<expr>200-BYE</expr>
+					</eq>
+				</verify>
+			</response>
+			<postlude>
+				<generate event="Branch2Event" fsm="UE2"/>
+			</postlude>
+			<transition to="UE1WaitSucceed" event="200-BYE"/>
+		</state>
+	</add_to>
+	
+	<add_to fsm="UE2">
+		<transition from="UE2Alerting" to="EndUE1Call" event="ALERTING_UAS"/>
+		
+		<state ID="EndUE1Call">
+			<prelude>
+				<generate event="Branch1Event" fsm="UE1"/>
+			</prelude>
+			<transition to="UE2Answer" event="Branch2Event"/>
+		</state>
+		
+		<state ID="UE2Connected" timer="10000">
+			<prelude>
+				<verify step="5" requirements="REQ13862">
+					<eq>
+						<msg_ref type="sip" msg_instance="last">Request</msg_ref>
+						<expr>ACK</expr>
+					</eq>
+				</verify>
+			</prelude>
+			
+			<transition to="UE2Releasing" event="TimerExpired"/>
+		</state>
+		
+		<state ID="UE2Releasing">
+			<prelude>
+				<!--Sending BYE to peer to terminate call.-->
+				<send protocol="sip" msgtype="BYE"/>
+			</prelude>
+			<transition to="UE2EndSession" event="200-Bye"/>
+		</state>
+		
+		<state ID="UE2EndSession" ES="True">
+			<prelude>
+				<generate event="SucceedEvent" fsm="UE1"/>
+			</prelude>
+		</state>
+	</add_to>
+</pc2xml>

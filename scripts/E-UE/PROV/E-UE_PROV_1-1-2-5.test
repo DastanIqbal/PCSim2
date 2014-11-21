@@ -1,0 +1,247 @@
+################################################################################
+#// Filename: EUE_PROV_1-1-2-5.test
+#// Author:   Matthew Forbes
+#//
+#//
+#// Creation Date: October 21, 2004
+#// Modified by: Matthew Forbes, 3/3/05, added CM reboot at end to restore device for next test
+#//                       Hudson Jorge, 02/25/09, adapted to PC2.0 EDVA provisioning
+################################################################################
+#// Description:
+#//            TC2771 TEST CASE E-UE-PROV 1.1.2.5 - eUE Ability to Implement Sub-options 1 and 2
+#//            Based on  TC335 TEST CASE PROV 5.6 Verify Option 122 sub option 1 and 2
+#//
+#// Objective:
+#//     Test the capability of the E-DVA DUT to accept the DVA DHCP OFFER only from the
+#//     Telephony Service Provider DHCP Server, assigned in option 122, sub-option 1 and 2
+#//     of the CM DHCP OFFER.
+#//
+#// PacketCable DUT:
+#//     DVA
+#//
+#// Test Steps:
+#//     - Initial configuration
+#//     - Reset DUT
+#//     - Check Provisioning state
+#//     - Change DVA policy in server so option 122, sub-option 1 and 2 to DHCP server
+#//       addresses that will not respond to the DVA DHCP DISCOVER messages
+#//     - Start sniffer
+#//     - Reset DUT
+#//     - Allow time for provisioning process, device should not complete provisioning
+#//     - Stop sniffer
+#//     - Invoke parsing tool and validate using Pass/Fail scripts
+#//     - Restore values for options 12 and 15
+#//     - Delete DVA config file
+#//
+#// Notes:
+#//     - Requires provPrimitives.tcl & tftp_primitives.tcl.
+#//     - Requires the specific config file in $BASE_CFG_FILE_PATH in Provisioning Server.
+#//     - Requires parT.tcl parsing tool to parse data from capture file.
+##########################################################################################
+
+global SCRIPT_VERSION
+set SCRIPT_VERSION { # $Id: E-UE_PROV_1-1-2-5.test 7406 2010-07-20 17:17:37Z dthakore $ }
+set DVA_MAC $MTA_MAC
+set DVA_IP $MTA_IP
+
+###################### PLATFORM INITIALIZATION ########################
+
+DoStep "EUE_PROV_1-1-2-5_PreStep-1" "Initialize Test Platform" {
+    # Initialize TFTP modules
+	Init_PROV
+	# Initialize Sniffer
+	Init_CONTROLLER_LAN
+    # Initialize PARSING TOOL
+    Init_PART
+} { PASS_STEP }
+
+###################### INITIAL CONFIGURATION OF DUT ########################
+
+DoStep "EUE_PROV_1-1-2-5_1-1" "Initial configuration" {
+    LogMsg "--- Initial PROV module ---"
+    ProvCreateConfig 291 $DVA_MAC
+    PROV_MODIFY_DEVICE $DVA_MAC MTAFORCW_122 $DVA_MAC.bin
+    PROV_DEPLOY_DHCP
+} { PASS_STEP }
+
+
+################ Reset CM and DVA and Verify Provisioning ################
+
+DoStep "EUE_PROV_1-1-2-5_2-1" "Reset CM and DVA" {
+    set val [SNMPvN_RESET $CM_IP]
+    LogMsg "Reset of CM and DVA has passed"
+} {
+    IsEqual $val 0
+}
+
+DoStep "EUE_PROV_1-1-2-5_2-2" "pktcMTADevProvisioningState Content Verification" {
+    # Wait for a minute to let CM/DVA starting to reboot
+    actionWait "Wait 60 seconds for CM/MTA to reboot" 60
+    # Get the OID from the DVA and check it using our previously defined
+    set val [GetProvState 1 600]
+    LogMsg "MTA Provisioning State"
+    LogMsg "             - Expected : 1"
+    LogMsg "             - Received : $val"
+} {
+    IsEqual $val 1
+}
+
+##################### Change Option122, Sub-options 1&2 ##########################
+
+DoStep "EUE_PROV_1-1-2-5_3-1" "Modify CM policy with option 122, sub-options 1&2 to not respond to DVA" {
+    LogMsg "--- Modify CM Policy and Save ---"
+    # verify_signal "Modify CM policy with option 122, sub-options 1&2 to not respond to DVA(CMTC335)"
+    PROV_MODIFY_DEVICE $CM_MAC CMTC335 
+    PROV_DEPLOY_DHCP
+    LogMsg "--- Options 122, sub-options 1&2 have been modified ---"
+} {PASS_STEP}
+
+###################### START SNIFFER ########################
+
+DoStep "EUE_PROV_1-1-2-5_4-1" "Start sniffer" {
+    LogMsg "--- Start sniffer ---"
+    SetupCaptureControllerLan "host $DVA_IP || host $PROV_DHCP1_IP || host $CM_IP"
+    StartCaptureControllerLan
+} {PASS_STEP}
+
+################## RESET CM and DVA and ALLOW TIME TO PROVISION ####################
+
+DoStep "EUE_PROV_1-1-2-5_5-1" "Reset DVA" {
+    set val [SNMPvN_RESET $CM_IP]
+    LogMsg "Reset of CM and DVA has passed"
+} {
+    IsEqual $val 0
+}
+
+DoStep "EUE_PROV_1-1-2-5_6-1" "Allow 3 minutes for DVA to attempt provisioning" {
+    # Wait for 3 minutes to let CM/DVA start to reboot
+    LogMsg "DVA is attempting to reprovision, please wait"
+    actionWait "Wait 3 minutes for CM/DVA to attempt to reboot" 180
+} {PASS_STEP}
+
+###################### STOP SNIFFER ########################
+
+DoStep "EUE_PROV_1-1-2-5_7-1" "Stop sniffer" {
+    LogMsg "--- Stop sniffer ---"
+    StopCaptureControllerLan
+    SaveToFileControllerLan
+} { PASS_STEP }
+
+########################## INVOKE PARSING TOOL ##################################
+
+DoStep "EUE_PROV_1-1-2-5_8-1" "Analyze flow data" {
+    # Set up parser file
+    set PARSERFILE    $ETH_DEFAULT_TXT_FILE
+} { PASS_STEP }
+
+DoStep "EUE_PROV_1-1-2-5_8-2" "Parse data into database" {
+       # Parse data
+    set PARAMS_DHCP         "{DHCP {} {} {} {} {} {} {} {}}"
+    
+    set PARAMS_CM_SRC       "{{} {} {} {} $CM_IP {} {} {} {}}"
+    set PARAMS_CM_DST       "{{} {} {} {} {} {} {} $CM_IP {}}"
+    set msgID_CM            [ParseFile $PARSERFILE "$PARAMS_DHCP $PARAMS_CM_SRC $PARAMS_CM_DST"]
+    
+    set PARAMS_DVA_SRC      "{{} {} {} {} $DVA_IP {} {} {} {}}"
+    set PARAMS_DVA_DST      "{{} {} {} {} {} {} {} $DVA_IP {}}"
+    set msgID_DVA           [ParseFile $PARSERFILE "$PARAMS_DHCP $PARAMS_DVA_SRC $PARAMS_DVA_DST"]
+} {
+    if { $::PART_RETURN == 0 } {
+        PASS_STEP
+    } else {
+        FAIL_STEP "Cannot find data"
+    }
+}
+
+######################### VERIFY DHCP OFFER OPTION 122, SUB-OPTIONS 1&2 FROM CM  ######################
+
+DoStep "EUE_PROV_1-1-2-5_8-3" "DHCP OFFER: Sub-options 1&2 exist, but don't respond" {
+    LogMsg "Verify DHCP DHCP OFFER: Sub-options 1&2 exist, but don't respond"
+    set CONTINUE_PAST_STEP_ERROR 1
+    # Find CM MAC with colons
+    set CM_MAC_COL [AddColMac $CM_MAC]
+} {
+    # Verify DHCP OFFER is not from sub-option 1 or 2
+    set dhcp1 [GetValue $msgID_CM "INANY DHCP OFFER OPTION122SUBOPTION1" AND \
+            "OPTIONCLIENTHWADDRESS" "IS" "$CM_MAC_COL"]
+    set dhcp2 [GetValue $msgID_CM "INANY DHCP OFFER OPTION122SUBOPTION2" AND \
+                    "OPTIONCLIENTHWADDRESS" "IS" "$CM_MAC_COL"]
+    VerifyNotValue $msgID_DVA "INANY DHCP OFFER HEADERSRCIP" "IS" "$dhcp1"
+    VerifyNotValue $msgID_DVA "INANY DHCP OFFER HEADERSRCIP" "IS" "$dhcp2"
+}
+
+######################### VERIFY DHCP OFFER EXISTS, HAS DIFFERENT ADDRESS THAN 122.1/2 ###################
+
+DoStep "EUE_PROV_1-1-2-5_8-4" "DHCP REQUEST: DOES NOT EXIST" {
+    LogMsg "Verify DHCP OFFER: EXISTS, BUT NOT 122.1/2"
+    set DVA_MAC_COL [AddColMac $DVA_MAC]
+} {
+    # Verify DHCP OFFER is not 122.1/2
+    set dhcpoff [GetValue $msgID_DVA "INANY DHCP OFFER HEADERSRCIP" AND \
+            "OPTIONCLIENTHWADDRESS" "IS" "$DVA_MAC_COL"]
+    IsNotEqual $dhcpoff $dhcp1
+    IsNotEqual $dhcpoff $dhcp2
+}
+
+######################### VERIFY THERE IS NO DHCP REQUEST FROM the DVA  ##########################
+
+DoStep "EUE_PROV_1-1-2-5_8-5" "DHCP REQUEST: DOES NOT EXIST" {
+    LogMsg "Verify DHCP REQUEST: DOES NOT EXIST"
+    set DVA_MAC_COL [AddColMac $DVA_MAC]
+} {
+    # Verify DHCP REQUEST does NOT exist
+    VerifyNotValue $msgID_DVA "INANY DHCP REQUEST OPTION55" "EXISTS" "" AND \
+            "OPTIONCLIENTHWADDRESS" "IS" "$DVA_MAC_COL"
+}
+
+DoStep "EUE_PROV_1-1-2-5_8-6" "DVA Sequence" {
+    LogMsg "Verify DVA Sequence"
+    
+    # Set DVA SEQUENCE to check REPEAT of DVA DHCP DISCOVERS (5x)
+    set DVA_SEQUENCE "DHCP:DISCOVER,DHCP:OFFER,DHCP:DISCOVER,DHCP:OFFER,\
+            DHCP:DISCOVER,DHCP:OFFER,DHCP:DISCOVER,DHCP:OFFER,DHCP:DISCOVER,DHCP:OFFER"
+    # Remove whitespace
+    regsub -all { } $DVA_SEQUENCE {} DVA_SEQUENCE
+} {
+    VerifyValue $msgID_DVA "SEQUENCE $DVA_SEQUENCE" "" ""
+}
+
+##################### RESTORE VALUE FOR SUBOPTION IN DVA ##########################
+
+DoStep "EUE_PROV_1-1-2-5_10-1" "Restore values for option 122, sub-options 1&2 in CM policy" {
+    LogMsg "--- Modify CM Policy and Save ---"
+    # verify_signal "Restore values for option 122, sub-options 1&2 in CM policy(CMFORCW_122)"
+    PROV_MODIFY_DEVICE $CM_MAC CMFORCW_122
+    PROV_DEPLOY_DHCP
+    LogMsg "--- Option 122, sub-options 1&2 have been restored ---"
+} {PASS_STEP}
+
+################ Reset CM and DVA and Verify Provisioning ################
+
+DoStep "EUE_PROV_1-1-2-5_10-2" "Reset CM and DVA" {
+    set val [SNMPvN_RESET $CM_IP]
+    LogMsg "Reset of CM and DVA has passed"
+} {
+    IsEqual $val 0
+}
+
+DoStep "EUE_PROV_1-1-2-5_10-3" "pktcMTADevProvisioningState Content Verification" {
+    # Wait for a minute to let CM/DVA starting to reboot
+    actionWait "Wait 60 seconds for CM/DVA to reboot" 60
+    # Get the OID from the DVA and check it using our previously defined
+    set val [GetProvState 1 600]
+    LogMsg "DVA Provisioning State"
+    LogMsg "             - Expected : 1"
+    LogMsg "             - Received : $val"
+} {
+    IsEqual $val 1
+}
+
+################################################################################
+# Cleanup
+################################################################################
+Cleanup
+return 0
+
+
+

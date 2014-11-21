@@ -1,0 +1,171 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-UE 1.1.5.3" 
+	descrip="No Keep-Alive Mechanism" 
+	number="RST-UE 1.1.5.3" inspector="disable">
+	
+	<template file="./templates/UERegAndSubTemp.xml" name="Registrar"/>
+	<template file="./templates/CallOrigAtUETemp.xml" name="UE1"/>
+	
+	<remove_from fsm="Registrar">
+		<state ID="Registered" sub="prelude"/>
+	</remove_from>
+	
+	<remove_from fsm="UE1">
+		<state ID="Connected"/>
+	</remove_from>
+	
+	<add_to fsm="Registrar">
+		<state ID="Registered" sub="prelude">
+			<var name="stun_rcvd">
+				<expr>F</expr>
+			</var>
+			<generate event="Branch1Event" fsm="STUN"/>
+			<send protocol="sip" msgtype="200-Register"/>
+			<generate event="Registered" fsm="UE1"/>
+		</state>
+	</add_to>
+	
+	<add_to fsm="UE1">
+		<transition from="OffHook" to="VerifyDialTone" event="OffHookComplete"/>
+		
+		<state ID="VerifyDialTone">
+			<prelude>
+				<send protocol="utility" msgtype="VerifyDialTone"/>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="utility">Response</msg_ref>
+						<expr>VerifyDialToneComplete</expr>
+					</eq>
+					<then>
+						<verify step="2" requirements="REQ23121, REQ23122">
+							<eq>
+								<msg_ref type="utility">Response</msg_ref>
+								<expr>VerifyDialToneComplete</expr>
+							</eq>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<transition to="OnHook1" event="VerifyDialToneComplete"/>
+			<transition to="END" event="VerifyDialToneError"/>
+		</state>
+		
+		<state ID="OnHook1">
+			<prelude>
+				<send protocol="utility" msgtype="OnHook"/>
+				
+			</prelude>
+			<postlude>
+				<log promptUser="true" expr="Unplug the coax cable from the DUT."/>
+			</postlude>
+			<transition to="OffHook2" event="OnHookComplete"/>
+		</state>
+		
+		<state ID="OffHook2">
+			<prelude>
+				<send protocol="utility" msgtype="OffHook"/>
+			</prelude>
+			<transition to="VerifyDialTone2" event="OffHookComplete"/>
+		</state>
+		
+		<state ID="VerifyDialTone2">
+			<prelude>
+				<send protocol="utility" msgtype="VerifyDialTone">
+					<mod modtype="replace" hdr="voiceExpected">
+						<expr>no</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="utility">Response</msg_ref>
+						<expr>VerifyDialToneComplete</expr>
+					</eq>
+					<then>
+						<verify step="3" requirements="REQ23121, REQ23122">
+							<eq>
+								<msg_ref type="utility">Response</msg_ref>
+								<expr>VerifyDialToneComplete</expr>
+							</eq>
+						</verify>
+						<log promptUser="true" expr="Plug coax cable back into DUT."/>
+					</then>
+				</if>
+			</response>
+			<transition to="Setup" event="VerifyDialToneComplete"/>
+			<transition to="END" event="VerifyDialToneError"/>
+		</state>
+		
+		<state ID="Connected" timer="20000">
+			<prelude>
+				<verify step="1" requirements="REQ23121, REQ23122">
+					<eq>
+						<var_ref name="stun_rcvd"/>
+						<expr>F</expr>
+					</eq>
+				</verify>
+				<generate event="Branch2Event" fsm="STUN"/>
+			</prelude>
+			<!-- Transitions for Connected state -->
+			<transition to="Releasing" event="TimerExpired"/>
+		</state>
+	</add_to>
+	
+	<fsm name="Stun">
+		<models>
+			<stun/>
+		</models>
+		
+		<NE sim_type="term" elements="SCSCF1 PCSCF1" targets="PCSCF1"/>
+		
+		<states initialstate="WaitReg">
+			<state ID="WaitReg">
+				<transition to="NoBindingReq" event="Branch1Event"/>
+			</state>
+			
+			<state ID="NoBindingReq">
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="stun">Request</msg_ref>
+							<expr>BindingRequest</expr>
+						</eq>
+						<then>
+							<assign name="stun_rcvd">
+								<expr>T</expr>
+							</assign>
+							<send protocol="stun" msgtype="BindingResponse"/>
+						</then>
+					</if>
+				</response>
+				<transition to="NoBindingReq" event="BindingRequest"/>
+				<transition to="Complete" event="Branch2Event"/>
+			</state>
+			
+			<state ID="Complete" ES="true"/>
+				
+		</states>
+	</fsm>
+</pc2xml>

@@ -1,0 +1,154 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	PCPCII-99 : Reduce the timers in HookFlash2 and DialUE2 to 2 seconds as there can be issues with
+		the short digit timer if it is greater than 4 seconds. (ghassler 1/5/09)
+	PCPCII-139 : Update the Voicetronix modifiers to use the new values. (ghassler 07/10/2009)
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-UE 1.5.3.2" 
+	descrip="Call Hold – held party disconnects " 
+	number="RST-UE 1.5.3.2">
+	
+	<template file="./templates/CallTermAtUETemp.xml" name="UE1"/>
+	<template file="./templates/CallOrigAtUETemp.xml" name="UE2"/>
+
+	<add_to fsm="UE2">
+		<states initialstate="WaitSucceed"/>
+		<state ID="WaitSucceed">
+			<transition to="Setup" event="SucceedEvent"/>
+		</state>
+	</add_to>
+
+	<remove_from fsm="UE1">
+		<state ID="Connected"/>
+	</remove_from>
+
+	<remove_from fsm="UE2">
+		<NE elements="UE1" targets="UE1"/>
+		<state ID="Setup" sub="prelude"/>
+		<state ID="Connected"/>
+	</remove_from>
+
+	<add_to fsm="UE1">
+		<state ID="Connected">
+			<prelude once="true">
+				<!-- Step 2 of test case 1.5.3.2 - -->
+				<send protocol="sip" msgtype="ACK"/>
+				<sleep time="3000"/>
+				<send protocol="utility" msgtype="HookFlash"/>
+			</prelude>
+			<transition to="Connected" event="OffHookComplete"/>
+			<transition to="HookFlash1" event="HookFlashComplete"/>
+		</state>
+		
+		<state ID="HookFlash1">
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>REInvite</expr>
+					</eq>
+					<then>
+						<!-- Step 2 of test case 1.5.3.2 - -->
+						<send protocol="sip" msgtype="100-INVITE"/>
+						<send protocol="sip" msgtype="200-INVITE"/>
+					</then>
+				</if>
+			</response>
+			<transition to="HookFlash2" event="REInvite"/>
+		</state>
+		
+		<state ID="HookFlash2">
+			<response>
+				<if>
+					<!-- Step 2 of test case 1.5.3.2 - -->
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>ACK</expr>
+					</eq>
+					<then>
+						<sleep time="3000"/>
+						<!-- Step 3 of test case 1.5.3.2 - -->
+						<send protocol="utility" msgtype="DialDigits">
+							<mod modtype="add" hdr="number">
+								<expr>*52</expr>
+							</mod>
+						</send>
+						<generate event="SucceedEvent" fsm="UE2"/>
+						<sleep time="2000"/>
+					</then>
+				</if>
+			</response>
+			<transition to="DialUE2" event="DialDigitsComplete"/>
+			<transition to="HookFlash2" event="ACK"/>
+		</state>
+		
+		<state ID="DialUE2">
+			<prelude once="true">
+				<send protocol="utility" msgtype="DialDigits">
+					<mod modtype="add" hdr="number">
+						<expr>303</expr>
+					</mod>
+				</send>
+				<sleep time="2000"/>
+				<send protocol="sip" msgtype="BYE"/>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Response</msg_ref>
+						<expr>200-BYE</expr>
+					</eq>
+					<then>
+						<verify step="5" requirements="REQ13806">
+							<eq>
+								<msg_ref type="sip">Response</msg_ref>
+								<expr>200-BYE</expr>
+							</eq>
+							<then>
+								<send protocol="utility" msgtype="DialDigits">
+									<mod modtype="add" hdr="number">
+										<expr>5551212</expr>
+									</mod>
+								</send>
+							</then>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<transition to="EndSession" event="200-BYE"/>
+			<transition to="DialUE2" event="DialDigitsComplete"/>
+		</state>
+		
+		<state ID="EndSession" ES="True" offHookOK="true"/>
+	</add_to>
+	
+	<add_to fsm="UE2">
+		<NE elements="UE2" targets="UE2 3035551212"/>
+		<state ID="Connected" timer="20000">
+			<prelude>
+				<verify step="5" requirements="REQ13807">
+					<eq>
+						<msg_ref type="sip" msg_instance="last">Response</msg_ref>
+						<expr>200-INVITE</expr>
+					</eq>
+				</verify>
+			</prelude>
+			<transition to="Releasing" event="TimerExpired"/>
+		</state>
+	</add_to>
+</pc2xml>

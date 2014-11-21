@@ -1,0 +1,176 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+ Change History: (Author & Date)
+-->
+<pc2xml version="$Revision: 7768 $"
+        name="EUE Prov 1.1.2.8"
+        descrip="eUE fails provision when value provided for SNMP entity in sub-option 3
+                 is not known to the KDC but is resolvable in DNS."
+        number="EUE Prov 1.1.2.8">
+
+    <template file="./templates/EUE_Prov_B_1_1_1.xml" name="SubOpt3_KRB"/>
+	<remove_from fsm="SubOpt3_KRB">
+		<state ID="Reboot"/>
+	</remove_from>
+	
+    <add_to fsm="SubOpt3_KRB">
+		<!-- Before we reboot, set pktcMtaDevResetKrbTickets MIB to value of invalidateProvOnReboot=1 SNMPv3 -->
+        <state ID="Reboot">
+            <prelude>
+				<log promptUser="true" expr="Make sure the eUE is in a normal running state where the eUE can receive SNMPv3."/>
+                <send protocol="utility" msgtype="SNMPSet">
+                    <mod modtype="add" hdr="array">
+                        <var_expr>
+                            <expr>varBind 1 1 3 \r\n ][ , </expr>
+							<expr>PKTC-IETF-MTA-MIB::pktcMtaDevResetKrbTickets.0,BITS,1][\r\n</expr>
+                        </var_expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+                    <mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="6">
+                    <contains>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>1</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="realReboot" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+		
+		<state ID="realReboot" timer="5000">
+		<!-- We can now power cycle the UE to conduct the test -->
+			<prelude once="true" >
+				<send protocol="utility" msgtype="SNMPSet">
+					<mod modtype="add" hdr="array">
+						<var_expr>
+							<expr>varBind 1 1 3 \r\n ][ , </expr>
+							<expr>DOCS-CABLE-DEVICE-MIB::docsDevResetNow.0,INTEGER,1][\r\n</expr>
+						</var_expr>
+					</mod>
+					<mod modtype="replace" hdr="agentip">
+						<msg_ref type="platform">DUT.CM IP Address</msg_ref>
+					</mod>
+					<!-- Always use version 2 for a CM reset -->
+					<mod modtype="replace" hdr="version">
+						<expr>2c</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="utility">Response</msg_ref>
+						<expr>SNMPRespFailure</expr>
+					</eq>
+					<then>
+						<fail/>
+					</then>
+				</if>
+				<if>
+					<or>
+						<eq>
+							<msg_ref type="sip">REGISTER.Contact.expires</msg_ref>
+							<expr>0</expr>
+						</eq>
+						<eq>
+							<msg_ref type="sip">REGISTER.Expires.value</msg_ref>
+							<expr>0</expr>
+						</eq>
+					</or>
+					<then>
+						<send protocol="sip" msgtype="200-REGISTER"/>
+					</then>
+				</if>
+			</response>
+			<!-- Test cases deriving their functionality from this template
+				should change the following transition to some local state -->
+			<transition to="realReboot" event="SNMPResp"/>
+			<transition to="StartCapture_RebootWait" event="TimerExpired"/>
+			<transition to="END" event="SNMPRespFailure"/>
+			<transition to="realReboot" event="REGISTER"/>
+		</state>
+				
+        <transition from="StartCapture_RebootWait" to="VerifyMessaging" event="TimerExpired"/>
+		
+        <!-- 7, 11 eUE does not send AP-REQ; instead, additional AS-REQ. -->
+        <!-- 10 AS-REP must contain an error message -->
+        <state ID="VerifyMessaging">
+            <prelude once="true">
+				<sleep time="120000"/>
+                <stop_capture/>
+
+                <parse_capture name="eUE_KERB">
+                    <parser_filter protocol="kerberos" ip="DUT.IP"/>
+                </parse_capture>
+				<parse_capture name="eUE_PKTC">
+                    <parser_filter protocol="pktc" ip="DUT.IP"/>
+                </parse_capture>
+				<parse_capture name="eUE_SNMP">
+                    <parser_filter protocol="snmp" ip="DUT.IP"/>
+                </parse_capture>
+				<parse_capture name="eUE_TFTP">
+                    <parser_filter protocol="tftp" ip="DUT.IP"/>
+                </parse_capture>
+				
+				<verify step="7">
+					<and>
+						<null>
+							<capture_ref type="snmp" name="eUE_SNMP">Inform Request.msgGlobalData.msgID</capture_ref>
+						</null>
+						<null>
+							<capture_ref type="tftp" name="eUE_TFTP">Data Packet.opcode</capture_ref>
+						</null>
+					</and>
+				</verify>
+				
+				<!-- Currently the Wireshark cannot decode the Kerberos Response Message -->
+				<!--verify step="10">
+					<eq>
+						<capture_ref type="kerberos" name="eUE_KERB">AS-REP</capture_ref>
+                        <expr>KRB_ERROR</expr>
+                    </eq>
+				</verify-->
+                <verify step="11">
+					<and>
+						<null>
+							<capture_ref type="pktc" name="eUE_PKTC">AP-REQ</capture_ref>
+						</null>
+						<!-- the PCSim2 Version: 1.0.0-beta   build: 8283 has a bug parsing kerberos data, therefore using different 
+						method for verifying AS-REQ message-->
+						<!--notnull>
+							<capture_ref type="kerberos" name="eUE_KERB" msg_instance="2">AS-REQ.msg.type</capture_ref>
+						</notnull-->
+						<and>
+							<eq>
+								<capture_ref type="kerberos" name="eUE_KERB" msg_instance="2">AS-REQ.ipv6.src_host.show</capture_ref>
+								<msg_ref type="platform">DUT.IP</msg_ref>
+							</eq>
+							<eq>
+								<capture_ref type="kerberos" name="eUE_KERB" msg_instance="2">AS-REQ.ipv6.dst_host.show</capture_ref>
+								<msg_ref type="platform">DUT.KDC IP Address</msg_ref>
+							</eq>
+						</and>
+					</and>
+                </verify>
+				<generate event="SucceedEvent"/>
+            </prelude>
+			<transition to="END" event="SucceedEvent"/>
+        </state>
+    </add_to>
+</pc2xml>

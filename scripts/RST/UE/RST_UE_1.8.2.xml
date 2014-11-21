@@ -1,0 +1,152 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-UE 1.8.2" 
+	descrip="Operator Services (Busy Line Verification and Operator Interrupt): Disabled" 
+	number="RST-UE 1.8.2">
+	
+	<template file="./templates/CallOrigAtUETemp.xml" name="UE1"/>
+	<template file="./templates/CallTermAtUETemp.xml" name="Operator"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Setup"/>
+		<state ID="Connected"/>
+		<state ID="OnHook"/>
+		<state ID="Releasing"/>
+	</remove_from>
+
+	
+	<add_to fsm="UE1">
+		<state ID="Setup">
+			<prelude once="true">
+				<send protocol="utility" msgtype="DialDigits">
+					<mod modtype="add" hdr="number">
+						<msg_ref type="platform">UE1.phone number 1</msg_ref>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>Invite</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="100-INVITE"/>
+					</then>
+				</if>
+				<!-- This set of tests determines whether to send 183 with Answer
+						 or a 180 to the INVITE -->
+				<if>
+					<and>
+						<eq>
+							<msg_ref type="extensions">precondition</msg_ref>
+							<expr>require</expr>
+						</eq>
+						<or>
+							<contains>
+								<msg_ref type="sip" hdr_instance="any">Invite.Require</msg_ref>
+								<expr>precondition</expr>
+							</contains>
+							<contains>
+								<msg_ref type="sip" hdr_instance="any">Invite.Supported</msg_ref>
+								<expr>precondition</expr>
+							</contains>
+						</or>
+					</and>
+					<then>
+						<!--Sending 183-Invite with answer-->
+						<sleep time="200"/>
+						<send protocol="sip" msgtype="183-Invite"/>
+					</then>
+					<elseif>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>Invite</expr>
+						</eq>
+						<then>
+							<!--Sending 180-Invite with SS not supporting precondition.-->
+							<sleep time="200"/>
+							<send protocol="sip" msgtype="180-Invite"/>
+						</then>
+					</elseif>
+				</if>
+			</response>
+			<transition to="Setup" event="DialDigitsComplete"/>
+			<transition to="Alerting" event="INVITE"/>
+		</state>
+		
+		<state ID="Connected">
+			<prelude>
+				<generate event="SucceedEvent" fsm="Operator"/>
+			</prelude>
+			<transition to="OnHook" event="Branch3Event"/>
+		</state>
+		
+		<state ID="OnHook">
+			<prelude>
+				<send protocol="utility" msgtype="OnHook"/>
+			</prelude>
+			<transition to="WaitBye" event="OnHookComplete"/>
+		</state>
+		
+		<state ID="WaitBye">
+			<transition to="END" event="BYE"/>
+		</state>
+			
+	</add_to>
+	
+	<remove_from fsm="Operator">
+		<NE elements="UE1" targets="UE1"/>
+	</remove_from>
+		
+	<add_to fsm="Operator">
+		<NE elements="UE2" targets="UE2"/>
+		<states initialstate="WaitForSucceedEvent"/>
+		
+		<state ID="WaitForSucceedEvent">
+			<transition to="Subscribe" event="SucceedEvent"/>
+		</state>
+		
+		<state ID="Subscribe">
+			<prelude>
+				<send protocol="sip" msgtype="Subscribe" subscribeType="dialog">
+					<mod modtype="add" hdr="P-Asserted-Identity">
+						<expr>&lt;operator ID&gt;</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="2" requirements="REQ14024">
+					<eq>
+						<msg_ref type="sip">Response</msg_ref>
+						<expr>403-Subscribe</expr>
+					</eq>
+					<then>
+						<generate event="Branch3Event" fsm="UE1"/>
+					</then>
+				</verify>
+			</response>
+			<transition to="EndCall" event="403-Subscribe"/>
+		</state>
+		
+		<state ID="EndCall" ES="true" offHookOK="true"/>
+	</add_to>
+</pc2xml>

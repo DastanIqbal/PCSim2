@@ -1,0 +1,165 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	PCPCII-139 : Update the Voicetronix modifiers to use the new values. (ghassler 07/10/2009)
+	PCPCII-148 : Add once parameter to the prelude in Setup to correct endless loop issue (ghassler 11/02/2009)
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="SIP-UE 1.20.1" 
+	descrip="Tel-URI global form" 
+	number="SIP-UE 1.20.1">
+	
+	<template file="./templates/CallOrigAtUETemp.xml" name="UE1"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Setup"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<NE targets="8008888888"/>
+		<state ID="Setup">
+			<prelude once="true">
+				<send protocol="utility" msgtype="DialDigits">
+					<mod modtype="add" hdr="number">
+						<expr>8008888888</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>INVITE</expr>
+					</eq>
+					<then>
+						<var name="uri">
+							<msg_ref type="sip">Invite.Request-Line.Request-URI</msg_ref>
+						</var>
+						<!-- Step 2 & 3  of test case 1.20.1 - 
+									Verify that the tel URI is using global form. 
+									(The phone-number parameter returns value after tel:+
+									 therefore it must begin with +.)
+									Verify that it has country and national numbers:  -->
+						<verify step="2" requirements="RFC1834">
+							<contains>
+								<msg_ref type="sip">INVITE.Request-Line.Request-URI</msg_ref>
+								<expr>tel:+</expr>
+							</contains>
+						</verify>
+						<verify step="3" requirements="RFC1838">
+							<contains>
+								<msg_ref type="sip">INVITE.Request-Line.Request-URI</msg_ref>
+								<expr>tel:+1</expr>
+							</contains>
+						</verify>
+						<verify step="3" requirements="RFC1838">
+							<and>
+								<contains>
+									<msg_ref type="sip">INVITE.Request-Line.Request-URI</msg_ref>
+									<expr>tel:+1</expr>
+								</contains>
+								<contains>
+									<msg_ref type="sip">INVITE.Request-Line.Request-URI</msg_ref>
+									<expr>800</expr>
+								</contains>
+							</and>
+						</verify>
+						<verify step="4" requirements="RFC1830">
+							<and>
+								<dnc>
+									<var_ref name="uri"/>
+									<expr>%3B</expr>
+								</dnc>
+							<and>
+								<dnc>
+									<var_ref name="uri"/>
+									<expr>%3D</expr>
+								</dnc>
+							<and>
+								<dnc>
+									<var_ref name="uri"/>
+									<expr>%3F</expr>
+								</dnc>
+							<and>
+								<dnc>
+									<var_ref name="uri"/>
+									<expr>%2B</expr>
+								</dnc>
+							<and>
+								<dnc>
+									<var_ref name="uri"/>
+									<expr>%3b</expr>
+								</dnc>
+							<and>
+								<dnc>
+									<var_ref name="uri"/>
+									<expr>%3d</expr>
+								</dnc>
+							<and>
+								<dnc>
+									<var_ref name="uri"/>
+									<expr>%3f</expr>
+								</dnc>
+								<dnc>
+									<var_ref name="uri"/>
+									<expr>%2b</expr>
+								</dnc>
+							</and>
+							</and>
+							</and>
+							</and>
+							</and>
+							</and>
+							</and>
+						</verify>
+						
+						<!-- Step 8  of test case 1.20.1 - 
+									Verify the Request-URI in the INVITE doesn't contain a 
+									space character. -->
+						<verify step="8" requirements="RFC1837">
+							<dnc>
+								<var_ref name="uri"/>
+								<expr> </expr>
+							</dnc>
+						</verify>
+						<!-- Step 5  of test case 1.20.1 - 
+							Verify that, if the characters below are
+							part of a parameter value, that they are
+							percent encoded:
+								'+', ';', '=', and ? -->
+						<!-- The $uri will be replaced by the variable defined above.
+									 NOTE the $uri must have a space immediately after it for the syntax to
+									 work properly. -->
+						<log promptUser="true" verify="true" yesExpected="false" step="5" requirements="RFC1831" 
+						expr="\n\tRequest-URI = $uri \n\nDoes a +, ;, =, or ? character appear in the value of any parameter in the URI?"/>
+						<!-- Step 6  of test case 1.20.1 - 
+							Verify that the following parameters, isdn-address (isub), extension (ext), 
+							pname (pname), and context (phone-context) only appear once: -->
+						<log promptUser="true" verify="true" step="6" requirements="RFC1832"
+						expr="\n\tRequest-URI = $uri \n\nDoes each of the following parameters:\n\t\tisub,\n\t\text,\n\t\tphone-context,\n\t\t and pname\nappear no more than once in the Request-URI?"/>
+						<!-- Step 7  of test case 1.20.1 - 
+							Verify that the following parameters, isdn-address (isub), extension (ext), 
+							pname (pname), and context (phone-context) only appear once: -->
+						<log promptUser="true" verify="true" step="7" requirements="RFC1833"
+							expr="\n\tRequest-URI = $uri \n\nAre the following parameter in the proper order if present in the Request-URI?\n\t1. The isub or ext parameter appears first?\n\t2. Followed by the phone-context parameter?\n\t3. Followed any other parameters in lexicographical order?\n"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Setup" event="DialDigitsComplete"/>
+			<transition to="END" event="INVITE"/>
+		</state>
+	</add_to>
+</pc2xml>

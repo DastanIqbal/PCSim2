@@ -1,0 +1,71 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+ Change History: (Author & Date)
+
+
+
+-->
+<!-- First are the document type and the attributes for our document -->
+<pc2xml version="$Revision: 7768 $" name="EUE Prov 2.1.2.8" 
+		descrip="Ability of eUE to Provision Using Device Level Only Attributes in IPv6" 
+		number="EUE Prov 2.1.2.8">
+
+	<!-- Next we define the each of state machines -->
+	<template file="./templates/EUE_Prov_B_1_1_1.xml" name="RebootCM"/>
+	
+	<add_to fsm="RebootCM">
+		<transition from="StartCapture_RebootWait" to="VerifyBootState" event="TimerExpired"/>
+	
+		<state ID="VerifyBootState">
+			<prelude once="true">
+				<send protocol="utility" msgtype="SNMPGet">
+					<mod modtype="add" hdr="oids">
+						<expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvisioningState.0</expr>
+					</mod>
+					<mod modtype="replace" hdr="agentip">
+						<msg_ref type="platform">DUT.IP</msg_ref>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="2">
+					<contains>
+						<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+						<expr>1</expr>
+					</contains>
+				</verify>
+				
+			</response>
+			<transition to="VerifySNMP" event="SNMPResp"/>
+			<transition to="VerifySNMP" event="SNMPRespFailure"/>
+		</state>
+		
+		<state ID="VerifySNMP">
+			<prelude>
+				<stop_capture/>
+				<parse_capture name="eUE_SNMP">
+					<parser_filter protocol="snmp" ip="DUT.IP"/>
+				</parse_capture>
+
+				<verify step="3">
+					<contains>
+						<capture_ref type="snmp" name="eUE_SNMP" msg_instance="3">Inform Request.msgData.plaintext.data.informRequest.error_status.showname</capture_ref>
+						<expr>noError (0)</expr>
+					</contains>
+				</verify>
+				<generate event="Branch1Event"/>
+			</prelude>
+			<transition to="END" event="Branch1Event"/>
+		</state>
+		
+	</add_to>
+</pc2xml>

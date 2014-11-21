@@ -1,0 +1,287 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-UE 1.1.3.3" 
+	descrip=" Held Media: Held UE" 
+	number="RST-UE 1.1.3.3">
+	
+	<template file="./templates/CallOrigAtUETemp.xml" name="UE1"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Connected"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<state ID="Connected">
+			<transition to="SendReINVITE" event="DIALOG_CONFIRMED_UAS"/>
+		</state>
+		
+		<state ID="SendReINVITE">
+			<prelude once="true">
+				<sleep time="5000"/>
+				<start_capture>
+					<filter>
+						<var_expr>
+							<expr>host </expr>
+							<msg_ref type="platform">UE0.IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">Platform.STUN IP Address</msg_ref>
+						</var_expr>
+					</filter>
+				</start_capture>
+				<!-- Step 2 of test case 1.1.3.3 - -->
+				<send protocol="sip" msgtype="REINVITE">
+					<mod modtype="replace" hdr="mode" param="value">
+						<expr>inactive</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+						<expr>200</expr>
+					</eq>
+					<then>
+						<verify step="2" requirements="REQ13456, REQ13457, REQ13464">
+							<eq>
+								<msg_ref type="sdp">200-INVITE.mode.value</msg_ref>
+								<expr>inactive</expr>
+							</eq>
+						</verify>
+						<verify step="2" requirements="REQ13456, REQ13457, REQ13464">
+							<dnc>
+								<msg_ref type="sdp">200-Invite.c.address</msg_ref>
+								<expr>0.0.0.0</expr>
+							</dnc>
+						</verify>
+						<send protocol="sip" msgtype="ACK"/>
+						<stop_capture/>
+						<log promptUser="true" verify="true" yesExpected="true" step="2" requirements="REQ13456, REQ13457, REQ13464" expr="Verify in the capture file that the device is still transmitting RTCP packets."/>
+					</then>
+				</if>
+			</response>
+			<transition to="SendReINVITE" event="100-INVITE"/>
+			<transition to="SendReINVITE2" event="200-INVITE"/>
+		</state>
+		
+		<state ID="SendReINVITE2">
+			<prelude once="true">
+				<sleep time="5000"/>
+				<!-- Step 3 of test case 1.1.3.3 - -->
+				<send protocol="sip" msgtype="REINVITE">
+					<mod modtype="replace" hdr="mode" param="value">
+						<expr>sendrecv</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+						<expr>200</expr>
+					</eq>
+					<then>
+						<verify step="3" requirements="REQ13462">
+							<eq>
+								<msg_ref type="sdp">200-INVITE.mode.value</msg_ref>
+								<expr>sendrecv</expr>
+							</eq>
+						</verify>
+						<!-- Step 4 of test case 1.1.3.3 - -->
+						<send protocol="sip" msgtype="ACK"/>
+					</then>
+				</if>
+			</response>
+			<transition to="SendReINVITE2" event="100-INVITE"/>
+			<transition to="SendReINVITE3" event="200-INVITE"/>
+		</state>
+		
+		<state ID="SendReINVITE3">
+			<prelude once="true">
+				<sleep time="5000"/>
+				<!-- Step 5 of test case 1.1.3.3 - -->
+				<send protocol="sip" msgtype="REINVITE">
+					<mod modtype="replace" hdr="mode" param="value">
+						<expr>sendonly</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+						<expr>200</expr>
+					</eq>
+					<then>
+						<verify step="5" requirements="REQ13458">
+							<eq>
+								<msg_ref type="sdp">200-INVITE.mode.value</msg_ref>
+								<expr>recvonly</expr>
+							</eq>
+						</verify>
+						<!-- Step 4 of test case 1.1.3.3 - -->
+						<send protocol="sip" msgtype="ACK"/>
+					</then>
+				</if>
+			</response>
+			<transition to="SendReINVITE3" event="100-INVITE"/>
+			<transition to="SendReINVITE4" event="200-Invite"/>
+		</state>
+		
+		<state ID="SendReINVITE4">
+			<prelude once="true">
+				<sleep time="5000"/>
+				<!-- Step 6 of test case 1.1.3.3 - -->
+				<send protocol="sip" msgtype="REINVITE">
+					<mod modtype="replace" hdr="mode" param="value">
+						<expr>sendrecv</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+						<expr>200</expr>
+					</eq>
+					<then>
+						<verify step="6" requirements="REQ13462">
+							<eq>
+								<msg_ref type="sdp">200-INVITE.mode.value</msg_ref>
+								<expr>sendrecv</expr>
+							</eq>
+						</verify>
+						<!-- Step 7 of test case 1.1.3.3 - -->
+						<send protocol="sip" msgtype="ACK"/>
+					</then>
+				</if>
+			</response>
+			<transition to="SendReINVITE4" event="100-INVITE"/>
+			<transition to="SendReINVITE5" event="200-Invite"/>
+		</state>
+		
+		<state ID="SendReINVITE5">
+			<prelude once="true">
+				<sleep time="5000"/>
+				<!-- Step 8 of test case 1.1.3.3 - -->
+				<send protocol="sip" msgtype="REINVITE">
+					<mod modtype="replace" hdr="mode" param="value">
+						<expr>sendonly</expr>
+					</mod>
+					<mod modtype="replace" hdr="c" param="address">
+						<expr>0.0.0.0</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+						<expr>200</expr>
+					</eq>
+					<then>
+						<verify step="8" requirements="REQ13459">
+							<eq>
+								<msg_ref type="sdp">200-INVITE.mode.value</msg_ref>
+								<expr>recvonly</expr>
+							</eq>
+						</verify>
+						<verify step="8" requirements="REQ13459">
+							<eq>
+								<msg_ref type="sdp">200-Invite.c.address</msg_ref>
+								<expr>0.0.0.0</expr>
+							</eq>
+						</verify>
+						<!-- Step 8 of test case 1.1.3.3 - -->
+						<send protocol="sip" msgtype="ACK"/>
+					</then>
+				</if>
+			</response>
+			<transition to="SendReINVITE5" event="100-INVITE"/>
+			<transition to="SendReINVITE6" event="200-Invite"/>
+		</state>
+		
+		<state ID="SendReINVITE6">
+			<prelude once="true">
+				<sleep time="5000"/>
+				<!-- Step 9 of test case 1.1.3.3 - -->
+				<send protocol="sip" msgtype="REINVITE">
+					<mod modtype="replace" hdr="mode" param="value">
+						<expr>sendrecv</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+						<expr>200</expr>
+					</eq>
+					<then>
+						<verify step="9" requirements="REQ13462">
+							<eq>
+								<msg_ref type="sdp">200-INVITE.mode.value</msg_ref>
+								<expr>sendrecv</expr>
+							</eq>
+						</verify>
+						<!-- Step 7 of test case 1.1.3.3 - -->
+						<send protocol="sip" msgtype="ACK"/>
+					</then>
+				</if>
+			</response>
+			<transition to="SendReINVITE6" event="100-INVITE"/>
+			<transition to="SendReINVITE7" event="200-Invite"/>
+		</state>
+		
+		<state ID="SendReINVITE7">
+			<prelude once="true">
+				<sleep time="5000"/>
+				<!-- Step 10 of test case 1.1.3.3 - -->
+				<send protocol="sip" msgtype="REINVITE">
+					<mod modtype="delete" hdr="mode"/>
+					<mod modtype="replace" hdr="c" param="address">
+						<expr>0.0.0.0</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+						<expr>200</expr>
+					</eq>
+					<then>
+						<verify step="11" requirements="REQ13460">
+							<eq>
+								<msg_ref type="sdp">200-Invite.c.address</msg_ref>
+								<expr>0.0.0.0</expr>
+							</eq>
+						</verify>
+						<!-- Step 7 of test case 1.1.3.3 - -->
+						<send protocol="sip" msgtype="ACK"/>
+					</then>
+				</if>
+			</response>
+			<transition to="SendReINVITE7" event="100-INVITE"/>
+			<transition to="END" event="200-Invite"/>
+		</state>
+	</add_to>
+</pc2xml>

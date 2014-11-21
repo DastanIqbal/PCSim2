@@ -1,0 +1,74 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="SIP-UE 1.2.1.4" 
+	descrip="Unsupported value in Require header" 
+	number="SIP-UE 1.2.1.4">
+	
+	<template file="./templates/CallTermAtUETemp.xml" name="UE1"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Setup"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<state ID="Setup">
+			<prelude>
+				<send protocol="sip"  msgtype="Invite">
+					<!-- Step 1 from the test case 1.2.1.4 -the Require header 
+						value set to 100junk -->
+					<mod modtype="add" hdr="Require" param="option-tag">
+						<expr>100junk</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+						<expr>420</expr>
+					</eq>
+					<then>
+						<verify step="1" requirements="RFC401, RFC402" group="420">
+							<eq>
+								<msg_ref type="sip">420-INVITE.Unsupported.option-tag</msg_ref>
+								<expr>100junk</expr>
+							</eq>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<transition to="Receive420" event="100-INVITE"/>
+			<transition to="END" event="420-INVITE"/>
+		</state>
+		
+		<state ID="Receive420">
+			<response>
+				<verify step="1" requirements="RFC401, RFC402" group="420">
+					<eq>
+						<msg_ref type="sip">420-INVITE.Unsupported.option-tag</msg_ref>
+						<expr>100junk</expr>
+					</eq>
+				</verify>
+			</response>
+			<transition to="END" event="420-INVITE"/>
+		</state>
+	</add_to>
+</pc2xml>

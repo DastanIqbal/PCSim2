@@ -1,0 +1,246 @@
+#//*****************************************************************************
+#// Filename: E-UE-PROV_1-1-2-15.test
+#// Author:   Debra Littleton
+#// Creation Date: September 20, 2004
+#// Modified by:  Matthew Forbes
+#//               Added logic to test provisioning sequence with DNS resolution in SRV Response-4/10/08-MLF
+#//*****************************************************************************
+#// Description:
+#//     TC1154 TEST CASE PROV E-UE-PROV 1-1-2-15 Verifying that MTA clears Provisioning Application
+#//     Server Ticket saved in NVRAM
+#//     
+#// Objective:
+#//     Test the ability of the MTA to invalidate the ticket saved in NVRAM for
+#//     Application Provisioning server.
+#//
+#// PacketCable DUT:
+#//     MTA
+#//
+#// Test Steps:
+#//     - Initial Configuration: Cfg. 291, Configure DHCP server to select secure prov flow.
+#//     - Reset DUT
+#//     - Check Provisioning Sucess
+#//     - Set pktcMtaDevResetKrbTickets = invalidateAllProvOnReboot     
+#//     - Start sniffer
+#//     - Reset DUT
+#//     - Check Provisioning state of MTA
+#//     - Stop sniffer
+#//     - Invoke parsing tool and validate using Pass/Fail scripts
+#//     - Delete MTA config file
+#//
+#// Notes:
+#//     - Requires provPrimitives.tcl & tftp_primitives.tcl.
+#//     - Requires the specific config file in $BASE_CFG_FILE_PATH in Provisioning Server.
+#//     - Requires parT.tcl parsing tool to parse data from capture file.                
+#//*****************************************************************************
+global SCRIPT_VERSION
+set SCRIPT_VERSION { # $Id: E-UE-PROV_1-1-2-15.test 7406 2010-07-20 17:17:37Z dthakore $ }
+
+DoStep "E-UE-PROV_1-1-2-15-1-1" "Initialize Test Platform" {
+    Init_PROV
+    Init_CONTROLLER_LAN
+    # Initial PARSER TOOL
+    Init_PART
+} { PASS_STEP }
+
+DoStep "PROV_5-42-2-1" "Initialize Test Platform" {
+    # verify_signal "MTA security assoiciation required for this test. Has MTA SA been set?"
+} { PASS_STEP }
+
+DoStep "E-UE-PROV_1-1-2-15_3-1" "Initial configuration" {
+    LogMsg "--- Initial configuration ---"
+    # ProvCreateConfig 611 $MTA_MAC
+    PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122
+    PROV_DEPLOY_DHCP
+} { PASS_STEP }
+
+# DoStep "E-UE-PROV_1-1-2-15_4-1" "Reset MTA" {
+    # SNMP_RESET $MTA_IP
+    # LogMsg "Reset MTA has passed"
+# } {
+    # PASS_STEP
+# }
+
+
+# DoStep "E-UE-PROV_1-1-2-15_5-1" "Check MTA Prov State" {
+    # set val [WaitProvCompletion 100]
+    # LogMsg "Check MTA Prov State"
+# } {
+    # IsEqual $val 0
+# }
+
+
+DoStep "E-UE-PROV_1-1-2-15_6-1" "pktcMtaDevResetKrbTickets Reset Kerberos Tickets" {
+    # Wait for a couple of seconds to let CM/MTA finish rebooting
+    actionWait "Wait for a couple seconds before sending SNMP" 2
+    set val [SNMP_SET $oid_pktcMtaDevResetKrbTickets OCTET-STRING 0x80 $MTA_IP]
+} {
+    if {$val == 0} {
+        LogMsg "Reset Kerberos Tickets Success: Reset invalidateAllProvOnReboot"
+        PASS_STEP
+    } else {
+        FAIL_STEP "Cannot reset Kerberos tickets"
+    }
+}
+
+set msgStr "Start Sniffer"
+DoStep "E-UE-PROV_1-1-2-15_7-1" $msgStr {
+    LogMsg "--- $msgStr ---"
+    SetupCaptureControllerLan "host $MTA_IP || udp port 67 || host $CM_IP"
+    StartCaptureControllerLan
+} {PASS_STEP}
+
+# DoStep "E-UE-PROV_1-1-2-15_8-1" "Reset MTA" {
+    # SNMP_RESET $MTA_IP
+    # LogMsg "Reset MTA has passed"
+# } {
+    # PASS_STEP
+# }
+# 
+# DoStep "E-UE-PROV_1-1-2-15_9-1" "Check MTA Prov State" {
+    # set val [WaitProvCompletion 100]
+    # LogMsg "Check MTA Prov State"
+# } {
+    # IsEqual $val 0
+# }
+
+################ Reset CM and MTA and Verify Provisioning ################
+
+DoStep "E-UE-PROV_1-1-2-15_8-1" "Reboot MTA" {
+    # set val [SNMPvN_RESET $CM_IP]
+    set val [SNMP_SET $oid_pktcMtaDevResetNow INTEGER 1 $MTA_IP]
+    LogMsg "Reboot MTA has passed"
+} {
+    IsEqual $val 0
+}
+
+DoStep "E-UE-PROV_1-1-2-15_8-2" "pktcMTADevRealmisioningState Content Verification" {
+    # Wait for a minute to let CM/MTA starting to reboot
+    actionWait "Wait for CM/MTA to reboot" 30
+    # Get the OID from the MTA and check it using our previously defined
+    set val [GetProvState 1 600]
+    LogMsg "MTA Provisioning State"
+    LogMsg "             - Expected : 1"
+    LogMsg "             - Received : $val"
+} {
+    IsEqual $val 1
+}
+
+
+set msgStr "Stop Sniffer"
+DoStep "E-UE-PROV_1-1-2-15_10-1" $msgStr {    
+    LogMsg "--- $msgStr ---"
+    StopCaptureControllerLan
+    SaveToFileControllerLan
+} {PASS_STEP}
+
+########################## INVOKE PARSING TOOL ##################################
+
+DoStep "E-UE-PROV_1-1-2-15_11-1" "Analyze flow data" {
+    # Set up parser file
+    set PARSERFILE    $ETH_DEFAULT_TXT_FILE
+} { PASS_STEP }
+
+DoStep "E-UE-PROV_1-1-2-15_11-2" "Parse all data into database" {
+    # Parse data    
+    set PARAMS_DHCP         "{DHCP {} {} {} {} {} {} {} {}}"
+    set PARAMS_MTA_SRC      "{{} {} {} {} $MTA_IP {} {} {} {}}"
+    set PARAMS_MTA_DST      "{{} {} {} {} {} {} {} $MTA_IP {}}"
+    set msgID_MTA           [ParseFile $PARSERFILE "$PARAMS_DHCP $PARAMS_MTA_SRC $PARAMS_MTA_DST"]
+    
+} { 
+    if { $::PART_RETURN == 0 } {
+        PASS_STEP
+    } else {
+        FAIL_STEP "Cannot find data"
+    }
+}
+
+DoStep "E-UE-PROV_1-1-2-15_11-3" "Kerberos AS-REQ: EXISTS" {
+    LogMsg "Verify AS REQUEST EXISTS"
+} {
+    VerifyValue $msgID_MTA "INFIRST KRB KRB_AS_REQ KRB_TYPE" "EXISTS" ""
+}
+
+DoStep "E-UE-PROV_1-1-2-15_11-4" "Kerberos AS-REQ TYPE: AS-REQ" {
+    LogMsg "Verify AS REQUEST TYPE IS AS-REQ"
+} {
+    VerifyValue $msgID_MTA "INFIRST KRB KRB_AS_REQ KRB_TYPE" "IS" "AS-REQ"
+}
+
+DoStep "E-UE-PROV_1-1-2-15_12-1" "Kerberos AS-REP: EXISTS" {
+    LogMsg "Verify AS REPLY EXISTS"
+} {
+    VerifyValue $msgID_MTA "INANY KRB KRB_AS_REP KRB_TYPE" "EXISTS" ""
+}
+
+DoStep "E-UE-PROV_1-1-2-15_12-2" "Kerberos AS-REP TYPE: AS-REP" {
+    LogMsg "Verify AS REPLY TYPE IS AS-REP"
+} {
+    VerifyValue $msgID_MTA "INFIRST KRB KRB_AS_REP KRB_TYPE" "IS" "AS-REP"
+}
+
+DoStep "E-UE-PROV_1-1-2-15_13-1" "AP REQUEST: EXISTS" {
+    LogMsg "Verify AP REQUEST: EXISTS"
+} {
+    VerifyValue $msgID_MTA "INANY PKKM PKKM_TYPE PKKM_AP_REQ" "EXISTS" "" AND \
+            "PKKM_TYPE" "IS" "AP Request.*" AND \
+            "PKKM_DOI" "IS" "SNMPv3.*" AND \
+            "PKKM_VERSION" "IS" "1.0" AND \
+            "PKKM_KRB_TYPE" "IS" "AP-REQ"
+}
+
+DoStep "E-UE-PROV_1-1-2-15_13-6" "Verify MTA AS-REQ, AS-REP, AP-REQ Sequence" {
+    LogMsg "E-UE-PROV_1-1-2-15_13-6" "Verify MTA AS-REQ, AS-REP, AP-REQ Sequence"
+    
+
+    # THIS IS CASE FOR ALL PACKETS IN SEQ TO BE PRESENT, USE THIS ALSO FOR NEGATIVE TEST FOR OTHER CASES
+    set MTA_SEQUENCE_MAIN "DHCP:DISCOVER,DHCP:OFFER,DHCP:REQUEST,DHCP:ACK,\
+            DNS:DNS_QUERY_SRV,DNS:DNS_RESPONSE_SRV,DNS:DNS_QUERY_HOST,DNS:DNS_RESPONSE_HOST,\
+            KRB:KRB_AS_REQ,KRB:KRB_AS_REP,PKKM:PKKM_AP_REQ,PKKM:PKKM_AP_REP,\
+            SNMP:SNMP_INFORM,SNMP:SNMP_SET,\
+            TFTP:TFTP_READ_REQUEST,TFTP:TFTP_DATA_PACKET,TFTP:TFTP_ACKNOWLEDGEMENT,\
+            DNS:DNS_QUERY_HOST,DNS:DNS_RESPONSE_HOST,\
+            KRB:KRB_AS_REQ,KRB:KRB_AS_REP,PKKM:PKKM_AP_REQ,PKKM:PKKM_AP_REP"
+    
+    regsub -all { } $MTA_SEQUENCE_MAIN {} MTA_SEQUENCE_MAIN
+
+    #CASE WHERE TICKET FOR PROV SERVER REQUESTED
+    set MTA_SEQUENCE "DHCP:DISCOVER,DHCP:OFFER,DHCP:REQUEST,DHCP:ACK,\
+            DNS:DNS_QUERY_SRV,DNS:DNS_RESPONSE_SRV,DNS:DNS_QUERY_HOST,DNS:DNS_RESPONSE_HOST,\
+            KRB:KRB_AS_REQ,KRB:KRB_AS_REP,PKKM:PKKM_AP_REQ,PKKM:PKKM_AP_REP,\
+            SNMP:SNMP_INFORM,SNMP:SNMP_SET,\
+            TFTP:TFTP_READ_REQUEST,TFTP:TFTP_DATA_PACKET,TFTP:TFTP_ACKNOWLEDGEMENT,\
+            SNMP:SNMP_INFORM"
+    regsub -all { } $MTA_SEQUENCE {} MTA_SEQUENCE
+    
+    #CASE WHERE TICKET FOR PROV SERVER REQUESTED AND KDC IP ADDRESS IS RESOLVED IN DNS SRV RESPONSE - 4/10/08-MLF
+    set MTA_SEQUENCE1 "DHCP:DISCOVER,DHCP:OFFER,DHCP:REQUEST,DHCP:ACK,\
+            DNS:DNS_QUERY_SRV,DNS:DNS_RESPONSE_SRV,\
+            KRB:KRB_AS_REQ,KRB:KRB_AS_REP,PKKM:PKKM_AP_REQ,PKKM:PKKM_AP_REP,\
+            SNMP:SNMP_INFORM,SNMP:SNMP_SET,\
+            TFTP:TFTP_READ_REQUEST,TFTP:TFTP_DATA_PACKET,TFTP:TFTP_ACKNOWLEDGEMENT,\
+            SNMP:SNMP_INFORM"
+    regsub -all { } $MTA_SEQUENCE1 {} MTA_SEQUENCE1
+    
+            
+        VerifyNotValue $msgID_MTA "SEQUENCE $MTA_SEQUENCE_MAIN" "" ""
+    # Check both sequences based on DNS resolution either in SRV or not - 4/10/08-MLF    
+        set val1 [VerifyValue $msgID_MTA "SEQUENCE $MTA_SEQUENCE" "" ""]
+        set val2 [VerifyValue $msgID_MTA "SEQUENCE $MTA_SEQUENCE1" "" ""]
+            
+} {
+    # Verify MTA Sequence
+    # IsEqual $status_val 0
+    # Check both sequences based on DNS resolution either in SRV or not - 4/10/08-MLF
+        if {$val1 == 0 || $val2 == 0} {
+            PASS_STEP
+        } else {
+            FAIL_STEP
+        }
+}
+
+################################################################################
+# Cleanup
+################################################################################
+Cleanup

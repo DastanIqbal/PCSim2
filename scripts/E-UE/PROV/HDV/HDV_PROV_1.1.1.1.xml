@@ -1,0 +1,22 @@
+<?xml version="1.0"?>
+<!--
+######################################################################################
+##                                                                                  ##
+## (c) 2009 Cable Television Laboratories, Inc.  All rights reserved.  Any use      ##
+## of this documentation/package is subject to the terms and conditions of the      ##
+## CableLabs License provided to you on download of the documentation/package       ##
+## and also available at www.cablemodem.com.                                        ##
+##                                                                                  ##
+######################################################################################
+
+
+ Change History: (Author & Date)
+
+-->
+<!-- First are the document type and the attributes for our document -->
+<pc2xml version="$Revision: 7406 $" name="HDV_Prov_1.1.1.1" 
+	descrip="Secure Provisioning" 
+	number="HDV_Prov_1.1.1.1">
+
+	<template file="./templates/EUE_Prov_B_2_2_1.xml" name="SecureUE"/>
+</pc2xml>

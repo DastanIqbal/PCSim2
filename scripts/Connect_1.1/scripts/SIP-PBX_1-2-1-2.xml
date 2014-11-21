@@ -1,0 +1,199 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	2011-11-15	Seung Lee - final versionfor
+
+
+
+
+-->
+<pc2xml version="$Revision: 1 $" 
+	name="SIP-PBX 1.2.1.2" 
+	descrip="Presence of Privacy Header in INVITE Message for Caller ID (Trusted Network)" 
+	number="SIP-PBX 1.2.1.2" >
+
+<template file="./templates/Proxy_mod4ESG.xml" name="UE1"/>
+	<remove_from fsm="UE1">
+		<state ID="Register"/>
+		<state ID="OffHook"/>
+		<state ID="Setup"/>
+		<state ID="Connected"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		
+		<states initialstate="Register">
+			<state ID="Register">
+				<prelude>
+					<start_capture>
+						<filter>
+							<var_expr>
+								<expr>host </expr>
+								<msg_ref type="platform">UE0.IP</msg_ref>
+								<expr> || host </expr>
+								<msg_ref type="platform">UE0.IP2</msg_ref>
+								<expr> || host </expr>
+								<msg_ref type="platform">PCSCF1.IP</msg_ref>
+								<expr> || host </expr>
+								<msg_ref type="platform">UE1.IP</msg_ref>
+							</var_expr>
+						</filter>
+					</start_capture>
+				</prelude>
+				<postlude>
+					<sleep time="3000"></sleep>
+				</postlude>
+				<transition to="OffHook" event="Registered"/>
+			</state>
+			
+				<!-- CALL -->
+			<state ID="OffHook">
+				<prelude>
+					<log promptUser="True" expr="Make sure the phone number 1 is set to 'Anonymous' and the phone number 2 is set to the actual number of the extension in DUT config file."/>
+					<!-- Step 1 test case SIP-PBX 1.2.1.2-->
+					<!-- We provide 1 sec gap between OnHook and OffHook-->
+					<sleep time="1000"/>
+					<send protocol="utility" msgtype="OffHook"/>
+				</prelude>
+				<!-- transition to="Call" event="OffHookComplete"/-->
+				<transition to="Setup" event="OffHookComplete"/>
+				<!--transition to="Setup" event="DialDigitsComplete"/>
+				<transition to="Setup" event="INVITE"/-->
+			</state>
+			
+			<!-- Call State -->
+			<state ID="Setup">
+				<prelude once="true">
+					<var name="phone_number">
+						<var_expr>
+							<expr>*67 </expr>
+							<msg_ref type="platform">UE1.phone number 1</msg_ref>									
+						</var_expr>	
+					</var>
+					<send protocol="utility" msgtype="DialDigits">
+						<mod modtype="add" hdr="number">
+							<var_ref name="phone_number"/>
+						</mod>
+					</send>
+				</prelude>
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>INVITE</expr>
+						</eq>
+						<then>	
+							<!-- Step 2 test case SIP-PBX 1.2.1.2-->
+							<verify step="2" requirements="REQ24252">
+										<eq>
+											<!-- msg_ref type="sip">Invite.Privacy.priv-value</msg_ref-->
+											<msg_ref type="sip">Invite.Privacy</msg_ref>
+											<expr>id</expr>
+										</eq>
+							</verify>	
+	
+								<!-- Step 3 test case SIP-PBX 1.2.1.2-->
+								<verify step="3" requirements="REQ24251, REQ24252">
+								<!--or-->
+									<eq ignoreCase="true">
+										<msg_ref type="sip">Invite.From.name-addr</msg_ref>
+										<expr>"Anonymous" &lt;sip:anonymous@anonymous.invalid&gt;</expr>
+									</eq>	
+									<!--eq>
+										<msg_ref type="sip">Invite.From.name-addr</msg_ref>
+										<expr>"Anonymous"&lt;sip:anonymous@redlab.com&gt;</expr>
+									</eq>
+								</or-->
+							</verify>
+	
+							<!-- Step 4 test case SIP-PBX 1.2.1.2-->
+							<verify step="4" requirements="REQ24249">
+									<var name="header1">
+										<var_expr>
+											<expr>sip:+1</expr>
+											<msg_ref type="platform">UE0.phone number 1</msg_ref>
+											<expr>@</expr>
+											<msg_ref type="platform">UE0.domain</msg_ref>
+											<expr>;user=phone</expr>
+										</var_expr>
+									</var>
+									<var name="header2">
+										<var_expr>
+												<expr>tel:+1</expr>
+												<msg_ref type="platform">UE0.phone number 1</msg_ref>									
+										</var_expr>	
+									</var>		
+								<or>
+									<contains>
+										<msg_ref type="sip">Invite.P-Asserted-Identity</msg_ref>
+										<var_ref name="header1"/>
+									</contains>	
+									<contains>
+										<msg_ref type="sip">Invite.P-Asserted-Identity</msg_ref>
+										<var_ref name="header2"/>
+									</contains>
+								</or>
+							</verify>
+							<proxy target="UE1"/>								
+						</then>
+					<elseif>
+						<or>
+							<eq>
+								<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE1.IP</msg_ref>
+							</eq>
+							<eq>
+								<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE1.IP</msg_ref>
+							</eq>
+						</or>
+						<then>
+							<proxy target="UE0"/>
+						</then>
+					</elseif>
+						<elseif>
+							<or>
+								<eq>
+									<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+									<msg_ref type="platform">UE0.IP</msg_ref>
+								</eq>
+								<eq>
+									<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+									<msg_ref type="platform">UE0.IP</msg_ref>
+								</eq>
+							</or>
+							<then>
+								<proxy target="UE1"/>
+							</then>
+					</elseif>
+				</if>
+				</response>
+				<transition to="Setup" event="DialDigitsComplete"/>
+				<transition to="Setup" event="INVITE"/>
+				<transition to="Alerting" event="CANCEL"/>
+				<transition to="Alerting" event="xxx-INVITE"/>
+				<transition to="Setup" event="OffHookComplete"/>
+			</state>
+			<state ID="Connected" timer="10000">
+				<!-- Step 5 test case SIP-PBX 1.2.1.2-->
+				<prelude>
+					<log promptUser="True" yesExpected="True" verify="True" 
+									step="5" requirements="REQ, REQ" 
+									expr="Check Caller ID display on UE1: should say 'anonymous'"/>
+				</prelude>
+				<transition to="OnHook" event="TimerExpired"/>
+			</state>
+			<state ID="EndCall" ES="true"/>
+		</states>
+	</add_to>
+</pc2xml>	

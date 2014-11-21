@@ -1,0 +1,102 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+
+<pc2xml version="$Revision: 6076 $" name="UT_SEC_UE_1.1.9" descrip="This is a unit test for test script SEC_UE_1.1.9 " number="3">
+	<fsm name="UE0">
+		<models>
+			<register/>
+		</models>
+		<NE sim_type="term" elements="DUT" targets="UE0 DUT"/>
+		<states initialstate="Register">
+			<!-- REGISTER State -->
+			<state ID="Register">
+				<prelude>
+					<sleep time="5000"/>
+					<send protocol="sip" msgtype="Register" target="PCSCF1" originator="DUT"/>
+				</prelude>
+				<transition to="Digest" event="401-Register"/>
+				<transition to="Subscribe" event="200-Register"/>
+			</state>
+			<state ID="Digest">
+				<prelude>
+					<send protocol="sip" msgtype="Register" target="PCSCF1" originator="DUT"/>
+				</prelude>
+				<transition to="Subscribe" event="200-Register"/>
+			</state>
+			<!-- Subscribe State -->
+			<state ID="Subscribe" timer="5000">
+				<prelude>
+					<send protocol="sip" msgtype="Subscribe" target="PCSCF1" originator="DUT"/>
+				</prelude>
+				<transition to="Register1" event="TimerExpired"/>
+			</state>
+			<state ID="Register1">
+				<prelude>
+					<sleep time="5000"/>
+					<send protocol="sip" msgtype="Register" target="PCSCF1" originator="DUT" />
+					 
+				</prelude>
+				<transition to="Register2" event="401-Register"/>
+				
+			</state>
+			<state ID="Register2">
+				<prelude>
+					<!--sleep time="5000"/-->
+					<send protocol="sip" msgtype="Register" target="PCSCF1" originator="DUT">
+					<mod modtype="replace" hdr="Call-ID" param="value">
+				
+					<msg_ref type="sip" msg_instance="last">401-Register.Call-ID.value</msg_ref>
+					</mod>	
+					<mod modtype="replace" hdr="From" param="tag">
+				
+					<msg_ref type="sip" msg_instance="last">401-Register.From.tag</msg_ref>
+					</mod>
+					 <mod modtype="replace" hdr="To" param="tag">
+				
+					<msg_ref type="sip" msg_instance="last">401-Register.To.tag</msg_ref>      
+					</mod>
+					 <mod modtype="replace" hdr="Authorization" param="realm">
+					<msg_ref type="sip" msg_instance="prev">401-REGISTER.WWW-Authenticate.realm</msg_ref>
+					</mod>
+					<!--mod modtype="replace" hdr="Authorization" param="cnonce">
+					<msg_ref type="sip" msg_instance="prev">401-REGISTER.WWW-Authenticate.realm</msg_ref>
+					</mod-->
+					<mod modtype="replace" hdr="Authorization" param="nonce">
+					<msg_ref type="sip" msg_instance="prev">401-REGISTER.WWW-Authenticate.nonce</msg_ref>
+					</mod>
+					
+					</send>
+				</prelude>
+				<transition to="Digest1" event="503-Register"/>
+				<transition to="Digest1" event="401-Register"/>
+				<transition to="Digest1" event="TimerExpired"/>
+				
+			</state>
+			<state ID="Digest1">
+				<prelude>
+					<send protocol="sip" msgtype="Register" target="PCSCF1" originator="DUT"/>
+				</prelude>
+				<transition to="END" event="200-Register"/>
+			</state>
+			
+			
+		</states>
+	</fsm>
+</pc2xml>

@@ -1,0 +1,162 @@
+################################################################################
+#// Filename: PROV_5-7.test (PACT)
+#// Author:   Rachapong Pornwiriyangkura
+#//           Matthew Forbes
+#//
+#//
+#// Creation Date: July 30, 2004
+#// Modified by:
+################################################################################
+#// Description:
+#//     TC613 TEST CASE PROV 5.7 DHCP Option 122, Sub-option 8
+#//
+#// Objective:
+#//     Test the ability of the E-MTA DUT to utilize the value in option 122, suboption 8 to
+#// reset the time value contained in the "pktcMtaDevProvisioningTimer" MIB Object.  The value
+#// of sub-option 8 in option 122 is valid only if a vendor chooses to implement it. However, it
+#// is required that the MTA must support this functionality.
+#//
+#// PacketCable DUT:
+#//     MTA
+#//
+#// Test Steps:
+#//     - Initial configuration
+#//     - Reset DUT
+#//     - Check Provisioning state
+#//     - Invoke SNMPv3 API and verify initial value for MIB Object
+#//     - Change policy in server to change value for option 122, sub-option 8
+#//     - Start sniffer
+#//     - Reset DUT
+#//     - Check Provisioning state
+#//     - Stop sniffer
+#//     - Invoke SNMPv3 API and query MIB object and validate value
+#//     - Restore default value for option 122, sub-option 8
+#//     - Delete MTA config file
+#//
+#// Notes:
+#//     - Requires provPrimitives.tcl & tftp_primitives.tcl.
+#//     - Requires the specific config file in $BASE_CFG_FILE_PATH in Provisioning Server.
+#//     - Requires parT.tcl parsing tool to parse data from capture file.
+################################################################################
+
+global SCRIPT_VERSION
+set SCRIPT_VERSION { # $Id: E-UE-PROV_1-1-2-6.test 7406 2010-07-20 17:17:37Z dthakore $ }
+
+###################### INITIAL CONFIGURATION OF DUT ########################
+
+
+DoStep "PROV_5-7_1-1" "Initial configuration" {
+    LogMsg "--- Initial PROV module ---"
+    Init_PROV
+    # ProvCreateConfig 291 $MTA_MAC
+    PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122 
+    PROV_DEPLOY_DHCP
+} { PASS_STEP }
+
+
+################ Reset CM and MTA and Verify Provisioning ################
+
+DoStep "PROV_5-7_3-1" "Reset MTA" {
+    set val [SNMPvN_RESET $CM_IP]
+    LogMsg "Reset of CM and MTA has passed"
+} {
+    IsEqual $val 0
+}
+
+DoStep "PROV_5-7_3-2" "pktcMTADevProvisioningState Content Verification" {
+    # Wait for a minute to let CM/MTA starting to reboot
+    actionWait "Waiting for CM and MTA to reboot" 60
+    # Get the OID from the MTA and check it using our previously defined
+    set val [GetProvState 1 600]
+    LogMsg "MTA Provisioning State"
+    LogMsg "             - Expected : 1"
+    LogMsg "             - Received : $val"
+} {
+    IsEqual $val 1
+}
+
+######################### VERIFY ORIGINAL VALUE OF MIB OBJECT  ##########################
+
+DoStep "PROV_5-7_4-1" "pktcMtaDevProvisioningTimer Content Verification" {
+    set val [SNMP_GET $oid_pktcMtaDevProvisioningTimer $MTA_IP]
+        LogMsg "The value for the provisioning timer"
+        LogMsg "             - Expected : 10"
+        LogMsg "             - Received : $val"
+} {
+    IsEqual $val 10
+}
+
+##################### MODIFY VALUE FOR SUBOPTION IN MTA POLICY ##########################
+
+DoStep "PROV_5-7_5-1" "Modify value for option 122, suboption 8" {
+    LogMsg "--- Modify MTA Policy and Save ---"
+    # verify_signal "Modify value for option 122 sub-option 8 to 5 (MTATC613)"
+    PROV_MODIFY_DEVICE $MTA_MAC MTATC613
+    PROV_DEPLOY_DHCP
+    LogMsg "--- Sub-option 8 has been modified ---"
+} {PASS_STEP}
+
+
+DoStep "PROV_5-7_6-1" "Start sniffer" {
+    LogMsg "--- Start sniffer ---"
+    Init_CONTROLLER_LAN
+    SetupCaptureControllerLan "host $MTA_IP || udp port 67 || host $CM_IP"
+    StartCaptureControllerLan
+} {PASS_STEP}
+
+################## RESET CM and MTA and VERIFY PROVISIONING ####################
+
+DoStep "PROV_5-7_7-1" "Reset MTA" {
+    set val [SNMPvN_RESET $CM_IP]
+    LogMsg "Reset of CM and MTA has passed"
+} {
+    IsEqual $val 0
+}
+
+DoStep "PROV_5-7_8-1" "pktcMTADevProvisioningState Content Verification" {
+    # Wait for a minute to let CM/MTA starting to reboot
+    actionWait "Waiting for CM and MTA to reboot" 60
+    # Get the OID from the MTA and check it using our previously defined
+    set val [GetProvState 1 600]
+    LogMsg "MTA Provisioning State"
+    LogMsg "             - Expected : 1"
+    LogMsg "             - Received : $val"
+} {
+    IsEqual $val 1
+}
+
+DoStep "PROV_5-7_8-2" "Stop sniffer" {
+    LogMsg "--- Stop sniffer ---"
+    StopCaptureControllerLan
+    SaveToFileControllerLan
+} { PASS_STEP }
+
+######################### VERIFY VALUE OF MIB OBJECT  ##########################
+
+DoStep "PROV_5-7_9-1" "pktcMtaDevProvisioningTimer Content Verification" {
+    set val [SNMP_GET $oid_pktcMtaDevProvisioningTimer $MTA_IP]
+        LogMsg "The value for the provisioning timer"
+        LogMsg "             - Expected : 3"
+        LogMsg "             - Received : $val"
+} {
+    IsEqual $val 3
+}
+
+##################### RESTORE VALUE FOR SUB-OPTION 8 IN MTA ##########################
+
+DoStep "PROV_5-7_10-1" "Restore value for option 122, sub-option 8" {
+    LogMsg "--- Modify MTA Policy and Save ---"
+    # verify_signal "Restore default value for option 122 sub-option 8 (MTAFORCW_122)"
+    PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122
+    PROV_DEPLOY_DHCP
+    LogMsg "--- Sub-option 8 has been modified ---"
+} {PASS_STEP}
+
+################################################################################
+# Cleanup
+################################################################################
+Cleanup
+return 0
+
+
+

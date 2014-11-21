@@ -1,0 +1,215 @@
+###########################################################
+#   Author: Vikas Sarawat (CableLabs)
+#   Date  :   06/22/07  
+#   DUT   :      CPD-Requestor
+#   Title : TEST CASE CPD-Requestor 1.2.2 – set and delete the keys manually
+#   Objective: Verify that the keys can be deleted and provisioned manually.
+#
+#
+##
+###########################################################
+
+
+set procNum 1
+set stepNum 0 ;# (next used +1)
+
+set mod cpd
+set cpd ::$mod\::
+
+set str "InitModule CPD"
+DoStep "Step $procNum.[incr stepNum]" $str {
+    # Doc: InitModule CPD (Source-Link Plugin-Module & Open Socket)
+    set isOk [set soc [ InitModule $mod ] ]
+} { if {$isOk == -1 } {FAIL_STEP $str } else {PASS_STEP} }
+
+set str "Rx CPD Auth_1 Msg"
+DoStep "Step $procNum.[incr stepNum]" $str {
+    # Doc: Rx 1st Message
+    set isOk 1
+    set rxData_Auth_1 [ $cpd\MsgRx 30 ]
+    set cpdMessageType [$cpd\MsgGetVal $rxData_Auth_1 AppPayload cpdMessageType]
+    if {$cpdMessageType !=1} { LogMsg "!! cpdMessageType is not 1"; set isOk -1}
+    set agId [$cpd\MsgGetVal $rxData_Auth_1 AGID id]
+    
+} { if {$isOk == -1 } {FAIL_STEP $str } else {PASS_STEP} }
+
+set str "Build & Tx CPD Auth_2 Msg"
+DoStep "Step $procNum substep 0" $str {
+    
+    #DBG# $cpd\RecDisplayMembers $txData_Rep
+    
+    set hmacSha1Key $gCPD_AUTH1_KEY
+    
+    
+    #################
+    set macData_A [ $cpd\MsgNew MAC_A ]
+    
+    # Copy CPD hdr.*
+    set results [ $cpd\MsgSetVal $macData_A Hdr version \
+            [ $cpd\MsgGetVal $rxData_Auth_1 Hdr version ] ]
+    set results [ $cpd\MsgSetVal $macData_A Hdr reserved \
+            [ $cpd\MsgGetVal $rxData_Auth_1 Hdr reserved ] ]
+    set results [ $cpd\MsgSetVal $macData_A Hdr len \
+            [ $cpd\MsgGetVal $rxData_Auth_1 Hdr len ] ]
+    set results [ $cpd\MsgSetVal $macData_A Hdr flags \
+            [ $cpd\MsgGetVal $rxData_Auth_1 Hdr flags ] ]
+    set results [ $cpd\MsgSetVal $macData_A Hdr checksum \
+            [ $cpd\MsgGetVal $rxData_Auth_1 Hdr checksum ] ]
+    set results [ $cpd\MsgSetVal $macData_A Hdr flowId \
+            [ $cpd\MsgGetVal $rxData_Auth_1 Hdr flowId ] ]
+    
+    # Copy CPD AppPayload.*
+    set results [ $cpd\MsgSetVal $macData_A AppPayload len \
+            [ $cpd\MsgGetVal $rxData_Auth_1 AppPayload len ] ]
+    set results [ $cpd\MsgSetVal $macData_A AppPayload applicationId \
+            [ $cpd\MsgGetVal $rxData_Auth_1 AppPayload applicationId ] ]
+    set results [ $cpd\MsgSetVal $macData_A AppPayload ver \
+            [ $cpd\MsgGetVal $rxData_Auth_1 AppPayload ver ] ]
+    set results [ $cpd\MsgSetVal $macData_A AppPayload cpdMessageType \
+            [ $cpd\MsgGetVal $rxData_Auth_1 AppPayload cpdMessageType ] ]
+    set results [ $cpd\MsgSetVal $macData_A AppPayload crType \
+            [ $cpd\MsgGetVal $rxData_Auth_1 AppPayload crType ] ]
+    set results [ $cpd\MsgSetVal $macData_A AppPayload crId \
+            [ $cpd\MsgGetVal $rxData_Auth_1 AppPayload crId ] ]
+    set results [ $cpd\MsgSetVal $macData_A AppPayload transactionId \
+            [ $cpd\MsgGetVal $rxData_Auth_1 AppPayload transactionId ] ]
+    set results [ $cpd\MsgSetVal $macData_A AppPayload flags \
+            [ $cpd\MsgGetVal $rxData_Auth_1 AppPayload flags ] ]
+    set results [ $cpd\MsgSetVal $macData_A AppPayload reserved \
+            [ $cpd\MsgGetVal $rxData_Auth_1 AppPayload reserved ] ]
+    
+    # Anchor AGID_Transform_selected
+    set AGID_Transform_selected [ $cpd\MsgGetVal $rxData_Auth_1 AGID id ]
+    
+    # Copy-1 (FIRST) AGID.id
+    set results [ $cpd\MsgSetVal $macData_A AGID len \
+            [ $cpd\MsgGetVal $rxData_Auth_1 AGID len ] ]
+    set results [ $cpd\MsgSetVal $macData_A AGID id \
+            [ $cpd\MsgGetVal $rxData_Auth_1 AGID id ] ]
+            
+    # Copy A_Challenge
+    set results [ $cpd\MsgSetVal $macData_A A_Challenge len \
+            [ $cpd\MsgGetVal $rxData_Auth_1 A_Challenge len ] ]
+    set results [ $cpd\MsgSetVal $macData_A A_Challenge nonce \
+            [ $cpd\MsgGetVal $rxData_Auth_1 A_Challenge nonce ] ]
+    
+    # Anchor A and B Nonce
+    set A_Challenge_Nonce [ $cpd\MsgGetVal $rxData_Auth_1 A_Challenge nonce ]
+    set B_Challenge_Nonce 0f0e0d0c0b0a09080706050403020100
+    
+    # Add A_Response (init all zero - before MAC)
+    set results [ $cpd\MsgSetVal $macData_A A_Response mac 000000000000000000000000 ]
+    # Set length for A_Response (set to zero for MAC-calc) ?What-Length (12-bytes)?
+    set results [ $cpd\MsgSetVal $macData_A A_Response len \
+            [ $cpd\RecGetBinLen [ $cpd\MsgGetRec $macData_A A_Response ] ] ]
+            
+    # Add B_Challenge (nonce set above)
+    set results [ $cpd\MsgSetVal $macData_A B_Challenge nonce $B_Challenge_Nonce ]
+    # Set length for B_Challenge
+    set results [ $cpd\MsgSetVal $macData_A B_Challenge len \
+            [ $cpd\RecGetBinLen [ $cpd\MsgGetRec $macData_A B_Challenge ] ] ]
+    
+    #################
+    
+    # Build msgHex (for HMAC SHA1)
+    set macMsgHex_A [ $cpd\MsgBuild $macData_A ]
+    
+    # Show details
+    #DBG# set x [ $cpd\MsgParse $macMsgHex_A ]
+    
+    # Compute SHA1 HMAC ?Key?=A_Challenge.nonce
+    set mac_A [sha1::hmac $hmacSha1Key [comConvertHexToStr $macMsgHex_A ] ]
+    
+    # Mac is 40-char, 20-bytes
+    #DBG#  puts mac=$mac
+    
+    # Trim HMAC to 96-bits = 12-bytes = 24-char
+    set mac_A [string range $mac_A 0 23 ]
+    
+    ##################
+    
+    # Doc: Instantiate New Message
+    set txData_Auth_2 [ $cpd\MsgNew Auth_2 ]
+    
+    # Copy CPD hdr.*
+    set results [ $cpd\MsgSetVal $txData_Auth_2 Hdr version \
+            [ $cpd\MsgGetVal $rxData_Auth_1 Hdr version ] ]
+    set results [ $cpd\MsgSetVal $txData_Auth_2 Hdr reserved \
+            [ $cpd\MsgGetVal $rxData_Auth_1 Hdr reserved ] ]
+    set results [ $cpd\MsgSetVal $txData_Auth_2 Hdr len \
+            [ $cpd\MsgGetVal $rxData_Auth_1 Hdr len ] ]
+    # Special - modify flags - "AX_CHALLENGE and AX_RESPONSE flags are now set"
+    set results [ $cpd\MsgSetVal $txData_Auth_2 Hdr flags \
+            [expr [ $cpd\MsgGetVal $rxData_Auth_1 Hdr flags ] | 0x10 ] ]
+    set results [ $cpd\MsgSetVal $txData_Auth_2 Hdr checksum \
+            [ $cpd\MsgGetVal $rxData_Auth_1 Hdr checksum ] ]
+    set results [ $cpd\MsgSetVal $txData_Auth_2 Hdr flowId \
+            [ $cpd\MsgGetVal $rxData_Auth_1 Hdr flowId ] ]
+    
+    # Copy CPD AppPayload.*
+    set results [ $cpd\MsgSetVal $txData_Auth_2 AppPayload len \
+            [ $cpd\MsgGetVal $rxData_Auth_1 AppPayload len ] ]
+    set results [ $cpd\MsgSetVal $txData_Auth_2 AppPayload applicationId \
+            [ $cpd\MsgGetVal $rxData_Auth_1 AppPayload applicationId ] ]
+    set results [ $cpd\MsgSetVal $txData_Auth_2 AppPayload ver \
+            [ $cpd\MsgGetVal $rxData_Auth_1 AppPayload ver ] ]
+    set results [ $cpd\MsgSetVal $txData_Auth_2 AppPayload cpdMessageType \
+            [ $cpd\MsgGetVal $rxData_Auth_1 AppPayload cpdMessageType ] ]
+    set results [ $cpd\MsgSetVal $txData_Auth_2 AppPayload crType \
+            [ $cpd\MsgGetVal $rxData_Auth_1 AppPayload crType ] ]
+    set results [ $cpd\MsgSetVal $txData_Auth_2 AppPayload crId \
+            [ $cpd\MsgGetVal $rxData_Auth_1 AppPayload crId ] ]
+    set results [ $cpd\MsgSetVal $txData_Auth_2 AppPayload transactionId \
+            [ $cpd\MsgGetVal $rxData_Auth_1 AppPayload transactionId ] ]
+    set results [ $cpd\MsgSetVal $txData_Auth_2 AppPayload flags \
+            [ $cpd\MsgGetVal $rxData_Auth_1 AppPayload flags ] ]
+    set results [ $cpd\MsgSetVal $txData_Auth_2 AppPayload reserved \
+            [ $cpd\MsgGetVal $rxData_Auth_1 AppPayload reserved ] ]
+    
+    # Copy-1 (FIRST) AGID.id
+    set results [ $cpd\MsgSetVal $txData_Auth_2 AGID len \
+            [ $cpd\MsgGetVal $rxData_Auth_1 AGID len ] ]
+    # changing the AGID
+    set results [ $cpd\MsgSetVal $txData_Auth_2 AGID id \
+            [ $cpd\MsgGetVal $rxData_Auth_1 AGID id ]]
+    
+    #################
+    
+    # Set B_Challenge.nonce
+    set results [ $cpd\MsgSetVal $txData_Auth_2 B_Challenge nonce $B_Challenge_Nonce ]
+    
+    # Setting A_Response to an incorrect value
+    set results [ $cpd\MsgSetVal $txData_Auth_2 A_Response mac [expr $mac_A & 0xff] ]
+    
+    #################
+    
+    # Doc: Build & Tx Message to DstIp, DstPort
+    set msgLen [ $cpd\MsgTx [ $cpd\MsgBuild $txData_Auth_2 ] $soc $::gCPD_REMOTE_IP $::gCPD_REMOTE_PORT ]
+    
+} { if {$isOk == -1 } {FAIL_STEP $str } else {PASS_STEP} }
+
+set str "Rx an Error msg or NO MSG"
+DoStep "Step $procNum substep 1" $str {
+    # Doc: Rx 1st Message
+    set rxData_Auth_3 [ $cpd\MsgRx ]
+    if {$rxData_Auth_3 != -1 } {
+       set rxMac [ $cpd\MsgGetVal $rxData_Auth_3 B_Response mac ]
+       if {$rxMac != -1 } {
+           LogMsg "!! The message received is not an error message"
+           set isOk -1
+       }
+    }
+} { if {$isOk == -1 } {FAIL_STEP $str } else {PASS_STEP} }
+
+Cleanup
+
+
+
+
+
+
+
+
+
+
+

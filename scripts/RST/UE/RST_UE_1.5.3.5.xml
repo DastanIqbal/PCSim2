@@ -1,0 +1,93 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	PCPCII-139 : Update the Voicetronix modifiers to use the new values. (ghassler 07/10/2009)
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-UE 1.5.3.5" 
+	descrip="Call Hold – emergency call" 
+	number="RST-UE 1.5.3.5">
+	
+	<template file="./templates/CallOrigAtUETemp.xml" name="UE1"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Setup" sub="prelude"/>
+		<state ID="Connected"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<NE targets="UE1 service:sos"/>
+		
+		<state ID="Setup" sub="prelude" once="true">
+			<send protocol="utility" msgtype="DialDigits">
+				<mod modtype="add" hdr="number">
+					<expr>911</expr>
+				</mod>
+			</send>
+		</state>
+		
+		<state ID="Connected">
+			<prelude>
+				<sleep time="3000"/>
+				<send protocol="utility" msgtype="HookFlash"/>
+			</prelude>
+			<transition to="Verify" event="HookFlashComplete"/>
+		</state>
+		
+		<state ID="Verify">
+			<prelude once="true">
+				<send protocol="utility" msgtype="VerifyDialTone"/>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="utility">Response</msg_ref>
+						<expr>VerifyDialToneError</expr>
+					</eq>
+					<then>
+						<verify step="2" requirements="REQ13825, REQ13855">
+							<eq>
+								<msg_ref type="utility">Response</msg_ref>
+								<expr>VerifyDialToneError</expr>
+							</eq>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<transition to="VerifyNoReinvite" event="VerifyDialToneError"/>
+			<transition to="VerifyNoReinvite" event="VerifyDialToneComplete"/>
+		</state>
+		
+		<state ID="VerifyNoReinvite" timer="10000">
+			<response>
+				<verify step="2" requirements="REQ13825, REQ13855">
+					<and>
+						<eq>
+							<msg_ref type="event"/>
+							<expr>TimerExpired</expr>
+						</eq>
+						<neq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>REINVITE</expr>
+						</neq>
+					</and>
+				</verify>
+			</response>
+			<transition to="Releasing" event="TimerExpired"/>
+		</state>
+	</add_to>
+</pc2xml>

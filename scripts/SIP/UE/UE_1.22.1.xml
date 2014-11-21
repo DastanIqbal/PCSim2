@@ -1,0 +1,128 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	PCPCII-139 : Update the Voicetronix modifiers to use the new values. (ghassler 07/10/2009)
+	PCPCII-141 : Update the script to test the P-Preferred-Identity header as an addr-spec instead of name-addr. 
+		(ghassler 07/ /2009)
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="SIP-UE 1.22.1" 
+	descrip=" Emergency session set-up within an non-emergency registration" 
+	number="SIP-UE 1.22.1">
+	
+	<fsm name="Operator">
+		<models>
+			<session/>
+		</models>
+	
+		<NE sim_type="term" elements="UE1 SCSCF1 PCSCF1" targets="UE1 service:sos"/>
+	
+		<states initialstate="Register">
+			<state ID="Register">
+				<prelude>
+					<var name="cidValue">
+						<expr>unknown</expr>
+					</var>
+				</prelude>
+				<transition to="OffHook" event="Registered"/>
+			</state>
+			
+			<state ID="OffHook">
+				<prelude>
+					<send protocol="utility" msgtype="OffHook"/>
+				</prelude>
+				<transition to="Setup" event="OffHookComplete"/>
+			</state>
+			
+			<state ID="Setup">
+				<prelude once="true">
+					<send protocol="utility" msgtype="DialDigits">
+						<mod modtype="add" hdr="number">
+							<expr>911</expr>
+						</mod>
+					</send>
+				</prelude>
+				<response>
+					<if>
+						<contains>
+							<msg_ref type="pidf+xml">Invite</msg_ref>
+							<expr>Content-ID: </expr>
+						</contains>
+						<then>
+							<assign name="cidValue">
+								<msg_ref type="pidf+xml" bodyType="xml">Invite.Content-ID.addr-spec</msg_ref>
+							</assign>
+						</then>
+					</if>
+					<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>INVITE</expr>
+					</eq>
+					<then>
+							<!-- If the current message that we received is an Invite, answer with
+		               a 100-trying -->
+							<verify step="2" requirements="REQ17126, REQ17151, REQ17191, REQ17192">
+								<contains>
+									<msg_ref type="sip">Invite.Request-Line.Request-URI</msg_ref>
+									<expr>urn:service:sos</expr>
+								</contains>
+							</verify>
+							<verify step="3" requirements="REQ17193, REQ17194">
+								<contains>
+									<msg_ref type="sip">Invite.To.name-addr</msg_ref>
+									<expr>urn:service:sos</expr>
+								</contains>
+							</verify>
+							<verify step="4" requirements="REQ17242">
+								<contains>
+									<msg_ref type="sip">Invite.From.name-addr</msg_ref>
+									<msg_ref type="platform">DUT.pui</msg_ref>
+								</contains>
+							</verify>
+							<verify step="5" requirements="REQ17243">
+								<contains>
+									<msg_ref type="sip">Invite.P-Preferred-Identity.addr-spec</msg_ref>
+									<msg_ref type="platform">DUT.pui</msg_ref>
+								</contains>
+							</verify>
+							<verify step="6" requirements="REQ17244, REQ17246">
+								<contains>
+									<msg_ref type="sip">Invite.Geolocation.addr-spec</msg_ref>
+									<expr>cid:</expr>
+								</contains>
+							</verify>
+							<verify step="7" requirements="REQ17244, REQ17246">
+								<contains>
+									<msg_ref type="sip">Invite.Geolocation.name-addr</msg_ref>
+									<var_ref name="cidValue"/>
+								</contains>
+							</verify>
+							<verify step="7" requirements="REQ17244, REQ17246">
+								<contains>
+									<msg_ref type="pidf+xml" bodyType="xml">Invite.Content-Type</msg_ref>
+									<expr>application/pidf+xml</expr>
+								</contains>
+							</verify>
+						</then>
+					</if>
+				</response>
+				<transition to="Setup" event="DialDigitsComplete"/>
+				<transition to="END" event="INVITE"/>
+			</state>
+		</states>
+	</fsm>
+</pc2xml>

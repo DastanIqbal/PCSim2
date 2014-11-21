@@ -1,0 +1,414 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+ 	2011-09-20	Matthew Forbes - Initial version
+	2011-11-15	Seung Lee - final version
+
+
+
+
+-->
+<pc2xml version="$Revision: 1 $" 
+	name="ESG 1.1.1.2" 
+	descrip="Static Mode via DNS" 
+	number="ESG 1.1.1.2">
+	
+	<template file="./templates/Proxy_Term_At_DUT.xml" name="UE0" />
+
+	<remove_from fsm="UE0">
+		<state ID="Register"/>
+		<state ID="Setup"/>
+		<state ID="Connected"/>
+		<state ID="OnHookUE1"/>
+	</remove_from>	
+	
+	<add_to fsm="UE0">
+		<state ID="Register">
+		
+		<prelude>
+			<log promptUser="True"
+				 expr="UE0 (DUT) and UE1 (SP-SSE/platform) should be configured to support static mode"/>
+			<log promptUser="True" 
+				 expr="Renew IP config on platform workstation"/>	 
+			<start_capture>
+				<filter>
+					<var_expr>
+						<expr>host </expr>
+						<msg_ref type="platform">UE0.IP</msg_ref>
+						<expr> || host </expr>
+						<msg_ref type="platform">UE0.IP2</msg_ref>
+						<expr> || host </expr>
+						<msg_ref type="platform">PCSCF1.IP</msg_ref>
+						<expr> || host </expr>
+						<msg_ref type="platform">UE1.IP</msg_ref>
+					</var_expr>
+				</filter>
+			</start_capture>	 
+			<!-- Step 1 test case ESG 1.1.1.2 Start Capture--> 
+			<generate event="SucceedEvent"/>
+		</prelude>		
+		<transition to="OffHook" event="SucceedEvent"/>
+		</state>
+		
+		<state ID="Setup">
+				<prelude once="true">
+					<send protocol="utility" msgtype="DialDigits">
+						<mod modtype="add" hdr="number">
+							<msg_ref type="platform">UE0.phone number 1</msg_ref>
+						</mod>
+						<mod modtype="replace" hdr="voiceport">
+						   <msg_ref type="platform">Platform.voiceport1</msg_ref>
+						</mod>
+					</send>
+				</prelude>
+				<response>
+					<if>
+						<or>
+							<eq>
+								<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE1.IP</msg_ref>
+							</eq>
+							<eq>
+								<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE1.IP</msg_ref>
+							</eq>
+						</or>
+						<then>
+							<proxy target="UE0">
+								<mod modtype="replace" hdr="Request-Line" param='domain'>
+									<msg_ref type="platform">UE0.domain</msg_ref>
+								</mod>
+							</proxy>
+						</then>
+						<elseif>
+							<or>
+								<eq>
+									<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+									<msg_ref type="platform">UE0.IP</msg_ref>
+								</eq>
+								<eq>
+									<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+									<msg_ref type="platform">UE0.IP</msg_ref>
+								</eq>
+							</or>
+							<then>
+								<proxy target="UE1"/>
+							</then>
+						</elseif>
+					</if>
+					
+					
+					<!-- Step 7 test case ESG 1.1.1.2 Verify Invite-->
+					<!-- commenting out this verification step as this step verfies SP-SSE instead of SIP-PBX
+					<var name="header1">
+						<var_expr>
+							<expr>sip:+1</expr>
+							<msg_ref type="platform">UE0.phone number 1</msg_ref>
+							<expr>@sippbx.redlab.com Route=sip:</expr>
+							<msg_ref type="platform">UE0.FQDN</msg_ref>
+						</var_expr>
+					</var>
+					
+					<verify step="7" requirements="REQ, REQ">			
+						<eq>
+							<msg_ref type="sip">Invite.Request-Line.Request-URI</msg_ref>
+							<var_ref name="header1"/>
+						</eq>
+					</verify>						
+					-->
+				</response>
+				
+				<transition to="Setup" event="DialDigitsComplete"/>
+				<transition to="Setup" event="INVITE"/>
+				<transition to="Alerting" event="CANCEL"/>
+				<transition to="Alerting" event="xxx-INVITE"/>
+				<transition to="Setup" event="OffHookComplete"/>
+			</state>
+		<!-- CONNECTED State -->
+			<state ID="Connected" timer="10000">		
+				<prelude>
+					<!-- Step 4 test case ESG 1.1.1.2 Verify phone rings and there is 2 way voice path-->
+					<log promptUser="True" yesExpected="True" verify="True" step="4"
+									expr="Verify phone rings and there is 2 way voice path."/>					
+				</prelude>
+				<transition to="OnHook" event="TimerExpired"/>
+			</state>	
+		<!-- Step 5 test case ESG 1.1.1.2 End call-->
+		<state ID="OnHookUE1">
+			<prelude>
+
+				<send protocol="utility" msgtype="OnHook"/>
+				<sleep time="5000"/>
+				<!-- Step 6 test case ESG 1.1.1.2 stop capture-->
+				
+				<!-- commenting out this verification step as this step verfies SP-SSE instead of SIP-PBX
+				<stop_capture/>
+				<parse_capture name="eUE_cap">
+					<parser_filter ip="DUT.IP"/>
+				</parse_capture>				
+				<verify step="3 4">
+					<and>
+						<contains>
+							<capture_ref type="dns" name="eUE_cap" msg_instance="first" hdr_instance="any">Query.qry.name.show</capture_ref>
+							<msg_ref type="platform">DUT.domain</msg_ref>
+						</contains>
+						<contains>
+	                       <capture_ref type="dns" name="eUE_cap" msg_instance="2">Response.addl.addr.show</capture_ref>
+	                       <msg_ref type="platform">DUT.IP</msg_ref>
+	               	 	</contains>
+	               	 </and>	
+				</verify>
+				-->
+				
+			</prelude>
+			
+			
+			<postlude>
+			<!-- Step 8 test case ESG 1.1.1.2 open capture and verify there are no register messages-->
+			<!-- commenting out as the procedure is covered above aby real time check
+				<log promptUser="True" yesExpected="True" verify="True" step="8" requirements="REQ23941"
+									expr="Open the capture and verify there are no register messages."/>
+				<log promptUser="True" expr="Wait for the next prompt to make another call."/>		
+			-->
+			</postlude>	
+			
+			<transition to="OffHookUE0" event="OnHookComplete"/>
+		</state>
+		
+		<state ID="OffHookUE0">
+			<prelude>
+				<send protocol="utility" msgtype="OffHook"/>
+			</prelude>
+			<transition to="SetupUE0" event="OffHookComplete"/>
+		</state>
+
+		<state ID="SetupUE0">
+			<prelude once="true">
+				<send protocol="utility" msgtype="DialDigits">
+					<mod modtype="add" hdr="number">
+						<msg_ref type="platform">UE1.phone number 1</msg_ref>
+					</mod>
+					</send>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>Invite</expr>
+					</eq>
+					<then>
+						<verify step="12" requirements="REQ, REQ">
+						<or>			
+							<contains>
+								<msg_ref type="sip">Invite.Request-Line.Request-URI</msg_ref>
+								<msg_ref type="platform">PCSCF1.FQDN</msg_ref>
+							</contains>
+							<contains>
+								<msg_ref type="sip">Invite.Request-Line.Request-URI</msg_ref>
+								<msg_ref type="platform">PCSCF1.IP</msg_ref>
+							</contains>
+						</or>	
+						</verify>
+						<proxy target="UE1">
+							<mod modtype="replace" hdr="Request-Line" param='domain'>
+								<msg_ref type="platform">UE1.domain</msg_ref>
+							</mod>
+						</proxy>
+					</then>
+					
+					<elseif>
+					<or>
+						<eq>
+							<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+							<msg_ref type="platform">UE1.IP</msg_ref>
+						</eq>
+						<eq>
+							<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+							<msg_ref type="platform">UE1.IP</msg_ref>
+						</eq>
+					</or>
+					<then>
+						<proxy target="UE0"/>
+					</then>
+					</elseif>
+					
+					<elseif>
+						<or>
+							<eq>
+								<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE0.IP</msg_ref>
+							</eq>
+							<eq>
+								<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE0.IP</msg_ref>
+							</eq>
+						</or>
+						<then>
+							<proxy target="UE1"/>
+						</then>
+					</elseif>
+				</if>
+			</response>				
+
+			<transition to="SetupUE0" event="DialDigitsComplete"/>
+			<transition to="SetupUE0" event="INVITE"/>
+			<transition to="AlertingUE1" event="CANCEL"/>
+			<transition to="AlertingUE1" event="xxx-INVITE"/>
+			<transition to="SetupUE0" event="OffHookComplete"/>
+		</state>	
+		
+		<state ID="AlertingUE1" timer="6000">
+			<response>
+				<if>
+					<and>
+						<null>
+							<msg_ref type="sip">200-INVITE.SDP</msg_ref>
+						</null>
+						<or>
+							<eq>
+								<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE1.IP</msg_ref>
+							</eq>
+							<eq>
+								<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE1.IP</msg_ref>
+							</eq>
+						</or>
+					</and>
+					<then>
+						<proxy target="UE0"/>
+					</then>
+					<elseif>
+						<and>
+							<eq>
+								<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE1.IP</msg_ref>
+							</eq>
+							<notnull>
+								<msg_ref type="sip">200-INVITE.SDP</msg_ref>
+							</notnull>
+						</and>
+						<then>
+                            <proxy target="UE0"/>
+						</then>	
+						</elseif>
+						<elseif>
+							<or>
+								<eq>
+									<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+									<msg_ref type="platform">UE0.IP</msg_ref>
+								</eq>
+								<eq>
+									<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+									<msg_ref type="platform">UE0.IP</msg_ref>
+								</eq>
+							</or>
+							<then>
+								<proxy target="UE1"/>
+							</then>
+						</elseif>
+					</if>
+					<if>
+						<eq>
+							<msg_ref type="event"/>
+							<expr>TimerExpired</expr>
+						</eq>
+						<then>
+							<send protocol="utility" msgtype="OffHook">
+								<mod modtype="replace" hdr="voiceport">
+									<msg_ref type="platform">Platform.voiceport1</msg_ref>
+								</mod>
+							</send>
+						</then>
+					</if>
+				</response>
+				<transition to="AlertingUE1" event="INVITE"/>
+				<transition to="AlertingUE1" event="OPTIONS"/>
+				<transition to="AlertingUE1" event="200-OPTIONS"/>
+				<transition to="AlertingUE1" event="PRACK"/>
+				<transition to="AlertingUE1" event="200-PRACK"/>
+				<transition to="AlertingUE1" event="UPDATE"/>
+				<transition to="AlertingUE1" event="200-UPDATE"/>
+				<transition to="AlertingUE1" event="xxx-INVITE"/>
+				<transition to="AlertingUE1" event="OffHookComplete"/>
+				<transition to="Connected2nd" event="ACK"/>
+			</state>
+			
+			<state ID="Connected2nd" timer="10000">		
+				<prelude>
+					<!-- Step 9 test case ESG 1.1.1.2 Verify phone rings and there is 2 way voice path-->
+					<log promptUser="True" yesExpected="True" verify="True" step="9"
+									expr="Verify phone rings and there is 2 way voice path."/>					
+				</prelude>
+					<transition to="OnHook2nd" event="TimerExpired"/>
+			</state>
+					
+			<state ID="OnHook2nd">
+				<prelude once="true">
+					<send protocol="utility" msgtype="OnHook"/>
+				</prelude>
+				<response>
+					<if>
+						<or>
+							<eq>
+								<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE1.IP</msg_ref>
+							</eq>
+							<eq>
+								<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE1.IP</msg_ref>
+							</eq>
+						</or>
+						<then>
+							<proxy target="UE0"/>
+						</then>
+						<elseif>
+							<or>
+								<eq>
+									<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+									<msg_ref type="platform">UE0.IP</msg_ref>
+								</eq>
+								<eq>
+									<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+									<msg_ref type="platform">UE0.IP</msg_ref>
+								</eq>
+							</or>
+							<then>
+								<proxy target="UE1"/>
+							</then>
+						</elseif>
+					</if>
+				</response>
+				<transition to="OnHook2nd" event="OnHookComplete"/>
+				<transition to="OnHook2nd" event="Bye"/>
+				<transition to="2ndOnHookUE1" event="200-Bye"/>
+			</state>
+
+			<state ID="2ndOnHookUE1">
+				<prelude>
+					<send protocol="utility" msgtype="OnHook">
+						<mod modtype="replace" hdr="voiceport">
+							<msg_ref type="platform">Platform.voiceport1</msg_ref>
+						</mod>
+					</send>
+				</prelude>
+				
+				<postlude>
+					<stop_capture/>	
+				</postlude>
+				
+				<transition to="END" event="OnHookComplete"/>
+			</state>	
+
+	</add_to>
+</pc2xml>		

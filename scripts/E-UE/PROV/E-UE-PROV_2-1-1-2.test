@@ -1,0 +1,193 @@
+#//*****************************************************************************
+#// Filename: E-UE-PROV_2-1-1-2.test (PACT)
+#// Author:  Matthew Forbes          
+#//          
+#//           
+#// Creation Date: October 30, 2008
+#// Modified by:
+#//*****************************************************************************
+#// Description:
+#//     TC1079 TEST CASE PROV 1.3 Verify only SNMPv3 MTA access to manipulate
+#// PacketCable objects. No SNMPv1 or SNMPv2    
+#//
+#// Objective:
+#//     Insure the E/MTA DUT is accessible only by the MTA IP address and via SNMPv3. No
+#// SNMPv1 or SNMPv2 access is allowed.  In addition, the CM IP address can't be used to
+#// change PacketCable E/MTA related information edocsis esafe MIB status is also analyzed.
+#//
+#// PacketCable DUT:
+#//     MTA
+#//
+#// Test Steps:
+#//     - Initial configuration
+#//     - Reset DUT
+#//     - Check Provisioning state
+#//     - Invoke SNMPv3 API and query MIB objects and validate values
+#//     - Invoke SNMPv2 API and query MIB objects and validate values
+#//     - Delete MTA config file
+#//
+#// Notes:
+#//     - Requires provPrimitives.tcl & tftp_primitives.tcl.
+#//     - Requires the specific config file in $BASE_CFG_FILE_PATH in Provisioning Server.
+#//*****************************************************************************
+
+global SCRIPT_VERSION
+set SCRIPT_VERSION { # $Id: E-UE-PROV_2-1-1-2.test 7406 2010-07-20 17:17:37Z dthakore $ }
+
+DoStep "E-UE-PROV_2-1-1-2_1-1" "Initial configuration" {
+    LogMsg "--- Initial PROV module ---"
+    Init_PROV
+    # ProvCreateConfig 291 $MTA_MAC
+    PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122 Device_Level_Secure.cfg
+    PROV_DEPLOY_DHCP
+} { PASS_STEP }
+
+
+
+################ Reset CM and MTA and Verify Provisioning ################
+
+DoStep "E-UE-PROV_2-1-1-2_2-1" "Reboot CM/MTA" {
+    set val [SNMPvN_RESET $CM_IP]
+    LogMsg "Reboot of CM and MTA has passed"
+} {
+    IsEqual $val 0
+}
+
+DoStep "E-UE-PROV_2-1-1-2_2-2" "pktcMTADevProvisioningState Content Verification" {
+    # Wait for a minute to let CM/MTA starting to reboot
+    actionWait "Wait for CM/MTA to reboot" 60
+    # Get the OID from the MTA and check it using our previously defined
+    set val [GetProvState 1 600]
+    LogMsg "MTA Provisioning State"
+    LogMsg "             - Expected : 1"
+    LogMsg "             - Received : $val"
+} {
+    IsEqual $val 1
+}
+
+DoStep "E-UE-PROV_2-1-1-2_3-1" "Verify ifIndex1 MIB" {
+    LogMsg "Verify ifIndex1 MIB"
+    set int [SNMP_GET .1.3.6.1.2.1.2.2.1.1.1 $MTA_IP]
+} {
+    IsEqual $int 1
+}
+
+# DoStep "E-UE-PROV_2-1-1-2_3-2" "Verify ifIndex9 MIB" {
+    # LogMsg "Verify ifIndex9 MIB"
+    # set int [SNMP_GET .1.3.6.1.2.1.2.2.1.1.9 $MTA_IP]
+# } {
+    # IsEqual $int 9
+# }
+# 
+# DoStep "E-UE-PROV_2-1-1-2_3-3" "Verify ifIndex10 MIB" {
+    # LogMsg "Verify ifIndex10 MIB"
+    # set int [SNMP_GET .1.3.6.1.2.1.2.2.1.1.10 $MTA_IP]
+# } {
+    # IsEqual $int 10
+# }
+
+#For multi-line mta
+################################################################################
+# set MTA1_NUMLINES 4
+################################################################################
+set a 2
+    set b 0
+        set c 9
+        while {$b < $MTA1_NUMLINES} {
+DoStep "E-UE-PROV_2-1-1-2_3-$a" "Verify ifIndex$c MIB" {
+    LogMsg "Verify ifIndex$c MIB"
+
+    set int [SNMP_GET .1.3.6.1.2.1.2.2.1.1.$c $MTA_IP]
+
+} {
+    IsEqual $int $c
+}
+                incr a
+            incr b
+        incr c
+    }
+# DoStep "E-UE-PROV_2-1-1-2_3-3" "Verify ifIndex10 MIB" {
+    # LogMsg "Verify ifIndex10 MIB"
+    # set int [SNMP_GET .1.3.6.1.2.1.2.2.1.1.12 $MTA_IP]
+# } {
+    # IsEqual $int 12
+# }
+
+################################################################################
+
+
+
+
+DoStep "E-UE-PROV_2-1-1-2_4-1" "Verify ifIndex1 MIB" {
+    LogMsg "Verify ifIndex1 MIB"
+    set int [SNMPvN_GET .1.3.6.1.2.1.2.2.1.1.1 $CM_IP]
+} {
+    IsEqual $int 1
+}
+
+DoStep "E-UE-PROV_2-1-1-2_4-2" "Verify ifIndex16 MIB" {
+    LogMsg "Verify ifIndex16 MIB"
+    set int [SNMPvN_GET .1.3.6.1.2.1.2.2.1.1.16 $CM_IP]
+} {
+    IsEqual $int 16
+}
+
+DoStep "E-UE-PROV_2-1-1-2_5-1" "Verify ifIndex1 MIB is not accessible through MTA on SNMPv2" {
+    LogMsg "Verify ifIndex1 MIB not accessible"
+    set int [SNMPvN_GET .1.3.6.1.2.1.2.2.1.1.1 $MTA_IP]
+} {
+    # IsEqual $int "Timeout: No Response from $MTA_IP."
+    IsEqual $int "Timeout: No Response from $MTA_IP.,"
+}
+
+DoStep "E-UE-PROV_2-1-1-2_5-2" "Verify ifIndex16 MIBis not accessible through MTA on SNMPv2" {
+    LogMsg "Verify ifIndex16 MIB not accessible"
+    set int [SNMPvN_GET .1.3.6.1.2.1.2.2.1.1.16 $MTA_IP]
+} {
+    # IsEqual $int "Timeout: No Response from $MTA_IP."
+    IsEqual $int "Timeout: No Response from $MTA_IP.,"
+}
+
+DoStep "E-UE-PROV_2-1-1-2_5-3" "Verify ifIndex15 MIBis not accessible through MTA on SNMPv2" {
+    LogMsg "Verify ifIndex16 MIB not accessible"
+    set int [SNMPvN_GET $oid_pktcMtaDevProvState $MTA_IP]
+} {
+    # IsEqual $int "Timeout: No Response from $MTA_IP."
+    IsEqual $int "Timeout: No Response from $MTA_IP.,"
+}
+
+DoStep "E-UE-PROV_2-1-1-2_6-1" "Verify esafeProvisioningStatusProgress MIB" {
+    LogMsg "Verify esafeProvisioningStatusProgress MIB"
+    set esafe [SNMPvN_GET .1.3.6.1.4.1.4491.2.1.14.1.1.1.1.1.16 $CM_IP]
+} {
+    IsEqual $esafe 3
+}
+
+DoStep "E-UE-PROV_2-1-1-2_7-1" "Verify esafeProvisioningStatusFailureFound MIB" {
+    LogMsg "Verify esafeProvisioningStatusFailureFound MIB"
+    set esafe [SNMPvN_GET .1.3.6.1.4.1.4491.2.1.14.1.1.1.1.2.16 $CM_IP]
+} {
+    IsEqual $esafe 2
+}
+
+DoStep "E-UE-PROV_2-1-1-2_8-1" "Verify esafeProvisioningStatusFailureFlow MIB" {
+    LogMsg "Verify esafeProvisioningStatusFailureFlow MIB"
+    set esafe [SNMPvN_GET .1.3.6.1.4.1.4491.2.1.14.1.1.1.1.3.16 $CM_IP]
+} {
+       # IsEqual $esafe "SNMPv2-SMI::enterprises.4491.2.1.14.1.1.1.1.3.16 = \"\""
+       # IsEqual $esafe "\"\""
+        IsEqual $esafe ""
+}
+
+DoStep "E-UE-PROV_2-1-1-2_9-1" "Verify esafeProvisioningStatusFailureEventID MIB" {
+    LogMsg "Verify esafeProvisioningStatusFailureEventID MIB"
+    set esafe [SNMPvN_GET .1.3.6.1.4.1.4491.2.1.14.1.1.1.1.4.16 $CM_IP]
+} {
+    IsEqual $esafe 0
+}
+
+################################################################################
+# Cleanup
+################################################################################
+set CONTINUE_PAST_STEP_ERROR 0
+Cleanup

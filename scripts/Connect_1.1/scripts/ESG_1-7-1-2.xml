@@ -1,0 +1,455 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	2011-09-20	Marc Weaver - Initial version
+	2011-11-15	Seung Lee - final versionfor
+
+
+
+
+-->
+
+<!-- First are the document type and the attributes for our document -->
+<pc2xml version="$Revision: 1 $" 
+	name="ESG_1.7.1.2" 
+	descrip="Ability of SETA Function to Terminate an Auto Answer Test Call" 
+	number="ESG_1.7.1.2">
+	
+	<template file="./templates/CallTermAtUETemp.xml" name="UE1"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Setup" sub="prelude"/>
+		<state ID="Connected"/>
+		<state ID="Alerting"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<state ID="Setup" sub="prelude">
+			<start_capture>
+				<filter>
+					<var_expr>
+						<expr>host </expr>
+						<msg_ref type="platform">UE0.IP</msg_ref>
+						<expr> || host </expr>
+						<msg_ref type="platform">Platform.STUN IP Address</msg_ref>
+					</var_expr>
+				</filter>
+			</start_capture>
+			<!-- Step  1 from test case 3.1.4  -->
+			<send protocol="sip" msgtype="Invite">
+				<mod modtype="replace" hdr="audio" param="payload-type">
+					<expr>0 8</expr>
+				</mod>
+				<mod modtype="delete" hdr="ptime"/>
+				<mod modtype="add" hdr="rtpmap">
+					<expr>8 PCMA/8000</expr>
+				</mod>
+			</send>
+		</state>
+		
+		<state ID="Alerting" timer="12000">
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="event"/>
+							<expr>TimerExpired</expr>
+						</eq>
+						<then>
+							<!--Take DUT phone off hook-->
+							<send protocol="utility" msgtype="OffHook"/>
+						</then>
+					</if>
+					<!-- Expected responses are 180, 183, PRACK, UPDATE, or 200 -->
+					<!-- Step 6 from the Default Message Flow Call-Term-at-UE(DUT) Sequence Diagram - received UPDATE -->
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>UPDATE</expr>
+						</eq>
+						<then>
+							<!-- Step 7 from the Default Message Flow Call-Term-at-UE(DUT) Sequence Diagram- received UPDATE -->
+							<!--QoS required for test, sending a 200-OK to Update message to peer.-->
+							<send protocol="sip" msgtype="200-Update"/>
+						</then>
+						<!-- Step 8 from the Default Message Flow Call-Term-at-UE(DUT) Sequence Diagram - received 180 -->
+						<elseif>
+							<and>
+								<eq>
+									<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+									<expr>180</expr>
+								</eq>
+								<contains>
+									<msg_ref type="sip" hdr_instance="any">180-INVITE.Require</msg_ref>
+									<expr>100rel</expr>
+								</contains>
+							</and>
+							<then>
+								<!--Reliablity required for test, sending Prack message to peer.-->
+								<send protocol="sip" msgtype="Prack"/>
+							</then>
+						</elseif>
+					</if>
+					
+				</response>
+				<!-- Transitions for Alerting state -->
+				<transition to="Alerting" event="200-PRACK"/>
+				<transition to="Alerting" event="UPDATE"/>
+				<transition to="Alerting" event="18x-INVITE"/>
+				<transition to="Answer" event="TimerExpired"/>
+				<transition to="Connected" event="200-INVITE"/>
+		</state>
+		
+		<state ID="Connected" timer="120000">
+			<prelude once="true">
+				<send protocol="sip" msgtype="ACK"/>
+				<send protocol="sip" msgtype="INVITE">
+					<mod modtype="replace" hdr="From" param="name-addr">
+						<var_expr>
+							<expr>&lt;</expr>
+							<msg_ref type="platform">UE2.pui</msg_ref>
+							<expr>&gt;</expr>
+						</var_expr>	
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="4" requirements="REQ ">
+						<neq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>xxx-INVITE</expr>
+						</neq>
+				</verify>
+				<if>
+					<and>
+						<eq>
+							<msg_ref type="event"/>
+							<expr>DIALOG_CONFIRMED_UAC</expr>
+						</eq>
+						<contains>
+							<msg_ref type="sip" msg_instance="last">18x-Invite.SDP</msg_ref>
+							<expr>m=audio</expr>
+						</contains>
+					</and>
+					<then>
+						<var name="answer">
+							<msg_ref type="sip" msg_instance="last">18x-Invite</msg_ref>
+						</var>
+					</then>
+					<elseif>
+						<and>
+							<eq>
+								<msg_ref type="event"/>
+								<expr>DIALOG_CONFIRMED_UAC</expr>
+							</eq>
+							<contains>
+								<msg_ref type="sip" msg_instance="last">200-UPDATE.SDP</msg_ref>
+								<expr>m=audio</expr>
+							</contains>
+						</and>
+						<then>
+							<var name="answer">
+								<msg_ref type="sip" msg_instance="last">200-UPDATE</msg_ref>
+							</var>
+						</then>
+					</elseif>
+					<elseif>
+						<and>
+							<eq>
+								<msg_ref type="event"/>
+								<expr>DIALOG_CONFIRMED_UAC</expr>
+							</eq>
+							<contains>
+								<msg_ref type="sip" msg_instance="last">200-Invite.SDP</msg_ref>
+								<expr>m=audio</expr>
+							</contains>
+						</and>
+						<then>
+							<var name="answer">
+								<msg_ref type="sip" msg_instance="last">200-INVITE</msg_ref>
+							</var>
+						</then>
+					</elseif>
+				</if>
+				<if>
+					<eq>
+						<msg_ref type="event"/>
+						<expr>DIALOG_CONFIRMED_UAC</expr>
+					</eq>
+					<then>
+						<var name="audioPort">
+							<var_ref name="answer" protocol="sdp" hdr="audio" param="port"/>
+						</var>
+						<var name="ulaw">
+							<var_expr>
+								<expr>m=audio </expr>
+								<var_ref name="audioPort"/>
+								<expr> RTP/AVP 0</expr>
+							</var_expr>
+						</var>
+						<var name="alaw">
+							<var_expr>
+								<expr>m=audio </expr>
+								<var_ref name="audioPort"/>
+								<expr> RTP/AVP 8</expr>
+							</var_expr>
+						</var>
+						<var name="g711a">
+							<var_expr>
+								<expr>m=audio </expr>
+								<var_ref name="audioPort"/>
+								<expr> RTP/AVP 8 0</expr>
+							</var_expr>
+						</var>
+						<var name="g711u">
+							<var_expr>
+								<expr>m=audio </expr>
+								<var_ref name="audioPort"/>
+								<expr> RTP/AVP 0 8</expr>
+							</var_expr>
+						</var>
+						<verify step="1 2">
+							<contains>
+								<var_ref name="answer" protocol="sip" hdr="SDP" />
+								<expr>m=audio</expr>
+							</contains>
+						</verify>
+
+						<verify step="2">
+							<eq>
+								<var_ref name="answer" protocol="sdp" hdr="v" param="number"/>
+								<expr>0</expr>
+							</eq>
+						</verify>
+						
+						<verify step="2">
+							<!--or>
+								<eq>
+									<var_ref name="answer" protocol="sdp" hdr="o" param="user"/>
+									<msg_ref type="platform">UE0.username</msg_ref>
+								</eq>
+								<eq>
+									<var_ref name="answer" protocol="sdp" hdr="o" param="user"/>
+									<expr>-</expr>
+								</eq>
+							</or-->
+							<notnull>
+								<var_ref name="answer" protocol="sdp" hdr="o" param="user"/>
+							</notnull>
+						</verify>
+						
+						<verify step="2">
+							<gte>
+								<var_ref name="answer" protocol="sdp" hdr="o" param="session-id"/>
+								<expr>0</expr>
+							</gte>
+						</verify>
+						
+						<verify step="2">
+							<gte>
+								<var_ref name="answer" protocol="sdp" hdr="o" param="session-version"/>
+								<expr>0</expr>
+							</gte>
+						</verify>
+						
+						<verify step="2">
+							<eq>
+								<var_ref name="answer" protocol="sdp" hdr="o" param="net-type"/>
+								<expr>IN</expr>
+							</eq>
+						</verify>
+						
+						<verify step="2">
+							<or>
+								<eq>
+									<var_ref name="answer" protocol="sdp" hdr="o" param="address-type"/>
+									<expr>IP4</expr>
+								</eq>
+								<eq>
+									<var_ref name="answer" protocol="sdp" hdr="o" param="address-type"/>
+									<expr>IP6</expr>
+								</eq>
+							</or>
+						</verify>
+						
+						<verify step="2">
+							<or>
+								<eq>
+									<var_ref name="answer" protocol="sdp" hdr="o" param="address"/>
+									<msg_ref type="platform">UE0.IP</msg_ref>
+								</eq>
+								<eq>
+									<var_ref name="answer" protocol="sdp" hdr="o" param="address"/>
+									<msg_ref type="platform">UE0.FQDN</msg_ref>
+								</eq>
+							</or>
+						</verify>
+						
+						<verify step="2">
+							<!--or>
+								<eq>
+									<var_ref name="answer" protocol="sdp" hdr="s" param="name"/>
+									<expr>-</expr>
+								</eq>
+								<eq>
+									<var_ref name="answer" protocol="sdp" hdr="s" param="name"/>
+									<expr>0x20</expr>
+								</eq>
+							</or-->
+							<notnull>
+								<var_ref name="answer" protocol="sdp" hdr="s" param="name"/>
+							</notnull>
+						</verify>
+						
+						<verify step="2">
+							<and>
+								<eq>
+									<var_ref name="answer" protocol="sdp" hdr="t" param="start"/>
+									<expr>0</expr>
+								</eq>
+								<eq>
+									<var_ref name="answer" protocol="sdp" hdr="t" param="stop"/>
+									<expr>0</expr>
+								</eq>
+							</and>
+						</verify>
+
+						<verify step="3" requirements="REQ14680">
+							<contains>
+								<var_ref name="answer" protocol="sip" hdr="SDP"/>
+								<var_ref name="ulaw"/>
+							</contains>
+						</verify>
+						
+						<verify step="4" requirements="REQ14679">
+							<or>
+								<eq>
+									<var_ref name="answer" protocol="sdp" hdr="max-packet-rate" param="value"/>
+									<expr>50.0</expr>
+								</eq>
+								<eq>
+									<var_ref name="answer" protocol="sdp" hdr="max-packet-rate" param="value"/>
+									<expr>50</expr>
+								</eq>
+							</or>
+						</verify>
+
+						<verify step="4" requirements="REQ14679">
+							<or>
+								<eq>
+									<var_ref name="answer" protocol="sdp" hdr="ptime" param="value"/>
+									<expr>20</expr>
+								</eq>
+								<dnc>
+									<var_ref name="answer" protocol="sip" hdr="SDP"/>
+									<expr>a=ptime:</expr>
+								</dnc>
+							</or>
+						</verify>
+						
+						<verify step="7" requirements="REQ14680">
+							<or>
+								<contains>
+									<var_ref name="answer" protocol="sip" hdr="SDP"/>
+									<var_ref name="alaw"/>
+								</contains>
+							<or>
+								<contains>
+									<var_ref name="answer" protocol="sip" hdr="SDP"/>
+									<var_ref name="g711a"/>
+								</contains>
+								<contains>
+									<var_ref name="answer" protocol="sip" hdr="SDP"/>
+									<var_ref name="g711u"/>
+								</contains>
+							</or>	
+							</or>
+						</verify>
+						<stop_capture/>
+						<log step="4" requirements="REQ14679" promptUser="true" verify="true"
+							expr="Is the device sending RTP approximately every 20 milliseconds?"/>
+						<log step="11" requirements="REQ " promptUser="true" verify="true"
+							expr="Verify No SIP, RTP or RTCP messages associated with the test call are forwarded to the enterprise network."/>
+						<log step="13" requirements="REQ " promptUser="true" verify="true"
+							expr="Verify the ESG does not expose the SETA management interface to the enterprise."/>
+						<log promptUser="true" verify="true" step="2" requirements="REQ12693"
+					expr="Verify that the ESG reports statistics on Call Start Time, Call End Time, SIP Call ID, Call Direction, Originating and Terminating SIP URIs, and Codec Type"/>
+						<log promptUser="true" verify="true" step="2" requirements="REQ12693"
+					expr="Verify the SETA component of the staticstics include Session Disconnect Delay, SIP Response code to the INVITE and Call Completion Status"/>
+					
+					<log step="4" requirements="REQ12696, REQ12697, REQ12698, REQ126999" 
+					promptUser="True" yesExpected="True" verify="True" 
+					expr="In the ESG GUI verify that there is a report containing JitterBuffer: with JBA=\nJBR=\nJBN=\nJBM=\nJBX=\npresent in both the LocalMetrics and the RemoteMetrics."/>
+				
+				<log step="15" requirements="" 
+					promptUser="True" yesExpected="True" verify="True" 
+					expr="In the ESG GUI verify that there is a report containing PacketLoss: with NLR=\nJDR=\npresent in both the LocalMetrics and the RemoteMetrics."/>
+					
+				<log step="15" requirements="" 
+					promptUser="True" yesExpected="True" verify="True" 
+					expr="In the ESG GUI verify that there is a report containing BurstGapLoss with BLD=\nBD=\nGLD=\nGD=\nGMIN\npresent in both the LocalMetrics and the RemoteMetrics."/>
+				
+				< log step="15" requirements="" 
+					promptUser="True" yesExpected="True" verify="True" 
+					expr="In the ESG GUI verify that there is a report containing Delay with RTD=\nESD=\npresent in both the LocalMetrics and the RemoteMetrics."/>
+				
+				< log step="15" requirements="" 
+					promptUser="True" yesExpected="True" verify="True" 
+					expr="In the ESG GUI verify that there is a report containing Signal with SL=\nNL=\nRERL=\npresent in both the LocalMetrics and the RemoteMetrics."/>
+				
+				< log step="15" requirements="" 
+					promptUser="True" yesExpected="True" verify="False" 
+					expr="Optional: In the ESG GUI verify that there is a report containing CallQuality with RCQ=\nMOS-LQ\nMOS-CQ=\npresent in both the LocalMetrics and the RemoteMetrics."/>		
+					
+					
+					</then>
+				</if>
+			</response>
+			<transition to="Connected" event="OffHookComplete"/>
+			<transition to="Releasing" event="TimerExpired"/>
+		</state>
+	</add_to>
+</pc2xml>
+
+<!-- These are the steps to check the syslog messages-->
+
+	            
+	             <!-- From step 29 of B.2.2.3 for IPv4 -->
+				<!--verify step="16" group="Syslog">
+					<and>
+						<contains>
+							<capture_ref type="syslog" name="eUE_Prov">NOTICE.msg.show</capture_ref>
+							<expr>LOCAL</expr>
+						</contains>
+					<and>
+						<contains>
+							<capture_ref type="syslog" name="eUE_Prov">NOTICE.msg.show</capture_ref>
+							<expr>INFORMATION</expr>
+						</contains>
+					</and>
+					<contains>
+							<capture_ref type="syslog" name="eUE_Prov">NOTICE.msg.show</capture_ref>
+							<expr>Priority 134</expr>
+						</contains>
+					</and>
+				</verify-->
+ <!-- Pop-Up to have Tester verify Statistics on ESG GUI
+		  <state ID="Connected" timer="5000">
+			<postlude>
+				
+					
+				
+			</postlude>			
+			<transition to="OnHook" event="TimerExpired"/>
+		</state>
+ 
+  -->

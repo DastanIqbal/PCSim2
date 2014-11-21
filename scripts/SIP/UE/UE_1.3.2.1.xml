@@ -1,0 +1,87 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="SIP-UE 1.3.2.1" 
+	descrip="UE Sends Answer 200-INVITE when INVITE did not	Contain 100rel in Supported or Require Headers " 
+	number="SIP-UE 1.3.2.1">
+	
+	<template file="./templates/CallTermAtUETemp.xml" name="UE1"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Setup" sub="prelude"/>
+		<state ID="Answer"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<state ID="Setup" sub="prelude">
+			<!-- Step 1 from the test case SIP 1.3.2.1 Sequence Diagram - 
+				send Invite with neither "100rel" nor "precondition" -->
+			<send protocol="sip" msgtype="Invite">
+				<mod modtype="delete" hdr="Supported" param="option-tag">100rel</mod>
+				<mod modtype="delete" hdr="Supported" param="option-tag">precondition</mod>
+			</send>
+		</state>
+		
+		<state ID="Answer">
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>UPDATE</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="200-Update"/>
+					</then>
+				</if>
+				<if>
+					<eq>
+						<msg_ref type="sip" msg_instance="last">Response.Status-Line.status-code</msg_ref>
+						<expr>200</expr>
+					</eq>
+					<then>
+						<verify step="2" requirements="RFC685, RFC35">
+							<and>
+								<eq>
+									<msg_ref type="sip" msg_instance="last">200-Invite.Content-Type.media-subtype</msg_ref>
+									<expr>sdp</expr>
+								</eq>
+								<and>
+									<gt>
+										<msg_ref type="sip" msg_instance="last">200-Invite.Content-Length.value</msg_ref>
+										<expr>0</expr>
+									</gt>
+									<contains>
+										<msg_ref type="sip">200-INVITE.SDP</msg_ref>
+										<expr>rtpmap</expr>
+									</contains>
+								</and>
+							</and>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<transition to="Answer" event="UPDATE"/>
+			<transition to="Answer" event="200-PRACK"/>
+			<transition to="Answer" event="18x-INVITE"/>
+			<transition to="Answer" event="OffHookComplete"/>
+			<transition to="Connected" event="200-INVITE"/>
+		</state>
+	</add_to>
+</pc2xml>

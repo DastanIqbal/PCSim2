@@ -1,0 +1,126 @@
+#//*****************************************************************************
+#// Filename: E-UE-PROV_1-1-2-33.test
+#// Author:   Matthew Forbes
+#//
+#// Creation Date: October 24, 2008
+#// Modified by:
+#//*****************************************************************************
+#// Description:
+#//     TC2854 TEST CASE E-UE-PROV 1.1.2.33 Ability of eUE to Use Default Values for
+#//     Optional Sub-options When Not Present in DHCP Configuration
+#//
+#// Objective:
+#//     This test verifies the ability of the eUE to use default values when optional
+#//     sub-options are absent.
+#//
+#// PacketCable DUT:
+#//     MTA
+#//
+#// Test Steps:
+#//     - Initialize MTA config file setup 
+#//     - Start Sniffer
+#//     - Reset DUT
+#//     - Check Provisioning state
+#//     - Use SNMPv3 MIB Browser to verify MIB objects using Pass/Fail scripts
+#//     - Stop sniffer and save trace data
+#//     - Delete MTA config file
+#//
+#// Notes:
+#//     - Requires provPrimitives.tcl & tftp_primitives.tcl.
+#//     - Requires the specific config file in $BASE_CFG_FILE_PATH in Provisioning Server.
+#//*****************************************************************************
+
+global SCRIPT_VERSION
+set SCRIPT_VERSION { # $Id: E-UE-PROV_1-1-2-33.test 7406 2010-07-20 17:17:37Z dthakore $ }
+
+DoStep "E-UE-PROV_1-1-2-33_1-1" "Initial configuration" {
+    LogMsg "--- Initial PROV module ---"
+    Init_PROV
+} { PASS_STEP }
+
+
+################ Provision Policy server #################################
+
+DoStep "E-UE-PROV_1-1-2-33_2-1" "Setup policy in provisioning server" {
+    LogMsg "Setup policy in provisioning server"
+} {
+    PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122
+    PROV_DEPLOY_DHCP
+}
+
+DoStep "E-UE-PROV_1-1-2-33_3-1" "Start sniffer" {
+    LogMsg "--- Start sniffer ---"
+    Init_CONTROLLER_LAN
+    SetupCaptureControllerLan "host $MTA_IP || udp port 67 || host $CM_IP"
+    StartCaptureControllerLan
+} {PASS_STEP}
+
+################ Reset CM and MTA and Verify Provisioning ################
+
+DoStep "E-UE-PROV_1-1-2-33_4-1" "Hard reboot CM/MTA" {
+    set val [SNMPvN_RESET $CM_IP]
+    LogMsg "Hard reboot of CM and MTA has passed"
+} {
+    IsEqual $val 0
+}
+
+DoStep "E-UE-PROV_1-1-2-33_5-1" "pktcMTADevRealmisioningState Content Verification" {
+    # Wait for a minute to let CM/MTA starting to reboot
+    actionWait "Wait for CM/MTA to reboot" 60
+    # Get the OID from the MTA and check it using our previously defined
+    set val [GetProvState 1 600]
+    LogMsg "MTA Provisioning State"
+    LogMsg "             - Expected : 1"
+    LogMsg "             - Received : $val"
+} {
+    IsEqual $val 1
+}
+
+########################### Verify MIB Values ##############################
+
+DoStep "E-UE-PROV_1-1-2-33_6-1" "pktcMtaDevRealmUnsolicitedKeyNomTimeout Content Verification" {
+    set CONTINUE_PAST_STEP_ERROR 1
+    set val [SNMP_GET $pktcMtaDevRealmUnsolicitedKeyNomTimeout.1 $MTA_IP]
+} {
+    IsEqual $val 3000
+}
+
+DoStep "E-UE-PROV_1-1-2-33_6-2" "pktcMtaDevRealmUnsolicitedKeyMaxTimeout Content Verification" {
+    set val [SNMP_GET $pktcMtaDevRealmUnsolicitedKeyMaxTimeout.1 $MTA_IP]
+} {
+    IsEqual $val 100
+}
+
+DoStep "E-UE-PROV_1-1-2-33_6-3" "pktcMtaDevRealmUnsolicitedKeyMaxRetries Content Verification" {
+    set val [SNMP_GET $pktcMtaDevRealmUnsolicitedKeyMaxRetries.1 $MTA_IP]
+} {
+    IsEqual $val 5
+}
+
+DoStep "E-UE-PROV_1-1-2-33_6-4" "pktcMtaDevRealmUnsolicitedKeyMaxRetries Content Verification" {
+    set val [SNMP_GET $oid_pktcMtaDevProvisioningTimer $MTA_IP]
+} {
+    IsEqual $val 10
+}
+
+DoStep "E-UE-PROV_1-1-2-33_7-1" "Stop sniffer" {
+    LogMsg "--- Stop sniffer ---"
+    StopCaptureControllerLan
+    SaveToFileControllerLan
+} { PASS_STEP }
+
+################################################################################
+# Cleanup
+################################################################################
+
+DoStep "E-UE-PROV_1-1-2-33_7-2" "Restore MTA policy in provisioning server(MTAFORCW122)" {
+    LogMsg "Restore MTA policy in provisioning server(MTAFORCW122)"
+} {
+    # verify_signal "Restore MTA policy in provisioning server(MTAFORCW122)"
+    PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122
+    PROV_DEPLOY_DHCP
+}
+
+set CONTINUE_PAST_STEP_ERROR 0
+Cleanup
+return 0

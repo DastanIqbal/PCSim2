@@ -1,0 +1,501 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+ Change History: (Author & Date)
+	PCPCII-135 : UPdate the script to accommodate a de-register message during the reboot. (ghassler 06/24/2009)
+	PCPCII-139 : Update the Voicetronix modifiers to use the new values. (ghassler 07/10/2009)
+	PCPCII-202 : Update the script to use the F timer equal to 128 instead of 32. (ghassler 02/25/2010)
+	PCPCII-339 : Remove the test for the reg-id parameter incrementing across new initial regististrations. 
+		(ghassler 06/09/2010)
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="SIP-UE 1.1.2.3" 
+	descrip="Timer F Expiration" 
+	number="SIP-UE 1.1.2.3">
+	
+	<template file="./templates/UERegAndSubTemp.xml" name="Registrar"/>
+	<template file="./templates/Proxy.xml" name="Proxy"/>
+	
+	<configure name="No Response Timeout" value="180000"/>
+	
+	<add_to fsm="Proxy">
+		<states initialstate="WaitSucceedEvent"/>
+		<state ID="WaitSucceedEvent">
+			<transition to="OffHook" event="Registered"/>
+			<transition to="WaitSucceedEvent" event="AuthenticateSucceed"/>
+		</state>
+	</add_to>
+	
+	<remove_from fsm="Registrar">
+		<state ID="PendingRegistration"/>
+		<state ID="Reboot"/>
+	</remove_from>
+	
+	<remove_from fsm="Proxy">
+		<state ID="Connected"/>
+		<state ID="OnHook"/>
+	</remove_from>
+	
+	<add_to fsm="Registrar">
+		<NE targets="UE1"/>
+		
+		<state ID="Reboot" timer="10000">
+			<prelude once="true">
+				<!--  reset the non-DUT E-DVA first to allow it to get registered first if possible -->
+				<send protocol="utility" msgtype="SNMPSet">
+					<mod modtype="add" hdr="array">
+						<var_expr>
+								<expr>varBind 1 1 3 \r\n ][ , </expr>
+								<expr>PKTC-IETF-MTA-MIB::pktcMtaDevResetNow.0,INTEGER,1][\r\n</expr>
+						</var_expr>
+					</mod>
+				</send>
+				<send protocol="utility" msgtype="SNMPSet">
+					<mod modtype="add" hdr="array">
+						<var_expr>
+								<expr>varBind 1 1 3 \r\n ][ , </expr>
+								<expr>PKTC-IETF-MTA-MIB::pktcMtaDevResetNow.0,INTEGER,1][\r\n</expr>
+						</var_expr>
+					</mod>
+					<mod modtype="replace" hdr="agentip">
+						<msg_ref type="platform">UE1.IP</msg_ref>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="utility">Response</msg_ref>
+						<expr>SNMPRespFailure</expr>
+					</eq>
+					<then>
+						<fail/>
+					</then>
+				</if>
+				<if>
+					<or>
+						<eq>
+							<msg_ref type="sip">REGISTER.Contact.expires</msg_ref>
+							<expr>0</expr>
+						</eq>
+						<eq>
+							<msg_ref type="sip">REGISTER.Expires.value</msg_ref>
+							<expr>0</expr>
+						</eq>
+					</or>
+					<then>
+						<send protocol="sip" msgtype="200-REGISTER"/>
+					</then>
+				</if>
+			</response>
+			<!-- Transitions for PendingRegistration state -->
+			<transition to="PendingRegistration" event="TimerExpired"/>
+			<transition to="Reboot" event="SNMPResp"/>
+			<transition to="END" event="SNMPRespFailure"/>
+			<transition to="Reboot" event="REGISTER"/>
+		</state>
+		
+		<state ID="PendingRegistration">
+			<prelude once="true">
+				<var name="UE0Registered">
+					<expr>FALSE</expr>
+				</var>
+				<var name="UE1Registered">
+					<expr>FALSE</expr>
+				</var>
+				<var name="UE0Subscribed">
+					<expr>FALSE</expr>
+				</var>
+				<var name="UE1Subscribed">
+					<expr>FALSE</expr>
+				</var>
+			</prelude>
+			<response>
+				<!-- PCPCII-96 Add the following test so the digest is only calculated on the 
+					correct messages. -->
+				<if>
+					<and>
+						<contains>
+							<msg_ref type="sip">200-NOTIFY.From.name-addr</msg_ref>
+							<msg_ref type="platform">UE0.username</msg_ref>
+						</contains>
+						<eq>
+							<msg_ref type="sip">200-NOTIFY.Call-ID</msg_ref>
+							<var_ref name="UE0Subscribed"/>
+						</eq>
+					</and>
+					<then>
+						<assign name="UE0Subscribed">
+							<expr>TRUE</expr>
+						</assign>
+					</then>
+					<elseif>
+						<and>
+							<contains>
+								<msg_ref type="sip">200-NOTIFY.From.name-addr</msg_ref>
+								<msg_ref type="platform">UE1.username</msg_ref>
+							</contains>
+							<eq>
+								<msg_ref type="sip">200-NOTIFY.Call-ID</msg_ref>
+								<var_ref name="UE1Subscribed"/>
+							</eq>
+						</and>
+						<then>
+							<assign name="UE1Subscribed">
+								<expr>TRUE</expr>
+							</assign>
+						</then>
+					</elseif>
+					<elseif> 
+						<and>
+							<contains>
+								<msg_ref type="sip">REGISTER</msg_ref>
+								<expr>Authorization</expr>
+							</contains>
+							<and>
+								<contains>
+									<msg_ref type="sip">REGISTER.From.name-addr</msg_ref>
+									<msg_ref type="platform">UE0.username</msg_ref>
+								</contains>
+								<digest/>
+							</and>
+						</and>
+						<then>
+							<send protocol="sip" msgtype="200-Register" target="UE0">
+								<mod modtype="replace" hdr="Contact" param="expires">
+									<expr>200</expr>
+								</mod>
+							</send>
+							<generate event="AuthenticateSucceed" fsm="Proxy"/>
+							<assign name="UE0Registered">
+								<expr>TRUE</expr>
+							</assign>
+						</then>
+					</elseif>
+					<elseif>
+						<and>
+							<contains>
+								<msg_ref type="sip">REGISTER</msg_ref>
+								<expr>Authorization</expr>
+							</contains>
+							<and>
+								<contains>
+									<msg_ref type="sip">REGISTER.From.name-addr</msg_ref>
+									<msg_ref type="platform">UE1.username</msg_ref>
+								</contains>
+								<digest/>
+							</and>
+						</and>
+						<then>
+							<send protocol="sip" msgtype="200-Register" target="UE1"/>
+							<generate event="AuthenticateSucceed" fsm="Proxy"/>
+							<assign name="UE1Registered">
+								<expr>TRUE</expr>
+							</assign>
+						</then>
+					</elseif>
+					<elseif>
+						<contains>
+							<msg_ref type="sip">REGISTER.From.name-addr</msg_ref>
+							<msg_ref type="platform">UE0.username</msg_ref>
+						</contains>
+						<then>
+							<send protocol="sip" msgtype="401-REGISTER" target="UE0"/>
+						</then>
+					</elseif>
+					<elseif>
+						<contains>
+							<msg_ref type="sip">REGISTER.From.name-addr</msg_ref>
+							<msg_ref type="platform">UE1.username</msg_ref>
+						</contains>
+						<then>
+							<send protocol="sip" msgtype="401-REGISTER" target="UE1"/>
+						</then>
+					</elseif>
+				</if>
+				<if>
+					<and>
+						<contains>
+							<msg_ref type="sip">SUBSCRIBE.Event</msg_ref>
+							<expr>reg</expr>
+						</contains>
+						<contains>
+							<msg_ref type="sip">SUBSCRIBE.From.name-addr</msg_ref>
+							<msg_ref type="platform">UE0.username</msg_ref>
+						</contains>
+					</and>
+					<then>
+						<send protocol="sip" msgtype="200-SUBSCRIBE" target="UE0"/>
+						<sleep time="100"/>
+						<send protocol="sip" msgtype="NOTIFY" target="UE0"/>
+						<assign name="UE0Subscribed">
+							<msg_ref type="sip">SUBSCRIBE.Call-ID</msg_ref>
+						</assign>
+					</then>
+					<elseif>
+						<and>
+							<contains>
+								<msg_ref type="sip">SUBSCRIBE.Event</msg_ref>
+								<expr>reg</expr>
+							</contains>
+							<contains>
+								<msg_ref type="sip">SUBSCRIBE.From.name-addr</msg_ref>
+								<msg_ref type="platform">UE1.username</msg_ref>
+							</contains>
+						</and>
+						<then>
+							<send protocol="sip" msgtype="200-SUBSCRIBE" target="UE1"/>
+							<sleep time="100"/>
+							<send protocol="sip" msgtype="NOTIFY" target="UE1"/>
+							<assign name="UE1Subscribed">
+								<msg_ref type="sip">SUBSCRIBE.Call-ID</msg_ref>
+							</assign>
+						</then>
+					</elseif>
+				</if>
+				<!-- Transition logic to Registered  state -->
+				<if>
+					<and>
+						<eq>
+							<msg_ref type="sip">Response</msg_ref>
+							<expr>200-NOTIFY</expr>
+						</eq>
+						<and>
+							<eq>
+								<var_ref name="UE0Registered"/>
+								<expr>TRUE</expr>
+							</eq>
+							<and>
+								<eq>
+									<var_ref name="UE1Registered"/>
+									<expr>TRUE</expr>
+								</eq>
+								<and>
+									<eq>
+										<var_ref name="UE0Subscribed"/>
+										<expr>TRUE</expr>
+									</eq>
+									<eq>
+										<var_ref name="UE1Subscribed"/>
+										<expr>TRUE</expr>
+									</eq>
+								</and>
+							</and>
+						</and>
+					</and>
+					<then>
+						<generate event="Branch1Event"/>
+						<generate event="Registered" fsm="Proxy"/>
+					</then>
+				</if>
+			</response>
+			<transition to="PendingRegistration" event="REGISTER"/>
+			<transition to="PendingRegistration" event="SUBSCRIBE"/>
+			<transition to="PendingRegistration" event="200-NOTIFY"/>
+			<transition to="WaitState" event="Branch1Event"/>
+		</state>
+		
+		<state ID="WaitState" timer="102000">
+			<prelude>
+				<var name="callcomplete">
+					<expr>false</expr>
+				</var>
+				<var name="registerrcvd">
+					<expr>false</expr>
+				</var>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="event"/>
+						<expr>TimerExpired</expr>
+					</eq>
+					<then>
+						<log level="ERROR" expr="The UE did not send a REGISTER message in 100 seconds."/>
+					</then>
+				</if>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>REGISTER</expr>
+					</eq>
+					<then>
+						<generate event="Registered" fsm="Proxy"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Wait128Sec" event="REGISTER"/>
+			<transition to="END" event="TimerExpired"/>
+		</state>
+
+		<state ID="Wait128Sec" timer="127000">
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="event"/>
+						<expr>TimerExpired</expr>
+					</eq>
+					<then>
+						<generate event="Branch1Event" fsm="Proxy"/>
+					</then>
+				</if>
+			</response>
+			<transition to="F Timer" event="TimerExpired"/>
+			<transition to="Wait128Sec" event="Register"/>
+		</state>
+		
+		<state ID="F Timer" timer="20000">
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="event"/>
+						<expr>Branch1Event</expr>
+					</eq>
+					<then>
+						<assign name="callcomplete">
+							<expr>true</expr>
+						</assign>
+					</then>
+					<elseif>
+						<and>
+							<eq>
+								<msg_ref type="sip">Request</msg_ref>
+								<expr>REGISTER</expr>
+							</eq>
+							<eq>
+								<var_ref name="registerrcvd"/>
+								<expr>false</expr>
+							</eq>
+						</and>
+						<then>
+							<assign name="registerrcvd">
+								<expr>true</expr>
+							</assign>
+							<verify step="8" requirements="REQ16941">
+								<and>
+									<eq>
+										<msg_ref type="sip">REGISTER.Authorization.nonce</msg_ref>
+										<expr></expr>
+									</eq>
+									<eq>
+										<msg_ref type="sip">REGISTER.Authorization.response</msg_ref>
+										<expr></expr>
+									</eq>
+								</and>
+							</verify>
+						</then>
+					</elseif>
+					<elseif>
+						<eq>
+							<msg_ref type="event"/>
+							<expr>TimerExpired</expr>
+						</eq>
+						<then>
+							<assign name="registeredrcvd">
+								<expr>true</expr>
+							</assign>
+						</then>
+					</elseif>
+				</if>
+				<if>
+					<and>
+						<eq>
+							<var_ref name="callcomplete"/>
+							<expr>true</expr>
+						</eq>
+						<eq>
+							<var_ref name="registerrcvd"/>
+							<expr>true</expr>
+						</eq>
+					</and>
+					<then>
+						<generate event="SucceedEvent"/>
+					</then>
+				</if>
+			</response>
+			<!--  This state makes sure that the completes first before
+				we transition -->
+			<transition to="F Timer" event="REGISTER"/>
+			<transition to="F Timer" event="Branch1Event"/>
+			<transition to="F Timer" event="TimerExpired"/>
+			<transition to="END" event="SucceedEvent"/>
+		</state>
+				
+	</add_to>
+	
+	<add_to fsm="Proxy">
+		<state ID="Connected">
+			<prelude once="true">
+				<!-- Step 4 of test case 1.1.2.3 -  Verify Voice/Media path is present-->
+				<send protocol="utility" msgtype="VerifyVoicePath2Way">
+					<mod modtype="add" hdr="from voiceport">
+						<msg_ref type="platform">Platform.voiceport0</msg_ref>
+					</mod>
+					<mod modtype="add" hdr="to voiceport">
+						<msg_ref type="platform">Platform.voiceport1</msg_ref>
+					</mod>
+					<mod modtype="add" hdr="voiceExpected">
+						<expr>yes</expr>
+					</mod>
+				</send>
+			</prelude>
+			<transition to="OnHook" event="Branch1Event"/>
+			<transition to="Connected" event="Registered"/>
+			<transition to="Connected" event="VerifyVoicePath2WayComplete"/>
+		</state>
+		
+		<state ID="OnHook" timer="10000">
+			<prelude once="true">
+				<send protocol="utility" msgtype="OnHook"/>
+			</prelude>
+			<response>
+				<if>
+					<or>
+						<eq>
+							<msg_ref type="sip">BYE.SourceAddress.IP</msg_ref>
+							<msg_ref type="platform">UE0.IP</msg_ref>
+						</eq>
+						<neq>
+							<msg_ref type="utility">Response</msg_ref>
+							<expr>OnHookComplete</expr>
+						</neq>
+					</or>
+					<then>
+						<verify step="7" requirements="REQ16941, REQ16942">
+							<and>
+								<neq>
+									<msg_ref type="sip">BYE.SourceAddress.IP</msg_ref>
+									<msg_ref type="platform">UE0.IP</msg_ref>
+								</neq>
+								<eq>
+									<msg_ref type="event"/>
+									<expr>TimerExpired</expr>
+								</eq>
+							</and>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<transition to="OnHook" event="OnHookComplete"/>
+			<transition to="EndCall" event="BYE"/>
+			<transition to="EndCall" event="TimerExpired"/>
+		</state>
+		
+		<state ID="EndCall" ES="true">
+			<prelude>
+				<generate event="Branch1Event" fsm="Registrar"/>
+			</prelude>
+		</state>
+		
+	</add_to>
+</pc2xml>

@@ -1,0 +1,78 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="SIP-UE 1.2.3.1" 
+	descrip="UAS Terminating Session on confirmed Dialog " 
+	number="SIP-UE 1.2.3.1">
+	
+	<template file="./templates/CallTermAtUETemp.xml" name="UE1"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Releasing"/>
+		<state ID="Connected"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<state ID="Connected" timer="31500">
+			<prelude once="true">
+				<!-- Step 2 test case SIP 1.2.3.1- 
+           		Terminate the session at the UE and wait for 32 ( 64*T1) seconds-->
+				<send protocol="utility" msgtype="OnHook"/>
+			</prelude>
+			<response>
+				<if>
+					<and>
+						<neq>
+							<msg_ref type="utility">Response</msg_ref>
+							<expr>OnHookComplete</expr>
+						</neq>
+					<and>
+						<neq>
+							<msg_ref type="event"/>
+							<expr>OffHookComplete</expr>
+						</neq>
+						<neq>
+							<msg_ref type="event"/>
+							<expr>DIALOG_CONFIRMED_UAC</expr>
+						</neq>
+					</and>
+					</and>
+					<then>
+						<verify step="2" requirements="RFC728">
+							<and>
+								<eq>
+									<msg_ref type="event"/>
+									<expr>TimerExpired</expr>
+								</eq>
+								<neq>
+									<msg_ref type="sip">Request</msg_ref>
+									<expr>BYE</expr>
+								</neq>
+							</and>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<transition to="Connected" event="OffHookComplete"/>
+			<transition to="Connected" event="OnHookComplete"/>
+			<transition to="END" event="TimerExpired"/>
+		</state>
+	</add_to>
+</pc2xml>

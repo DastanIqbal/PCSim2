@@ -1,0 +1,95 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+Change History: (Author & Date)
+	
+
+
+
+--> 
+
+
+<pc2xml version="$Revision: 7268 $" name="HDV_RST_UE_3.1.17.3" descrip="MWI on Multiline" number="HDV_RST_UE_3.1.17.3" inspector="disable">
+	<template file="./templates/UERegAndSubTemp.xml" name="Registrar" /> 
+		<remove_from fsm="Registrar">
+			<state ID="Registered" /> 
+			<state ID="Notification" /> 
+		</remove_from>
+ 
+		<add_to fsm="Registrar">
+			<state ID="Registered" timer="20000">
+				<prelude once="true">
+					<send protocol="sip" msgtype="200-Register" /> 
+				</prelude>
+				<response>
+					<if>
+					<eq>
+						<msg_ref type="sip">SUBSCRIBE.Event.event-type</msg_ref> 
+						<expr>reg</expr> 
+					</eq>
+				<then>
+					<send protocol="sip" msgtype="200-SUBSCRIBE" /> 
+					<sleep time="100" /> 
+					<send protocol="sip" msgtype="NOTIFY" >
+					</send>
+				</then>
+					</if>
+					<if>
+					<eq>
+						<msg_ref type="sip">SUBSCRIBE.Event.event-type</msg_ref> 
+						<expr>message-summary</expr> 
+					</eq>
+				<then>
+					<send protocol="sip" msgtype="200-SUBSCRIBE" /> 
+					<sleep time="100" /> 
+					<send protocol="sip" msgtype="NOTIFY" origReq="SUBSCRIBE" orig_instance="2">
+						<mod modtype="add" hdr="Voice-Message LINE 1">
+						<expr>5</expr> 
+					</mod>
+						<mod modtype="add" hdr="Voice-Message LINE 2">
+						<expr>3</expr> 
+					</mod>
+					</send>
+				</then>
+					</if>
+					<if>
+						<eq>
+							<msg_ref type="sip">SUBSCRIBE.Event.event-type</msg_ref> 
+							<expr>ua-profile</expr> 
+						</eq>
+				<then>
+					<send protocol="sip" msgtype="200-SUBSCRIBE" /> 
+					<sleep time="100" /> 
+					<send protocol="sip" msgtype="NOTIFY" >
+					</send>
+				</then>
+					</if>
+				</response>
+				<postlude once="true">
+					<sleep time="1000" /> 
+					<log promptUser="True" yesExpected="True" verify="True" step="1" requirements="REQ23583" expr="Verify the PP-1 displays 5 messages are waiting" />
+					<sleep time="1000" /> 
+					<log promptUser="True" yesExpected="True" verify="True" step="1" requirements="REQ23583" expr="Verify the PP-2 displays 3 messages are waiting" /> 
+				</postlude>
+			<transition to="Registered" event="SUBSCRIBE" /> 
+			<transition to="Registered" event="200-NOTIFY" /> 
+			<transition to="Call3" event="200-NOTIFY" /> 
+			</state>
+						
+			<state ID="Call3" timer="2000">
+				<transition to="EndCall3" event="TimerExpired" /> 
+			</state>
+			
+			<state ID="EndCall3" ES="true">
+				<transition to="END" event="SessionTerminated" /> 
+			</state>
+			
+		</add_to>
+  </pc2xml>

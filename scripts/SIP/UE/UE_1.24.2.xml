@@ -1,0 +1,224 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="SIP-UE 1.24.2" 
+	descrip="Call Waiting Disconnect Timing (=0)" 
+	number="SIP-UE 1.24.2" inspector="disable">
+	
+	<template file="./templates/CallOrigAtUETemp.xml" name="UE1"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Setup"/>
+		<state ID="Connected"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+
+		<state ID="Setup">
+			<prelude once="true">
+				<send protocol="utility" msgtype="DialDigits">
+					<mod modtype="add" hdr="number">
+						<msg_ref type="platform">UE1.phone number 1</msg_ref>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>Invite</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="100-INVITE"/>
+						<verify step="2" requirements="REQ19520, REQ19521">
+							<and>
+								<contains>
+									<msg_ref type="sip">INVITE.SDP</msg_ref>
+									<expr>ice-lite</expr>
+								</contains>
+							<and>
+								<ipv4>
+									<msg_ref type="sdp">INVITE.host-1.connection-address</msg_ref>
+								</ipv4>
+								<ipv6>
+									<msg_ref type="sdp">INVITE.host-2.connection-address</msg_ref>
+								</ipv6>
+							</and>
+							</and>
+						</verify>
+						
+						<send protocol="sip" msgtype="180-INVITE"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Setup" event="DialDigitsComplete"/>
+			<transition to="Alerting" event="INVITE"/>
+		</state>
+		
+		
+		<state ID="Connected" timer="40000">
+			<prelude>
+				<start_capture/>
+				<start_stream name="call" file="../config/tones/tone2.rtp" format="G711">
+					<to>
+						<ip>
+							<msg_ref type="sdp" msg_instance="last">INVITE.c.address</msg_ref>
+						</ip>
+						<port>
+							<msg_ref type="sdp" msg_instance="last">INVITE.audio.port</msg_ref>
+						</port>
+					</to>
+					<from>
+						<ip>
+							<msg_ref type="platform">Platform.STUN IP Address</msg_ref>
+						</ip>
+						<port>
+							<msg_ref type="platform">Platform.RTP Port1</msg_ref>
+						</port>
+					</from>
+				</start_stream>
+				<send protocol="utility" msgtype="VerifyVoicePath2Way">
+					<mod modtype="replace" hdr="from voiceport">
+						<msg_ref type="platform">Platform.voiceport0</msg_ref>
+					</mod>
+					<mod modtype="replace" hdr="to voiceport">
+						<msg_ref type="platform">Platform.voiceport1</msg_ref>
+					</mod>
+				</send>
+				
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="utility">Response</msg_ref>
+						<expr>VerifyVoicePath2WayComplete</expr>
+					</eq>
+					<then>
+						<verify step="5" requirements="REQ19520, REQ19527">
+							<eq>
+								<msg_ref type="utility">Response</msg_ref>
+								<expr>VerifyVoicePath2WayComplete</expr>
+							</eq>
+						</verify>
+					</then>
+				</if>		
+			</response>
+			<transition to="ChangeIP" event="VerifyVoicePath2WayComplete"/>
+		</state>
+		
+		<state ID="ChangeIP">
+			<prelude once="true">
+				<send protocol="sip" msgtype="REINVITE">
+					<mod modtype="replace" hdr="o" param="address">
+						<msg_ref type="platform">UE1.IP2</msg_ref>
+					</mod>
+					<mod modtype="replace" hdr="c" param="address-type">
+						<expr>IP6</expr>
+					</mod>
+					<mod modtype="replace" hdr="o" param="address-type">
+						<expr>IP6</expr>
+					</mod>
+					<mod modtype="replace" hdr="c" param="address">
+						<msg_ref type="platform">UE1.IP2</msg_ref>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Response</msg_ref>
+						<expr>200-Invite</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="ACK"/>
+						<verify step="5" requirements="REQ19520, REQ19526">
+							<and>
+								<contains>
+									<msg_ref type="sip">200-INVITE.SDP</msg_ref>
+									<expr>ice-lite</expr>
+								</contains>
+							<and>	
+								<ipv6>
+									<msg_ref type="sdp">200-INVITE.o.address</msg_ref>
+								</ipv6>
+								<ipv6>
+									<msg_ref type="sdp">200-INVITE.c.address</msg_ref>
+								</ipv6>
+							</and>		
+							</and>
+						</verify>
+						<sleep time="2000"/>
+						<start_stream name="call" file="../config/tones/tone2.rtp" format="G711">
+							<to>
+								<ip>
+									<msg_ref type="sdp">200-INVITE.c.address</msg_ref>
+								</ip>
+								<port>
+									<msg_ref type="sdp">200-INVITE.audio.port</msg_ref>
+								</port>
+							</to>
+							<from>
+								<ip>
+									<msg_ref type="platform">Platform.STUN IP Address2</msg_ref>
+								</ip>
+								<port>
+									<msg_ref type="platform">Platform.RTP Port2</msg_ref>
+								</port>
+							</from>
+						</start_stream>
+						<stop_capture/>
+					</then>
+				</if>
+			</response>
+			<transition to="ChangeIP" event="100-INVITE"/>
+			<transition to="VerifyRTPIPv6" event="200-INVITE"/>
+		</state>
+		
+		<state ID="VerifyRTPIPv6">
+			<prelude>
+				<send protocol="utility" msgtype="VerifyVoicePath2Way">
+					<mod modtype="replace" hdr="from voiceport">
+						<msg_ref type="platform">Platform.voiceport0</msg_ref>
+					</mod>
+					<mod modtype="replace" hdr="to voiceport">
+						<msg_ref type="platform">Platform.voiceport1</msg_ref>
+					</mod>
+				</send>
+				
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="utility">Response</msg_ref>
+						<expr>VerifyVoicePath2WayComplete</expr>
+					</eq>
+					<then>
+						<verify step="6" requirements="REQ19520, REQ19527">
+							<eq>
+								<msg_ref type="utility">Response</msg_ref>
+								<expr>VerifyVoicePath2WayComplete</expr>
+							</eq>
+						</verify>
+					</then>
+				</if>		
+			</response>
+			<transition to="END" event="VerifyVoicePath2WayComplete"/>
+			<transition to="END" event="VerifyVoicePath2WayError"/>
+		</state>
+	</add_to>
+</pc2xml>

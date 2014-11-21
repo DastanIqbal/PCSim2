@@ -1,0 +1,16 @@
+###########################################################
+#   Author: Vikas Sarawat (CableLabs)
+#   Date :   06/22/07  
+#   DUT:     Control-Point
+#   Title   : TEST CASE CPD-Control Point 2.2.2 – set and delete the keys manually
+#   Objective: Verify that the Requestor ignores a response with error value of 0.
+#
+#
+#
+##
+###########################################################
+
+
+LogMsg "---Verify that the Control Point allows deletion of already existing keys and provisioning of the new ones."
+
+

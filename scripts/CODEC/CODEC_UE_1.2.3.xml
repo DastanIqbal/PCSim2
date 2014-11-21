@@ -1,0 +1,66 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+ Change History: (Author & Date)
+	PCPCII-139 & PCPCII-140 : Update the Voicetronix modifiers to use the new values. 
+		(ghassler 07/10/2009 & 08/04/2009)
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="CODEC-MEDIA_1.2.3" 
+	descrip="Simultaneous Communication - Non-PSTN interface" 
+	number="CODEC-MEDIA_1.2.3">
+	
+	<template file="./templates/Proxy.xml" name="SCSCF1"/>
+	
+	<remove_from fsm="SCSCF1">
+		<state ID="Connected"/>
+	</remove_from>
+	
+	<add_to fsm="SCSCF1">
+		<state ID="Connected" timer="20000">
+			<prelude once="true">
+				<send protocol="utility" msgtype="VERIFYVOICEPATH2WAY">
+					<mod modtype="add" hdr="to voiceport">
+						<msg_ref type="platform">Platform.voiceport1</msg_ref>
+					</mod>
+					<mod modtype="add" hdr="from voiceport">
+						<msg_ref type="platform">Platform.voiceport0</msg_ref>
+					</mod>
+					<mod modtype="add" hdr="voiceExpected">
+						<expr>yes</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="utility">Response</msg_ref>
+						<expr>VERIFYVOICEPATH2WAYCOMPLETE</expr>
+					</eq>
+					<then>
+						<verify step="2" requirements="REQ12524">
+							<eq>
+								<msg_ref type="utility">Response</msg_ref>
+								<expr>VERIFYVOICEPATH2WAYCOMPLETE</expr>
+							</eq>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<transition to="OnHook" event="TimerExpired"/>
+			<transition to="Connected" event="VERIFYVOICEPATH2WAYCOMPLETE"/>
+		</state>
+	</add_to>
+</pc2xml>

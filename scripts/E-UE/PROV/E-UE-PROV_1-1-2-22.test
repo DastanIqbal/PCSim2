@@ -1,0 +1,402 @@
+#//*****************************************************************************
+#// Filename: E-UE-PROV_1-1-2-22.test
+#// Author:   Dan Smith
+#//           Matthew Forbes
+#// Creation Date: August 9, 2004
+#// Modified by:
+#//*****************************************************************************
+#// Description:
+#//     TC1316 TEST CASE PROV 5.55 pktcMtaDevProvisioningTimer Functionality Verification
+#//
+#// Objective:
+#//     To verify the functionality of the MIB object:  pktcMtaDevProvisioningTimer
+#//     
+#//
+#// PacketCable DUT:
+#//     MTA
+#//
+#// Test Steps:
+#//     - Initial configuration
+#//     - Configure policy with option 122, sub-option 8 set to 2 minutes
+#//     - KDC should be configured to not respond to AS_REQ from MTA or disabled
+#//     - Start sniffer
+#//     - Reset DUT
+#//     - Allow time for provisioning and for timeout
+#//     - Stop sniffer
+#//     - Invoke parsing tool and validate using Pass/Fail scripts
+#//     - Delete MTA config file
+#//
+#// Notes:
+#//     - Requires provPrimitives.tcl & tftp_primitives.tcl.
+#//     - Requires the specific config file in $BASE_CFG_FILE_PATH in Provisioning Server.
+#//     - Requires parT.tcl parsing tool to parse data from capture file.
+#//*****************************************************************************
+
+########
+# Notes: 9-Aug-2004 (DLS)
+#
+# - Add CM.bin and MTA.bin config file TFTP logic (optional)
+# - Defile better method for DHCP Server configuration?
+# - Verify timming of AS-REQ and DHCP:Discover messages.
+# - Future ParT Release: SEQUENCE-I API?
+#
+########
+
+global SCRIPT_VERSION
+set SCRIPT_VERSION { # $Id: E-UE-PROV_1-1-2-22.test 7406 2010-07-20 17:17:37Z dthakore $ }
+
+#################### Init Provision and TFTP modules ################
+
+DoStep "E-UE-PROV_1-1-2-22_1-1" "Initial configuration" {
+    LogMsg "--- Initial PROV module ---"
+    Init_PROV
+    # ProvCreateConfig 611 $MTA_MAC
+    PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122
+    PROV_DEPLOY_DHCP
+} { PASS_STEP }
+
+#if {000} {
+    
+
+################ Reset CM and MTA and Verify Provisioning ################
+
+DoStep "E-UE-PROV_1-1-2-22_1-4" "Hard reboot MTA" {
+    set val [SNMPvN_RESET $CM_IP]
+    LogMsg "Hard reboot of CM and MTA has passed"
+} {
+    IsEqual $val 0
+}
+
+DoStep "E-UE-PROV_1-1-2-22_1-5" "pktcMTADevProvisioningState Content Verification" {
+    # Wait for a minute to let CM/MTA starting to reboot
+    actionWait "Wait for CM/MTA to reboot" 60
+    # Get the OID from the MTA and check it using our previously defined
+    set val [GetProvState 1 600]
+    LogMsg "MTA Provisioning State"
+    LogMsg "             - Expected : 1"
+    LogMsg "             - Received : $val"
+} {
+    IsEqual $val 1
+}
+
+
+#} ;# END if-000
+
+#################### (Manual) Provision CM / MTA ################
+
+DoStep "E-UE-PROV_1-1-2-22_1-6" "Configure DHCP Server" {
+} {
+    # verify_signal "Configure DHCP policy for MTA with option 122, sub-option 8 set to 2 \
+            # minutes. KDC should not respond or be disabled (MTATC1316)"
+    PROV_MODIFY_DEVICE $MTA_MAC MTATC1316
+    PROV_DEPLOY_DHCP
+}
+
+#################### Start Sniffer ##################################
+
+DoStep "E-UE-PROV_1-1-2-22_2-1" "Start sniffer" {
+    LogMsg "--- Start sniffer --- "
+    Init_CONTROLLER_LAN
+    SetupCaptureControllerLan "host $MTA_IP || udp port 67 || host $CM_IP"
+    StartCaptureControllerLan
+} {PASS_STEP}
+
+#################### MTA #######################################
+
+########################## Clear Tickets ##################################
+
+DoStep "E-UE-PROV_1-1-2-22_3-1" "pktcMtaDevResetKrbTickets Reset Kerberos Tickets" {
+    # Wait for a couple of seconds to let CM/MTA finish rebooting
+    actionWait "Wait for 10 seconds before sending SNMP" 10
+    set val [SNMP_SET $oid_pktcMtaDevResetKrbTickets OCTET-STRING 0xC0 $MTA_IP]
+} {
+    if {$val == 0} {
+        LogMsg "Kerberos Tickets Have been cleared"
+        PASS_STEP
+    } else {
+        FAIL_STEP "Cannot reset Kerberos tickets"
+    }
+}
+
+DoStep "E-UE-PROV_1-1-2-22_3-2" "Reset MTA" {
+        # set val [SNMP_RESET $MTA_IP]
+        set val [SNMP_SET $oid_pktcMtaDevResetNow INTEGER 1 $MTA_IP]
+    LogMsg "--- Reset MTA ---"
+} {
+    IsEqual $val 0
+    # IsEqual $val 1
+}
+
+############################ MONITOR SNIFFER TRACE ############################
+
+# DoStep "E-UE-PROV_1-1-2-22_4-1" "Monitor Sniffer Trace" {
+# } {
+    # verify_signal "Monitor sniffer trace. Note time of DHCP ACK from provisioning server \
+            # to MTA. "
+# }
+# 
+
+DoStep "E-UE-PROV_1-1-2-22_5-1" "Continue to monitor Sniffer Trace" {
+} {
+    # verify_signal "MTA should send AS_REQs for 2 minutes and then issue a DHCP Discover. \
+            # Did this occur? "
+    # actionWait "Wait 5 seconds for AS_REQ after reset" 5
+    actionWait "Wait 180 seconds for DHCP DISCOVER after AS_REQs from reset" 180
+}
+#################### Stop Sniffer ##################################
+
+DoStep "E-UE-PROV_1-1-2-22_6-1" "Stop sniffer" {
+    LogMsg "--- Stop sniffer ---"
+    StopCaptureControllerLan
+    SaveToFileControllerLan 
+} { PASS_STEP }
+
+#################### Init ParT Tool ##################################
+
+DoStep "E-UE-PROV_1-1-2-22_6-2" "Analyze flow data" {
+    # Initial PARSER TOOL
+    Init_PART
+    
+    # Set up parser file
+    set PARSERFILE    $ETH_DEFAULT_TXT_FILE
+    
+} { PASS_STEP }
+
+#################### Parse Frames to ParT DataStore ##################################
+
+DoStep "E-UE-PROV_1-1-2-22_6-3" "Parse data" {
+    LogMsg "--- Parse data ---"
+    set PARAMS_DHCP         "{DHCP {} {} {} {} {} {} {} {}}"
+    set PARAMS_KRB         "{KRB {} {} {} {} {} {} {} {}}"
+    set msgID_MTA           [ParseFile $PARSERFILE "$PARAMS_DHCP $PARAMS_KRB"]
+################################################################################
+#     set PARAMS_MTA_SRC      "{{} {} {} {} $MTA_IP {} {} {} {}}"
+#     set PARAMS_MTA_DST      "{{} {} {} {} {} {} {} $MTA_IP {}}"
+#     set msgID_MTA           [ParseFile $PARSERFILE "$PARAMS_DHCP $PARAMS_MTA_SRC $PARAMS_MTA_DST"]
+################################################################################
+} {
+    if { $::PART_RETURN == 0 } {
+        PASS_STEP
+    } else {
+        FAIL_STEP "Failed ParT ParseFile operation."
+    }
+}
+
+#################### ParT Verify MTA Frames ################################
+
+
+
+                        
+DoStep "E-UE-PROV_1-1-2-22_6-4" "Verify sub-option 8 timeout period" {
+    #DECLARE A NEW VARIABLE
+    catch { unset ::MATT }
+    variable ::MATT
+    
+    #CALL INRANGE TO RETURN THE TIMESTAMP FOR DHCP ACK PARSED FROM THE FILE AND ORIGINATED BY THE MTA
+    VerifyValue $msgID_MTA "INRANGEALL(AFTER:-1,BEFORE:-1):(::MATT):(TIMESP,OPTIONCLIENTIPADDRESS,FNUM) DHCP ACK OPTIONCLIENTIPADDRESS" "IS" "$MTA_IP"
+    # tk_messageBox -message "DELETEME: The packets which match this type are: $::MATT($msgID_MTA) "
+    
+
+    
+    #Get the time for the first packet
+    set timeOfAck $::MATT($msgID_MTA,[ lindex $::MATT($msgID_MTA) 0],TIMESP)
+    set frameOfAck  $::MATT($msgID_MTA,[ lindex $::MATT($msgID_MTA) 0],FNUM)
+
+    #tk_messageBox -message "DELETEME: Dealing with FNUM: $frameCurrentPacket , [ lindex $::MATT($msgID_MTA) 0]"
+    #tk_messageBox -message "DELETEME: RANGE NEXT:   [ lrange $::MATT($msgID_MTA) 1 end ]"
+    
+    
+    catch { unset ::MATT }
+    # Find CM MAC with colons
+    set MTA_MAC_COL [AddColMac $MTA_MAC]
+    #CALL INRANGE TO RETURN THE TIMESTAMPS FOR DHCP DISCOVERS PARSED FROM THE FILE AND ORIGINATED BY THE MTA
+    VerifyValue $msgID_MTA "INRANGEALL(AFTER:-1,BEFORE:-1):(::MATT):(TIMESP,OPTIONCLIENTHWADDRESS,FNUM) DHCP DISCOVER OPTIONCLIENTHWADDRESS" "IS" "$MTA_MAC_COL"
+    # tk_messageBox -message "DELETEME: The packets which match this type are: $::MATT($msgID_MTA) "
+    
+    #Get the time for the second packet
+    set timeOfDiscover $::MATT($msgID_MTA,[ lindex $::MATT($msgID_MTA) 1],TIMESP)
+    set frameOfDiscover  $::MATT($msgID_MTA,[ lindex $::MATT($msgID_MTA) 1],FNUM)
+        
+        set diffTime [ expr $timeOfDiscover - $timeOfAck ]
+    } {
+        if { ( $diffTime > 150 ) || ( $diffTime < 110 ) } {
+            verify_signal "ERROR: The time difference between retries is NOT within the acceptable range (2-2.5min); Frames under consideration include $frameOfAck and $frameOfDiscover. Continue?"
+            FAIL_STEP
+        } else {
+            verify_signal "PASS: The time difference between retries is within the acceptable range (2-2.5min); Frames under consideration include $frameOfAck and $frameOfDiscover; DIFF TIME = $diffTime; Continue?"
+        PASS_STEP
+    }
+        
+        #tk_messageBox -message "DELETEME: Dealing with FNUM: $frameNextPacket , $i"
+        
+        #tk_messageBox -message "DELETEME: CURRENT PACKET: $timeOfCurrentPacket ($frameCurrentPacket) NEXT PACKET: $timeOfNextPacket ($frameNextPacket) DIFF = [ expr $timeOfNextPacket - $timeOfCurrentPacket ]"
+    }
+
+
+
+set msgStr "Verify MTA DHCP ACK exists"
+DoStep "E-UE-PROV_1-1-2-22_6-5" $msgStr {
+    LogMsg "--- $msgStr ---"
+    set CONTINUE_PAST_STEP_ERROR 1
+} {
+    VerifyValue $msgID_MTA "INANY DHCP ACK OPTION53" "EXISTS" "" AND \
+            "OPTIONCLIENTHWADDRESS" "IS" "$MTA_MAC_COL"
+}
+
+set msgStr "Verify MTA DHCP Offer exists and contains 122.6"
+DoStep "E-UE-PROV_1-1-2-22_6-6" $msgStr {
+    LogMsg "--- $msgStr ---"
+} {
+    VerifyValue $msgID_MTA "INANY DHCP OFFER OPTION122SUBOPTION6" "EXISTS" "" AND \
+            "OPTIONCLIENTHWADDRESS" "IS" "$MTA_MAC_COL"
+}
+
+
+DoStep "E-UE-PROV_1-1-2-22_6-7" "Verify KDC server matches option 122, sub-option 6" {
+    LogMsg "--- Verify KDC server matches option 122, sub-option 6 ---"
+    set kdcip [GetValue $msgID_MTA "INANY KRB KRB_AS_REQ HEADERDSTIP"]
+    set kdcrealm [GetValue $msgID_MTA "INANY DHCP OFFER OPTION122SUBOPTION6" AND \
+            "OPTIONCLIENTHWADDRESS" "IS" "$MTA_MAC_COL"]
+} {
+    verify_signal "KDC server realm name is $kdcrealm and it's IP address is $kdcip, is \
+           this correct?"
+}
+
+############# VERIFY MULTIPLE AS_REQ AND DHCP DISCOVERS USING SEQUENCING ###############
+
+
+set msgStr "Verify MTA KRB:KRB_AS_REQ Sequence"
+DoStep "E-UE-PROV_1-1-2-22_6-8" $msgStr {
+    LogMsg "--- $msgStr ---"
+    
+    # Set SEQUENCE to check
+    set MTA_SEQUENCE "KRB:KRB_AS_REQ,KRB:KRB_AS_REQ,KRB:KRB_AS_REQ"
+    
+    # Remove whitespace
+    regsub -all { } $MTA_SEQUENCE {} MTA_SEQUENCE
+} {
+    # Verify Sequence
+    VerifyValue $msgID_MTA "SEQUENCE $MTA_SEQUENCE" "" ""
+}
+
+set msgStr "Verify NO MTA AS-REP from KDC"
+DoStep "E-UE-PROV_1-1-2-22_6-9" $msgStr {
+    LogMsg "--- $msgStr ---"
+} {
+    VerifyNotValue $msgID_MTA "INANY KRB KRB_TYPE KRB_AS_REP" "EXISTS" "" AND \
+            "OPTIONCLIENTHWADDRESS" "IS" "$MTA_MAC_COL"
+}
+
+set msgStr "Verify MTA DHCP:DISCOVER Sequence"
+DoStep "E-UE-PROV_1-1-2-22_7-1" $msgStr {
+    LogMsg "--- $msgStr ---"
+    
+    # Set SEQUENCE to check
+    set MTA_SEQUENCE "DHCP:DISCOVER,KRB:KRB_AS_REQ,DHCP:DISCOVER"
+    
+    # Remove whitespace
+    regsub -all { } $MTA_SEQUENCE {} MTA_SEQUENCE
+} {
+    # Verify Sequence
+    VerifyValue $msgID_MTA "SEQUENCE $MTA_SEQUENCE" "" ""
+}
+
+###################################### Verify ESAFE MIBs ###############################
+# 
+ # DoStep "E-UE-PROV_1-1-2-22_8-1" "Verify ESAFE MIBs" {
+ # } {
+     # verify_signal "Query esafeProvisioningStatusTable using walk on SNMPv2 browser.
+                    # Capture and save trace."
+ # }
+################################################################################
+# These scripts will automate ESAFE MIB verification
+################################################################################
+
+################################################################################
+set msgStr "Verify the MIB esafeProvisioningStatusProgress"
+DoStep "E-UE-PROV_1-1-2-22_8-1" $msgStr {
+set val [SNMPvN_GET 1.3.6.1.4.1.4491.2.1.14.1.1.1.1.1.16 $CM_IP]
+} {
+IsEqual $val 2
+}
+
+set msgStr "Verify the MIB esafeProvisioningStatusFailureFound"
+DoStep "E-UE-PROV_1-1-2-22_9-1" $msgStr {
+set val [SNMPvN_GET 1.3.6.1.4.1.4491.2.1.14.1.1.1.1.2.16 $CM_IP]
+} {
+IsEqual $val 1
+}
+
+set msgStr "Verify the MIB esafeProvisioningStatusFailureFlow"
+DoStep "E-UE-PROV_1-1-2-22_10-1" $msgStr {
+set val [SNMPvN_GET 1.3.6.1.4.1.4491.2.1.14.1.1.1.1.3.16 $CM_IP]
+} {
+    if { ( $val == "\"MTA-9\"" ) || ($val == "\"MTA23\"" ) } {
+        return 0
+    } else {
+        LogMsg "Fail: Expected value is MTA-9 or MTA23  but receive $val" 49
+        return 1
+    }
+}
+
+set msgStr "Verify the MIB esafeProvisioningStatusFailureEventID"
+DoStep "E-UE-PROV_1-1-2-22_11-1" $msgStr {
+set val [SNMPvN_GET 1.3.6.1.4.1.4491.2.1.14.1.1.1.1.4.16 $CM_IP]
+} {
+    if { ( $val == "65533" ) || ($val == "65521" ) } {
+        return 0
+    } else {
+        LogMsg "Fail: Expected value is 65533 or 65521  but receive $val" 49
+        return 1
+    }
+}
+
+    set msgStr "Verify the MIB esafeProvisioningStatusFailureErrorText"
+DoStep "E-UE-PROV_1-1-2-22_12-1" $msgStr {
+    set string1 "\"AS request has been sent, and no MSO KDC AS Kerberos ticket reply has yet been received.\""
+    set string2 "\"The provisioning sequence took too long .*\""
+    set val [SNMPvN_GET 1.3.6.1.4.1.4491.2.1.14.1.1.1.1.5.16 $CM_IP]
+} {
+# IsEqual $val "SNMPv2-SMI::enterprises.4491.2.1.14.1.1.1.1.5.16 = \"\""
+    # verify_signal "The value for esafeProvisioningStatusFailureErrorText is $val. Is this correct?"
+    set val1 [string compare -length 85 $val $string1]
+    set val2 [string compare -length 40 $val $string2]
+    if { ( $val1 == 0 ) || ( $val2 == 0 ) } {
+        return 0
+    } else {
+        LogMsg "Fail: Expected value is \"$string1\" or \"$string2\" but receive $val" 49
+        return 1
+    }
+}
+
+set msgStr "Verify the MIB esafeProvisioningStatusLastUpdate"
+DoStep "E-UE-PROV_1-1-2-22_13-1" $msgStr {
+    set val [SNMPvN_GET 1.3.6.1.4.1.4491.2.1.14.1.1.1.1.6.16 $CM_IP]
+    set month [string range $val 5 6]
+    set day [string range $val 8 9]
+    # set month [hexToDec $month]
+    # set day [hexToDec $day]
+} {
+    verify_signal "The date from esafeProvisioningStatusLastUpdate is $month\/$day. Is this correct?"
+}
+################################################################################
+
+
+################################################################################
+# Cleanup
+################################################################################
+
+DoStep "E-UE-PROV_1-1-2-22_14-1" "Restore MTA policy and KDC server" {
+} {
+    # verify_signal "Restore MTA policy and KDC server (MTAFORCW_122)"
+    # actionWait "Wait 50 seconds for MTA to recover" 50
+    PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122
+    PROV_DEPLOY_DHCP
+}
+
+# Clear
+set CONTINUE_PAST_STEP_ERROR 0
+
+Cleanup
+
+return 0

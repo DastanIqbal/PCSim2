@@ -1,0 +1,169 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+
+<!-- First are the document type and the attributes for our document -->
+<pc2xml version="$Revision: 8188 $" 
+	name="NAT_UE_1.2.5.9" 
+	descrip="Call from a Lite-ICE UE (DUT) to a Lite-ICE UE" 
+	number="NAT_UE_1.2.5.9">
+	
+	<template file="./templates/CallOrigAtUETemp.xml" name="UE1"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Setup"/>
+		<state ID="Connected"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		
+		<state ID="Setup">
+			<prelude once="true">
+				<send protocol="utility" msgtype="DialDigits">
+					<mod modtype="add" hdr="number">
+						<msg_ref type="platform">UE1.phone number 1</msg_ref>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>Invite</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="100-INVITE"/>
+												
+						<verify step="1" requirements="RFC4361, RFC4363, RFC4365, RFC4366, RFC4367, RFC4369, RFC4371, RFC4446, RFC4496, RFC4497, RFC4498, RFC4501, RFC4506, RFC4509, RFC4510" >
+							<contains>
+								<msg_ref type="sip">INVITE.SDP</msg_ref>
+								<expr>a=ice-lite</expr>
+							</contains>
+						</verify>
+								
+						<verify step="1" requirements="RFC4361, RFC4363, RFC4365, RFC4366, RFC4367, RFC4369, RFC4371, RFC4446, RFC4496, RFC4497, RFC4498, RFC4501, RFC4506, RFC4509, RFC4510" >
+							<or>
+								<eq>
+									<msg_ref type="sip">INVITE.c.address</msg_ref>
+									<msg_ref type="sip">INVITE.host-1.connection-address</msg_ref>
+								</eq>
+								<eq>
+									<msg_ref type="sip">INVITE.c.address</msg_ref>
+									<msg_ref type="sip">INVITE.host-2.connection-address</msg_ref>									
+								</eq>
+							</or>
+						</verify>
+						
+						<verify step="1" requirements="RFC4361, RFC4363, RFC4365, RFC4366, RFC4367, RFC4369, RFC4371, RFC4446, RFC4496, RFC4497, RFC4498, RFC4501, RFC4506, RFC4509, RFC4510" >
+							<contains>
+								<msg_ref type="sdp">INVITE.host-1.component-id</msg_ref>
+								<expr>1</expr>
+							</contains>
+						</verify>
+						
+						<verify step="1" requirements="RFC4361, RFC4363, RFC4365, RFC4366, RFC4367, RFC4369, RFC4371, RFC4446, RFC4496, RFC4497, RFC4498, RFC4501, RFC4506, RFC4509, RFC4510" >
+							<contains>
+								<msg_ref type="sdp">INVITE.host-2.component-id</msg_ref>
+								<expr>2</expr>
+							</contains>
+						</verify>
+						
+						<verify step="1" requirements="RFC4361, RFC4363, RFC4365, RFC4366, RFC4367, RFC4369, RFC4371, RFC4446, RFC4496, RFC4497, RFC4498, RFC4501, RFC4506, RFC4509, RFC4510" >
+							<eq>
+								<msg_ref type="sdp">INVITE.host-1.foundation</msg_ref>
+								<msg_ref type="sdp">INVITE.host-2.foundation</msg_ref>
+							</eq>
+						</verify>
+						
+						<verify step="1" requirements="RFC4361, RFC4363, RFC4365, RFC4366, RFC4367, RFC4369, RFC4371, RFC4446, RFC4496, RFC4497, RFC4498, RFC4501, RFC4506, RFC4509, RFC4510" >
+							<dnc>
+								<msg_ref type="sdp">INVITE.host-1</msg_ref>
+								<expr>raddr</expr>
+							</dnc>
+						</verify>
+						
+						<verify step="1" requirements="RFC4361, RFC4363, RFC4365, RFC4366, RFC4367, RFC4369, RFC4371, RFC4446, RFC4496, RFC4497, RFC4498, RFC4501, RFC4506, RFC4509, RFC4510" >
+							<dnc>
+								<msg_ref type="sdp">INVITE.host-1</msg_ref>
+								<expr>rport</expr>
+							</dnc>
+						</verify>
+
+						<verify step="1" requirements="RFC4361, RFC4363, RFC4365, RFC4366, RFC4367, RFC4369, RFC4371, RFC4446, RFC4496, RFC4497, RFC4498, RFC4501, RFC4506, RFC4509, RFC4510" >
+							<contains>
+								<msg_ref type="sip">INVITE.SDP</msg_ref>
+								<expr>a=ice-pwd:</expr>
+							</contains>
+						</verify>
+
+						<verify step="1" requirements="RFC4361, RFC4363, RFC4365, RFC4366, RFC4367, RFC4369, RFC4371, RFC4446, RFC4496, RFC4497, RFC4498, RFC4501, RFC4506, RFC4509, RFC4510" >
+							<gte>
+								<msg_ref type="sdp" length="true">INVITE.ice-pwd.value</msg_ref>
+								<expr>22</expr>
+							</gte>
+						</verify>
+
+						<verify step="1" requirements="RFC4361, RFC4363, RFC4365, RFC4366, RFC4367, RFC4369, RFC4371, RFC4446, RFC4496, RFC4497, RFC4498, RFC4501, RFC4506, RFC4509, RFC4510" >
+							<contains>
+								<msg_ref type="sip">INVITE.SDP</msg_ref>
+								<expr>a=ice-ufrag:</expr>
+							</contains>
+						</verify>
+
+						<verify step="1" requirements="RFC4361, RFC4363, RFC4365, RFC4366, RFC4367, RFC4369, RFC4371, RFC4446, RFC4496, RFC4497, RFC4498, RFC4501, RFC4506, RFC4509, RFC4510" >
+							<gte>
+								<msg_ref type="sdp" length="true">INVITE.ice-ufrag.value</msg_ref>
+								<expr>4</expr>
+							</gte>
+						</verify>
+					</then>
+				</if>
+			</response>
+			
+			<transition to="Setup" event="DialDigitsComplete"/>
+			<!-- Transitions for Setup state -->
+			<transition to="Connected" event="INVITE"/>
+		</state>
+		
+		<state ID="Connected">
+			<prelude once="true">
+				<send protocol="sip" msgtype="200-Invite">
+					<mod modtype="add" hdr="SDP">
+						<var_expr>
+							<expr>a=ice-lite</expr>
+							<expr>\r\na=ice-pwd:</expr>
+							<msg_ref type="platform">UE1.STUN Password Credential</msg_ref>
+							<expr>\r\na=ice-ufrag:</expr>
+							<msg_ref type="platform">UE1.STUN Username Credential</msg_ref>
+							<expr>\r\na=candidate:1 1 UDP </expr>
+							<msg_ref type="platform">UE1.STUN Priority</msg_ref>
+							<expr> </expr>
+							<msg_ref type="platform">UE1.IP</msg_ref>
+							<expr> </expr>
+							<msg_ref type="platform">UE1.SDPPort</msg_ref>
+							<expr> typ host</expr>
+						</var_expr>
+					</mod>
+				</send>
+			</prelude>
+			<transition to="Connected" event="DialDigitsComplete"/>
+			<transition to="END" event="ACK"/>
+		</state>
+	</add_to>
+</pc2xml>

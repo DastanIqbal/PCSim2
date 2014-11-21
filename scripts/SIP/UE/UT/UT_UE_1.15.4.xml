@@ -1,0 +1,38 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+
+<pc2xml version="$Revision: 8188 $" name="UT_UE_1.15.4" descrip="This is a unit test script for testing the UE_1.15.4 test script." number="1">
+	<template name="UE0" file="$UT_PATH/Templates/ut/RegSub_DUT.xml"/>
+	<add_to fsm="UE0">
+		<transition from="Subscribe" to="Fail" event="200-Subscribe"/>
+		<transition from="Subscribe" to="END" event="Notify"/>
+		<state ID="Subscribe" sub="postlude">
+			<send protocol="sip" msgtype="200-Notify" target="PCSCF1" originator="DUT"/>
+		</state>
+		<state ID="Fail">
+			<prelude>
+				<fail/>
+				<generate event="FailEvent"/>
+			</prelude>
+			<!-- Transitions for Fail state -->
+			<transition to="END" event="FailEvent"/>
+		</state>
+	</add_to>
+</pc2xml>

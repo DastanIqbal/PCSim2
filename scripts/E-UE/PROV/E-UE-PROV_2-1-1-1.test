@@ -1,0 +1,96 @@
+#//*****************************************************************************
+#// Filename: E-UE-PROV_2-1-1-1.test (PACT)
+#// Author:   Matthew Forbes
+#// Creation Date: October 30, 2008
+#// Modified by:
+#//*****************************************************************************
+#// Description:
+#//     TC2826 TEST CASE E-UE-PROV 2.1.1.1 SNMPv2/v3 co-existence
+#//
+#//
+#// Objective:
+#//     To ensure the E/DVA DUT is acessible by the MTA IP address in both SNMPv3 and SNMPv2.
+#//     
+#//
+#//
+#// PacketCable DUT:
+#//     EDVA
+#//
+#// Test Steps:
+#//     - Initial Configuration: Cfg. 2826, MTA configured for v2/v3 read write access.
+#//     - TFTP config file
+#//     - Reset DUT
+#//     - Check Provisioning state of MTA
+#//     - Invoke SNMPv2/v3 read/write apps and validate using Pass/Fail scripts
+#//     - Delete MTA config file
+#//
+#// Notes:
+#//     - Requires provPrimitives.tcl & tftp_primitives.tcl.
+#//     - Requires the specific config file in $BASE_CFG_FILE_PATH in Provisioning Server.
+#//*****************************************************************************
+global SCRIPT_VERSION
+set SCRIPT_VERSION { # $Id: E-UE-PROV_2-1-1-1.test 7406 2010-07-20 17:17:37Z dthakore $ }
+
+DoStep "E-UE-PROV_2-1-1-1_1-1" "Initialize Test Platform" {
+    Init_PROV
+    # ProvCreateConfig 1458 $MTA_MAC
+    PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122 cfg-2826.bin
+    PROV_DEPLOY_DHCP
+} { PASS_STEP }
+
+
+
+DoStep "E-UE-PROV_2-1-1-1_2-1" "Reset CM/MTA" {
+    SNMPvN_RESET $CM_IP
+    LogMsg "Reset CM/MTA has passed"
+} {
+    PASS_STEP
+}
+
+DoStep "E-UE-PROV_2-1-1-1_3-1" "pktcMTADevProvisioningState Content Verification" {
+    # Wait for a minute to let CM/MTA starting to reboot
+    actionWait "Wait for CM/MTA to reboot" 60
+    # Get the OID from the MTA and check it using our previously defined
+    set val [GetProvState 1 600]
+    LogMsg "MTA Provisioning State"
+    LogMsg "             - Expected : 1"
+    LogMsg "             - Received : $val"
+} {
+    IsEqual $val 1
+}
+
+
+DoStep "E-UE-PROV_2-1-1-1_4-1" "pktcMtaDevProvisioningTimer Content Verification and reset" {
+    LogMsg "Get value for pktcMtaDevProvisioningTimer(SNMPv2)"
+    set val [SNMPvN_GET $oid_pktcMtaDevProvisioningTimer $MTA_IP 2c public2]
+    IsEqual $val 10
+} {
+    LogMsg "Set value for pktcMtaDevProvisioningTimer(SNMPv2) to 20"
+    set val [SNMPvN_SET $oid_pktcMtaDevProvisioningTimer Unsigned32 20 $MTA_IP 2c public2]
+    IsEqual $val 0
+    set val [SNMPvN_GET $oid_pktcMtaDevProvisioningTimer $MTA_IP 2c public2]
+    IsEqual $val 20
+}
+
+DoStep "E-UE-PROV_2-1-1-1_5-1" "Setup SNMPv3 to point to MTA" {
+    # No message sent
+} { PASS_STEP }
+
+DoStep "E-UE-PROV_2-1-1-1_6-1" "pktcMtaDevProvisioningTimer Content Verification and reset" {
+    LogMsg "Get value for pktcMtaDevProvisioningTimer(SNMPv3)"
+    set val [SNMP_GET $oid_pktcMtaDevProvisioningTimer $MTA_IP]
+    # set val [SNMP_GET .1.3.6.1.4.1.4491.2.2.1.1.1.11.0 $MTA_IP]
+    IsEqual $val 20
+} {
+    LogMsg "Set value for pktcMtaDevProvisioningTimer(SNMPv3) to 15"
+    set val [SNMP_SET $oid_pktcMtaDevProvisioningTimer Unsigned32 15 $MTA_IP ]
+    IsEqual $val 0
+    set val [SNMP_GET $oid_pktcMtaDevProvisioningTimer $MTA_IP]
+    IsEqual $val 15
+}
+
+################################################################################
+# Cleanup
+################################################################################
+
+Cleanup

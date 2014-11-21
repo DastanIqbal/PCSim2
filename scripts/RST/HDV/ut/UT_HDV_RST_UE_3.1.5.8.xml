@@ -1,0 +1,205 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+
+<pc2xml version="$Revision: 6076 $" name="UT_RST_UE_1.1.1.2" descrip="This is a unit test for the RST_UE 1.1.1.2 test script" number="1">
+	<template file="./templates/ut/Orig_DUT.xml" name="UT_HDV_RST_UE_3.1.5.8"/>
+	<remove_from fsm="UT_HDV_RST_UE_3.1.5.8">
+		<state ID="Setup"/>
+		<state ID="Connected"/>
+	</remove_from>
+	<add_to fsm="UT_HDV_RST_UE_3.1.5.8">
+			<NE targets="*69"/>
+			<state ID="Setup">
+				<prelude>
+					<log expr="Start the test script if you haven't already."/>
+					<sleep time="5000"/>
+					<send protocol="sip" msgtype="Invite" target="UE1" originator="DUT">
+						<mod modtype="add" hdr="P-Asserted-Identity">
+					<var_expr>
+						<expr>&quot;Cullen, Jennings&quot; &lt;sip:</expr>
+						<msg_ref type="platform">UE1.username</msg_ref>
+						<expr>@</expr>
+						<msg_ref type="platform">UE1.domain</msg_ref>
+						<expr>&gt;</expr>
+					</var_expr>
+				</mod>
+					</send>
+					
+				</prelude>
+				<response>
+					<!-- Step 4 from the Default Message Flow Call-Term-at-UE(DUT) Sequence Diagram -
+               Test 18x response for reliability for possible Prack message -->
+					<if>
+						<contains>
+							<msg_ref type="sip" msg_instance="last" hdr_instance="any">18x-Invite.Require</msg_ref>
+							<expr>100rel</expr>
+						</contains>
+						<then>
+							<!--Reliablity required for test sending Prack message to peer.-->
+							<send protocol="sip" msgtype="Prack" target="UE1" originator="DUT"/>
+						</then>
+					</if>
+				</response>
+				<!-- Transitions for Setup state -->
+				<transition from="Setup" to="Proceeding" event="100-INVITE"/>
+				<transition from="Setup" to="Alerting" event="180-INVITE"/>
+				<transition from="Setup" to="Alerting" event="183-INVITE"/>
+				<transition from="Setup" to="Connected" event="200-INVITE"/>
+			</state>
+			
+			<state ID="Connected">
+				<prelude>
+					<send protocol="sip" msgtype="ACK" target="UE1" originator="DUT"/>
+				</prelude>
+				<postlude>
+					<send protocol="sip" msgtype="200-BYE" target="UE1" originator="DUT"/>
+				</postlude>
+				<transition to="Setup1" event="BYE"/>
+			</state>
+			<state ID="Setup1">
+				<prelude once="true">
+				
+				<send protocol="utility" msgtype="DialDigits">
+					<mod modtype="add" hdr="number">
+						<expr>*69</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>Invite</expr>
+					</eq>
+					<then>
+						<!--verify step="5" requirements="REQ23395"-->
+							<and>
+								<eq>
+									<msg_ref type="sip">Invite.Request-Line.username</msg_ref>
+									<expr>*69</expr>
+								</eq>
+								<and>
+									<eq>
+										<msg_ref type="sip">Invite.Request-Line.domain</msg_ref>
+										<msg_ref type="platform">UE0.domain</msg_ref>
+									</eq>
+									<eq>
+										<msg_ref type="sip">Invite.Request-Line.user</msg_ref>
+										<expr>dialstring</expr>
+									</eq>
+								</and>
+							</and>
+						<!--/verify-->
+						<send protocol="sip" msgtype="180-INVITE" target="UE1" originator="DUT"/>
+					</then>
+				</if>
+			</response>
+			<!-- Step 2 test case SIP 1.6.3.2 -Dial the number for UE-A from UE-B 
+				to establish a stable two-way call as per steps 1-12 [UE Terminating Case Flow]..-->
+			<transition to="Setup1" event="DialDigitsComplete"/>
+			<transition to="Releasing1" event="Invite"/>
+			</state>
+			<state ID="Releasing1">
+			  <response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>CANCEL</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="200-CANCEL" target="UE1" originator="DUT"/>
+						<sleep time="200"/>
+						<send protocol="sip" msgtype="487-INVITE" target="UE1" originator="DUT" />
+					</then>
+				</if>
+			  </response>
+			  <transition to="EndCall1" event="CANCEL"/>
+			</state>
+			<state ID="EndCall1" timer="15000">
+                        <transition to="Setup2" event="ACK" />
+                        <transition to="Setup2" event="TimerExpired" />
+			</state>
+			<state ID="Setup2">
+				<prelude once="true">
+				<!-- Step 2 test case SIP 1.6.3.2 - Go off-hook on the device 
+				attached to the DUT (UE-A) and dial *61.-->
+				<send protocol="utility" msgtype="DialDigits">
+					<mod modtype="add" hdr="number">
+						<expr>*69</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>Invite</expr>
+					</eq>
+					<then>
+						<!--verify step="8" requirements="REQ23396 REQ23398"-->
+							<and>
+								<eq>
+									<msg_ref type="sip">Invite.Request-Line.username</msg_ref>
+									<expr>*69</expr>
+								</eq>
+								<and>
+									<eq>
+										<msg_ref type="sip">Invite.Request-Line.domain</msg_ref>
+										<msg_ref type="platform">UE1.domain</msg_ref>
+									</eq>
+									<eq>
+										<msg_ref type="sip">Invite.Request-Line.user</msg_ref>
+										<expr>dialstring</expr>
+									</eq>
+								</and>
+							</and>
+						<!--/verify-->
+						<send protocol="sip" msgtype="180-INVITE" target="UE1" originator="DUT"/>
+					</then>
+				</if>
+			</response>
+			<!-- Step 2 test case SIP 1.6.3.2 -Dial the number for UE-A from UE-B 
+				to establish a stable two-way call as per steps 1-12 [UE Terminating Case Flow]..-->
+			<transition to="Setup2" event="DialDigitsComplete"/>
+			<transition to="Releasing2" event="Invite"/>
+			</state>
+			<state ID="Releasing2">
+			  <response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>CANCEL</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="200-CANCEL" target="UE1" originator="DUT"/>
+						<sleep time="200"/>
+						<send protocol="sip" msgtype="487-INVITE" target="UE1" originator="DUT"/>
+					</then>
+				</if>
+			  </response>
+			  <transition to="EndCall2" event="CANCEL"/>
+			</state>
+			<state ID="EndCall2" timer="15000">
+                        <transition to="END" event="ACK" />
+                        <!--transition to="Setup2" event="TimerExpired" /-->
+			</state>
+			
+		</add_to>
+</pc2xml>

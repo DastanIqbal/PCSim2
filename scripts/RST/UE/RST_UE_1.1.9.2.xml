@@ -1,0 +1,119 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	PCPCII-174 : Update the script to the D11 version of the ATP (ghassler 01/26/2010)
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-UE 1.1.9.2" 
+	descrip="UE Behavior on Reception of a 486 Busy Here response " 
+	number="RST-UE 1.1.9.2" inspector="disable">
+	
+	<template file="./templates/CallOrigAtUETemp.xml" name="UE1"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Setup"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<state ID="Setup">
+			<prelude once="true">
+				<send protocol="utility" msgtype="DialDigits">
+					<mod modtype="add" hdr="number">
+						<msg_ref type="platform">UE1.phone number 1</msg_ref>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<!-- If the current message that we received is an Invite, answer with
+               a 100-trying -->
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>Invite</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="100-INVITE"/>
+						<send protocol="sip" msgtype="486-INVITE"/>
+					</then>
+				</if>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>ACK</expr>
+					</eq>
+					<then>
+						<verify step="4" requirements="REQ14296">
+							<eq>
+								<msg_ref type="sip">Request</msg_ref>
+								<expr>ACK</expr>
+							</eq>
+						</verify>
+						
+					</then>
+				</if>
+			</response>
+			<transition to="Setup" event="DialDigitsComplete"/>
+			<transition to="Setup" event="INVITE"/>
+			<transition to="Busy" event="ACK"/>
+		</state>
+		
+		<state ID="Busy">
+			<prelude>
+				<sleep time="5000"/>
+				<send protocol="utility" msgtype="VerifyBusy"/>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="utility">Response</msg_ref>
+						<expr>VerifyBusyComplete</expr>
+					</eq>
+					<then>
+						<verify step="3" requirements="REQ14296">
+							<eq>
+								<msg_ref type="utility">Response</msg_ref>
+								<expr>VerifyBusyComplete</expr>
+							</eq>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<transition to="VerifyState2" event="VerifyBusyComplete"/>
+			<transition to="VerifyState2" event="VerifyBusyError"/>
+		</state>
+	
+		<state ID="VerifyState2" timer="10000">
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="event"/>
+						<expr>TimerExpired</expr>
+					</eq>
+					<then>
+						<verify step="5" requirements="REQ14296">
+							<eq>
+								<msg_ref type="event"/>
+								<expr>TimerExpired</expr>
+							</eq>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<transition to="END" event="TimerExpired"/>
+		</state>
+	</add_to>
+</pc2xml>

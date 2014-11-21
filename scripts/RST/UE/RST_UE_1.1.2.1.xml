@@ -1,0 +1,105 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-UE 1.1.2.1" 
+	descrip="Call Status Indication on 486 Response" 
+	number="RST-UE 1.1.2.1">
+	
+	<template file="./templates/CallOrigAtUETemp.xml" name="UE1"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Register"/>
+		<state ID="Setup"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<state ID="Register">
+			<response>
+				<var name="announcement">
+					<msg_ref type="platform">DUT.Supports Local Announcements</msg_ref>
+				</var>
+				
+			</response>
+			<transition to="OffHook" event="Registered"/>
+		</state>
+		<!-- SETUP State -->
+		
+		<state ID="Setup">
+			<prelude once="true">
+				<send protocol="utility" msgtype="DialDigits">
+					<mod modtype="add" hdr="number">
+						<msg_ref type="platform">UE1.phone number 1</msg_ref>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>Invite</expr>
+					</eq>
+					<then>
+						<!-- Steps 2 from test case SIP 1.1.2.1 -
+						Execute steps 1 of [UE originating Case Flow]. 
+						And the SS responds to the INVITE request with a 486 BUSY HERE message..-->
+						<send protocol="sip" msgtype="486-INVITE"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Setup" event="DialDigitsComplete"/>
+			<transition to="Verify State" event="INVITE"/>
+		</state>
+		
+		<state ID="Verify State">
+			<response>
+				<if>
+					<and>
+						<neq>
+							<msg_ref type="event"/>
+							<expr>INVITE_RECEIVED_UAS</expr>
+						</neq>
+						<eq ignoreCase="true">
+							<var_ref name="announcement"/>
+							<expr>true</expr>
+						</eq>
+					</and>
+					<then>
+						<log promptUser="True" group="tones" yesExpected="True" verify="True" 
+							step="2" requirements="REQ13427" 
+							expr="Verify that the UE applies the configured indication to the user."/>
+					</then>
+					<elseif>
+						<neq>
+							<msg_ref type="event"/>
+							<expr>INVITE_RECEIVED_UAS</expr>
+						</neq>
+						<then>
+							<log promptUser="True" group="tones" yesExpected="True" verify="True" 
+								step="2" requirements="REQ13427" 
+								expr="Verify that the UE is playing busy tone to the user."/>
+						</then>
+					</elseif>
+				</if>
+			</response>
+			<transition to="Verify State" event="DialDigitsComplete"/>
+			<transition to="END" event="ACK"/>
+		</state>
+	</add_to>
+</pc2xml>

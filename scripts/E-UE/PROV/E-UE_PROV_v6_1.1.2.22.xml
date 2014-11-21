@@ -1,0 +1,296 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+ Change History: (Author & Date)
+-->
+<pc2xml version="$Revision: 7768 $"
+        name="EUE Prov 1.1.2.22"
+        descrip="eUE acts on timer value configured in sub-option 8 and reflects
+                 proper value in pktcMtaDevProvisioningTimer MIB."
+        number="EUE Prov 1.1.2.22">
+
+    <template file="./templates/EUE_Prov_B_1_1_1.xml" name="MultipleIP"/>
+
+    <add_to fsm="MultipleIP">
+        <transition from="StartCapture_RebootWait" to="ClearTicket" event="TimerExpired"/>
+
+
+        <!-- Clear Kerberos ticket by setting the pktcMtaDevReset KrbTickets. -->
+        <!-- Set pktcMtaDevResetKrbTickets MIB to value of invalidateProvOnReboot=1 SNMPv3 -->
+        <state ID="ClearTicket">
+            <prelude>
+                <send protocol="utility" msgtype="SNMPSet">
+                    <mod modtype="add" hdr="array">
+                        <var_expr>
+                            <expr>varBind 1 1 3 \r\n ][ , </expr>
+                            <expr>PKTC-IETF-MTA-MIB::pktcMtaDevResetKrbTickets.0,BITS,00][\r\n</expr>
+                        </var_expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+                    <mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="3">
+                    <contains>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>80 0</expr>
+                    </contains>
+                </verify>
+            </response>
+	    <postlude>
+	    	<stop_capture/>
+	    </postlude>
+            <transition to="ConfigurePolicy" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+	
+	<state ID="ConfigurePolicy"
+		provFile="v6.C.1.2.1.bin"
+		policyFile="X_eUEv6_sub8_2min"
+		nextState="Reset"/>
+		
+
+        <!-- Reset the UE DUT (not the CM) and bring it to an operational state. -->
+        <!-- Longer timer due to nature of test. -->
+        <state ID="Reset" timer="150000">
+            <prelude once="true">
+                <start_capture>
+                    <filter>
+			<var_expr>
+				<expr>host </expr>
+				<msg_ref type="platform">DUT.IP</msg_ref>
+				<expr> || host </expr>
+				<msg_ref type="platform">DUT.CM IP Address</msg_ref>
+				<expr> || host </expr>
+				<msg_ref type="platform">DUT.DHCP Server IP</msg_ref>
+			</var_expr>
+                    </filter>
+                </start_capture>
+
+                <send protocol="utility" msgtype="SNMPSet">
+                    <mod modtype="add" hdr="array">
+                        <var_expr>
+                            <expr>varBind 1 1 3 \r\n ][ , </expr>
+                            <expr>PKTC-IETF-MTA-MIB::pktcMtaDevResetNow.0,INTEGER,1][\r\n</expr>
+                        </var_expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP Address</msg_ref>
+                    </mod>
+                    <mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPRespFailure</expr>
+                    </eq>
+                    <then>
+                        <fail/>
+                    </then>
+                </if>
+                <if>
+                    <or>
+                        <eq>
+                            <msg_ref type="sip">REGISTER.Contact.expires</msg_ref>
+                            <expr>0</expr>
+                        </eq>
+                        <eq>
+                            <msg_ref type="sip">REGISTER.Expires.value</msg_ref>
+                            <expr>0</expr>
+                        </eq>
+                    </or>
+                    <then>
+                        <send protocol="sip" msgtype="200-REGISTER"/>
+                    </then>
+                </if>
+            </response>
+            <transition to="VerifyMessaging" event="TimerExpired"/>
+            <transition to="Reset" event="SNMPResp"/>
+            <transition to="Reset" event="REGISTER"/>
+            <!-- Step 7 MTA resets properly, otherwise SNMPRespFailure. -->
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+        <state ID="VerifyMessaging">
+            <prelude once="true">
+                <stop_capture/>
+                <parse_capture name="eUE_v6">
+			<parser_filter protocol="dhcpv6" clientMAC="DUT.MAC Address"/>
+                </parse_capture>
+		<parse_capture name="eUE_KERB">
+			<parser_filter protocol="kerberos" ip="DUT.IP"/>
+                </parse_capture>
+		
+		<verify step="4">
+			<notnull>
+				<capture_ref type="dhcpv6" name="eUE_v6">Reply.num</capture_ref>
+			</notnull>
+                </verify>
+
+                <!--MTA continues provisioning process and issues AS_REQ to the KDC server 
+                    specified by the provisioning application in option 122, sub-option 6. -->
+                <verify step="5">
+			<eq>
+				<capture_ref type="kerberos" name="eUE_KERB">AS-REQ.ipv6.src_host.show</capture_ref>
+				<msg_ref type="platform">DUT.IP</msg_ref>
+			</eq>
+                </verify>
+
+                <!-- No response to the AS_REQ takes place. --> 
+                <!-- MTA continues sending AS_REQ messages until the timeout period elapses. -->
+                <verify step="6">
+                    <and>
+                        <null>
+                            <capture_ref type="kerberos" name="eUE_KERB">AS-REP.num</capture_ref>
+                        </null>
+                        <lt>
+				<capture_ref type="kerberos" name="eUE_KERB">AS-REQ.geninfo.num.show</capture_ref>
+				<capture_ref type="kerberos" name="eUE_KERB" msg_instance="last">AS-REQ.geninfo.num.show</capture_ref>
+                        </lt>
+                    </and>
+                </verify>
+
+                <!-- MTA times out as specified in sub-option 8 and broadcasts DHCP Discover message. -->
+                <!-- Timeout time was configured to 2 minutes. -->
+                <verify step="7">
+			<and>
+			    <gt>
+				<capture_ref type="dhcpv6" name="eUE_v6" msg_instance="2" add="126.0">Reply.frame.time_relative.show</capture_ref>
+				<capture_ref type="dhcpv6" name="eUE_v6" msg_instance="last">Release.frame.time_relative.show</capture_ref>
+			    </gt>
+			    <lt>
+				<capture_ref type="dhcpv6" name="eUE_v6" msg_instance="2" add="119.0">Reply.frame.time_relative.show</capture_ref>
+				<capture_ref type="dhcpv6" name="eUE_v6" msg_instance="last">Release.frame.time_relative.show</capture_ref>
+			    </lt>
+			</and>
+                </verify>
+
+                <generate event="SucceedEvent"/>
+            </prelude>
+            <transition to="eSafe_1" event="SucceedEvent"/>
+        </state>
+
+        <!-- esafeProvisioningStatusProgress from SNMPv2 shows inprogress(2). -->
+        <state ID="eSafe_1">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>ESAFE-MIB::esafeProvisioningStatusProgress.16</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.CM IP Address</msg_ref>
+                    </mod>
+                    <mod modtype="replace" hdr="version">
+                        <expr>2c</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="8">
+                    <contains>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>2</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="eSafe_2" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+        <!-- esafeProvisioningStatusFailureFound from SNMPv2 is true(1). -->
+        <state ID="eSafe_2">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>ESAFE-MIB::esafeProvisioningStatusFailureFound.16</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.CM IP Address</msg_ref>
+                    </mod>
+                    <mod modtype="replace" hdr="version">
+                        <expr>2c</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="9">
+                    <contains>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>1</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="eSafe_3" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+        <!-- esafeProvisioningStatusFailureFlow from SNMPv2 label for secure provisioning flow as MTA-9. -->
+        <state ID="eSafe_3">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>ESAFE-MIB::esafeProvisioningStatusFailureFlow.16</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.CM IP Address</msg_ref>
+                    </mod>
+                    <mod modtype="replace" hdr="version">
+                        <expr>2c</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="10">
+                    <contains>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>MTA9</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="eSafe_4" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+        <!-- esafeProvisioningStatusLastUpdate from SNMPv2 shows time when row is created. -->
+        <state ID="eSafe_4">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>ESAFE-MIB::esafeProvisioningStatusLastUpdate.16</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.CM IP Address</msg_ref>
+                    </mod>
+                    <mod modtype="replace" hdr="version">
+                        <expr>2c</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="13">
+                    <notnull>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                    </notnull>
+                </verify>
+            </response>
+            <transition to="END" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+    </add_to>
+</pc2xml>

@@ -1,0 +1,137 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	PCPCII-139 : Update the Voicetronix modifiers to use the new values. (ghassler 07/10/2009)
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-UE 1.9.4.4" 
+	descrip="CANCEL before 200 OK during an Emergency call " 
+	number="RST-UE 1.9.4.4">
+	
+	<template file="./templates/CallOrigAtUETemp.xml" name="UE1"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Setup" sub="prelude"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<NE targets="service:sos urn:service:sos"/>
+		
+		<transition from="Alerting" to="VerifyCancel" event="PROV_RSP_TX_UAS"/>
+		
+		<state ID="Setup" sub="prelude" once="true">
+			<!-- Step  1 of test case 1.9.4.4 -->
+			<send protocol="utility" msgtype="DialDigits">
+				<mod modtype="add" hdr="number">
+					<expr>911</expr>
+				</mod>
+			</send>
+		</state>
+		
+		<state ID="VerifyCancel">
+			<!-- Step 2 of test case 1.9.4.4 - -->
+			<prelude once="true">
+				<send protocol="utility" msgtype="OnHook"/>
+			</prelude>
+			<response>
+				<if>
+				     <eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>Cancel</expr>
+					</eq>
+					<then>
+						<verify step="2" requirements="REQ14080">
+							<eq>
+								<msg_ref type="sip">CANCEL.Request-Line.Request-URI</msg_ref>
+								<msg_ref type="sip" msg_instance="last">Invite.Request-Line.Request-URI</msg_ref>
+							</eq>
+						</verify>
+						<verify step="2" requirements="REQ14080">
+							<eq>
+								<msg_ref type="sip">CANCEL.Call-ID.value</msg_ref>
+								<msg_ref type="sip" msg_instance="last">Invite.Call-ID.value</msg_ref>
+							</eq>
+						</verify>
+						<verify step="2" requirements="REQ14080">
+							<eq>
+								<msg_ref type="sip">CANCEL.To</msg_ref>
+								<msg_ref type="sip" msg_instance="last">Invite.To</msg_ref>
+							</eq>
+						</verify>
+						<verify step="2" requirements="REQ14080">
+							<eq>
+								<msg_ref type="sip">CANCEL.CSeq.value</msg_ref>
+								<msg_ref type="sip" msg_instance="last">Invite.CSeq.value</msg_ref>
+							</eq>
+						</verify>
+						<verify step="2" requirements="REQ14080">
+							<eq>
+								<msg_ref type="sip">CANCEL.From</msg_ref>
+								<msg_ref type="sip" msg_instance="last">Invite.From</msg_ref>
+							</eq>
+						</verify>
+						<verify step="2" requirements="REQ14080">
+							<eq>
+								<msg_ref type="sip">CANCEL.Via</msg_ref>
+								<msg_ref type="sip" msg_instance="last">Invite.Via</msg_ref>
+							</eq>
+						</verify>
+						<verify step="2" requirements="REQ14080">
+							<eq>
+								<msg_ref type="sip">CANCEL.CSeq.method</msg_ref>
+								<expr>CANCEL</expr>
+							</eq>
+						</verify>
+						<verify step="2" requirements="REQ14080">
+							<eq>
+								<msg_ref type="sip">CANCEL.Route</msg_ref>
+								<msg_ref type="sip" msg_instance="last">Invite.Route</msg_ref>
+							</eq>
+						</verify>
+						<verify step="2" requirements="REQ14080">
+							<dnc>
+								<msg_ref type="sip">CANCEL</msg_ref>
+								<expr>Require: </expr>
+							</dnc>
+						</verify>
+						<verify step="2" requirements="REQ14080">
+							<dnc>
+								<msg_ref type="sip">CANCEL</msg_ref>
+								<expr>Proxy-Require: </expr>
+							</dnc>
+						</verify>
+						<verify step="2" requirements="REQ14080">
+							<eq>
+								<msg_ref type="sip">CANCEL.DestinationAddress.IP</msg_ref>
+								<msg_ref type="sip" msg_instance="last">Invite.DestinationAddress.IP</msg_ref>
+							</eq>
+						</verify>
+						<verify step="2" requirements="REQ14080">
+							<eq>
+								<msg_ref type="sip">CANCEL.DestinationAddress.port</msg_ref>
+								<msg_ref type="sip" msg_instance="last">Invite.DestinationAddress.port</msg_ref>
+							</eq>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<transition to="END" event="Cancel"/>
+			<transition to="VerifyCancel" event="OnHookComplete"/>
+			<transition to="VerifyCancel" event="DialDigitsComplete"/>
+		</state>
+	</add_to>
+</pc2xml>

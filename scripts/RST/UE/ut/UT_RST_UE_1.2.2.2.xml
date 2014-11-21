@@ -1,0 +1,115 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+
+<pc2xml version="$Revision: 8188 $" name="UT_RST_UE_1.2.2.2" descrip="UT" number="1">
+	<fsm name="UE1">
+		<models>
+			<session/>
+		</models>
+		<NE sim_type="term" elements="DUT" targets="UE0 DUT"/>
+		<states initialstate="Register1">
+			<!-- REGISTER1 State -->
+			<state ID="Register1">
+				<prelude>
+					<send protocol="sip" msgtype="Register" target="PCSCF1" originator="DUT"/>
+				</prelude>
+				<transition to="Digest1" event="401-Register"/>
+				<transition to="Setup1" event="200-Register"/>
+			</state>
+			<state ID="Digest1">
+				<prelude>
+					<send protocol="sip" msgtype="Register" target="PCSCF1" originator="DUT"/>
+				</prelude>
+				<transition to="Setup1" event="200-Register"/>
+			</state>
+			<!-- SETUP1 State -->
+			<state ID="Setup1">
+				<prelude once="true">
+					<log promptUser="true" expr="Start the test script if you haven't already."/>
+				</prelude>
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>Invite</expr>
+						</eq>
+						<then>
+							<send protocol="sip" msgtype="100-INVITE" target="UE1" originator="DUT"/>
+						</then>
+					</if>
+				</response>
+				<!-- Transitions for Setup1 state -->
+				<transition to="Answer" event="INVITE"/>
+			</state>
+			
+			<state ID="Answer">
+				<prelude>
+					<sleep time="5000"/>
+					<send protocol="sip" msgtype="200-INVITE" target="UE1" originator="DUT"/>
+				</prelude>
+				<transition to="Hangup" event="ACK"/>
+			</state>
+			
+			<state ID="Hangup">
+				<postlude>
+					<send protocol="sip" msgtype="200-BYE" target="UE1" originator="DUT"/>
+				</postlude>
+				<transition to="EndCall1" event="BYE"/>
+			</state>
+			
+			<state ID="EndCall1" ES="true">
+				<transition to="Setup2" event="SessionTerminated"/>
+			</state>
+			
+			
+			<!-- SETUP2 State -->
+			<state ID="Setup2" timer="120000">
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>Invite</expr>
+						</eq>
+						<then>
+							<send protocol="sip" msgtype="100-INVITE" target="UE1" originator="DUT"/>
+						</then>
+					</if>
+				</response>
+				<!-- Transitions for Setup2 state -->
+				<transition to="Answer2" event="INVITE"/>
+			</state>
+			<state ID="Answer2">
+				<prelude>
+					<sleep time="5000"/>
+					<send protocol="sip" msgtype="200-INVITE" target="UE1" originator="DUT"/>
+				</prelude>
+				<transition to="Hangup2" event="ACK"/>
+			</state>
+			
+			<state ID="Hangup2">
+				<postlude>
+					<send protocol="sip" msgtype="200-BYE" target="UE1" originator="DUT"/>
+				</postlude>
+				<transition to="END" event="BYE"/>
+			</state>
+	
+		</states>
+	</fsm>
+</pc2xml>

@@ -1,0 +1,117 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="SIP-UE 1.4.1" 
+	descrip="OPTIONS Handling" 
+	number="SIP-UE 1.4.1">
+	
+	<fsm name="UE1">
+		<models>
+			<session/>
+		</models>
+		
+		<NE sim_type="orig" elements="UE1 PCSCF2 SCSCF1 PCSCF1" targets="UE1"/>
+		
+		<states initialstate="Register">
+			<state ID="Register">
+				<transition to="Receive 200-OPTIONS" event="Registered"/>
+			</state>
+			
+			<state ID="Receive 200-OPTIONS">
+				<prelude>
+					<send protocol="sip" msgtype="OPTIONS"/>
+				</prelude>
+				<postlude>
+					<verify step="1" requirements="RFC478, RFC479">
+						<eq>
+							<msg_ref type="sip">Response</msg_ref>
+							<expr>200-OPTIONS</expr>
+						</eq>
+					</verify>
+				</postlude>
+				<transition to="Receive 420-OPTIONS" event="200-OPTIONS"/>
+			</state>
+			
+			<state ID="Receive 420-OPTIONS">
+				<prelude>
+					<send protocol="sip" msgtype="OPTIONS">
+						<!-- Step-2, Message Flow for test case SIP 1.4.1 - 
+							Send an OPTIONS request; in the message include a 
+							"require: foo" header.-->
+						<mod modtype="add" hdr="Require">
+							<expr>foo</expr>
+						</mod>
+					</send>
+				</prelude>
+				<postlude>
+					<verify step="2" requirements="RFC479">
+						<eq>
+							<msg_ref type="sip">Response</msg_ref>
+							<expr>420-OPTIONS</expr>
+						</eq>
+					</verify>
+				</postlude>
+				<transition to="Receive 404-OPTIONS" event="420-OPTIONS"/>
+			</state>
+			
+			<state ID="Receive 404-OPTIONS">
+				<prelude>
+					<send protocol="sip" msgtype="OPTIONS">
+						<!-- Step-3, Message Flow for test case SIP 1.4.1 -
+							Send an OPTIONS request with an unknown URI.-->
+						<mod modtype="replace" hdr="Request-Line" param="Request-URI">
+							<expr>sip:UE0@1.1.1.1</expr>
+						</mod>
+					</send>
+				</prelude>
+				<postlude>
+					<verify step="3" requirements="RFC479">
+						<eq>
+							<msg_ref type="sip">Response</msg_ref>
+							<expr>404-OPTIONS</expr>
+						</eq>
+					</verify>
+				</postlude>
+				<transition to="Receive 415-OPTIONS" event="404-OPTIONS"/>
+			</state>
+			
+			<state ID="Receive 415-OPTIONS">
+				<prelude>
+					<send protocol="sip" msgtype="OPTIONS">
+						<!-- Step-3, Message Flow for test case SIP 1.4.1 -
+							Send an OPTIONS request with an unknown URI.-->
+						<mod modtype="replace" hdr="Content-Type" param="media-subtype">
+							<expr>junk</expr>
+						</mod>
+					</send>
+				</prelude>
+				<postlude>
+					<verify step="4" requirements="RFC479">
+						<eq>
+							<msg_ref type="sip">Response</msg_ref>
+							<expr>415-OPTIONS</expr>
+						</eq>
+					</verify>
+				</postlude>
+				<transition to="END" event="415-OPTIONS"/>
+			</state>
+		</states>
+	</fsm>
+</pc2xml>

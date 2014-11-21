@@ -1,0 +1,94 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+Change History: (Author & Date)
+
+
+-->
+<!-- Document type and attributes. -->
+<pc2xml version="$Revision: 6076 $"
+        name="E-UE_PROV_2.1.3.2"
+        descrip="eUE mplements default values for notification receiver timeout and notification
+                 receiver retries when sub-types 4 and 5 are omitted from configuration file."
+        number="E-UE_PROV_2.1.3.2">
+
+
+    <!-- Reset UE; start capture. -->
+    <template file="./templates/EUE_Prov_B_1_1_1.xml" name="SNMPVersions"/>
+
+    <add_to fsm="SNMPVersions">
+        <transition from="StartCapture_RebootWait" to="CMProvisioned" event="TimerExpired"/>
+
+        <state ID="CMProvisioned">
+		<prelude>
+			<sleep time="20000"/>
+			<stop_capture/>
+			<parse_capture name="receiver1">
+			    <parser_filter protocol="snmp" msgtype="Inform Request" ip="DUT.DHCP Server IP"/>
+			</parse_capture>
+			<parse_capture name="receiver2">
+			    <parser_filter protocol="snmp" ip="Platform.SNMP Server2 IP"/>
+			</parse_capture>
+
+			<!-- E/MTA DUT sends PktcMTADevProvisioning Status INFORM provisioning PASS (1)
+			     to default Notification Receiver. -->
+			<verify step="PC-1.5, Steps 6, 7">
+				<eq>
+					<capture_ref type="snmp" name="receiver1" msg_instance="3">Inform Request.msgData.plaintext.data.informRequest.variable_bindings.1-3-6-1-2-1-140-1-1-8-0.int.show</capture_ref>
+					<expr>1</expr>
+				</eq>
+			</verify>
+
+			<!-- E/MTA DUT sends PktcMTADevProvisioning Status INFORM to IP address in TLV38.1.
+			     Total number of INFORM sent is 3 (OKed by John B. to indicate exactly 3).
+			     Interval between each retransmission is about 15 seconds. -->
+			<verify step="PC-1.5, Step 8">
+			    <and>
+				<notnull>
+				    <capture_ref type="snmp" name="receiver2">Inform Request.data.informRequest.variable_bindings.1-3-6-1-2-1-140-1-1-8-0.int.show</capture_ref>
+				</notnull>
+				<eq>
+				    <capture_ref type="snmp" name="receiver2">Inform Request.ipv6.dst.show</capture_ref>
+				    <msg_ref type="platform">Platform.SNMP Server2 IP</msg_ref>
+				</eq>
+			    </and>
+			</verify>
+
+			<verify step="PC-1.5, Step 8">
+				<and>
+					<and>
+						<lte>
+						    <capture_ref type="snmp" name="receiver2" msg_instance="1" add="14.75">Inform Request.timestamp</capture_ref>
+						    <capture_ref type="snmp" name="receiver2" msg_instance="2">Inform Request.timestamp</capture_ref>
+						</lte>
+						<gte>
+						    <capture_ref type="snmp" name="receiver2" msg_instance="1" add="15.25">Inform Request.timestamp</capture_ref>
+						    <capture_ref type="snmp" name="receiver2" msg_instance="2">Inform Request.timestamp</capture_ref>
+						</gte>
+					</and>
+					<and>
+						<lte>
+						    <capture_ref type="snmp" name="receiver2" msg_instance="2" add="14.75">Inform Request.timestamp</capture_ref>
+						    <capture_ref type="snmp" name="receiver2" msg_instance="3">Inform Request.timestamp</capture_ref>
+						</lte>
+						<gte>
+						    <capture_ref type="snmp" name="receiver2" msg_instance="2" add="15.25">Inform Request.timestamp</capture_ref>
+						    <capture_ref type="snmp" name="receiver2" msg_instance="3">Inform Request.timestamp</capture_ref>
+						</gte>
+					</and>
+				</and>
+			</verify>
+			<generate event="SucceedEvent"/>
+		</prelude>
+		<transition to="END" event="SucceedEvent"/>
+        </state>
+    </add_to>
+</pc2xml>

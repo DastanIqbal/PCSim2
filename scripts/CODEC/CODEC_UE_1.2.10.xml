@@ -1,0 +1,346 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+ Change History: (Author & Date)
+	PCPCII-113 : Change the logic in the script to use the data received in the PUBLISH message
+		and include it in the dialog box. Update the prompts to include validating the DUT's and
+		UE1's Publish information. (ghassler 2/26/09)
+	
+	PCPCII-139 : Update the Voicetronix modifiers to use the new values. (ghassler 07/10/2009)
+
+	PCPCII-140 - Update the script to match all of the changes made to the D09 version of the
+		ATP. (ghassler 08/04/2009)
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="CODEC-MEDIA_1.2.10" 
+	descrip="VoIP Metrics – PUBLISH (G.711)" 
+	number="CODEC-MEDIA_1.2.10">
+	
+	<template file="./templates/Proxy.xml" name="SCSCF1"/>
+	
+	<remove_from fsm="SCSCF1">
+		<state ID="Connected"/>
+		<state ID="OnHook"/>
+	</remove_from>
+	
+	<add_to fsm="SCSCF1">
+		<state ID="Connected" timer="5000">
+			<postlude>
+				<log promptUser="true" verify="true" step="2" requirements="REQ12693"
+					expr="Transmit the tone, 1000Hz at -3.0dbm, from the DUT to UE-1 and confirm that the tone is received at least -30dbm?"/>
+					
+				<log promptUser="true" verify="true" step="2" requirements="REQ12693"
+					expr="Transmit the tone, 1500Hz at -6.0dbm, from UE-1 to the DUT and confirm that the tone is received at least -30dbm?"/>
+			</postlude>			
+			<transition to="OnHook" event="TimerExpired"/>
+		</state>
+		
+		<state ID="OnHook" timer="15000">
+			<prelude once="true">
+				<var name="dutPublish">
+					<expr>false</expr>
+				</var>
+				<var name="ue1Publish">
+					<expr>false</expr>
+				</var>
+				<send protocol="utility" msgtype="OnHook"/>
+				<send protocol="utility" msgtype="OnHook">
+					<mod modtype="replace" hdr="voiceport">
+						<msg_ref type="platform">Platform.voiceport1</msg_ref>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<or>
+						<eq>
+							<msg_ref type="sip">BYE.SourceAddress.IP</msg_ref>
+							<msg_ref type="platform">UE1.IP</msg_ref>
+						</eq>
+						<eq>
+							<msg_ref type="sip">200-BYE.SourceAddress.IP</msg_ref>
+							<msg_ref type="platform">UE1.IP</msg_ref>
+						</eq>
+					</or>
+					<then>
+						<proxy target="UE0"/>
+					</then>
+					<elseif>
+						<or>
+							<eq>
+								<msg_ref type="sip">BYE.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE0.IP</msg_ref>
+							</eq>
+							<eq>
+								<msg_ref type="sip">200-BYE.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE0.IP</msg_ref>
+							</eq>
+						</or>
+						<then>
+							<proxy target="UE1"/>
+						</then>
+					</elseif>
+					<elseif>
+						<eq>
+							<msg_ref type="sip">PUBLISH.SourceAddress.IP</msg_ref>
+							<msg_ref type="platform">UE0.IP</msg_ref>
+						</eq>
+						<then>
+							<!-- STEP 1 from B.13 Common Procedures -->
+							<send protocol="sip" msgtype="200-PUBLISH" target="UE0"/>
+							<verify step="4" requirements="REQ12692">
+								<eq>
+									<msg_ref type="sip">Request</msg_ref>
+									<expr>PUBLISH</expr>
+								</eq>
+							</verify>
+							
+							<!-- STEP 2 from B.13 Common Procedures -->
+							<verify step="4" requirements="REQ12691">
+								<eq>
+									<msg_ref type="sip">PUBLISH.Event.event-type</msg_ref>
+									<expr>vq-rtcpxr</expr>
+								</eq>
+							</verify>
+							
+							<!-- STEP 3 from B.13 Common Procedures -->
+							<verify step="4" requirements="REQ12691">
+								<contains>
+									<msg_ref type="sip">PUBLISH.SDP</msg_ref>
+									<expr>VQSessionReport</expr>
+								</contains>
+							</verify>
+							
+							<!-- STEP 5 from B.13 Common Procedures -->
+							<verify step="4" requirements="REQ20491, REQ20492, REQ22117, REQ22118, REQ22119">
+								<contains>
+									<msg_ref type="sip">PUBLISH.SDP</msg_ref>
+									<expr>LocalMetrics:</expr>
+								</contains>
+							</verify>
+							
+							<!-- STEP 5 from B.13 Common Procedures -->
+							<verify step="4" requirements="REQ20491, REQ20492, REQ22117, REQ22118, REQ22119">
+								<contains>
+									<msg_ref type="sip">PUBLISH.SDP</msg_ref>
+									<expr>RemoteMetrics:</expr>
+								</contains>
+							</verify>
+							<assign name="dutPublish">
+								<msg_ref type="sip">PUBLISH.SDP</msg_ref>
+							</assign>
+							
+						</then>
+					</elseif>
+					<elseif>
+						<eq>
+							<msg_ref type="sip">200-PUBLISH.SourceAddress.IP</msg_ref>
+							<msg_ref type="platform">UE1.IP</msg_ref>
+						</eq>
+						<then>
+							<send protocol="sip" msgtype="200-PUBLISH" target="UE0"/>
+							<generate event="SucceedEvent"/>
+						</then>
+					</elseif>
+					<elseif>
+						<eq>
+							<msg_ref type="sip">PUBLISH.SourceAddress.IP</msg_ref>
+							<msg_ref type="platform">UE1.IP</msg_ref>
+						</eq>
+						<then>
+							<send protocol="sip" msgtype="200-PUBLISH" target="UE1"/>
+							
+							<!-- STEP 1 from B.13 Common Procedures -->
+							<verify step="4" requirements="REQ12692">
+								<eq>
+									<msg_ref type="sip">Request</msg_ref>
+									<expr>PUBLISH</expr>
+								</eq>
+							</verify>
+							
+							<!-- STEP 2 from B.13 Common Procedures -->
+							<verify step="4" requirements="REQ12691">
+								<eq>
+									<msg_ref type="sip">PUBLISH.Event.event-type</msg_ref>
+									<expr>vq-rtcpxr</expr>
+								</eq>
+							</verify>
+							
+							<!-- STEP 3 from B.13 Common Procedures -->
+							<verify step="4" requirements="REQ12691">
+								<contains>
+									<msg_ref type="sip">PUBLISH.SDP</msg_ref>
+									<expr>VQSessionReport</expr>
+								</contains>
+							</verify>
+							
+							<!-- STEP 5 from B.13 Common Procedures -->
+							<verify step="4" requirements="REQ20491, REQ20492, REQ22117, REQ22118, REQ22119">
+								<contains>
+									<msg_ref type="sip">PUBLISH.SDP</msg_ref>
+									<expr>LocalMetrics:</expr>
+								</contains>
+							</verify>
+							<verify step="4" requirements="REQ20491, REQ20492, REQ22117, REQ22118, REQ22119">
+								<contains>
+									<msg_ref type="sip">PUBLISH.SDP</msg_ref>
+									<expr>RemoteMetrics:</expr>
+								</contains>
+							</verify>
+							
+							<assign name="ue1Publish">
+								<msg_ref type="sip">PUBLISH.SDP</msg_ref>
+							</assign>
+							
+						</then>
+					</elseif>
+					<elseif>
+						<eq>
+							<msg_ref type="sip">200-PUBLISH.SourceAddress.IP</msg_ref>
+							<msg_ref type="platform">UE0.IP</msg_ref>
+						</eq>
+						<then>
+							<send protocol="sip" msgtype="200-PUBLISH" target="UE1"/>
+						</then>
+					</elseif>
+				</if>
+				<if>
+					<and>
+						<neq>
+							<var_ref name="dutPublish"/>
+							<expr>false</expr>
+						</neq>
+						<neq>
+							<var_ref name="ue1Publish"/>
+							<expr>false</expr>
+						</neq>
+					</and>
+					<then>
+						<verify step="4" requirements="REQ12693">
+							<eq>
+								<msg_ref type="sip" msg_instance="last">Request</msg_ref>
+								<expr>PUBLISH</expr>
+							</eq>
+						</verify>
+						<stop_capture/>
+						<generate event="Branch1Event"/>
+					</then>
+				</if>
+			</response>
+			<transition to="OnHook" event="OnHookComplete"/>
+			<transition to="OnHook" event="Bye"/>
+			<transition to="OnHook" event="PUBLISH"/>
+			<transition to="OnHook" event="200-PUBLISH"/>
+			<transition to="OnHook" event="200-Bye"/>
+			<transition to="END" event="TimerExpired"/>
+			<transition to="VerifyMetrics" event="Branch1Event"/>
+		</state>
+		
+		<state ID="VerifyMetrics" ES="true">
+			<prelude>
+				<!-- PCPCII-113 Update the prompts to ask for validation of all of the DUT information first using the variable instead of 
+					 a capture file, then ask to validate all of UE1's information -->
+				<!-- Step - 6 Appendix B.13 Common Procedures  -->
+				<log step="4" requirements="REQ12694" 
+					promptUser="True" yesExpected="True" verify="True" 
+					expr="Verify the body of the DUT's Publish message includes a Start and Stop in the TimeStamps: field\nand the values in the LocalMetrics and RemoteMetrics are equal.\n\n$dutPublish"/>
+				
+				<!--  Step 7 from Appendix B.13-->
+				<log step="4" requirements="REQ12695" 
+					promptUser="True" yesExpected="True" verify="True" 
+					expr="Verify the body of the DUT's Publish message has the CallId: field in both\nthe LocalMetrics and RemoteMetrics are equal.\n\n$dutPublish"/>
+				
+				<!--  Step 8 from Appendix B.13-->
+				<log step="4" requirements="REQ20489" 
+					promptUser="True" yesExpected="True" verify="True" 
+					expr="Verify the DUT sent both LocaAddr: and RemoteAddr: in the body.\n\n$dutPublish"/>
+				
+				<!--  Step 10 from Appendix B.13-->
+				<log step="4" requirements="REQ12696, REQ12697, REQ12698, REQ126999" 
+					promptUser="True" yesExpected="True" verify="True" 
+					expr="Verify that there is a line containing JitterBuffer: with JBA=\nJBR=\nJBN=\nJBM=\nJBX=\npresent in both the LocalMetrics and the RemoteMetrics\nin the body of the DUT's Publish message?\n\n$dutPublish"/>
+				
+				<!--  Step 11 from Appendix B.13-->
+				<!-- log step="4" requirements="" 
+					promptUser="True" yesExpected="True" verify="True" 
+					expr="Verify that there is a line containing PacketLoss: with NLR=\nJDR=\npresent in both the LocalMetrics and the RemoteMetrics\nin the body of the DUT's Publish message?\n\n$dutPublish"/-->
+					
+				<!--  Step 12 from Appendix B.13-->
+				<!-- log step="4" requirements="" 
+					promptUser="True" yesExpected="True" verify="True" 
+					expr="Verify that there is a line containing BurstGapLoss with BLD=\nBD=\nGLD=\nGD=\nGMIN\npresent in both the LocalMetrics and the RemoteMetrics\nin the body of the DUT's Publish message?\n\n$dutPublish"/-->
+				
+				<!--  Step 13 from Appendix B.13-->
+				<!-- log step="4" requirements="" 
+					promptUser="True" yesExpected="True" verify="True" 
+					expr="Verify that there is a line containing Delay with RTD=\nESD=\npresent in both the LocalMetrics and the RemoteMetrics\nin the body of the DUT's Publish message?\n\n$dutPublish"/-->
+				
+				<!--  Step 14 from Appendix B.13-->
+				<!-- log step="4" requirements="" 
+					promptUser="True" yesExpected="True" verify="True" 
+					expr="Verify that there is a line containing Signal with SL=\nNL=\nRERL=\npresent in both the LocalMetrics and the RemoteMetrics\nin the body of the DUT's Publish message?\n\n$dutPublish"/-->
+				
+				<!--  Step 15 from Appendix B.13-->
+				<!-- log step="4" requirements="" 
+					promptUser="True" yesExpected="True" verify="True" 
+					expr="Verify that there is a line containing CallQuality with RCQ=\nMOS-LQ\nMOS-CQ=\npresent in both the LocalMetrics and the RemoteMetrics\nin the body of the DUT's Publish message?\n\n$dutPublish"/-->
+				
+				<!--  Test the UE1's PUBLISH information -->		
+				<!-- Step - 6 Appendix B.15 Common Procedures test case  -->
+				<log step="4" requirements="REQ12694" 
+					promptUser="True" yesExpected="True" verify="True" 
+					expr="Verify the body of UE1's Publish message includes a Start and Stop in the TimeStamps: field\nand the values in the LocalMetrics and RemoteMetrics are equal.\n\n$ue1Publish"/>
+					
+				<!--  Step 7 from Appendix B.13-->
+				<log step="4" requirements="REQ12695" 
+					promptUser="True" yesExpected="True" verify="True" 
+					expr="Verify the body of UE1's Publish message has the CallId: field in both\nthe LocalMetrics and RemoteMetrics are equal.\n\n$ue1Publish"/>
+				
+				<!--  Step 8 from Appendix B.13-->
+				<log step="4" requirements="REQ20489" 
+					promptUser="True" yesExpected="True" verify="True" 
+					expr="Verify UE1 sents both a LocalAddr: and RemoteAddr: in the body?\n\n$ue1Publish"/>
+				
+				<!--  Step 10 from Appendix B.13-->
+				<log step="4" requirements="REQ12696, REQ12697, REQ12698, REQ126999" 
+					promptUser="True" yesExpected="True" verify="True" 
+					expr="Verify that there is a line containing JitterBuffer: with JBA=\nJBR=\nJBN=\nJBM=\nJBX=\npresent in both the LocalMetrics and the RemoteMetrics\nin the body of UE1's Publish message?\n\n$ue1Publish"/>
+				
+				<!--  Step 11 from Appendix B.13-->
+				<!-- log step="4" requirements="" 
+					promptUser="True" yesExpected="True" verify="True" 
+					expr="Verify that there is a line containing PacketLoss: with NLR=\nJDR=\npresent in both the LocalMetrics and the RemoteMetrics\nin the body of UE1's Publish message?\n\n$ue1Publish"/-->
+				
+				<!--  Step 12 from Appendix B.13-->
+				<!-- log step="4" requirements="" 
+					promptUser="True" yesExpected="True" verify="True" 
+					expr="Verify that there is a line containing BurstGapLoss with BLD=\nBD=\nGLD=\nGD=\nGMIN\npresent in both the LocalMetrics and the RemoteMetrics\nin the body of UE1's Publish message?\n\n$ue1Publish"/-->
+				
+				<!--  Step 13 from Appendix B.13-->
+				<!-- log step="4" requirements="" 
+					promptUser="True" yesExpected="True" verify="True" 
+					expr="Verify that there is a line containing Delay with RTD=\nESD=\npresent in both the LocalMetrics and the RemoteMetrics\nin the body of UE1's Publish message?\n\n$ue1Publish"/-->
+				
+				<!--  Step 14 from Appendix B.13-->
+				<!-- log step="4" requirements="" 
+					promptUser="True" yesExpected="True" verify="True" 
+					expr="Verify that there is a line containing Signal with SL=\nNL=\nRERL=\npresent in both the LocalMetrics and the RemoteMetrics\nin the body of UE1's Publish message?\n\n$ue1Publish"/-->
+				
+				<!--  Step 15 from Appendix B.13-->
+				<!-- log step="4" requirements="" 
+					promptUser="True" yesExpected="True" verify="True" 
+					expr="Verify that there is a line containing CallQuality with RCQ=\nMOS-LQ\nMOS-CQ=\npresent in both the LocalMetrics and the RemoteMetrics\nin the body of UE1's Publish message?\n\n$ue1Publish"/-->
+			</prelude>
+			<transition to="END" event="SessionTerminated"/>
+		</state>
+	</add_to>
+</pc2xml>

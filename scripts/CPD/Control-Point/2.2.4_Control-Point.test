@@ -1,0 +1,174 @@
+###########################################################
+#   Author: Vikas Sarawat (CableLabs)
+#   Date :   06/22/07  
+#   DUT:     Control-Point
+#   Title   : TC2535 TEST CASE CPD-Control Point 2.2.4 – Incorrect AGID during Authentication
+#   Objective: If the AGID is not correct, then the Authentication Exchange cannot be successfully completed and the connection MUST be abandoned.
+#
+##
+###########################################################
+
+
+set procNum 1
+set stepNum 0 ;# (next used +1)
+
+set mod cpd
+set cpd ::$mod\::
+
+set str "InitModule CPD"
+DoStep "Step $procNum.[set stepNum] substep 0" $str {
+    # Doc: InitModule CPD (Source-Link Plugin-Module & Open Socket)
+    set isOk [set soc [ InitModule $mod ] ]
+    if { $soc != -1 } {
+        # Set flag for SocRaw (enable IPv4 option Router Alert)
+        $soc.socRaw 1
+    } ;# END if
+} { if {$isOk == -1 } {FAIL_STEP $str } else {PASS_STEP} }
+
+set str "initializing some message for speed"
+DoStep "Step $procNum.[set stepNum] substep 1" $str {
+    # Anchor A nonce
+    set A_Challenge_Nonce 000102030405060708090a0b0c0d0e0f
+    # Begin Speed? #################
+    set txData_Auth_3 [ $cpd\MsgNew Auth_3 ] ; # this is initialized here for speed
+    # Static
+    set results [ $cpd\MsgSetVal $txData_Auth_3 Hdr flags 0x10 ]
+            
+    set macData_B [ $cpd\MsgNew MAC_B ] ; # this is initialized here for speed
+    # Re-use static A_Challenge nonce
+    set results [ $cpd\MsgSetVal $macData_B A_Challenge nonce $A_Challenge_Nonce ]
+    
+    set macData_C [ $cpd\MsgNew MAC_C ]
+    # End Speed? ###################
+
+    # Anchor AGID_Transform_expected
+    set AGID_Transform_expected 8
+
+    # Anchor Default HMAC SHA1 Key "64*a"
+    set hmacSha1Key aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+
+} { PASS_STEP }
+
+
+set str "Build & Tx CPD Auth_1 Msg"
+DoStep "Step $procNum.[set stepNum] substep 2" $str {
+    # Doc: Instantiate New Message 
+    set txData_Auth_1 [ $cpd\MsgNew Auth_1 ]
+    
+    # Set CPD-Hdr AX_CHALLENGE flag
+    set results [ $cpd\MsgSetVal $txData_Auth_1 Hdr flags 0x08 ]
+    
+    
+    # Set CPD AGID (first)
+    set results [ $cpd\MsgSetVal $txData_Auth_1 AGID id $AGID_Transform_expected  ]
+    
+    # Set CPD A_CHALLENGE nonce (16-bytes)
+    set results [ $cpd\MsgSetVal $txData_Auth_1 A_Challenge nonce $A_Challenge_Nonce ]
+    
+    set txHex_Auth_1 [ $cpd\MsgBuild $txData_Auth_1 ]
+    # Doc: Build & Tx Message to DstIp, DstPort
+    set msgLen [ $cpd\MsgTx $txHex_Auth_1 $soc $::gCPD_REMOTE_IP $::gCPD_REMOTE_PORT ]
+    
+} { if {$isOk == -1 } {FAIL_STEP $str } else {PASS_STEP} }
+
+set str "Rx CPD Auth_2 Msg"
+DoStep "Step $procNum.[set stepNum] substep 3" $str {
+    # Doc: Rx 1st Message
+    #B -> A : HDR2, REQUEST, AGID, B_CHALLENGE, A_RESPONSE
+    set rxData_Auth_2 [ $cpd\MsgRx ]
+    
+} { if {$isOk == -1 } {FAIL_STEP $str } else {PASS_STEP} }
+
+set str "verify the A_Response"
+DoStep "Step $procNum.[set stepNum] substep 4" $str {
+
+    #HDR1, REQUEST, AGID*, A_CHALLENGE
+    #HDR1||REQUEST||AGID||A_CHALLENGE||A_RESPONSE||B_CHALLENGE
+    # fetchin B_Challenge from Auth_2
+    set B_CHALLENGE [$cpd\MsgGetVal $rxData_Auth_2 B_Challenge nonce]
+    set B_CHALLENGE_len [format %04x [$cpd\MsgGetVal $rxData_Auth_2 B_Challenge len]]
+    set B_CHALLENGE 000B[set B_CHALLENGE_len][set B_CHALLENGE]
+
+    # 0 ing out A_RESPONSE
+    set A_RESPONSE 000A0010000000000000000000000000
+   
+    # For the purpose of the MAC calculation for A_RESPONSE, the "entire   NLS message" is:
+    set DATA_For_A_Response $txHex_Auth_1$A_RESPONSE$B_CHALLENGE 
+
+    # Compute SHA1 HMAC for to calc A_RESPONSE
+    set EXP_A_RESPONSE [sha1::hmac $hmacSha1Key [comConvertHexToStr $DATA_For_A_Response ] ]
+
+    # Trim HMAC to 96-bits = 12-bytes = 24-char
+    set EXP_A_RESPONSE [string range $EXP_A_RESPONSE 0 23 ]
+
+    set RCVD_A_RESPONSE [$cpd\MsgGetVal $rxData_Auth_2 A_Response mac]
+    if { $RCVD_A_RESPONSE != $EXP_A_RESPONSE } {
+        LogMsg "ERROR Rx A_Response.mac != Local MAC\n    ($RCVD_A_RESPONSE != $EXP_A_RESPONSE) "
+        set isOk -1
+    } else  {
+        LogMsg "-v- Rx A_Response.mac == Local MAC !!!"
+    } ; # END if else (verify MAC)
+} { if {$isOk == -1 } {FAIL_STEP $str } else {PASS_STEP} }
+
+
+set str "Build and send AUTH_3"
+DoStep "Step $procNum.[set stepNum] substep 5" $str {
+        # 3.  A -> B : HDR3, REQUEST, AGID, B_RESPONSE
+        set results [ $cpd\MsgSetVal $txData_Auth_3 Hdr len \
+                [ $cpd\MsgGetVal $rxData_Auth_2 Hdr len ] ]
+        set results [ $cpd\MsgSetVal $txData_Auth_3 Hdr flags \
+                [ $cpd\MsgGetVal $rxData_Auth_2 Hdr flags ] ]
+        set results [ $cpd\MsgSetVal $txData_Auth_3 Hdr checksum \
+                [ $cpd\MsgGetVal $rxData_Auth_2 Hdr checksum ] ]
+
+        
+        # Copy CPD AppPayload.*
+        set results [ $cpd\MsgSetVal $txData_Auth_3 AppPayload transactionId \
+                [ $cpd\MsgGetVal $rxData_Auth_2 AppPayload transactionId ] ]
+        set results [ $cpd\MsgSetVal $txData_Auth_3 AppPayload flags \
+                [ $cpd\MsgGetVal $rxData_Auth_2 AppPayload flags ] ]
+
+        # send a wrong AG ID
+        set results [ $cpd\MsgSetVal $txData_Auth_3 AGID id \
+                [expr [ $cpd\MsgGetVal $rxData_Auth_2 AGID id ] + 5] ]
+
+       
+         #HDR2||REQUEST||AGID||B_RESPONSE||A_CHALLENGE||B_CHALLENGE
+         set DATA_FOR_B_RESPONSE [ $cpd\MsgBuild $txData_Auth_3 ]
+         set A_CHALLENGE 00090014$A_Challenge_Nonce
+         set DATA_FOR_B_RESPONSE $DATA_FOR_B_RESPONSE$A_CHALLENGE$B_CHALLENGE
+         #LogMsg "-v- DATA_FOR_B_RESPONSE= =$DATA_FOR_B_RESPONSE"
+         # Compute SHA1 HMAC for to calc A_RESPONSE
+         set B_RESPONSE [sha1::hmac $hmacSha1Key [comConvertHexToStr $DATA_FOR_B_RESPONSE ] ]
+
+         # Trim HMAC to 96-bits = 12-bytes = 24-char
+         set B_RESPONSE [string range $B_RESPONSE 0 23 ]
+         #LogMsg "-v- B_RESPONSE= =$B_RESPONSE"
+
+
+        set results [ $cpd\MsgSetVal $txData_Auth_3 Hdr len 0]
+        set results [ $cpd\MsgSetVal $txData_Auth_3 Hdr flags \
+                [expr [ $cpd\MsgGetVal $rxData_Auth_2 Hdr flags ] & 0x0f7 ] ]
+        set results [ $cpd\MsgSetVal $txData_Auth_3 Hdr checksum 0 ] 
+
+        set results [ $cpd\MsgSetVal $txData_Auth_3 B_response mac $B_RESPONSE]
+
+       set HextxData_Auth_3 [ $cpd\MsgBuild $txData_Auth_3 ]
+       set msgLen [ $cpd\MsgTx $HextxData_Auth_3 $soc $::gCPD_REMOTE_IP $::gCPD_REMOTE_PORT ]
+ 
+
+    #HDR3, REQUEST, AGID, B_RESPONSE
+} { if {$isOk == -1 } {FAIL_STEP $str } else {PASS_STEP} }
+
+
+set str "receive message 4 and validate that it is an error message"
+DoStep "Step $procNum.[set stepNum] substep 6" $str {
+        set rxData_Auth_4 [ $cpd\MsgRx ]
+
+        set isOk 1
+        set isOk [$cpd\MsgGetVal $rxData_Auth_4 Authentication sequenceNumber]
+
+} { if {$isOk == -1 } {FAIL_STEP $str } else {PASS_STEP} }
+
+Cleanup
+

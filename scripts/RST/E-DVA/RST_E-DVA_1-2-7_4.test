@@ -1,0 +1,273 @@
+#//*****************************************************************************
+#// Filename: PROV_12-6.test
+#// Author:   Matthew Forbes
+#//           
+#// Creation Date: July 3, 2007
+#// Modified by: 
+#//*****************************************************************************
+#// Description:
+#//     TC2536 TEST CASE PROV 12.6 Line Voltage Control - Policy-3 Timer Precedence
+#//
+#// Objective:
+#//     Verify that the E-MTA DUT gives precedence to pktcEnNcsEndPntLVMgmtMaintTimer 
+#//     when configured for loop voltage control policy 3.
+#//
+#// PacketCable DUT:
+#//     E-MTA
+#//
+#// Test Steps:
+#//     - Initial configuration
+#//     - Hook up Line Voltage Registration Tool (LVRT) to all lines
+#//     - Reset DUT
+#//     - Check Provisioning state
+#//     - Perform SNMPv3 SET, set value = voltage_based_on_service_or_timers(3)
+#//     - Perform SNMPv3 SET, pktcEnNcsEndPntLVMgmtResetTimer MIB Object, set value to 2 minutes
+#//     - Perform SNMPv3 SET, pktcEnNcsEndPntLVMgmtMaintTimer MIB Object, set value to 4 minutes
+#//     - Soft reset DUT
+#//     - Check Provisioning state
+#//     - Disconnect RF cable long enough for T4
+#//     - Wait for pktcEnNcsEndPntLVMgmtMaintTimer to time out (4 minutes)
+#//     - Check LVRT log and verify voltage is high for all lines for the period of pktcEnNcsEndPntLVMgmtMaintTimer
+#//     - Reconnect RF cable
+#//     - Check Provisioning state
+#//     - Perform SNMPv3 SET, pktcEnNcsEndPntLVMgmtResetTimer MIB Object, set value to 4 minutes
+#//     - Perform SNMPv3 SET, pktcEnNcsEndPntLVMgmtMaintTimer MIB Object, set value to 2 minutes
+#//     - Soft reset DUT
+#//     - Check Provisioning state
+#//     - Disconnect RF cable long enough for T4
+#//     - Wait for pktcEnNcsEndPntLVMgmtMaintTimer to time out (2 minutes)
+#//     - Check LVRT log and verify voltage is high for all lines for the period of pktcEnNcsEndPntLVMgmtMaintTimer
+#//     - Reconnect RF cable
+#//     - Check Provisioning state
+#//     - Stop trace and save LVRT log
+#//
+#//
+#// Notes:
+#//     - Requires provPrimitives.tcl & tftp_primitives.tcl.
+#//     - Requires the specific config file in $BASE_CFG_FILE_PATH in Provisioning Server.
+#//     - Requires parT.tcl parsing tool to parse data from capture file.
+#//*****************************************************************************
+global SCRIPT_VERSION
+set SCRIPT_VERSION { # $Id: RST_E-DVA_1-2-7_4.test 7406 2010-07-20 17:17:37Z dthakore $ }
+
+ DoStep "PROV_12-6_1-1" "Initial configuration" {
+    LogMsg "--- Initial PROV module ---"
+    Init_PROV
+    # ProvCreateConfig 291 $MTA_MAC
+ } { PASS_STEP }
+
+ # DoStep "PROV_12-6_1-2" "Initial configuration" {
+    # if {$AUTOCONFIG_INIT} {
+        # AutoCfg_OpenFile $MTA_MAC
+        # # Delete all endpoints except the first line
+        # for "{set ln 2;set index 10} {$ln <= $MTA1_NUMLINES} {incr ln;incr index} {"
+        # AutoCfg_EditFile delete $CLABS_OID.2.2.2.1.2.1.1.1.$index $MTA_MAC						;# CallAgentId
+        # }
+        # # save config file for MTA
+        # AutoCfg_CloseSaveFile $MTA_MAC
+        # } else {
+            # verify_signal "Modify configuration file to disable all lines except line 1"
+        # }
+    # } {
+        # PASS_STEP
+    # }
+    
+ DoStep "PROV_12-6_1-3" "Configure Provisioning Server" {
+        PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122 Secure_Flow_BasicCall_DigitMap.cfg
+     PROV_DEPLOY_DHCP
+ } { PASS_STEP }
+    
+ DoStep "PROV_12-6_1-4" "Connect LVRT" {
+    verify_signal "Connect all $MTA1_NUMLINES lines to the Line Voltage Registration Tool & start log."
+ } { PASS_STEP }
+    
+    
+  DoStep "PROV_12-6_1-5" "Start sniffer" {
+      LogMsg "--- Start sniffer ---"
+      Init_CONTROLLER_LAN
+      SetupCaptureControllerLan "host $MTA_IP || udp port 67 || host $CM_IP"
+      StartCaptureControllerLan
+  } {PASS_STEP}
+    
+################ Reset CM and MTA and Verify Provisioning ################
+
+ DoStep "PROV_12-6_2-1" "Hard reboot MTA" {
+        set val [SNMPvN_RESET $CM_IP]
+        # set valt1 [clock format [clock seconds]]
+        LogMsg "Hard reboot of CM and MTA has passed"
+ } {
+     IsEqual $val 0
+ }
+ 
+ DoStep "PROV_12-6_3-1" "pktcMTADevProvisioningState Content Verification" {
+     # Wait for a minute to let CM/MTA starting to reboot
+     actionWait "Wait for CM/MTA to reboot" 30
+     # Get the OID from the MTA and check it using our previously defined
+        set val [GetProvState 1 600]
+        # set valt2 [clock format [clock seconds]]
+     LogMsg "MTA Provisioning State"
+     LogMsg "             - Expected : 1"
+     LogMsg "             - Received : $val"
+ } {
+     IsEqual $val 1
+ }
+
+set oid_pktcEnNcsEndPntLVMgmtPolicy .1.3.6.1.4.1.4491.2.2.6.2.1.2.3.1.1.1
+set oid_pktcEnNcsEndPntLVMgmtResetTimer .1.3.6.1.4.1.4491.2.2.6.2.1.2.3.1.2.1
+set oid_pktcEnNcsEndPntLVMgmtMaintTimer .1.3.6.1.4.1.4491.2.2.6.2.1.2.3.1.3.1
+    
+    DoStep "PROV_12-6_4-1" "SNMP SET pktcEnNcsEndPntLVMgmtPolicy to voltage_based_on_service_or_timers(3)" {
+        set type  INTEGER
+        set newValue 3
+        set result [SNMP_SET $oid_pktcEnNcsEndPntLVMgmtPolicy $type $newValue $MTA_IP]
+    } {
+        IsEqual $result 0 ;# check MIB is writable
+    }   
+    
+    DoStep "PROV_12-6_5-1" "Set pktcEnNcsEndPntLVMgmtResetTimer to a new value" {
+        set type  Unsigned32
+        set newValue 2
+        set result [SNMP_SET $oid_pktcEnNcsEndPntLVMgmtResetTimer $type $newValue $MTA_IP]
+    } {
+        IsEqual $result 0
+    }
+
+    DoStep "PROV_12-6_6-1" "Set pktcEnNcsEndPntLVMgmtMaintTimer to a new value" {
+        set type Unsigned32
+        set newValue 4
+        set result [SNMP_SET $oid_pktcEnNcsEndPntLVMgmtMaintTimer $type $newValue $MTA_IP]
+        set valstartmt [clock format [clock seconds]]
+        LogMsg "--- Voltage should be high (20-48V) now. ---"
+        verify_signal "Voltage should now be high(20-48V) on all lines."
+    } {
+        IsEqual $result 0
+    }
+    
+    DoStep "PROV_12-6_7-1" "SNMP RESET" {
+        # SNMP_RESET $MTA_IP
+        SNMP_SET $oid_pktcMtaDevResetNow INTEGER 1 $MTA_IP
+        # set valt1 [clock format [clock seconds]]
+        # WaitProvCompletion 30
+        actionWait "Wait for MTA to reboot" 30
+        # set valt2 [clock format [clock seconds]]
+    } {PASS_STEP}
+    
+    DoStep "PROV_12-6_8-1" "pktcMtaDevProvisioningState Content Verification" {
+        # Get the OID from the MTA and check it using our previously defined
+        set val [SNMP_GET $oid_pktcMtaDevProvisioningState $MTA_IP 20]
+        LogMsg "The Value of MTA Provisioning State is: $val"
+    } {
+        IsEqual $val 1
+    }
+    
+    DoStep "PROV_12-6_9-1" "Disconnect RF signal" {
+        verify_signal "Disconnect RF cable and wait for T4 timeout and pktcEnNcsEndPntLVMgmtResetTimer timeout."
+        actionWait "Wait 35 seconds for T4 timeout." 35
+        # set valt1 [clock format [clock seconds]]
+    } { PASS_STEP }
+        
+    DoStep "PROV_12-6_10-1" "Wait for maintenance timer to timeout." {
+        verify_signal "The maintenance timer started at
+        $valstartmt .
+        Wait 4 minutes from this time and click yes."
+        set valtendmt [clock format [clock seconds]]
+        LogMsg "--- Voltage should be low (0-20V) now. ---"
+        verify_signal "Voltage should have remained high and now be low(0-20V) on all lines."
+    } { PASS_STEP }
+   
+    DoStep "PROV_12-6_11-1" "Restore RF signal." {
+        verify_signal "Reconnect RF cable."
+    } { PASS_STEP }
+    
+    DoStep "PROV_12-6_12-1" "pktcMTADevProvisioningState Content Verification" {
+        # Wait for a minute to let CM/MTA starting to reboot
+        actionWait "Wait for CM/MTA to reboot" 30
+        # Get the OID from the MTA and check it using our previously defined
+        set val [GetProvState 1 600]
+        LogMsg "MTA Provisioning State"
+        LogMsg "             - Expected : 1"
+        LogMsg "             - Received : $val"
+    } {
+        IsEqual $val 1
+    }
+    
+    DoStep "PROV_12-6_13-1" "Set pktcEnNcsEndPntLVMgmtResetTimer to a new value" {
+        set type Unsigned32
+        set newValue 4
+        set result [SNMP_SET $oid_pktcEnNcsEndPntLVMgmtResetTimer $type $newValue $MTA_IP]
+    } {
+        IsEqual $result 0
+    }
+    
+    DoStep "PROV_12-6_14-1" "Set pktcEnNcsEndPntLVMgmtMaintTimer to a new value" {
+        set type Unsigned32
+        set newValue 2
+        set result [SNMP_SET $oid_pktcEnNcsEndPntLVMgmtMaintTimer $type $newValue $MTA_IP]
+        set valstartmt [clock format [clock seconds]]
+        LogMsg "--- Voltage should be high (20-48V) now. ---"
+        verify_signal "Voltage should now be high(20-48V) on all lines."
+    } {
+        IsEqual $result 0
+    }
+    
+    DoStep "PROV_12-6_15-1" "SNMP RESET" {
+        # SNMP_RESET $MTA_IP
+        SNMP_SET $oid_pktcMtaDevResetNow INTEGER 1 $MTA_IP
+        # set valt1 [clock format [clock seconds]]
+        # WaitProvCompletion 30
+        actionWait "Wait for MTA to reboot" 30
+        # set valt2 [clock format [clock seconds]]
+    } {PASS_STEP}
+    
+    DoStep "PROV_12-6_16-1" "pktcMtaDevProvisioningState Content Verification" {
+        # Get the OID from the MTA and check it using our previously defined
+        set val [SNMP_GET $oid_pktcMtaDevProvisioningState $MTA_IP 20]
+        LogMsg "The Value of MTA Provisioning State is: $val"
+    } {
+        IsEqual $val 1
+    }
+    
+    DoStep "PROV_12-6_17-1" "Disconnect RF signal" {
+        verify_signal "Disconnect RF cable and wait for T4 timeout and pktcEnNcsEndPntLVMgmtResetTimer timeout."
+        actionWait "Wait 35 seconds for T4 timeout." 35
+        # set valt1 [clock format [clock seconds]]
+    } { PASS_STEP }
+    
+    DoStep "PROV_12-6_18-1" "Wait for maintenance timer to timeout." {
+        verify_signal "The maintenance timer started at
+        $valstartmt .
+        Wait 2 minutes from this time and click yes."
+        set valtendmt [clock format [clock seconds]]
+        LogMsg "--- Voltage should be low (0-20V) now. ---"
+        verify_signal "Voltage should have remained high and now be low(0-20V) on all lines."
+    } { PASS_STEP }
+    
+    DoStep "PROV_12-6_19-1" "Restore RF signal." {
+        verify_signal "Reconnect RF cable."
+    } { PASS_STEP }
+    
+    DoStep "PROV_12-6_19-2" "pktcMTADevProvisioningState Content Verification" {
+        # Wait for a minute to let CM/MTA starting to reboot
+        actionWait "Wait for CM/MTA to reboot" 30
+        # Get the OID from the MTA and check it using our previously defined
+        set val [GetProvState 1 600]
+        LogMsg "MTA Provisioning State"
+        LogMsg "             - Expected : 1"
+    } {
+        IsEqual $val 1
+    }
+                
+    DoStep "PROV_12-5_16-2" "Stop sniffer" {
+        LogMsg "--- Stop sniffer ---"
+        StopCaptureControllerLan
+        SaveToFileControllerLan
+    } {PASS_STEP}
+    
+       
+################################################################################
+# Cleanup
+################################################################################
+
+Cleanup
+return 0
+

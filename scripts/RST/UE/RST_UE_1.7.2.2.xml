@@ -1,0 +1,97 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	PCPCII-139 : Update the Voicetronix modifiers to use the new values. (ghassler 07/10/2009)
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-UE 1.7.2.2" 
+	descrip=" Auto-Callback as Anonymous " 
+	number="RST-UE 1.7.2.2">
+	
+	<template file="./templates/CallOrigAtUETemp.xml" name="UE1"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="OnHook"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<NE targets="*69 *68"/>
+		
+		<state ID="OnHook">
+			<prelude>
+				<send protocol="utility" msgtype="OnHook"/>
+			</prelude>
+			<transition to="OffHook1" event="OnHookComplete"/>
+		</state>
+		
+		<state ID="OffHook1">
+			<prelude>
+				<send protocol="utility" msgtype="OffHook"/>
+			</prelude>
+			<transition to="Dial1" event="OffHookComplete"/>
+		</state>
+		
+		<state ID="Dial1">
+			<prelude>
+				<send protocol="utility" msgtype="DialDigits">
+					<mod modtype="add" hdr="number">
+						<expr>*67</expr>
+					</mod>
+				</send>
+			</prelude>
+			<transition to="OnHook1" event="DialDigitsComplete"/>
+		</state>
+		
+		<state ID="OnHook1">
+			<prelude>
+				<send protocol="utility" msgtype="OnHook"/>
+			</prelude>
+			<transition to="EndCall2" event="OnHookComplete"/>
+		</state>
+		
+		<state ID="EndCall2" ES="True">
+			<transition to="OffHook3" event="SessionTerminated"/>
+		</state>
+		
+		<state ID="OffHook3">
+			<prelude>
+				<send protocol="utility" msgtype="OffHook"/>
+			</prelude>
+			<transition to="Setup3" event="OffHookComplete"/>
+		</state>
+		
+		<state ID="Setup3">
+			<prelude once="true">
+				<send protocol="utility" msgtype="DialDigits">
+					<mod modtype="add" hdr="number">
+						<expr>*68</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="4" requirements="REQ14007">
+					<contains>
+						<msg_ref type="sip">Invite.Privacy</msg_ref>
+						<expr>id</expr>
+					</contains>
+				</verify>
+			</response>
+			<transition to="Setup3" event="DialDigitsComplete"/>
+			<transition to="END" event="INVITE"/>
+		</state>
+	</add_to>
+</pc2xml>

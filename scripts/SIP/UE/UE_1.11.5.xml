@@ -1,0 +1,65 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="SIP-UE 1.11.5" 
+	descrip="UAS - Reliable Provisional Response and 100" 
+	number="SIP-UE 1.11.5">
+	
+	<template file="./templates/CallTermAtUETemp.xml" name="UE1"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Setup"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<NE elements="UE1 PCSCF2 SCSCF1 PCSCF1" ext_require="100rel"/>
+		
+		<state ID="Setup">
+			<prelude>
+				<send protocol="sip" msgtype="Invite"/>
+			</prelude>
+			<!-- Expected responses are 100, 180, 183 or 200 -->
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+						<expr>100</expr>
+					</eq>
+					<then>
+						<!-- Step 1 from the test case 1.11.5 -The SS receives a 100 response -->
+						<verify step="2" requirements="RFC3">
+							<dnc>
+								<msg_ref type="sip">100-Invite.Require</msg_ref>
+								<expr>100rel</expr>
+							</dnc>
+						</verify>
+						<verify step="2" requirements="RFC3">
+							<dnc>
+								<msg_ref type="sip">100-Invite</msg_ref>
+								<expr>RSeq: </expr>
+							</dnc>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<transition to="END" event="xxx-INVITE"/>
+		</state>
+	</add_to>
+</pc2xml>

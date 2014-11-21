@@ -1,0 +1,99 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+ Change History: (Author & Date)
+	PCPCIIATP-114 : Update the fmtp media line to use '=' instead of ':' between a parameter and its 
+			value. (ghassler 01/13/2010)
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="CODEC-MEDIA_1.3.2.6" 
+	descrip="UE T.38 Version Control (UE Originating)" 
+	number="CODEC-MEDIA_1.3.2.6">
+	
+	<template file="./templates/CallTermAtUETemp.xml" name="UE1"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Connected"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<state ID="Connected">
+			<prelude once="true">
+				<send protocol="sip" msgtype="ACK"/>
+				<sleep time="5000"/>
+				<log expr="Press start on the fax machine."/>
+				
+			</prelude>
+			<response>
+			    <if>
+			    	<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>REINVITE</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="100-INVITE"/>
+						<verify step="2" requirements="REQ12588, REQ12593, REQ13335">
+							<eq>
+								<msg_ref type="sdp">INVITE.audio.payload-type</msg_ref>
+								<expr>0 127</expr>
+							</eq>
+						</verify>
+						
+						<verify step="2" requirements="REQ12588, REQ12593, REQ13335">
+							<or>
+								<contains>
+									<msg_ref type="sdp" >REINVITE.fmtp-fax.params</msg_ref>
+									<expr>T38FaxVersion=0</expr>
+								</contains>
+							<or>
+								<contains>
+									<msg_ref type="sdp" >REINVITE.fmtp-fax.params</msg_ref>
+									<expr>T38FaxVersion=1</expr>
+								</contains>
+								<contains>
+									<msg_ref type="sdp" >REINVITE.fmtp-fax.params</msg_ref>
+									<expr>T38FaxVersion=2</expr>
+								</contains>
+							</or>
+							</or>
+						</verify>
+						<send protocol="sip" msgtype="200-INVITE">
+							<mod modtype="delete" hdr="audio"/>
+							<mod modtype="delete" hdr="media-modifier"/>
+							<mod modtype="delete" hdr="TIAS-modifier"/>
+							<mod modtype="delete" hdr="max-packet-rate"/>
+							<mod modtype="delete" hdr="rtpmap"/>
+							<mod modtype="delete" hdr="mode"/>
+							<mod modtype="delete" hdr="ptime"/>
+							<mod modtype="add" hdr="SDP">
+								<var_expr>
+									<expr>m=audio </expr>
+									<msg_ref type="platform">UE1.SDPPort2</msg_ref>
+									<expr> RTP/AVP 0 127\r\n</expr>
+									<expr>b=AS:80\r\nb=TIAS:64000\r\na=maxprate:50\r\n</expr>
+									<!-- expr>a=rtpmap:127 t38/8000\r\n</expr-->
+									<expr>a=fmtp:127 T38FaxVersion=2;T38FaxRateManagement=transferredTCF;T38FaxMaxDatagram=173</expr>
+								</var_expr>
+							</mod>
+					</send>
+					</then>
+				</if>
+			</response>
+			<transition to="Connected" event="OffHookComplete"/>
+			<transition to="Connected" event="REINVITE"/>
+			<transition to="Releasing" event="ACK"/>
+		</state>
+	</add_to>
+</pc2xml>

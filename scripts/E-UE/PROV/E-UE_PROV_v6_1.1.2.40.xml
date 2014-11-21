@@ -1,0 +1,283 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+Change History: (Author & Date)
+
+
+-->
+<!-- Document type and attributes. -->
+<pc2xml version="$Revision: 6076 $"
+        name="E-UE_PROV_1.1.2.40"
+        descrip="eUE proceeds with Basic and Hybrid Provisioning Flow when no ToD received by eCM."
+        number="E-UE_PROV_1.1.2.40">
+
+
+    <!-- Reset UE; start capture. -->
+    <template file="./templates/EUE_Prov_B_1_1_1.xml" name="SecProvFlow"/>
+
+    <add_to fsm="SecProvFlow">
+        <transition from="StartCapture_RebootWait" to="eCMProvisions" event="TimerExpired"/>
+	
+	<!-- Step 7. E/MTA reports provisioning pass code (1) to provisioning service. -->
+	<state ID="eCMProvisions">
+            <prelude once="true">
+                <stop_capture/>
+		<!-- this is a check for DOCSIS 3.0 eCM. -->
+                <send protocol="utility" msgtype="SNMPGet">
+			<mod modtype="add" hdr="oids">
+				<expr>DOCS-IF3-MIB::docsIf3CmStatusValue.2</expr>
+			</mod>
+			<!-- check for DOCSIS 2.0 eCM. -->
+			<!--mod modtype="add" hdr="oids">
+				<expr>DOCS-CABLE-DEVICE-MIB::docsDevServerBootState.0</expr>
+			</mod-->
+			<mod modtype="replace" hdr="agentip">
+				<msg_ref type="platform">DUT.CM IP Address</msg_ref>
+			</mod>
+			<mod modtype="replace" hdr="version">
+				<expr>2c</expr>
+			</mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="7">
+                    <contains>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>12</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="EUEProvisions" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+	
+        <state ID="EUEProvisions">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPGet">
+			<mod modtype="add" hdr="oids">
+				<expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvisioningState.0</expr>
+			</mod>
+			<mod modtype="replace" hdr="agentip">
+				<msg_ref type="platform">DUT.IP</msg_ref>
+			</mod>
+			<mod modtype="replace" hdr="version">
+				<expr>2c</expr>
+			</mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="9">
+                    <contains>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>1</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="VerifyMessage" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+
+        <!-- Step 8. -->
+        <state ID="VerifyMessage">
+            <prelude once="true">
+
+                <parse_capture name="eUE_SysLog">
+                    <parser_filter protocol="syslog" ip="DUT.IP"/>
+                </parse_capture>
+
+                <!-- 8 eUE sends Event EUE-EV-6 (4000960005) to Syslog Server. -->
+		<verify step="8">
+		    <and>
+			<eq>
+			    <capture_ref type="syslog" name="eUE_SysLog">syslog.ipv6.dst_host.show</capture_ref>
+			    <msg_ref type="platform">DUT.Syslog IP</msg_ref>
+			</eq>
+			<contains>
+			    <capture_ref type="syslog" name="eUE_SysLog">syslog.msg.show</capture_ref>
+			    <expr>4000960005</expr>
+			</contains>
+		    </and>
+		</verify>
+
+                <generate event="SucceedEvent"/>
+            </prelude>
+            <transition to="ReConfigure" event="SucceedEvent"/>
+        </state>
+
+
+        <!-- 10 Reconfigure in Hybrid mode. Reset. Repeat Steps 8 - 10. -->
+>
+	<state ID="ReConfigure">
+		<prelude>
+			<log promptUser="true" expr="Set the DUT to use a new policy, X_eUEv6_HYBRID and depoly."/>
+			<generate event="Branch1Event"/>
+		</prelude>
+		<transition to="Reset" event="Branch1Event"/>
+	</state>
+	
+	<state ID="Reset" timer="5000">
+		<prelude once="true" >
+			<send protocol="utility" msgtype="SNMPSet">
+				<mod modtype="add" hdr="array">
+					<var_expr>
+						<expr>varBind 1 1 3 \r\n ][ , </expr>
+						<expr>DOCS-CABLE-DEVICE-MIB::docsDevResetNow.0,INTEGER,1][\r\n</expr>
+					</var_expr>
+				</mod>
+				<mod modtype="replace" hdr="agentip">
+					<msg_ref type="platform">DUT.CM IP Address</msg_ref>
+				</mod>
+				<!-- Always use version 2 for a CM reset -->
+				<mod modtype="replace" hdr="version">
+					<expr>2c</expr>
+				</mod>
+			</send>
+		</prelude>
+		<response>
+			<if>
+				<eq>
+					<msg_ref type="utility">Response</msg_ref>
+					<expr>SNMPRespFailure</expr>
+				</eq>
+				<then>
+					<fail/>
+				</then>
+			</if>
+			<if>
+				<or>
+					<eq>
+						<msg_ref type="sip">REGISTER.Contact.expires</msg_ref>
+						<expr>0</expr>
+					</eq>
+					<eq>
+						<msg_ref type="sip">REGISTER.Expires.value</msg_ref>
+						<expr>0</expr>
+					</eq>
+				</or>
+				<then>
+					<send protocol="sip" msgtype="200-REGISTER"/>
+				</then>
+			</if>
+		</response>
+		<!-- Test cases deriving their functionality from this template
+			should change the following transition to some local state -->
+		<transition to="Reset" event="SNMPResp"/>
+		<transition to="StartCapture_RebootWait_1" event="TimerExpired"/>
+		<transition to="END" event="SNMPRespFailure"/>
+		<transition to="Reset" event="REGISTER"/>
+	</state>
+				
+	<state ID="StartCapture_RebootWait_1" timer="120000">
+		<prelude once="true" >
+			<start_capture>
+
+				<filter>
+					<var_expr>
+						<expr>host </expr>
+						<msg_ref type="platform">DUT.IP</msg_ref>
+						<expr> || host </expr>
+						<msg_ref type="platform">DUT.CM IP Address</msg_ref>
+						<expr> || host </expr>
+						<msg_ref type="platform">DUT.DHCP Server IP</msg_ref>
+					</var_expr>
+				</filter>
+			</start_capture>
+		</prelude>
+		<transition to="eCMProvisions_1" event="TimerExpired"/>
+	</state>
+	
+	<state ID="eCMProvisions_1">
+            <prelude once="true">
+                <stop_capture/>
+		<!-- this is a check for DOCSIS 3.0 eCM. -->
+                <send protocol="utility" msgtype="SNMPGet">
+			<mod modtype="add" hdr="oids">
+				<expr>DOCS-IF3-MIB::docsIf3CmStatusValue.2</expr>
+			</mod>
+			<!-- check for DOCSIS 2.0 eCM. -->
+			<!--mod modtype="add" hdr="oids">
+				<expr>DOCS-CABLE-DEVICE-MIB::docsDevServerBootState.0</expr>
+			</mod-->
+			<mod modtype="replace" hdr="agentip">
+				<msg_ref type="platform">DUT.CM IP Address</msg_ref>
+			</mod>
+			<mod modtype="replace" hdr="version">
+				<expr>2c</expr>
+			</mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="7">
+                    <contains>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>12</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="EUEProvisions_2" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+	
+        <state ID="EUEProvisions_2">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPGet">
+			 <mod modtype="add" hdr="oids">
+				<expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvisioningState.0</expr>
+			</mod>
+			<mod modtype="replace" hdr="agentip">
+				<msg_ref type="platform">DUT.IP</msg_ref>
+			</mod>
+		    	<mod modtype="replace" hdr="version">
+				<expr>2c</expr>
+			</mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="9">
+                    <contains>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>1</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="VerifyMessage2" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+
+        <!-- Step 9. -->
+        <state ID="VerifyMessage2">
+		<prelude once="true">
+
+			<parse_capture name="eUE_SysLog_hybrid">
+			    <parser_filter protocol="syslog" ip="DUT.IP"/>
+			</parse_capture>
+
+			<!-- 8-2 eUE sends Event EUE-EV-6 (4000960005) to Syslog Server. -->
+			<verify step="8">
+			    <and>
+				<eq>
+				    <capture_ref type="syslog" name="eUE_SysLog_hybrid">syslog.ipv6.dst_host.show</capture_ref>
+				    <msg_ref type="platform">DUT.Syslog IP</msg_ref>
+				</eq>
+				<contains>
+				    <capture_ref type="syslog" name="eUE_SysLog_hybrid">syslog.msg.show</capture_ref>
+				    <expr>4000960005</expr>
+				</contains>
+			    </and>
+			</verify>
+			<generate event="SucceedEvent"/>
+		</prelude>
+		<transition to="END" event="SucceedEvent"/>
+        </state>
+    </add_to>
+</pc2xml>

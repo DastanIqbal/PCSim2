@@ -1,0 +1,85 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	PCPCII-125 : Add the < and > symbols around the name-addr change in the P-Asserted-Identity header
+		sent in the INVITE message. (ghassler 3/30/2009)
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-UE 1.2.2.3" 
+	descrip="Local Tel URI in P-Asserted-Identity header " 
+	number="RST-UE 1.2.2.3">
+	
+	<fsm name="UE1">
+		<models>
+			<session/>
+		</models>
+		
+		<NE sim_type="orig" elements="UE1 PCSCF2 SCSCF1 PCSCF1" 
+			targets="UE1 4085264000 4085264000 4085264000999 "/>
+		
+		<states initialstate="Register">
+			
+			<state ID="Register">
+				<transition to="Setup" event="Registered"/>
+			</state>
+			
+			<state ID="Setup">
+				<prelude>
+					<send protocol="sip" msgtype="Invite">
+						<!-- Step 1 test case SIP 1.2.2.3-->
+						<mod modtype="replace" hdr="P-Asserted-Identity">
+							<!-- PCPCII-125 Add the < and > around the header -->
+							<expr>&lt;tel:4085264000;phone-context=+1&gt;</expr>
+						</mod>
+					</send>
+				</prelude>
+				<transition to="DisplayVerify" event="1xx-INVITE"/>
+			</state>
+			
+			<state ID="DisplayVerify">
+				<prelude>
+					<log promptUser="True" yesExpected="True" verify="True" 
+						step="2" requirements="REQ14457"
+						expr="Verify the Caller ID display has 4085264000 the number field?"/>
+				</prelude>
+				<transition to="EndSession" event="xxx-INVITE"/>
+			</state>
+			
+			<state ID="EndSession" ES="true">
+				<transition to="Setup1" event="SessionTerminated"/>
+			</state>
+			
+			<state ID="Setup1">
+				<prelude>
+					<send protocol="sip" msgtype="Invite">
+						<!-- Step 4 test case SIP 1.2.2.3-->
+						<!-- PCPCII-125 Add the < and > around the header -->
+						<mod modtype="replace" hdr="P-Asserted-Identity">
+							<expr>&lt;tel:408-526-4000;phone-context=+1&gt;</expr>
+						</mod>
+					</send>
+				</prelude>
+				<postlude>
+					<log promptUser="True" yesExpected="True" verify="True" 
+						step="5" requirements="REQ14457"
+						expr="Verify the Caller ID display has 4085264000 in the number field?"/>
+				</postlude>
+				<transition to="END" event="xxx-INVITE"/>
+			</state>
+		</states>
+	</fsm>
+</pc2xml>

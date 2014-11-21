@@ -1,0 +1,168 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="SIP-UE 1.6.1.3" 
+	descrip="UAC - Error Response in the Calling State   " 
+	number="SIP-UE 1.6.1.3">
+	
+	<template file="./templates/CallOrigAtUETemp.xml" name="UE1"/>
+	<configure name="FSM End Immediately" value="true"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Setup"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<state ID="Setup">
+			<prelude once="true">
+				<send protocol="utility" msgtype="DialDigits">
+					<mod modtype="add" hdr="number">
+						<msg_ref type="platform">UE1.phone number 1</msg_ref>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<!-- If the current message that we received is an Invite, answer with
+              a 100-trying -->
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>Invite</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="100-INVITE"/>
+						<!-- Step 2 from test case SIP 1.6.1.3 - The SS transmits an error 
+						response of 404 to the INVITE Not Found to the UE. -->
+						<send protocol="sip" msgtype="404-INVITE"/>
+					</then>
+				</if>
+				
+			</response>
+			<transition to="INVITE_RECEIVED_UAS" event="INVITE"/>
+			<transition to="Setup" event="DialDigitsComplete"/>
+		</state>
+		
+		<state ID="INVITE_RECEIVED_UAS">
+			<transition to="ACKState" event="INVITE_RECEIVED_UAS"/>
+		</state>
+		
+		<state ID="ACKState" timer="10000">
+			<response>
+				<verify step="2" requirements="RFC964">
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>ACK</expr>
+					</eq>
+				</verify>
+				<verify step="3" requirements="RFC965">
+					<eq>
+						<msg_ref type="sip" msg_instance="last">INVITE.DestinationAddress.IP</msg_ref>
+						<msg_ref type="sip">ACK.DestinationAddress.IP</msg_ref>
+					</eq>
+				</verify>
+				<verify step="3" requirements="RFC965">
+					<eq>
+						<msg_ref type="sip" msg_instance="last">INVITE.DestinationAddress.Port</msg_ref>
+						<msg_ref type="sip">ACK.DestinationAddress.Port</msg_ref>
+					</eq>
+				</verify>
+				<verify step="3" requirements="RFC965">
+					<eq>
+						<msg_ref type="sip" msg_instance="last">INVITE.Via.sent-protocol</msg_ref>
+						<msg_ref type="sip">ACK.Via.sent-protocol</msg_ref>
+					</eq>
+				</verify>
+				<verify step="4" requirements="RFC983">
+					<eq>
+						<msg_ref type="sip">ACK.Call-ID.value</msg_ref>
+						<msg_ref type="sip" msg_instance="last">INVITE.Call-ID.value</msg_ref>
+					</eq>
+				</verify>
+				<verify step="4" requirements="RFC983">
+					<eq>
+						<msg_ref type="sip" msg_instance="last">INVITE.From.name-addr</msg_ref>
+						<msg_ref type="sip">ACK.From.name-addr</msg_ref>
+					</eq>
+				</verify>
+				<verify step="4" requirements="RFC983">
+					<eq>
+						<msg_ref type="sip" msg_instance="last">INVITE.Request-Line.Request-URI</msg_ref>
+						<msg_ref type="sip">ACK.Request-Line.Request-URI</msg_ref>
+					</eq>
+				</verify>
+				<verify step="5" requirements="RFC984">
+					<eq>
+						<msg_ref type="sip">ACK.To.name-addr</msg_ref>
+						<msg_ref type="sip" msg_instance="last">404-INVITE.To.name-addr</msg_ref>
+					</eq>
+				</verify>
+				<verify step="6" requirements="RFC985, RFC986">
+					<eq>
+						<msg_ref type="sip" msg_instance="last">INVITE.Via</msg_ref>
+						<msg_ref type="sip">ACK.Via</msg_ref>
+					</eq>
+				</verify>
+				<verify step="7" requirements="RFC987, RFC988">
+					<eq>
+						<msg_ref type="sip">ACK.CSeq.method</msg_ref>
+						<expr>ACK</expr>
+					</eq>
+				</verify>
+				<verify step="7" requirements="RFC987, RFC988">
+					<eq>
+						<msg_ref type="sip">ACK.CSeq.value</msg_ref>
+						<msg_ref type="sip" msg_instance="last">INVITE.CSeq.value</msg_ref>
+					</eq>
+				</verify>
+				<verify step="8" requirements="RFC989">
+					<eq>
+						<msg_ref type="sip" msg_instance="last">INVITE.Route</msg_ref>
+						<msg_ref type="sip">ACK.Route</msg_ref>
+					</eq>
+				</verify>
+			</response>
+			<postlude>
+				<send protocol="sip" msgtype="200-INVITE"/>
+			</postlude>
+			<transition to="WaitACK" event="ACK"/>
+		</state>
+		
+		<state ID="WaitACK" timer="10000">
+			<response>
+				<if>
+					<neq>
+						<msg_ref type="event"/>
+						<expr>DIALOG_CONFIRMED_UAS</expr>
+					</neq>
+					<then>
+						<verify step="9" requirements="RFC962">
+							<neq>
+								<msg_ref type="sip">Request</msg_ref>
+								<expr>ACK</expr>
+							</neq>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<transition to="OnHook" event="ACK"/>
+			<transition to="OnHook" event="TimerExpired"/>
+		</state>
+	</add_to>
+</pc2xml>

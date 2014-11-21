@@ -1,0 +1,201 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	PCPCII-139 : Update the Voicetronix modifiers to use the new values. (ghassler 07/10/2009)
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-UE 1.7.2.7" 
+	descrip="Auto Callback SUBSCRIBE and NOTIFY Procedures " 
+	number="RST-UE 1.7.2.7">
+
+	<template file="./templates/CallOrigAtUETemp.xml" name="UE1"/>
+
+	<remove_from fsm="UE1">
+		<state ID="Register"/>
+	</remove_from>
+
+	<add_to fsm="UE1">
+		<state ID="Register">
+			<prelude>
+				<log promptUser="true" expr="Enable CallID on the DUT"/>
+			</prelude>
+			<transition to="OffHook" event="Registered"/>
+		</state>
+		
+		<transition from="OnHook" to="EndSession" event="OnHookComplete"/>
+		
+		<state ID="EndSession" ES="True">
+			<transition to="Setup1" event="SessionTerminated"/>
+		</state>
+		
+		<state ID="Setup1">
+			<prelude once="true">
+				<send protocol="utility" msgtype="DialDigits">
+					<mod modtype="add" hdr="number">
+						<expr>*66</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>Invite</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="486-INVITE"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Setup1" event="DialDigitsComplete"/>
+			<transition to="WaitAck" event="INVITE"/>
+		</state>
+		
+		<state ID="WaitAck">
+			<transition to="WaitAck" event="DialDigitsComplete"/>
+			<transition to="Subscribe1" event="ACK"/>
+		</state>
+		
+		<state ID="Subscribe1">
+			<!-- Step  5 -->
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>SUBSCRIBE</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="200-SUBSCRIBE"/>
+						<verify step="5" requirements="REQ14010, REQ14016">
+							<contains>
+								<msg_ref type="sip">SUBSCRIBE.Event</msg_ref>
+								<expr>dialog</expr>
+							</contains>
+						</verify>
+						<verify step="5" requirements="REQ14010, REQ14016">
+							<eq>
+								<msg_ref type="sip">SUBSCRIBE.Request-Line.Request-URI</msg_ref>
+								<msg_ref type="sip" msg_instance="last">INVITE.Request-Line.Request-URI</msg_ref>
+							</eq>
+						</verify>
+						<verify step="5" requirements="REQ14010, REQ14016">
+							<eq>
+								<msg_ref type="sip">SUBSCRIBE.Expires.value</msg_ref>
+								<expr>1800</expr>
+							</eq>
+						</verify>
+						<send protocol="sip" msgtype="NOTIFY">
+							<mod modtype="delete" hdr="dialog" body="dialog-info+xml"/>
+						</send>
+					</then>
+				</if>
+			</response>
+			<transition to="Notification" event="SUBSCRIBE"/>
+		</state>
+		
+		<state ID="Notification">
+			<postlude>
+				<log step="6" requirements="REQ14010, REQ14016" 
+					promptUser="True" yesExpected="True" verify="True" 
+						expr="Verify the UE plays a delayed processing announcement?"/>
+			</postlude>
+			<transition to="OnHook1" event="200-NOTIFY"/>
+		</state>
+		
+		<state ID="OnHook1">
+			<prelude>
+				<send protocol="utility" msgtype="OnHook"/>
+			</prelude>
+			<postlude>
+				<log step="7" requirements="REQ14010, REQ14016, REQ14020" 
+					promptUser="True" yesExpected="True" verify="True" 
+					expr="Verify a special ring is played?"/>
+			</postlude>
+			<transition to="NoSubscribe" event="OnHookComplete"/>
+		</state>
+		
+		<state ID="NoSubscribe" timer="3000">
+			<response>
+				<verify step="7" requirements="REQ14010, REQ14016, REQ14020"> 
+					<or>
+						<gt>
+							<msg_ref type="sip">Subscribe.Expires.value</msg_ref>
+							<expr>0</expr>
+						</gt>
+						<eq>
+							<msg_ref type="event"/>
+							<expr>TimerExpired</expr>
+						</eq>
+					</or>
+				</verify>
+			</response>
+			<transition to="SendNotify1" event="TimerExpired"/>
+			<transition to="SendNotify1" event="Subscribe"/>
+		</state>
+			
+		<state ID="SendNotify1">
+			<prelude>
+				<send protocol="sip" msgtype="NOTIFY" subscribeType="dialog">
+					<mod modtype="delete" hdr="dialog" body="dialog-info+xml"/>
+				</send>
+			</prelude>
+			<postlude>
+				<log step="8" requirements="REQ14010, REQ14016, REQ14020" 
+				promptUser="True" yesExpected="True" verify="True" 
+				expr="Verify a special ring is played again after the period defined\nby the AR Special Ringing Retry Wait Interval has elapsed?"/>
+			</postlude>
+			<transition to="SendNotify2" event="200-NOTIFY"/>
+		</state>
+	
+		<state ID="SendNotify2" timer="300000">
+			<prelude>
+				<sleep time="10000"/>
+				<send protocol="sip" msgtype="NOTIFY">
+					<mod modtype="delete" hdr="dialog" body="dialog-info+xml"/>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">SUBSCRIBE.Event.event-type</msg_ref>
+						<expr>dialog</expr>
+					</eq>
+					<then>
+						<verify step="9" requirements="REQ14010, REQ14016, REQ14020">
+							<eq>
+								<msg_ref type="sip">SUBSCRIBE.Expires.value</msg_ref>
+								<expr>0</expr>
+							</eq>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<transition to="SendNotify2" event="200-NOTIFY"/>
+			<transition to="Verify" event="SUBSCRIBE"/>
+			<transition to="Verify" event="TimerExpired"/>
+		</state>
+		
+		<state ID="Verify" timer="1000">
+			<postlude>
+				<log step="9" requirements="REQ14010, REQ14016, REQ14020" 
+					promptUser="True" yesExpected="True" verify="True" 
+					expr="Verify that the UE stops the special ringing?"/>
+			</postlude>
+			<transition to="END" event="TimerExpired"/>
+		</state>
+	</add_to>
+</pc2xml>

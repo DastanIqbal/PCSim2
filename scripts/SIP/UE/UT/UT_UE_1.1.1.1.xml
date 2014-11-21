@@ -1,0 +1,54 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+
+<pc2xml version="$Revision: 8188 $" name="UT_SIP-UE 1.1.1.1" descrip="REGISTER Message Details" number="UT_SIP-UE 1.1.1.1">
+	<template name="UT_SIP-UE 1.1.1.1" file="./templates//UT/Orig_DUT.xml"/>
+	<add_to fsm="UT_SIP-UE 1.1.1.1">
+		<states initialstate="PendingRegister1"/>
+		<state ID="PendingRegister1" timer="500">
+			<transition to="Register" event="TimerExpired"/>
+		</state>
+	</add_to>
+	<remove_from fsm="UT_SIP-UE 1.1.1.1">
+		<state ID="PendingRegister"/>
+		<state ID="Register"/>
+		<state ID="Digest"/>
+		<state ID="Setup"/>
+		<state ID="Proceeding"/>
+		<state ID="Alerting"/>
+		<state ID="Answer"/>
+		<state ID="Connected"/>
+	</remove_from>
+	<add_to fsm="UT_SIP-UE 1.1.1.1">
+		<state ID="Register">
+			<prelude>
+				<send protocol="sip" msgtype="Register" target="PCSCF1" originator="DUT"/>
+			</prelude>
+			<transition to="Digest" event="401-Register"/>
+		</state>
+		<state ID="Digest">
+			<prelude>
+				<sleep time="5000"/>
+				<send protocol="sip" msgtype="Register" target="PCSCF1" originator="DUT"/>
+			</prelude>
+			<transition to="END" event="200-Register"/>
+		</state>
+	</add_to>
+</pc2xml>

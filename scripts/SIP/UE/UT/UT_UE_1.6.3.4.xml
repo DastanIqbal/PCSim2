@@ -1,0 +1,40 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+
+<pc2xml version="$Revision: 8188 $" name="UT_UE_1.6.3.4" descrip="This is a unit test script for testing the UE_1.6.3.4 test script." number="1">
+	<configure name="FSM Process Duplicate Messages" value="true"/>
+	<template name="DUT" file="$UT_PATH/Templates/ut/Term_DUT.xml"/>
+	<remove_from fsm="DUT">
+		<!--state ID="Setup" sub="response"/-->
+	</remove_from>
+	<add_to fsm="DUT">
+		<NE targets="UE2"/>
+		<transition from="Setup" to="Resend" event="INVITE"/>
+		<state ID="Resend">
+			<postlude>
+				<retransmit protocol="sip" msgtype="18x-Invite"/>
+			</postlude>
+			<transition to="WaitCancel" event="INVITE"/>
+		</state>
+		<state ID="WaitCancel">
+			<transition to="END" event="CANCEL"/>
+		</state>
+	</add_to>
+</pc2xml>

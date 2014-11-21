@@ -1,0 +1,99 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	PCPCII-302 : The script is sending 100 and 18x message during the test. The ATP says to only 
+		send the 200 response. Remove the 1xx messages from the script. (ghassler 05/04/2010)
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="SIP-UE 1.6.1.5" 
+	descrip="2xx Response in the Calling State" 
+	number="SIP-UE 1.6.1.5">
+	
+	<template file="./templates/CallOrigAtUETemp.xml" name="UE1"/>
+	<configure name="FSM Process Duplicate Messages" value="true"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Setup"/>
+		<state ID="Connected"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<state ID="Setup">
+			<prelude once="true">
+				<send protocol="utility" msgtype="DialDigits">
+					<mod modtype="add" hdr="number">
+						<msg_ref type="platform">UE1.phone number 1</msg_ref>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<!-- If the current message that we received is an Invite, answer with
+              a 100-trying -->
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>Invite</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="200-INVITE"/>
+					</then>
+				</if>
+			</response>
+			<transition to="WaitAck" event="INVITE"/>
+			<transition to="Setup" event="DialDigitsComplete"/>
+		</state>
+		
+		<state ID="WaitAck">
+			<transition to="WaitAck" event="DialDigitsComplete"/>
+			<transition to="Connected" event="ACK"/>
+			<transition to="WaitAck" event="INVITE"/>
+		</state>
+		
+		<state ID="Connected" timer="10000">
+			<prelude>
+				<send protocol="sip" msgtype="404-INVITE"/>
+			</prelude>
+			<response>
+				<if>
+					<neq>
+						<msg_ref type="event"/>
+						<expr>DIALOG_CONFIRMED_UAS</expr>
+					</neq>
+					<then>
+						<verify step="4" requirements="RFC979, RFC981">
+							<and>
+								<eq>
+									<msg_ref type="event"/>
+									<expr>TimerExpired</expr>
+								</eq>
+								<neq>
+									<msg_ref type="sip">Request</msg_ref>
+									<expr>ACK</expr>
+								</neq>
+							</and>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<postlude>
+				<log expr="Go on hook on the device."/>
+			</postlude>
+			<transition to="END" event="ACK"/>
+			<transition to="END" event="TimerExpired"/>
+		</state>
+	</add_to>
+</pc2xml>

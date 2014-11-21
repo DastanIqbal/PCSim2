@@ -1,0 +1,95 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-UE 1.1.12.1" 
+	descrip="Event for Registrations – Override Flag True" 
+	number="RST-UE 1.1.12.1">
+	
+	<template file="./templates/UERegAndSubTemp.xml" name="Registrar"/>
+	
+	<configure name="No Response Timeout" value="90000"/>
+	
+	<remove_from fsm="Registrar">
+		<state ID="Registered"/>
+		<state ID="NotificationComplete"/>
+	</remove_from>
+	
+	<add_to fsm="Registrar">
+		<state ID="Registered">
+			<prelude>
+				<send protocol="sip" msgtype="200-Register"/>
+			</prelude>
+			<response>
+				<if>
+					<contains>
+						<msg_ref type="sip">SUBSCRIBE.Event</msg_ref>
+						<expr>reg</expr>
+					</contains>
+					<then>
+						<send protocol="sip" msgtype="200-SUBSCRIBE"/>
+						<sleep time="100"/>
+						<send protocol="sip" msgtype="NOTIFY"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Notification" event="SUBSCRIBE"/>
+		</state>
+		
+		<state ID="NotificationComplete">
+			<prelude once="true">
+				<!-- Step 3 from test case SIP-UE 1.1.12.1 - 
+					UE completes initial registration.
+					reg-event-body-> 
+						reginfo->registration->state= terminated.
+					reg-event-body->
+						reginfo->registration->contact->event=deactivated.-->
+				<send protocol="sip" msgtype="NOTIFY">
+					<mod modtype="replace" hdr="registration" param="state" body="reginfo+xml">
+						<expr>terminated</expr>
+					</mod>
+					<mod modtype="replace" hdr="contact" param="event" body="reginfo+xml">
+						<expr>rejected</expr>
+					</mod>
+					<mod modtype="replace" hdr="Subscription-State">
+						<expr>terminated</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>REGISTER</expr>
+					</eq>
+					<then>
+						<verify step="4" requirements="REQ23650">
+							<eq>
+								<msg_ref type="sip">Request</msg_ref>
+								<expr>REGISTER</expr>
+							</eq>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<transition to="NotificationComplete" event="200-NOTIFY"/>
+			<transition to="END" event="REGISTER"/>
+		</state>
+	</add_to>
+</pc2xml>

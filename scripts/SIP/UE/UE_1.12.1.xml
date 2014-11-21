@@ -1,0 +1,91 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="SIP-UE 1.12.1" 
+	descrip="Reception of a second UPDATE before generating a response to a previous UPDATE (After Session Establishment)" 
+	number="SIP-UE 1.12.1">
+	
+	<template file="./templates/CallTermAtUETemp.xml" name="UE1"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Connected"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<state ID="Connected">
+			<prelude once="true">
+				<send protocol="sip" msgtype="ACK"/>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="event"/>
+						<expr>DIALOG_CONFIRMED_UAC</expr>
+					</eq>
+					<then>
+						<!-- Step 11 from the test case SIP 1.12.1 - Send 2 UPDATE 
+						messages to the UE back-to-back (i.e. with as little time as 
+						possible between the messages).  The CSeq number should 
+						increment by one between the 2 UPDATEs. -->
+						<send protocol="sip" msgtype="UPDATE"/>
+						<send protocol="sip" msgtype="UPDATE"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Connected" event="OffHookComplete"/>
+			<transition to="Verify" event="DIALOG_CONFIRMED_UAC"/>
+		</state>
+		
+		<state ID="Verify" timer="10000">
+			<response>
+				<!-- Step 2 from test case 1.12.1 -->
+				<if>
+					<eq>
+						<msg_ref type="sip">Response</msg_ref>
+						<expr>500-UPDATE</expr>
+					</eq>
+					<then>
+						<verify step="3" requirements="RFC1422">
+							<eq>
+								<msg_ref type="sip">500-UPDATE.CSeq.value</msg_ref>
+								<msg_ref type="sip" msg_instance="last">UPDATE.CSeq.value</msg_ref>
+							</eq>
+						</verify>
+						<verify step="4" requirements="RFC1423">
+							<and>
+								<gt>
+									<msg_ref type="sip">500-UPDATE.Retry-After.value</msg_ref>
+									<expr>0</expr>
+								</gt>
+								<lte>
+									<msg_ref type="sip">500-UPDATE.Retry-After.value</msg_ref>
+									<expr>10</expr>
+								</lte>
+							</and>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<transition to="Verify" event="200-UPDATE"/>
+			<transition to="END" event="500-UPDATE"/>
+			<transition to="END" event="TimerExpired"/>
+		</state>
+	</add_to>
+</pc2xml>

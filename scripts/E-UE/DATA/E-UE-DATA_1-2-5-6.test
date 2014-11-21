@@ -1,0 +1,358 @@
+################################################################################
+#// Filename: E-UE-DATA_1-2-5-6.test (PACT)
+#// Author:   Matthew Forbes
+#//
+#//
+#//
+#// Creation Date: March 5, 2009
+#// Modified by:
+################################################################################
+#// Description:
+#//     TC2759 TEST CASE E-UE-DATA 1.2.5.6 - Ability of eUE to Properly Implement the
+#//     "System" MIB Group
+#//
+#// Objective:
+#//     To verify the correct implementation of the MIB objects included in the 
+#//     "system" MIB group.
+#//
+#//
+#// PacketCable DUT:
+#//     EDVA
+#//
+#// Test Steps:
+#//     - Initial configuration
+#//     - Start sniffer
+#//     - Reset DUT
+#//     - Check Provisioning state
+#//     - Invoke SNMPv3 API and query MIB objects and validate values
+#//     - Stop sniffer
+#//     - Hybrid configuration
+#//     - Start sniffer
+#//     - Reset DUT
+#//     - Check Provisioning state
+#//     - Invoke SNMPv2 API and bulk query MIB objects and validate values
+#//     - Stop sniffer
+#//
+#//
+#//
+#//
+#// Notes:
+#//     - Requires provPrimitives.tcl
+#//
+#//
+################################################################################
+global SCRIPT_VERSION
+set SCRIPT_VERSION { # $Id: E-UE-DATA_1-2-5-6.test 7454 2010-08-06 15:28:34Z ghassler $ }
+
+
+set test_case E-UE-DATA_1-2-5-6-
+set step_num 1
+
+Init_PROV
+
+DoStep ${test_case}${step_num} "Initial Configuration" {
+    LogMsg "--- Init PROV module ---"
+    # PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122 SecureFlow_BasicCall_DigitMap_Inactive.cfg
+    PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122 C.1.2.3.bin
+    PROV_DEPLOY_DHCP
+} {PASS_STEP}
+
+DoStep ${test_case}[incr step_num]_1 "Start sniffer" {
+    LogMsg "--- Start sniffer ---"
+    Init_CONTROLLER_LAN
+    SetupCaptureControllerLan "host $MTA_IP || udp port 67"
+    StartCaptureControllerLan
+} {PASS_STEP}
+
+DoStep ${test_case}${step_num}_2 "Reset CM/MTA" {
+    set val [SNMPvN_RESET $CM_IP]
+    LogMsg "--- Reset of CM and MTA has passed ---"
+} {
+    IsEqual $val 0
+}
+
+DoStep ${test_case}${step_num}_3 "pktcMTADevProvisioningState Content Verification" {
+    # Wait for a minute to let CM/MTA starting to reboot
+    actionWait "Wait for CM/MTA to reboot" 60
+    # Get the OID from the MTA and check it using our previously defined
+    set val [GetProvState 1 600]
+    LogMsg "MTA Provisioning State"
+    LogMsg "             - Expected : 1"
+    LogMsg "             - Received : $val"
+} {
+    IsEqual $val 1
+}
+
+DoStep ${test_case}[incr step_num]_1 "systemTable Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMP_TABLE_GET $table_systemTable $MTA_IP all]
+    LogMsg "The Value of systemTable is: $val"
+} {
+    verify_signal " Monitor TclSim console: systemTable should contain the following values
+    sysDescr        sysName
+    sysObjectID     sysLocation
+    sysUpTime       sysServices
+    sysContact      sysORLastChange "
+}
+
+DoStep ${test_case}[incr step_num]_1 "sysDescr Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMP_TABLE_GET $oid_sysDescr $MTA_IP 1]
+    LogMsg "The Value of sysDescr is: $val"
+} {
+    verify_signal " The Value of sysDescr is: $val (should conform to OSS)"
+}
+
+DoStep ${test_case}[incr step_num]_1 "sysObjectID Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMP_TABLE_GET $oid_sysObjectID $MTA_IP 1]
+    LogMsg "The Value of sysObjectID is: $val"
+} {
+    verify_signal " The Value of sysObjectID is: $val (should conform to OSS)"
+}
+
+DoStep ${test_case}[incr step_num]_1 "sysUpTime Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMP_TABLE_GET $oid_sysUpTime $MTA_IP 1]
+    LogMsg "The Value of sysUpTime is: $val"
+} {
+    verify_signal " The Value of sysUpTime is: $val (should be the time since reboot)"
+}
+
+DoStep ${test_case}[incr step_num]_1 "sysContact Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMP_TABLE_GET $oid_sysContact $MTA_IP 1]
+    LogMsg "The Value of sysContact is: $val"
+} {
+    verify_signal " The Value of sysContact is: $val (should be contact info for Mfg.)"
+}
+
+DoStep ${test_case}[incr step_num]_1 "sysName Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMP_TABLE_GET $oid_sysName $MTA_IP 1]
+    LogMsg "The Value of sysName is: $val"
+} {
+    verify_signal " The Value of sysName is: $val (should be DUT name)"
+}
+
+DoStep ${test_case}[incr step_num]_1 "sysLocation Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMP_TABLE_GET $oid_sysLocation $MTA_IP 1]
+    LogMsg "The Value of sysLocation is: $val"
+} {
+    verify_signal " The Value of sysLocation is: $val (should be physical location)"
+}
+
+DoStep ${test_case}[incr step_num]_1 "sysServices Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMP_TABLE_GET $oid_sysServices $MTA_IP 1]
+    LogMsg "The Value of sysServices is: $val"
+} {
+    verify_signal " The Value of sysServices is: $val (should contain 68 or up to 127)"
+}
+
+DoStep ${test_case}[incr step_num]_1 "sysORLastChange Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMP_TABLE_GET $oid_sysORLastChange $MTA_IP 1]
+    LogMsg "The Value of sysORLastChange is: $val"
+} {
+    verify_signal " The Value of sysORLastChange is: $val (0 or time since last change)"
+}
+
+DoStep ${test_case}[incr step_num]_1 "sysORTable Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMP_TABLE_GET $table_sysORTable $MTA_IP all]
+    LogMsg "The Value sysORTable is: $val"
+} {
+    verify_signal "Monitor TclSim console:  vacmAccessTable should contain the following values
+    sysORIndex (in index)
+    sysORID
+    sysORFDescr
+    sysORUpTime
+    "
+}
+
+DoStep ${test_case}[incr step_num] "Stop Sniffer" {
+    LogMsg "--- Stop Sniffer ---"
+    StopCaptureControllerLan
+    SaveToFileControllerLan "_Secure"
+} { PASS_STEP }
+
+set step_num 1
+
+DoStep ${test_case}${step_num}h "Initial Configuration" {
+    LogMsg "--- Init PROV module ---"
+    # PROV_MODIFY_DEVICE $MTA_MAC HYBRID2 HybridFlow_BasicCall_DigitMap_Inactive.cfg
+    PROV_MODIFY_DEVICE $MTA_MAC HYBRID2
+    PROV_DEPLOY_DHCP
+} {PASS_STEP}
+
+DoStep ${test_case}[incr step_num]h_1 "Start sniffer" {
+    LogMsg "--- Start sniffer ---"
+    Init_CONTROLLER_LAN
+    SetupCaptureControllerLan "host $MTA_IP || udp port 67"
+    StartCaptureControllerLan
+} {PASS_STEP}
+
+DoStep ${test_case}${step_num}h_2 "Reset CM/MTA" {
+    set val [SNMPvN_RESET $CM_IP]
+    LogMsg "--- Reset of CM and MTA has passed ---"
+} {
+    IsEqual $val 0
+}
+
+DoStep ${test_case}${step_num}h_3 "pktcMTADevProvisioningState Content Verification" {
+    # Wait for a minute to let CM/MTA starting to reboot
+    actionWait "Wait for CM/MTA to reboot" 120
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMPvN_GET $oid_pktcMtaDevProvisioningState $MTA_IP]
+    LogMsg "MTA Provisioning State"
+    LogMsg "             - Expected : 1"
+    LogMsg "             - Received : $val"
+} {
+    IsEqual $val 1
+}
+
+DoStep ${test_case}[incr step_num]h_1 "systemTable Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMPvN_TABLE_GET $table_systemTable $MTA_IP all]
+    LogMsg "The Value of systemTable is: $val"
+} {
+    verify_signal " Monitor TclSim console: systemTable should contain the following values
+    sysDescr        sysName
+    sysObjectID     sysLocation
+    sysUpTime       sysServices
+    sysContact      sysORLastChange "
+}
+
+DoStep ${test_case}[incr step_num]h_1 "sysDescr Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMPvN_TABLE_GET $oid_sysDescr $MTA_IP 1]
+    LogMsg "The Value of sysDescr is: $val"
+} {
+    verify_signal " The Value of sysDescr is: $val (should conform to OSS)"
+}
+
+DoStep ${test_case}[incr step_num]h_1 "sysObjectID Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMPvN_TABLE_GET $oid_sysObjectID $MTA_IP 1]
+    LogMsg "The Value of sysObjectID is: $val"
+} {
+    verify_signal " The Value of sysObjectID is: $val (should conform to OSS)"
+}
+
+DoStep ${test_case}[incr step_num]h_1 "sysUpTime Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMPvN_TABLE_GET $oid_sysUpTime $MTA_IP 1]
+    LogMsg "The Value of sysUpTime is: $val"
+} {
+    verify_signal " The Value of sysUpTime is: $val (should be the time since reboot)"
+}
+
+DoStep ${test_case}[incr step_num]h_1 "sysContact Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMPvN_TABLE_GET $oid_sysContact $MTA_IP 1]
+    LogMsg "The Value of sysContact is: $val"
+} {
+    verify_signal " The Value of sysContact is: $val (should be contact info for Mfg.)"
+}
+
+DoStep ${test_case}[incr step_num]h_1 "sysName Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMPvN_TABLE_GET $oid_sysName $MTA_IP 1]
+    LogMsg "The Value of sysName is: $val"
+} {
+    verify_signal " The Value of sysName is: $val (should be DUT name)"
+}
+
+DoStep ${test_case}[incr step_num]h_1 "sysLocation Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMPvN_TABLE_GET $oid_sysLocation $MTA_IP 1]
+    LogMsg "The Value of sysLocation is: $val"
+} {
+    verify_signal " The Value of sysLocation is: $val (should be physical location)"
+}
+
+DoStep ${test_case}[incr step_num]h_1 "sysServices Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMPvN_TABLE_GET $oid_sysServices $MTA_IP 1]
+    LogMsg "The Value of sysServices is: $val"
+} {
+    verify_signal " The Value of sysServices is: $val (should contain 68 or up to 127)"
+}
+
+DoStep ${test_case}[incr step_num]h_1 "sysORLastChange Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMPvN_TABLE_GET $oid_sysORLastChange $MTA_IP 1]
+    LogMsg "The Value of sysORLastChange is: $val"
+} {
+    verify_signal " The Value of sysORLastChange is: $val (0 or time since last change)"
+}
+
+DoStep ${test_case}[incr step_num]h_1 "sysORTable Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMPvN_TABLE_GET $table_sysORTable $MTA_IP all]
+    LogMsg "The Value sysORTable is: $val"
+} {
+    verify_signal "Monitor TclSim console:  vacmAccessTable should contain the following values
+    sysORIndex
+    sysORID
+    sysORFDescr
+    sysORUpTime
+    "
+}
+
+DoStep ${test_case}[incr step_num]h "Stop Sniffer" {
+    LogMsg "--- Stop Sniffer ---"
+    StopCaptureControllerLan
+    SaveToFileControllerLan "_Hybrid"
+} { PASS_STEP }
+
+DoStep ${test_case}[incr step_num] "Configure Provisioning Server" {
+    PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122 Device_Level_Secure.cfg
+    PROV_DEPLOY_DHCP
+} { PASS_STEP }
+
+
+############### Reset CM and MTA and Verify Provisioning ################
+
+DoStep ${test_case}[incr step_num] "Reset CM/MTA" {
+    set val [SNMPvN_RESET $CM_IP]
+    LogMsg "--- Reset of CM and MTA has passed ---"
+} {
+    IsEqual $val 0
+}
+
+DoStep ${test_case}[incr step_num] "pktcMTADevProvisioningState Content Verification" {
+    # Wait for a minute to let CM/MTA starting to reboot
+    actionWait "Wait for CM/MTA to reboot" 60
+    # Get the OID from the MTA and check it using our previously defined
+    set val [GetProvState 1 600]
+    LogMsg "MTA Provisioning State"
+    LogMsg "             - Expected : 1"
+    LogMsg "             - Received : $val"
+} {
+    IsEqual $val 1
+}
+
+
+################################################################################
+# Cleanup
+################################################################################
+set CONTINUE_PAST_STEP_ERROR 0
+Cleanup
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

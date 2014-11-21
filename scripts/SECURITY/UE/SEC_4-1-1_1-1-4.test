@@ -1,0 +1,285 @@
+#//********************************************************************************
+#// Filename: SEC_1-1-4.test
+#// Author:   Satish Kumar, Texas Instruments(Visiting ENgineer)
+#// Creation Date: 15-Aug-2003
+#// Modified by:
+#//     Titintorn Yaemnoi September 26, 2003
+#//     - Add/Remove comments.
+#//     Titintorn on October 27, 2003
+#//     - Add ethereal start/stop automatically
+#//     - Add verify DNS, TGS, AS, AP messages automatically.
+#//		03/18/09 WJN
+#//		- Changed removed set for oid_pktcMtaDevResetKrbTickets so platform default would be used
+#//		- Changed reboot to SNMP_set for PC2.0
+#//********************************************************************************
+#// Description:
+#//     TC355 TEST CASE SEC 1.1.4 Provisioning Steps MTA-5 to MTA-14.
+#//
+#// Objective:
+#//     Verify that the MTA establishes SNMPv3 keys per PacketCable Provisioning Specification.
+#//     This test verifies that an MTA that saves tickets in memory operates properly after a reboot.
+#//
+#// PacketCable DUT:
+#//     MTA
+#//********************************************************************************
+global SCRIPT_VERSION
+set SCRIPT_VERSION { # $Id: SEC_4-1-1_1-1-4.test 7406 2010-07-20 17:17:37Z dthakore $ }
+
+set stepName        "SEC_1-1-4_"
+set preStepName     "PRESTEP_SEC_1-1-4_"
+set majorStepCount  1   ;# Major step
+set minorStepCount  1   ;# Minor step
+
+Init_NCS
+
+##############################################################################
+# PRESTEP_SEC_1-1-4_1-1: Start Configure
+##############################################################################
+DoStep ${preStepName}${majorStepCount}-${minorStepCount} "Configure Setup" {
+#    set oid_pktcMtaDevResetKrbTickets .1.3.6.1.4.1.4491.2.2.1.1.3.19.0
+Init_PROV
+} {PASS_STEP}
+
+incr minorStepCount
+
+##############################################################################
+# PRESTEP_SEC_1-1-4_1-2: Invalidate the existing Prov server Ticket by SNMP_SET
+##############################################################################
+DoStep ${preStepName}${majorStepCount}-${minorStepCount} "Clear ticket thru SNMP" {
+    # Get the OID from the MTA and check it using our previously defined
+    set retcode1 [SNMP_SET $oid_pktcMtaDevResetKrbTickets OCTET-STRING 0xC0 $MTA_IP]
+    LogMsg "The Value of MTA Provisioning State is: $retcode1" 49
+} {
+    if { ( $retcode1 == 0 ) } {
+        PASS_STEP
+    } else {
+        FAIL_STEP "Ticket Invalidation failed"
+    }
+}
+
+incr minorStepCount
+
+##############################################################################
+# PRESTEP_SEC_1-1-4_1-3: Check for presence of SNMPv3 API
+##############################################################################
+DoStep ${preStepName}${majorStepCount}-${minorStepCount} "verify snmp" {
+    puts "--- Verify if SNMP API is started ---" action
+
+} {
+    if {$SNMP_V3_API} {
+        puts "SNMPv3 API is already started"
+        PASS_STEP
+    } else {
+        puts "\
+            WARNING:
+            It seems as though you do not have a Provisioning server API application.
+            This test can not be executed without a API or sort of SNMPv3 Utility.
+            Please Enable SNMPv3 utility and restart TclSim. " action
+        FAIL_STEP "SNMPv3 API is not started"
+    }
+}
+incr minorStepCount
+
+##############################################################################
+# PRESTEP_SEC_1-1-4_1-4: Reset MTA and wait for Provisioning
+##############################################################################
+DoStep ${preStepName}${majorStepCount}-${minorStepCount} "Reset MTA and wait for Prov complete" {
+    LogMsg "--- Reset MTA ---"
+    # SNMP_RESET $MTA_IP
+    SNMP_SET $oid_pktcMtaDevResetNow INTEGER 1 $MTA_IP
+    
+    # LogMsg "Wait for Provisioning message"
+    # set retCode [WaitProvCompletion 120]
+    actionWait "Wait for Provisioning message" 90
+    set retCode [SNMP_GET $oid_pktcMtaDevProvisioningState $MTA_IP]
+
+    # Perhaps MTA cannot reset with SNMP reset
+    if { $retCode != 1 } {
+        verify_signal "
+            1. MTA fail to reset with SNMP Reset command
+            2. Hard Reset MTA
+            3. Click 'YES' when ready"
+        set retCode [Wait_Msg msgIDSAEst 120]
+    }
+} {
+    if { $retCode == 1 } {
+        PASS_STEP
+    } else {
+        FAIL_STEP "MTA does not finish provisioning"
+    }
+}
+incr minorStepCount
+
+##############################################################################
+# PRESTEP_SEC_1-1-4_1-5: Start network capture from-to MTA
+##############################################################################
+DoStep ${preStepName}${majorStepCount}-${minorStepCount} "Disable connection with CMS" {
+    # Start sniffer
+} { 
+    LogMsg "--- Start sniffer ---"
+    Init_CONTROLLER_LAN
+    SetupCaptureControllerLan "host $MTA_IP"
+    StartCaptureControllerLan 
+}
+    
+incr minorStepCount
+
+##############################################################################
+# PRESTEP_SEC_1-1-4_1-6: Reset MTA
+##############################################################################
+DoStep ${preStepName}${majorStepCount}-${minorStepCount} "Reset MTA and wait for Prov complete" {
+    
+    LogMsg "--- Reset MTA ---"
+    # SNMP_RESET $MTA_IP
+    SNMP_SET $oid_pktcMtaDevResetNow INTEGER 1 $MTA_IP
+    #LogMsg "Wait for Provisioning message"
+    #set retCode [WaitProvCompletion 120]
+    
+    actionWait "Wait for Provisioning message" 90
+    set retCode [SNMP_GET $oid_pktcMtaDevProvisioningState $MTA_IP]
+    
+    # Perhaps MTA cannot reset with SNMP reset
+    if { $retCode != 1 } {
+        verify_signal "
+        1. MTA fail to reset with SNMP Reset command
+        2. Hard Reset MTA
+        3. Click 'YES' when ready"
+        set retCode [Wait_Msg msgIDSAEst 120]
+    }
+} {
+    if { $retCode == 1 } {
+        PASS_STEP
+    } else {
+        FAIL_STEP "MTA does not finish provisioning"
+    }
+}
+
+incr minorStepCount
+
+##############################################################################
+# PRESTEP_SEC_1-1-4_1-7: Stop network capture from-to MTA save as text
+##############################################################################
+DoStep ${preStepName}${majorStepCount}-${minorStepCount} "Stop capture and verify data" {
+    LogMsg "--- Stop sniffer ---" action
+    StopCaptureControllerLanAfter ApReplyCMS
+    SaveToFileControllerLan
+} {PASS_STEP}
+
+incr minorStepCount
+
+##############################################################################
+# PRESTEP_SEC_1-1-4_1-8: Check TGT/AS, TGS, DNS Request and DNS SRV and AP message
+##############################################################################
+DoStep ${preStepName}${majorStepCount}-${minorStepCount} "Check TGT/AS, TGS, DNS and AP messages" {
+    LogMsg "--- Check TGT/AS, TGS, DNS and AP messages ---"
+   
+    set ::FILE_PARSER_INPUT $::ETH_DEFAULT_TXT_FILE
+    Init_PARSER_LAN "CHECKS" ""
+    ParseKerberos
+    
+    set DnsSrvFrame [FindDns "$DNS_QUERY" "$QUERY_TYPE_SRV"]
+        LogMsg "DNS SRV FRAME = $DnsSrvFrame"  
+    set DnsRequestKDCFrame [FindDns "$DNS_QUERY" "$QUERY_TYPE_A" "$KDC_NAME"]
+        LogMsg "DNS REQUEST KDC FRAME = $DnsRequestKDCFrame"
+    set AsRequestFrame [FindAsRequest]
+        LogMsg "AS Request frame = $AsRequestFrame"   
+    set TgsRequestFrame [FindTgsRequest]
+        LogMsg "Tgs Request frame = $TgsRequestFrame"
+    set ApRequestFrame [FindApRequest]
+        LogMsg "AP Request frame = $ApRequestFrame" 
+
+} {PASS_STEP}
+
+set minorStepCount 1
+incr majorStepCount
+
+##############################################################################
+# SEC_1-1-4_1-1: Verify there MUST NOT have DNS SRV
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} "No DNS SRV" {
+    # No Messages
+} {
+    LogMsg "--- Check there MUST NOT have DNS SRV message---"
+
+    if { ($DnsSrvFrame == -1) } {
+        PASS_STEP
+    } else {
+        FAIL_STEP "Find DNS SRV messange"
+    }
+}
+
+incr majorStepCount
+
+##############################################################################
+# SEC_1-1-4_2-1: Verify there MUST NOT have DNS Request
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} "No DNS Request" {
+    # No Messages
+} {
+    LogMsg "--- Check there MUST NOT have DNS Request message---"
+    
+    if { ($DnsRequestKDCFrame == -1) } {
+        PASS_STEP
+    } else {
+        FAIL_STEP "Find DNS Request messange"
+    }
+}
+
+incr majorStepCount
+
+##############################################################################
+# SEC_1-1-4_3-1: Verify there MUST NOT have AS messages.
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} "No AS messages" {
+    # No Messages
+} {
+    LogMsg "--- Check there MUST NOT have AS message---"
+     
+    if { ($AsRequestFrame == -1) } {
+        PASS_STEP
+    } else {
+        FAIL_STEP "Find AS messange"
+    }
+}
+
+incr minorStepCount
+
+##############################################################################
+# SEC_1-1-4_3-2: Verify there MUST NOT have TGS messages.
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} "No TGS messages" {
+    # No Messages
+} {
+    LogMsg "--- Check there MUST NOT have TGS message---"
+    
+    if { ($TgsRequestFrame == -1) } {
+        PASS_STEP
+    } else {
+        FAIL_STEP "Find TGS messange"
+    }
+}
+
+incr majorStepCount
+set minorStepCount 1
+
+##############################################################################
+# SEC_1-1-4_4-1: Verify there MUST have AP messages.
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} "AP message for Provisioning" {
+    # No Messages
+} {
+    LogMsg "--- Check there MUST have AP message for Provisioning Server---"
+    if { ($ApRequestFrame != -1) } {
+        LogMsg "AP Request frame = $ApRequestFrame"
+        PASS_STEP
+    } else {
+        FAIL_STEP "Cannot find AP messange sending to Provisioning server"
+    }
+}
+
+incr minorStepCount
+
+##############################################################################
+# Cleanup
+##############################################################################
+Cleanup

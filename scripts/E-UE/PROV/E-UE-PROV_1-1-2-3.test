@@ -1,0 +1,153 @@
+################################################################################
+#// Filename: E-UE-PROV_1-1-2-3.test
+#// Author:   Matthew Forbes
+#// Creation Date: February 11, 2009
+#// Modified by:
+#// 
+################################################################################
+#// Description:
+#//     TC2769 TEST CASE E-UE-PROV_1.1.2.3 Ability of eUE to resolve TFTP FQDN via DNS 
+#//
+#// Objective:
+#//     To verify the ability of the eUE to resolve its TFTP server IP address via DNS    
+#//     from the FQDN provided in the DHCP configuration. This capability applies to both
+#//     IPv4 and IPv6.
+#//
+#// PacketCable DUT:
+#//     eUE
+#//
+#// Test Steps:
+#//     - Initial configuration
+#//     - Start sniffer
+#//     - Reset DUT
+#//     - Check Provisioning state
+#//     - Stop sniffer
+#//     - Check for DNS Request from MTA
+#//     - Check for DNS resolution of TFTP server FQDN in trace
+#//     - Check for SNMP Set message and look for correct TFTP and config file
+#//       (tftp://FQDN/MTA config file name)
+#//
+#// Notes:
+#//     - Requires provPrimitives.tcl & tftp_primitives.tcl.
+#//     - Requires the specific config file 
+#//     - Requires parT.tcl parsing tool to parse data from capture file.
+##########################################################################################
+
+global SCRIPT_VERSION
+set SCRIPT_VERSION { # $Id: E-UE-PROV_1-1-2-3.test 7406 2010-07-20 17:17:37Z dthakore $ }
+
+###################### INITIAL CONFIGURATION OF DUT ########################
+
+DoStep "E-UE-PROV_1-1-2-3_1-1" "Initial configuration" {
+    LogMsg "--- Initial PROV module ---"
+    Init_PROV
+    # ProvCreateConfig 291 $MTA_MAC
+    PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122 Device_Level_Secure.cfg
+    PROV_DEPLOY_DHCP
+} { PASS_STEP }
+
+
+
+DoStep "PROV_5-6_4-1" "Start sniffer" {
+    LogMsg "--- Start sniffer ---"
+    Init_CONTROLLER_LAN
+    SetupCaptureControllerLan "host $MTA_IP || host $PROV_DHCP1_IP || host $CM_IP"
+    StartCaptureControllerLan
+} {PASS_STEP}
+
+################## RESET CM and MTA and ALLOW TIME TO PROVISION ####################
+
+DoStep "PROV_5-6_5-1" "Reset MTA" {
+    set val [SNMPvN_RESET $CM_IP]
+    LogMsg "Reset of CM and MTA has passed"
+} {
+    IsEqual $val 0
+}
+
+DoStep "PROV_5-6_2-4" "pktcMTADevProvisioningState Content Verification" {
+    # Wait for a minute to let CM/MTA starting to reboot
+    actionWait "Wait 60 seconds for CM/MTA to reboot" 60
+    # Get the OID from the MTA and check it using our previously defined
+    set val [GetProvState 1 600]
+    LogMsg "MTA Provisioning State"
+    LogMsg "             - Expected : 1"
+    LogMsg "             - Received : $val"
+} {
+    IsEqual $val 1
+}
+
+DoStep "PROV_5-6_7-1" "Stop sniffer" {
+    LogMsg "--- Stop sniffer ---"
+    StopCaptureControllerLan
+    SaveToFileControllerLan
+} { PASS_STEP }
+
+########################## INVOKE PARSING TOOL ##################################
+
+DoStep "PROV_5-6_8-1" "Analyze flow data" {
+    # Initial PARSER TOOL
+    Init_PART
+    
+    # Set up parser file
+    set PARSERFILE    $ETH_DEFAULT_TXT_FILE
+} { PASS_STEP }
+
+DoStep "PROV_5-6_8-2" "Parse data into database" {
+       # Parse data
+    set PARAMS_DHCP         "{DHCP {} {} {} {} {} {} {} {}}"
+    set PARAMS_MTA_SRC      "{{} {} {} {} $MTA_IP {} {} {} {}}"
+    set PARAMS_MTA_DST      "{{} {} {} {} {} {} {} $MTA_IP {}}"
+    set msgID_MTA           [ParseFile $PARSERFILE "$PARAMS_DHCP $PARAMS_MTA_SRC $PARAMS_MTA_DST"]
+} {
+    if { $::PART_RETURN == 0 } {
+        PASS_STEP
+    } else {
+        FAIL_STEP "Cannot find data"
+    }
+}
+
+######################### VERIFY DNS REQUEST and RESPONSE  ######################
+
+DoStep "PROV_1-1_38-1" "DNS REQUEST: contains SNMP FQDN" {
+    LogMsg "Verify DNS REQUEST: contains SNMP FQDN"
+} {
+    VerifyValue $msgID_MTA "INANY DNS DNS_QUERY_HOST DNS_QUERIES" "IS" ".*$TFTP_FQDN.*"
+}
+
+DoStep "PROV_1-1_38-2" "DNS RESPONSE: contains SNMP IP address" {
+    LogMsg "Verify DNS RESPONSE: contains SNMP IP address"
+} {
+    VerifyValue $msgID_MTA "INANY DNS DNS_RESPONSE_HOST DNS_ANSWERS_ADDR" "IS" "$TFTP_SERVER"
+}
+
+
+######################### VERIFY SNMP SET contains correct EDVA config file  ##########################
+
+DoStep "PROV_1-1_43-1" "SNMP SET: Device config file" {
+    LogMsg "Verify SNMP SET: Device config file"
+} {
+    # Verify SNMP SET
+    VerifyValue $msgID_MTA "INFIRST SNMP SNMP_SET SNMP_DEVCFG_20" "IS" "\\\"tftp://$TFTP_FQDN/Device_Level_Secure.cfg.*"
+}
+
+DoStep "PROV_5-6_8-6" "MTA Sequence" {
+    LogMsg "Verify MTA Sequence"
+    
+    # Set MTA SEQUENCE to check REPEAT of MTA DHCP DISCOVERS (5x)
+    set MTA_SEQUENCE "SNMP:SNMP_SET,DNS:DNS_QUERY_HOST,DNS:DNS_RESPONSE_HOST,\
+            TFTP:TFTP_READ_REQUEST,TFTP:TFTP_DATA_PACKET,TFTP:TFTP_ACKNOWLEDGEMENT"
+    # Remove whitespace
+    regsub -all { } $MTA_SEQUENCE {} MTA_SEQUENCE
+} {
+    VerifyValue $msgID_MTA "SEQUENCE $MTA_SEQUENCE" "" ""
+}
+
+
+################################################################################
+# Cleanup
+################################################################################
+Cleanup
+return 0
+
+
+

@@ -1,0 +1,544 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	PCPCII-139 : Update the Voicetronix modifiers to use the new values. (ghassler 07/10/2009)
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-UE 1.1.4.1" 
+	descrip="Response Code Feedback" 
+	number="RST-UE 1.1.4.1">
+
+	<fsm name="UE1">
+		<models>
+			<session/>
+		</models>
+
+		<NE sim_type="term" elements="UE1 PCSCF2 SCSCF1 PCSCF1" targets="UE1"/>
+	
+		<states initialstate="Register">
+			<state ID="Register">
+				<transition to="OffHook1" event="Registered"/>
+			</state>
+			
+			<state ID="OffHook1">
+				<prelude>
+					<send protocol="utility" msgtype="OffHook"/>
+				</prelude>
+				<transition to="Setup1" event="OffHookComplete"/>
+			</state>
+			
+			<state ID="Setup1">
+				<prelude once="true">
+					<send protocol="utility" msgtype="DialDigits">
+						<mod modtype="add" hdr="number">
+							<msg_ref type="platform">UE1.phone number 1</msg_ref>
+						</mod>
+					</send>
+				</prelude>
+				<response>
+					<!-- If the current message that we received is an Invite, answer with
+               a 100-trying -->
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>Invite</expr>
+						</eq>
+						<then>
+							<!-- Step 2 of test case 1.1.4.1 -->
+							<send protocol="sip" msgtype="404-INVITE"/>
+							<log promptUser="true" yesExpected="true" verify="true" 
+								step="2" requirements="REQ13469, REQ13480" 
+								expr="Verify the UE plays out the default tone for the Annc-Vacant identifier in the Announcement Map."/>
+						</then>
+					</if>
+				</response>
+				<transition to="Setup1" event="DialDigitsComplete"/>
+				<transition to="EndCall1" event="INVITE"/>
+			</state>
+			
+			<state ID="EndCall1" ES="true">
+				<transition to="OffHook2" event="SessionTerminated"/>
+			</state>
+			
+			<state ID="OffHook2">
+				<prelude>
+					<send protocol="utility" msgtype="OffHook"/>
+				</prelude>
+				<transition to="Setup2" event="OffHookComplete"/>
+			</state>
+			
+			<state ID="Setup2">
+				<prelude once="true">
+					<send protocol="utility" msgtype="DialDigits">
+						<mod modtype="add" hdr="number">
+							<msg_ref type="platform">UE1.phone number 1</msg_ref>
+						</mod>
+					</send>
+				</prelude>
+				<response>
+					<!-- If the current message that we received is an Invite, answer with
+               a 100-trying -->
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>Invite</expr>
+						</eq>
+						<then>
+							<send protocol="sip" msgtype="406-INVITE"/>
+							<log promptUser="true" yesExpected="True" verify="True" 
+							requirements="REQ13469, REQ13480" step="4" 
+							expr="Verify the UE plays out the default tone for the Annc-Reorder identifier in the Announcement Map."/>
+						</then>
+					</if>
+				</response>
+				<transition to="Setup2" event="DialDigitsComplete"/>
+				<transition to="EndCall2" event="INVITE"/>
+			</state>
+			
+			<state ID="EndCall2" ES="true">
+				<transition to="OffHook3" event="SessionTerminated"/>
+			</state>
+			
+			<state ID="OffHook3">
+				<prelude>
+					<send protocol="utility" msgtype="OffHook"/>
+				</prelude>
+				<transition to="Setup3" event="OffHookComplete"/>
+			</state>
+			
+			<state ID="Setup3">
+				<prelude once="true">
+					<send protocol="utility" msgtype="DialDigits">
+						<mod modtype="add" hdr="number">
+							<msg_ref type="platform">UE1.phone number 1</msg_ref>
+						</mod>
+					</send>
+				</prelude>
+				<response>
+					<!-- If the current message that we received is an Invite, answer with
+               a 100-trying -->
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>Invite</expr>
+						</eq>
+						<then>
+							<send protocol="sip" msgtype="408-INVITE"/>
+							<log promptUser="true" yesExpected="true" verify="true" 
+								step="6" requirements="REQ13469, REQ13480" 
+								expr="Verify the UE plays out the default tone for the Annc-Reorder identifier in the Announcement Map."/>
+						</then>
+					</if>
+				</response>
+				<transition to="Setup3" event="DialDigitsComplete"/>
+				<transition to="EndCall3" event="INVITE"/>
+			</state>
+			
+			<state ID="EndCall3" ES="true">
+				<transition to="OffHook4" event="SessionTerminated"/>
+			</state>
+			
+			<state ID="OffHook4">
+				<prelude>
+					<send protocol="utility" msgtype="OffHook"/>
+				</prelude>
+				<transition to="Setup4" event="OffHookComplete"/>
+			</state>
+			
+			<state ID="Setup4">
+				<prelude once="true">
+					<send protocol="utility" msgtype="DialDigits">
+						<mod modtype="add" hdr="number">
+							<msg_ref type="platform">UE1.phone number 1</msg_ref>
+						</mod>
+					</send>
+				</prelude>
+				<response>
+					<!-- If the current message that we received is an Invite, answer with
+               a 100-trying -->
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>Invite</expr>
+						</eq>
+						<then>
+							<send protocol="sip" msgtype="480-INVITE"/>
+							<log promptUser="true" yesExpected="true" verify="true" 
+								step="8" requirements="REQ13469, REQ13480" 
+								expr="Verify the UE plays out the default tone for the Annc-Reorder identifier in the Announcement Map."/>
+						</then>
+					</if>
+				</response>
+				<transition to="Setup4" event="DialDigitsComplete"/>
+				<transition to="EndCall4" event="INVITE"/>
+			</state>
+			
+			<state ID="EndCall4" ES="true">
+				<transition to="OffHook5" event="SessionTerminated"/>
+			</state>
+			
+			<state ID="OffHook5">
+				<prelude>
+					<send protocol="utility" msgtype="OffHook"/>
+				</prelude>
+				<transition to="Setup5" event="OffHookComplete"/>
+			</state>
+			
+			<state ID="Setup5">
+				<prelude once="true">
+					<send protocol="utility" msgtype="DialDigits">
+						<mod modtype="add" hdr="number">
+							<msg_ref type="platform">UE1.phone number 1</msg_ref>
+						</mod>
+					</send>
+				</prelude>
+				<response>
+					<!-- If the current message that we received is an Invite, answer with
+               a 100-trying -->
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>Invite</expr>
+						</eq>
+						<then>
+							<send protocol="sip" msgtype="484-INVITE"/>
+							<log promptUser="true" yesExpected="true" verify="true" 
+								step="10" requirements="REQ13469, REQ13480" 
+								expr="Verify the UE plays out the default tone for the Annc-DailError identifier in the Announcement Map."/>
+						</then>
+					</if>
+				</response>
+				<transition to="Setup5" event="DialDigitsComplete"/>
+				<transition to="EndCall5" event="INVITE"/>
+			</state>
+			
+			<state ID="EndCall5" ES="true">
+				<transition to="OffHook6" event="SessionTerminated"/>
+			</state>
+			
+			<state ID="OffHook6">
+				<prelude>
+					<send protocol="utility" msgtype="OffHook"/>
+				</prelude>
+				<transition to="Setup6" event="OffHookComplete"/>
+			</state>
+			
+			<state ID="Setup6">
+				<prelude once="true">
+					<send protocol="utility" msgtype="DialDigits">
+						<mod modtype="add" hdr="number">
+							<msg_ref type="platform">UE1.phone number 1</msg_ref>
+						</mod>
+					</send>
+				</prelude>
+				<response>
+					<!-- If the current message that we received is an Invite, answer with
+               a 100-trying -->
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>Invite</expr>
+						</eq>
+						<then>
+							<send protocol="sip" msgtype="487-INVITE">
+								<mod modtype="delete" hdr="Contact"/>
+							</send>
+							<log promptUser="true" yesExpected="true" verify="true" 
+							step="12" requirements="REQ13469, REQ13480" 
+							expr="Verify the UE plays out the default tone for the Annc-Reorder identifier in the Announcement Map."/>
+						</then>
+					</if>
+				</response>
+				<transition to="Setup6" event="DialDigitsComplete"/>
+				<transition to="EndCall6" event="INVITE"/>
+			</state>
+			
+			<state ID="EndCall6" ES="true">
+				<transition to="OffHook7" event="SessionTerminated"/>
+			</state>
+			
+			<state ID="OffHook7">
+				<prelude>
+					<send protocol="utility" msgtype="OffHook"/>
+				</prelude>
+				<transition to="Setup7" event="OffHookComplete"/>
+			</state>
+			
+			<state ID="Setup7">
+				<prelude once="true">
+					<send protocol="utility" msgtype="DialDigits">
+						<mod modtype="add" hdr="number">
+							<msg_ref type="platform">UE1.phone number 1</msg_ref>
+						</mod>
+					</send>
+				</prelude>
+				<response>
+					<!-- If the current message that we received is an Invite, answer with
+               a 100-trying -->
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>Invite</expr>
+						</eq>
+						<then>
+							<send protocol="sip" msgtype="487-INVITE"/>
+							<log promptUser="true" yesExpected="true" verify="true" 
+								step="14" requirements="REQ13469, REQ13480" 
+								expr="Verify the UE plays out the default tone for the Annc-Disconnnected identifier in the Announcement Map."/>
+						</then>
+					</if>
+				</response>
+				<transition to="Setup7" event="DialDigitsComplete"/>
+				<transition to="EndCall7" event="INVITE"/>
+			</state>
+			
+			<state ID="EndCall7" ES="true">
+				<transition to="OffHook8" event="SessionTerminated"/>
+			</state>
+			
+			<state ID="OffHook8">
+				<prelude>
+					<send protocol="utility" msgtype="OffHook"/>
+				</prelude>
+				<transition to="Setup8" event="OffHookComplete"/>
+			</state>
+			
+			<state ID="Setup8">
+				<prelude once="true">
+					<send protocol="utility" msgtype="DialDigits">
+						<mod modtype="add" hdr="number">
+							<msg_ref type="platform">UE1.phone number 1</msg_ref>
+						</mod>
+					</send>
+				</prelude>
+				<response>
+					<!-- If the current message that we received is an Invite, answer with
+               a 100-trying -->
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>Invite</expr>
+						</eq>
+						<then>
+							<send protocol="sip" msgtype="487-INVITE"/>
+							<log promptUser="true" yesExpected="true" verify="true" 
+								step="16" requirements="REQ13469, REQ13480" 
+								expr="Verify the UE plays out the default tone for the Annc-NonWorking identifier in the Announcement Map."/>
+						</then>
+					</if>
+				</response>
+				<transition to="Setup8" event="DialDigitsComplete"/>
+				<transition to="EndCall8" event="INVITE"/>
+			</state>
+			
+			<state ID="EndCall8" ES="true">
+				<transition to="OffHook9" event="SessionTerminated"/>
+			</state>
+			
+			<state ID="OffHook9">
+				<prelude>
+					<send protocol="utility" msgtype="OffHook"/>
+				</prelude>
+				<transition to="Setup9" event="OffHookComplete"/>
+			</state>
+			
+			<state ID="Setup9">
+				<prelude once="true">
+					<send protocol="utility" msgtype="DialDigits">
+						<mod modtype="add" hdr="number">
+							<msg_ref type="platform">UE1.phone number 1</msg_ref>
+						</mod>
+					</send>
+				</prelude>
+				<response>
+					<!-- If the current message that we received is an Invite, answer with
+               a 100-trying -->
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>Invite</expr>
+						</eq>
+						<then>
+							<send protocol="sip" msgtype="500-INVITE"/>
+							<log promptUser="true" yesExpected="true" verify="true" 
+							steps="18" requirements="REQ13469, REQ13480" 
+							expr="Verify the UE plays out the default tone for the Annc-Vacant identifier in the Announcement Map."/>
+						</then>
+					</if>
+				</response>
+				<transition to="Setup9" event="DialDigitsComplete"/>
+				<transition to="EndCall9" event="INVITE"/>
+			</state>
+			
+			<state ID="EndCall9" ES="true">
+				<transition to="OffHook10" event="SessionTerminated"/>
+			</state>
+			
+			<state ID="OffHook10">
+				<prelude>
+					<send protocol="utility" msgtype="OffHook"/>
+				</prelude>
+				<transition to="Setup10" event="OffHookComplete"/>
+			</state>
+			
+			<state ID="Setup10">
+				<prelude once="true">
+					<send protocol="utility" msgtype="DialDigits">
+						<mod modtype="add" hdr="number">
+							<msg_ref type="platform">UE1.phone number 1</msg_ref>
+						</mod>
+					</send>
+				</prelude>
+				<response>
+					<!-- If the current message that we received is an Invite, answer with
+               a 100-trying -->
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>Invite</expr>
+						</eq>
+						<then>
+							<send protocol="sip" msgtype="503-INVITE"/>
+							<log promptUser="true" yesExpected="true" verify="true" 
+							step="20" requirements="REQ13469, REQ13480" 
+							expr="Verify the UE plays out the default tone for the Annc-Vacant identifier in the Announcement Map."/>
+						</then>
+					</if>
+				</response>
+				<transition to="Setup10" event="DialDigitsComplete"/>
+				<transition to="EndCall10" event="INVITE"/>
+			</state>
+			
+			<state ID="EndCall10" ES="true">
+				<transition to="OffHook11" event="SessionTerminated"/>
+			</state>
+			
+			<state ID="OffHook11">
+				<prelude>
+					<send protocol="utility" msgtype="OffHook"/>
+				</prelude>
+				<transition to="Setup11" event="OffHookComplete"/>
+			</state>
+			
+			<state ID="Setup11">
+				<prelude once="true">
+					<send protocol="utility" msgtype="DialDigits">
+						<mod modtype="add" hdr="number">
+							<msg_ref type="platform">UE1.phone number 1</msg_ref>
+						</mod>
+					</send>
+				</prelude>
+				<response>
+					<!-- If the current message that we received is an Invite, answer with
+               a 100-trying -->
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>Invite</expr>
+						</eq>
+						<then>
+							<send protocol="sip" msgtype="504-INVITE"/>
+							<log promptUser="true" yesExpected="true" verify="true" 
+								step="22" requirements="REQ13469, REQ13480" 
+								expr="Verify the UE plays out the default tone for the Annc-Vacant identifier in the Announcement Map."/>
+						</then>
+					</if>
+				</response>
+				<transition to="Setup11" event="DialDigitsComplete"/>
+				<transition to="EndCall11" event="INVITE"/>
+			</state>
+			
+			<state ID="EndCall11" ES="true">
+				<transition to="OffHook12" event="SessionTerminated"/>
+			</state>
+			
+			<state ID="OffHook12">
+				<prelude>
+					<send protocol="utility" msgtype="OffHook"/>
+				</prelude>
+				<transition to="Setup12" event="OffHookComplete"/>
+			</state>
+			
+			<state ID="Setup12">
+				<prelude once="true">
+					<send protocol="utility" msgtype="DialDigits">
+						<mod modtype="add" hdr="number">
+							<msg_ref type="platform">UE1.phone number 1</msg_ref>
+						</mod>
+					</send>
+				</prelude>
+				<response>
+					<!-- If the current message that we received is an Invite, answer with
+               a 100-trying -->
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>Invite</expr>
+						</eq>
+						<then>
+							<send protocol="sip" msgtype="600-INVITE"/>
+							<log promptUser="true" yesExpected="true" verify="true" 
+								step="24" requirements="REQ13469, REQ13480" 
+								expr="Verify the UE plays out the default tone for the Annc-Decline identifier in the Announcement Map."/>
+						</then>
+					</if>
+				</response>
+				<transition to="Setup12" event="DialDigitsComplete"/>
+				<transition to="EndCall12" event="INVITE"/>
+			</state>
+			
+			<state ID="EndCall12" ES="true">
+				<transition to="OffHook13" event="SessionTerminated"/>
+			</state>
+			
+			<state ID="OffHook13">
+				<prelude>
+					<send protocol="utility" msgtype="OffHook"/>
+				</prelude>
+				<transition to="Setup13" event="OffHookComplete"/>
+			</state>
+			
+			<state ID="Setup13">
+				<prelude once="true">
+					<send protocol="utility" msgtype="DialDigits">
+						<mod modtype="add" hdr="number">
+							<msg_ref type="platform">UE1.phone number 1</msg_ref>
+						</mod>
+					</send>
+				</prelude>
+				<response>
+					<!-- If the current message that we received is an Invite, answer with
+               a 100-trying -->
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>Invite</expr>
+						</eq>
+						<then>
+							<send protocol="sip" msgtype="603-INVITE"/>
+							<log promptUser="true" yesExpected="true" verify="true" 
+								step="26" requirements="REQ13469, REQ13480" 
+								expr="Verify the UE plays out the default tone for the Annc-Decline identifier in the Announcement Map."/>
+						</then>
+					</if>
+				</response>
+				<transition to="Setup13" event="DialDigitsComplete"/>
+				<transition to="END" event="INVITE"/>
+			</state>
+		</states>
+	</fsm>
+</pc2xml>

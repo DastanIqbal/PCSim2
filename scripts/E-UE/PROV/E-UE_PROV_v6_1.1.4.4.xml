@@ -1,0 +1,56 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+ Change History: (Author & Date)
+
+
+
+-->
+<!-- First are the document type and the attributes for our document -->
+<pc2xml version="$Revision: 7768 $" name="EUE Prov 1.1.4.4" 
+		descrip="Verification of Proper eUE Behavior When DAD Confirms That the Link-Local Address is Already in Use" 
+		number="EUE Prov 1.1.4.4">
+
+	<!-- Next we define the each of state machines -->
+	<template file="./templates/EUE_Prov_B_1_1_1.xml" name="RebootCM"/>
+	
+	<add_to fsm="RebootCM">
+		<transition from="StartCapture_RebootWait" to="VerifyBootState" event="TimerExpired"/>
+	
+		<state ID="VerifyBootState">
+			<prelude once="true">
+				<stop_capture/>
+				<parse_capture name="eUE_Prov">
+					<parser_filter ip="DUT.IP"/>
+				</parse_capture>
+				<verify step="2">
+					<and>
+						<notnull>
+							<capture_ref type="dns" name="eUE_Prov">Neighbor Solicitation.num</capture_ref>
+						</notnull>
+						<eq>
+							<capture_ref type="dns" name="eUE_Prov">Neighbor Solicitation.target-address</capture_ref>
+							<msg_ref type="platform">DUT.IP</msg_ref>
+						</eq>	
+					</and>	
+				</verify>
+				
+				<verify step="4">
+					<null>
+						<capture_ref type="dns" name="eUE_Prov">Router Solicitation.num</capture_ref>
+					</null>
+				</verify>
+				<generate event="Branch1Event"/>	
+			</prelude>
+			<transition to="END" event="Branch1Event"/>
+		</state>
+	</add_to>
+</pc2xml>

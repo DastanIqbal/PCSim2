@@ -1,0 +1,22 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+-->
+<pc2xml version="$Revision: 7318 $" 
+	name="HDV-RST-UE 1.1.1.2" 
+	descrip="Digit Map Package per IMPU" 
+	number="HDV-RST-UE 1.1.1.2">
+	
+	<template name="UE1" file="$SCRIPT_PATH/RST/UE/RST_UE_1.1.1.2.xml"/>
+</pc2xml>

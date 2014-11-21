@@ -1,0 +1,138 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+
+<pc2xml version="$Revision: 6076 $" name="UT_HDV_RST_UE_3.1.11.3" descrip="DECT PP Ability to Display Text and Activation Status for Call Forwarding Variable " number="1">
+	<fsm name="DUT">
+		<models>
+			<session/>
+		</models>
+		<NE sim_type="term" elements="DUT" targets="UE0 UE2 DUT *723035550001 3035550000"/>
+		<states initialstate="Register">
+			
+			<state ID="Register">
+				<prelude>
+					<send protocol="sip" msgtype="Register" target="PCSCF1" originator="DUT"/>
+				</prelude>
+				<transition to="Digest" event="401-Register"/>
+				<transition to="Call2" event="200-Register"/>
+			</state>
+			
+			<state ID="Digest">
+				<prelude>
+					<send protocol="sip" msgtype="Register" target="PCSCF1" originator="DUT"/>
+				</prelude>
+				<transition to="Call2" event="200-Register"/>
+			</state>
+			
+			<state ID="Call2">
+				<prelude>
+					<sleep time="10000" /> 
+					<send protocol="sip" msgtype="Invite" target="UE1" originator="DUT">
+						<mod modtype="replace" hdr="Request-Line" param="Request-URI">
+						<var_expr>
+						<expr>sip:*723035550001@</expr> 
+						<msg_ref type="platform">DUT.domain</msg_ref> 
+						<expr>;user=dialstring</expr> 
+						</var_expr>
+						</mod>
+					</send>
+				</prelude>
+				<postlude>
+					<send protocol="sip" msgtype="Ack" target="UE1" originator="DUT" >
+						<mod modtype="replace" hdr="Request-Line" param="Request-URI">
+						<var_expr>
+						<expr>sip:*723035550001@</expr> 
+						<msg_ref type="platform">DUT.domain</msg_ref> 
+						<expr>;user=dialstring</expr> 
+						</var_expr>
+						</mod>
+					 </send>
+				</postlude>
+			<transition to="Bye" event="200-INVITE" /> 
+			</state>
+			
+		<state ID="Bye" timer="2000">
+			<response>
+				<if>
+				<eq>
+				<msg_ref type="sip">Request</msg_ref> 
+				<expr>BYE</expr> 
+				</eq>
+				<then>
+				<send protocol="sip" msgtype="200-BYE" target="UE1" originator="DUT" /> 
+				</then>
+				</if>
+			</response>
+		<transition to="RecieveInvite" event="BYE" /> 
+		 </state>
+
+		<state ID="RecieveInvite" timer="7000">
+			<response>
+				<if>
+				<eq>
+				<msg_ref type="sip">Request</msg_ref> 
+				<expr>Invite</expr> 
+				</eq>
+				<then>
+				<send protocol="sip" msgtype="181-INVITE" target="UE1" originator="DUT" /> 
+				</then>
+				</if>
+			</response>
+		<transition to="RecieveInvite2" event="INVITE" /> 
+		</state>
+		
+		<state ID="RecieveInvite2" timer="5000">
+			<response>
+				<if>
+				<eq>
+				 <msg_ref type="sip">Request</msg_ref> 
+				<expr>Invite</expr> 
+				</eq>
+				<then>
+					<send protocol="sip" msgtype="180-INVITE" target="UE2" originator="DUT" />
+					<sleep time="3000"/>
+					<send protocol="sip" msgtype="200-INVITE" target="UE2" originator="DUT" />
+				</then>
+				</if>
+				</response>
+		<transition to="RecieveInvite2" event="INVITE" />
+		<transition to="Bye2" event="ACK" /> 
+		</state>
+	
+		<state ID="Bye2" timer="4000">
+			<prelude>
+				<sleep time="3000"/>
+				<send protocol="sip" msgtype="BYE" target="UE2" originator="DUT" />
+				<!--mod modtype="replace" hdr="Request-Line" param="Request-URI">
+					<var_expr>
+					<expr>sip:3035550000@</expr> 
+					<msg_ref type="platform">DUT.domain</msg_ref> 
+					<expr>;user=dialstring</expr> 
+					</var_expr>
+					</mod>
+				</send-->
+			</prelude>
+			<transition to="END" event="200-BYE" />
+		</state>
+		
+	
+		</states>
+	</fsm>
+</pc2xml>

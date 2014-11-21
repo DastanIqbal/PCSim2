@@ -1,0 +1,78 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	PCPCII-174 : Update the script to the D11 version of the ATP (ghassler 01/26/2010)
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-UE 1.1.8.3" 
+	descrip="UE Terminates Session Set-Up when No Answer Timeout Occurs " 
+	number="RST-UE 1.1.8.3">
+	
+	<template file="./templates/CallTermAtUETemp.xml" name="UE1"/>
+	
+	<add_to fsm="UE1">
+		<transition from="Setup" to="Verify" event="ALERTING_UAC"/>
+		
+		<transition from="Proceeding" to="Verify" event="ALERTING_UAC"/>
+		
+		<transition from="Alerting" to="Verify" event="ALERTING_UAC"/>
+		
+		<state ID="Verify" timer="24800">
+			<response>
+				<verify step="2" requirements="REQ13505, REQ14544, REQ14545">
+					<neq>
+						<msg_ref type="sip">Response</msg_ref>
+						<expr>480-INVITE</expr>
+					</neq>
+				</verify>
+			</response>
+			<transition to="480INVITE" event="TimerExpired"/>
+		</state>
+		
+		<state ID="480INVITE">
+			<response>
+				<verify step="2" requirements="REQ13505, REQ14544, REQ14545">
+					<eq>
+						<msg_ref type="sip">Response</msg_ref>
+						<expr>480-INVITE</expr>
+					</eq>
+				</verify>
+			</response>
+			<transition to="VerifyRinging" event="480-INVITE"/>
+		</state>
+		
+		<state ID="VerifyRinging">
+            <prelude>
+            	<send protocol="utility" msgtype="VerifyRing">
+            		<mod modtype="replace" hdr="voiceExpected">
+            			<expr>no</expr>
+            		</mod>
+            	</send>
+            </prelude>
+            <response>
+    			<verify step="3" requirements="REQ13505, REQ14544, REQ14547">
+    				<eq>
+    					<msg_ref type="utility">Response</msg_ref>
+    					<expr>VerifyRingComplete</expr>
+    				</eq>
+    			</verify>
+            </response>
+         
+			<transition to="END" event="VerifyRingComplete"/>
+		</state>
+	</add_to>
+</pc2xml>

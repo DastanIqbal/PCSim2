@@ -1,0 +1,128 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+ Change History: (Author & Date)
+	PCPCIIATP-114 : Update the fmtp media line to use '=' instead of ':' between a parameter and its 
+			value. (ghassler 01/13/2010)
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="CODEC-MEDIA_1.3.2.5" 
+	descrip="UE T.38 Version Control (UE Terminating)" 
+	number="CODEC-MEDIA_1.3.2.5">
+	
+	<template file="./templates/CallTermAtUETemp.xml" name="UE1"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Connected"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<state ID="Connected" timer="30000">
+			<prelude once="true">
+				<send protocol="sip" msgtype="ACK"/>
+				<var name="audio">
+					<var_expr>
+						<expr>m=audio </expr>
+						<msg_ref type="platform">Platform.RTP Port1</msg_ref>
+						<expr> RTP/AVP 0 </expr>
+						<msg_ref type="platform">UE0.T38 Codec</msg_ref>
+					</var_expr>
+				</var>
+				<var name="fmtp0">
+					<var_expr>
+						<expr>a=fmtp:</expr>
+						<msg_ref type="platform">UE0.T38 Codec</msg_ref>
+						<expr> T38FaxVerson=0</expr>
+					</var_expr>
+				</var>
+				<var name="fmtp1">
+					<var_expr>
+						<expr>a=fmtp:</expr>
+						<msg_ref type="platform">UE0.T38 Codec</msg_ref>
+						<expr> T38FaxVerson=1</expr>
+					</var_expr>
+				</var>
+				<var name="fmtp2">
+					<var_expr>
+						<expr>a=fmtp:</expr>
+						<msg_ref type="platform">UE0.T38 Codec</msg_ref>
+						<expr> T38FaxVerson=2</expr>
+					</var_expr>
+				</var>
+				
+				<sleep time="5000"/>
+				<send protocol="sip" msgtype="REINVITE">
+					<mod modtype="delete" hdr="audio"/>
+					<mod modtype="delete" hdr="media-modifier"/>
+					<mod modtype="delete" hdr="TIAS-modifier"/>
+					<mod modtype="delete" hdr="max-packet-rate"/>
+					<mod modtype="delete" hdr="rtpmap"/>
+					<mod modtype="delete" hdr="mode"/>
+					<mod modtype="delete" hdr="ptime"/>
+					<mod modtype="add" hdr="SDP">
+						<var_expr>
+							<expr>m=audio </expr>
+							<msg_ref type="platform">UE1.SDPPort2</msg_ref>
+							<expr> RTP/AVP 0 127\r\na=rtpmap:127 t38/8000\r\n</expr>
+							<expr>a=fmtp:127 a=T38FaxVersion=2;T38FaxRateManagement=transferredTCF;T38FaxMaxDatagram=173\r\n</expr>
+						</var_expr>
+					</mod>
+					<mod modtype="replace" hdr="s" param="name">
+						<expr>VoiceFax</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Response</msg_ref>
+						<expr>200-INVITE</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="ACK"/>
+						<verify step="2" requirements="REQ12588, REQ12593, REQ13335">
+							<eq>
+								<msg_ref type="sdp">200-INVITE.audio.payload-type</msg_ref>
+								<expr>0 127</expr>
+							</eq>
+						</verify>
+						
+						<verify step="2" requirements="REQ12588, REQ12593, REQ13335">
+							<or>
+								<contains>
+									<msg_ref type="sip" >200-INVITE.SDP</msg_ref>
+									<var_ref name="fmtp0"/>
+								</contains>
+							<or>
+								<contains>
+									<msg_ref type="sip">200-INVITE.SDP</msg_ref>
+									<var_ref name="fmtp1"/>
+								</contains>
+								<contains>
+									<msg_ref type="sip">200-INVITE.SDP</msg_ref>
+									<var_ref name="fmtp2"/>
+								</contains>
+							</or>
+							</or>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<transition to="Connected" event="OffHookComplete"/>
+			<transition to="Connected" event="1xx-INVITE"/>
+			<transition to="Releasing" event="TimerExpired"/>
+		</state>
+	</add_to>
+</pc2xml>

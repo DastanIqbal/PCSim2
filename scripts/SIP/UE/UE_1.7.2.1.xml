@@ -1,0 +1,246 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="SIP-UE 1.7.2.1" 
+	descrip="Basic Session Establishment using UDP " 
+	number="SIP-UE 1.7.2.1">
+	<template file="./templates/CallOrigAtUETemp.xml" name="UE1"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Setup"/>
+		<state ID="Alerting"/>
+		<state ID="Answer"/>
+		<state ID="Releasing"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<NE ext_require="100rel"/>
+		<state ID="Setup">
+			<prelude once="true">
+				<send protocol="utility" msgtype="DialDigits">
+					<mod modtype="add" hdr="number">
+						<msg_ref type="platform">UE1.phone number 1</msg_ref>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<!-- If the current message that we received is an Invite, answer with
+               a 100-trying -->
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>Invite</expr>
+					</eq>
+					<then>
+						<verify step="2" requirements="RFC1039">
+							<eq>
+								<msg_ref type="sip">Request</msg_ref>
+								<expr>INVITE</expr>
+							</eq>
+						</verify>
+						<send protocol="sip" msgtype="100-INVITE"/>
+						<send protocol="sip" msgtype="183-INVITE"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Setup" event="DialDigitsComplete"/>
+			<transition to="Alerting" event="INVITE"/>
+		</state>
+		
+		<state ID="Alerting" timer="5000">
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request.CSeq.method</msg_ref>
+						<expr>PRACK</expr>
+					</eq>
+					<then>
+						<verify step="4" requirements="RFC1148">
+							<eq>
+								<msg_ref type="sip">PRACK.Content-Length.value</msg_ref>
+								<expr>0</expr>
+							</eq>
+						</verify>
+						<verify step="4" requirements="RFC1148">
+							<dnc>
+								<msg_ref type="sip">PRACK.SDP</msg_ref>
+								<expr>rtpmap</expr>
+							</dnc>
+						</verify>
+					</then>
+				</if>
+				<if>
+					<and>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>PRACK</expr>
+						</eq>
+						<contains>
+							<msg_ref type="sip" msg_instance="last">18x-Invite.Require</msg_ref>
+							<expr>100rel</expr>
+						</contains>
+					</and>
+					<then>
+						<!--Reliablity required for test sending 200-Prack message to peer.-->
+						<send protocol="sip" msgtype="200-PRACK"/>
+					</then>
+				</if>
+				<!-- Now test for an UPDATE message -->
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>UPDATE</expr>
+					</eq>
+					<then>
+						<!--QoS required or supported sending 200-Update message to peer.-->
+						<send protocol="sip" msgtype="200-Update"/>
+					</then>
+				</if>
+				<!-- Test whether to send 180 -->
+				<if>
+					<and>
+						<contains>
+							<msg_ref type="sip" msg_instance="last">18x-Invite.Status-Line.status-code</msg_ref>
+							<expr>183</expr>
+						</contains>
+						<eq>
+							<msg_ref type="sdp">Request.qos-curr-remote.direction</msg_ref>
+							<msg_ref type="sdp">Request.qos-des-remote.direction</msg_ref>
+						</eq>
+					</and>
+					<then>
+						<!--Sending 180 for required preconditions.-->
+						<send protocol="sip" msgtype="180-Invite" bodies="SDP">
+							<mod modtype="add" hdr="Require" param="option-tag">
+								<expr>100rel</expr>
+							</mod>
+							<mod modtype="add" hdr="RSeq">
+								<expr>1</expr>
+							</mod>
+						</send>
+					</then>
+				</if>
+			</response>
+			<transition to="Alerting" event="DialDigitsComplete"/>
+			<transition to="Alerting" event="PRACK"/>
+			<transition to="Alerting" event="UPDATE"/>
+			<transition to="Answer" event="TimerExpired"/>
+		</state>
+		
+		<state ID="Answer" timer="10000">
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request.CSeq.method</msg_ref>
+						<expr>ACK</expr>
+					</eq>
+					<then>
+						<verify step="6" requirements="RFC1148">
+							<or>
+								<and>
+									<or>
+										<eq>
+											<msg_ref type="sip">ACK.Content-Length.value</msg_ref>
+											<expr>0</expr>
+										</eq>
+										<null>
+											<msg_ref type="sip">ACK.Content-Length</msg_ref>
+										</null>
+									</or>
+									<dnc>
+										<msg_ref type="sip">ACK.SDP</msg_ref>
+										<expr>rtpmap</expr>
+									</dnc>
+								</and>
+								<and>
+									<gt>
+										<msg_ref type="sip">ACK.Content-Length.value</msg_ref>
+										<expr>0</expr>
+									</gt>
+									<contains>
+										<msg_ref type="sip">ACK.SDP</msg_ref>
+										<expr>rtpmap</expr>
+									</contains>	
+								</and>
+							</or>
+						</verify>
+					</then>
+				</if>
+				<if>
+					<eq>
+						<msg_ref type="event"/>
+						<expr>TimerExpired</expr>
+					</eq>
+					<then>
+						<!--Sending 200-Invite-->
+						<send protocol="sip" msgtype="200-INVITE"/>
+					</then>
+				</if>
+				<!-- Now test for an UPDATE message -->
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>UPDATE</expr>
+					</eq>
+					<then>
+						<!--QoS required or supported sending 200-Update message to peer.-->
+						<send protocol="sip" msgtype="200-Update"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Answer" event="UPDATE"/>
+			<transition to="Answer" event="TimerExpired"/>
+			<transition to="Connected" event="ACK"/>
+		</state>
+		
+		<transition from="Connected" to="OnHook" event="TimerExpired"/>
+		
+		<transition from="OnHook" to="Releasing" event="OnHookComplete"/>
+		
+		<state ID="Releasing">
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request.CSeq.method</msg_ref>
+						<expr>BYE</expr>
+					</eq>
+					<then>
+						<verify step="8" requirements="RFC1148">
+							<eq>
+								<msg_ref type="sip">BYE.Content-Length.value</msg_ref>
+								<expr>0</expr>
+							</eq>
+						</verify>
+						<verify step="8" requirements="RFC1148">
+							<dnc>
+								<msg_ref type="sip">BYE.SDP</msg_ref>
+								<expr>rtpmap</expr>
+							</dnc>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<postlude>
+				<send protocol="sip" msgtype="200-BYE"/>
+			</postlude>
+			<transition to="END" event="Bye"/>
+		</state>
+	</add_to>
+</pc2xml>

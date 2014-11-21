@@ -1,0 +1,88 @@
+###########################################################
+#   Author: Vikas Sarawat (CableLabs)
+#   Date :   06/22/07  
+#   DUT:     Control-Point
+#   Title   : TEST CASE CPD-Control Point 2.1.6 – CPD Response for IPv6 when Request contains “Subnet Information Requested” Field
+#   Objective: Verify the CPD response message for IPv6 is fomatted correctly when “Subnet Information Request” flag is set in CPD Request.
+#
+#
+#
+##
+###########################################################
+
+
+#########Step number initialization###################
+set procNum 1
+set stepNum 0 ;# (next used +1)
+
+######Module information #################
+set mod cpd
+set cpd ::$mod\::
+set str "InitModule CPD"
+
+DoStep "Step $procNum.[set stepNum]" $str {
+    set isOk [set soc [ InitModule $mod ] ]; # Doc: InitModule CPD (Source-Module & Open Socket)
+    if { $soc != -1 } {
+        $soc.socRaw 1; # Set flag for SocRaw (enable IPv4 option Router Alert)
+    } ; # END if
+} { if {$isOk == -1 } {FAIL_STEP $str } else {PASS_STEP} }
+
+set str "Build & Tx CPD Request Msg and receive the response"
+DoStep "Step $procNum.[incr stepNum]" $str {
+    set txData_Req [ $cpd\MsgNew Request ]; # Doc: Instantiate New Message 
+    
+    # Build 
+    set txData_ReqHex [ $cpd\MsgBuild $txData_Req ]
+    # set Subnet Information Request 1
+    set txData_ReqHex [string replace $txData_ReqHex 56 57 01]
+    # Doc: Tx Message to DstIp, DstPort
+    set msgLen [ $cpd\MsgTx $txData_ReqHex $soc $::gCPD_REMOTE_IP $::gCPD_REMOTE_PORT ]
+
+    set rxData_Resp [ $cpd\MsgRx ]
+    set crIdRx [$cpd\MsgGetVal $rxData_Resp AppPayload crId ]
+   
+    
+} { if {$rxData_Resp == -1 } {FAIL_STEP $str } else {PASS_STEP} }
+
+
+set str "Verify the response-flags"
+DoStep "Step $procNum.[incr stepNum]" $str {
+       #Verify the CPD response “Flags” byte for:
+       #Bit 0: 1 (Subnet Information included)
+       #Bit 1: IP version of the control point: 0 for IPv4
+       #Bit 2: IP version of the subnet prefix: 0 for IPv4
+       set isOk 1
+        set flags [$cpd\MsgGetVal $rxData_Resp AppPayload flags ]
+
+        if {[expr $flags & 0x0001] == 1} { 
+           LogMsg "Subnet Information included flag is set in the response"
+        } else {
+           LogMsg "!!Subnet Information included flag is set in the response"; set isOk -1
+        }
+        if {[expr $flags & 0x0002] == 2} { 
+           LogMsg "IP version = IPV6"
+        } else {
+           LogMsg "IP version = IPV4";
+        }
+    
+} { if {$isOk == -1 } {FAIL_STEP $str } else {PASS_STEP} }
+
+set str "Verify the response - subnetPrefix"
+DoStep "Step $procNum.[incr stepNum]" $str {
+     set isOk 1
+     set subnetPrefix0 [$cpd\MsgGetVal $rxData_Resp AppPayload subnetPrefix0 ]
+    
+} { if {$subnetPrefix0 <= 0 } {FAIL_STEP $str } else {PASS_STEP} }
+
+set str "Verify the response- prefixLength"
+DoStep "Step $procNum.[incr stepNum]" $str {
+     set isOk 1
+     set prefixLength [$cpd\MsgGetVal $rxData_Resp AppPayload prefixLength ]
+    
+} { if {$prefixLength <= 0 } {FAIL_STEP $str } else {PASS_STEP} }
+
+Cleanup
+
+
+
+

@@ -1,0 +1,69 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="SIP-UE 1.2.1.6" 
+	descrip="Timestamp header 100 Trying" 
+	number="SIP-UE 1.2.1.6">
+	
+	<template file="./templates/CallTermAtUETemp.xml" name="UE1"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Setup"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<state ID="Setup">
+			<prelude>
+				<!-- Step 1 from test case SIP 1.2.1.6- The SS will send the INVITE 
+					with the Timestamp header.-->
+				<send protocol="sip" msgtype="Invite">
+					<mod modtype="add" hdr="Timestamp">
+						<!-- The value is roughly Dec. 21, 2007 at 6:30am MST -->
+						<expr>1198244256926</expr>
+					</mod>
+				</send>
+			</prelude>
+			<!-- Expected responses are 100, 180, 183 or 200 -->
+			<response>
+				<if>
+					<contains>
+						<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+						<expr>100</expr>
+					</contains>
+					<then>
+						<verify step="1" requirements="RFC414">
+							<and>
+								<contains>
+									<msg_ref type="sip">100-INVITE</msg_ref>
+									<expr>Timestamp:</expr>
+								</contains>
+								<lte>
+									<msg_ref type="sip" msg_instance="last">INVITE.Timestamp.value</msg_ref>
+									<msg_ref type="sip">100-INVITE.Timestamp.value</msg_ref>
+								</lte>
+							</and>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<transition to="END" event="100-INVITE"/>
+		</state>
+	</add_to>
+</pc2xml>

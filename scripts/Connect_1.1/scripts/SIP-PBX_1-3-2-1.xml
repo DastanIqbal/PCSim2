@@ -1,0 +1,241 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	2011-11-15	Seung Lee - final versionfor
+
+
+
+
+-->
+<pc2xml version="$Revision: 1 $" 
+		name="SIP-PBX 1.3.2.1" 
+		descrip="SIP-PBX Support for Call Forwarding Using a New Dialog INVITE(A)" 
+		number="SIP-PBX 1.3.2.1" >
+	
+<template file="./templates/CallTermAtUETemp.xml" name="UE1"/>
+			
+	<remove_from fsm="UE1">
+		<state ID="Register"/>
+		<state ID="Alerting"/>
+		<state ID="Setup"/>
+		<state ID="Proceeding" />
+		<state ID="Answer"/>
+		<state ID="Connected" />
+		<state ID="Releasing"/>
+		<state ID="OnHook"/>
+	</remove_from>
+	
+		<add_to fsm="UE1">
+			<state ID="Register">
+				<prelude>
+					<start_capture>
+						<filter>
+							<var_expr>
+								<expr>host </expr>
+								<msg_ref type="platform">UE0.IP</msg_ref>
+								<expr> || host </expr>
+								<msg_ref type="platform">UE0.IP2</msg_ref>
+								<expr> || host </expr>
+								<msg_ref type="platform">PCSCF1.IP</msg_ref>
+								<expr> || host </expr>
+								<msg_ref type="platform">UE1.IP</msg_ref>
+							</var_expr>
+						</filter>
+					</start_capture>
+				</prelude>
+				<transition to="Setup" event="Registered"/>
+			</state>
+		
+			<state ID="Setup">
+				<!-- Step 1 from the Default Message Flow Call-Term-at-UE(DUT) Sequence Diagram -
+               Test 18x response for reliability for possible Prack message- send Invite -->
+				<prelude>
+					<send protocol="sip" msgtype="Invite">
+						<mod modtype="replace" hdr="Request-Line" param="username">
+							<msg_ref type="platform">UE0.phone number 1</msg_ref>
+						</mod>
+					</send>
+					<generate event="Branch1Event" fsm="UE2"/>
+				</prelude>
+				<!-- Expected responses are 100, 180, 183 or 200 -->
+				<response>
+					<!-- Step 4 from the Default Message Flow Call-Term-at-UE(DUT) Sequence Diagram -
+               Test 18x response for reliability for possible Prack message -->
+					<if>
+						<contains>
+							<msg_ref type="sip" hdr_instance="any">18x-Invite.Require</msg_ref>
+							<expr>100rel</expr>
+						</contains>
+						<then>
+							<!--Reliablity required for test sending Prack message to peer.-->
+							<send protocol="sip" msgtype="Prack"/>
+						</then>
+					</if>
+				</response>
+				<!-- Transitions for Setup state -->
+				<transition to="Proceeding" event="100-INVITE"/>
+				<transition to="Proceeding" event="180-INVITE"/>
+				<transition to="Proceeding" event="183-INVITE"/>
+			</state>
+			
+			<state ID="Proceeding" timer="2000">
+				<!-- Expected responses are 180, 183 or 200 -->
+				<response>
+					<!-- Step 4 from the Default Message Flow Call-Term-at-UE(DUT) Sequence Diagram-
+               Test 18x response for reliability for possible Prack message -->
+					<if>
+						<contains>
+							<msg_ref type="sip" hdr_instance="any">18x-Invite.Require</msg_ref>
+							<expr>100rel</expr>
+						</contains>
+						<then>
+							<!--Reliablity required for test sending Prack message to peer.-->
+							<!-- Step 3 from the Default Message Flow Call-Term-at-UE(DUT) Sequence Diagram- send Prack -->
+							<send protocol="sip" msgtype="Prack"/>
+						</then>
+					</if>
+				</response>
+							
+				<postlude>
+					<stop_capture/>	
+					<send protocol="sip" msgtype="CANCEL"/>
+				</postlude>
+								
+				<transition to="END" event="603-INVITE"/>
+
+			</state>	
+	</add_to>
+	
+	<fsm name="UE2">
+		<models>
+			<session/>
+		</models>
+	
+		<NE sim_type="orig" elements="UE2 SCSCF1 PCSCF1" targets="UE2 3034090025"/>
+
+		<!-- NOTE - The test platform is assumed to be performing the 
+            registrar between tests. The session model requests
+						to be informed when the DUT registers and the fsm
+						will receive the Registered event once the DUT is
+						registered -->
+		<states initialstate="Register">
+			<!-- REGISTER State -->
+			<state ID="Register">
+				<transition to="Evaluate" event="Branch1Event"/>
+				<transition to="Register" event="Registered"/>
+			</state>
+			
+			<state ID="Evaluate">
+				<response>
+					<if>
+						<!-- Step 2 test case SIP-PBX 1.3.2.1-->
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>INVITE</expr>
+						</eq>
+						<then>
+						
+							<!-- Step 3 test case SIP-PBX 1.3.2.1-->
+							<verify step="3" requirements="REQ24255">
+								<notnull>		
+									<msg_ref type="sip">Invite.Request-Line.Request-URI</msg_ref>
+								</notnull>
+							</verify>
+							
+							<!-- Step 4 test case SIP-PBX 1.3.2.1-->
+							<var name="UE0PUI1">
+								<var_expr>
+									<expr>sip:+1</expr>
+									<msg_ref type="platform">UE2.pui</msg_ref>
+									<expr>;user=phone</expr>
+								</var_expr>
+							</var>
+							<var name="UE0PUI2">
+								<var_expr>
+									<expr>sip:</expr>
+									<msg_ref type="platform">UE2.pui</msg_ref>
+								</var_expr>
+							</var>
+							<verify step="4" requirements="REQ24255, REQ24246, REQ24247">
+								<and>
+									<or>
+										<contains>		
+											<msg_ref type="sip">Invite.Request-Line.Request-URI</msg_ref>
+											<var_ref name="UE0PUI1"/>
+										</contains>
+										<contains>	
+											<msg_ref type="sip">Invite.Request-Line.Request-URI</msg_ref>
+											<var_ref name="UE0PUI2"/>
+										</contains>	
+									</or>
+									<dnc>
+										<msg_ref type="sip">Invite.Request-Line.Request-URI</msg_ref>
+										<expr>-</expr>
+									</dnc>		
+								</and>		
+							</verify>
+							
+							<!-- Step 5 test case SIP-PBX 1.3.2.1-->
+							<verify step="5" requirements="REQ24246, REQ24247">
+								<contains>
+									<msg_ref type="sip">Invite.Request-Line.Request-URI</msg_ref>
+									<msg_ref type="platform">UE0.domain</msg_ref>
+								</contains>
+							</verify>
+							
+							<var name="UE0PAI">
+								<var_expr>
+									<expr>"John Doe"&lt;sip:+1</expr>
+									<msg_ref type="platform">UE1.pui</msg_ref>
+									<expr>;user=phone&gt;</expr>
+								</var_expr>
+							</var>
+							<!-- Step 6 test case SIP-PBX 1.3.2.1-->
+							<verify step="6, 7" requirements="REQ24249">
+								<or>
+								<contains>
+									<msg_ref type="sip">Invite.P-Asserted-Identity.name-addr</msg_ref>
+									<expr>sip</expr>	
+								</contains>
+									<or>
+									<contains>
+										<msg_ref type="sip">Invite.P-Asserted-Identity.name-addr</msg_ref>
+										<msg_ref type="platform">UE1.pui</msg_ref>									
+									</contains>
+										<or>
+										<contains>
+											<msg_ref type="sip">Invite.P-Asserted-Identity.name-addr</msg_ref>
+											<expr>;user=phone</expr>									
+										</contains>
+										<contains>
+											<msg_ref type="sip">Invite.P-Asserted-Identity.name-addr</msg_ref>
+											<msg_ref type="platform">UE0.phone number 1</msg_ref>									
+										</contains>
+										</or>
+									</or>
+								</or>
+							</verify>
+						</then>
+					</if>
+				</response>
+				<transition to="EndCall" event="INVITE"/>
+				</state>
+				
+				<state ID="EndCall" ES="true"/>
+			
+		</states>
+	</fsm>
+</pc2xml>				
+									
+							
+												

@@ -1,0 +1,185 @@
+#//*****************************************************************************
+#// Filename: E-UE-PROV_1-1-2-8.test
+#// Author:   Matthew Forbes
+#// Creation Date: February 12, 2009
+#// Modified by:
+#//*****************************************************************************
+#// Description:
+#//     TC2774 TEST CASE E-UE-PROV 1-1-2-8 Verify Proper dUE behavior when the SNMP Entity
+#//     contained in Sub-option 3 is not known to the KDC
+#//
+#// Objective:
+#//     This test verifies the ability of the eUE to fail to provision when the value provided for 
+#//     SNMP entity in sub-option 3 is not known to the KDC but is resolvable in DNS. Usage of the
+#//     SNMP entity FQDN in sub-option 3 is required for both DHCPv4 and DHCPv6.
+#//
+#// PacketCable DUT:
+#//     eUE
+#//
+#// Test Steps:
+#//     - Initialize eUE config file setup
+#//     - Setup DHCP Server Telephony Service Provider FQDN 122.3 = faultyvalue
+#//     - Ensure DNS resolves "faultyvalue" FQDN
+#//     - Setup DHCP server to select Secure Provisioning flow with proper 122 values
+#//     - Start Sniffer
+#//     - Clear Kerberos Tickets
+#//     - Reset DUT
+#//     - Check Provisioning state
+#//     - Stop sniffer
+#//     - Invoke parsing tool and validate using Pass/Fail scripts
+#//
+#// Notes:
+#//     - Requires provPrimitives.tcl & tftp_primitives.tcl.
+#//     - Requires the specific config file in $BASE_CFG_FILE_PATH in Provisioning Server.
+#//     - Requires parT.tcl parsing tool to parse data from capture file.
+#//*****************************************************************************
+global SCRIPT_VERSION
+set SCRIPT_VERSION { # $Id: E-UE-PROV_1-1-2-8.test 7406 2010-07-20 17:17:37Z dthakore $ }
+
+set step_name E-UE-PROV_1-1-2-8_
+set step_num 1
+
+
+DoStep ${step_name}${step_num}-PreStep-1 "Initialize Test Platform" { 
+   Init_PROV
+   Init_CONTROLLER_LAN
+   # ProvCreateConfig 291 $MTA_MAC
+} { PASS_STEP }
+
+incr step_num
+
+set msgStr "Configure DHCP server option 122 suboption 3 with a faulty value (MTATC763)"
+DoStep ${step_name}${step_num}-1 $msgStr {
+} { 
+    # verify_signal $msgStr
+    PROV_MODIFY_DEVICE $MTA_MAC MTATC763 Device_Level_Secure.cfg
+    PROV_DEPLOY_DHCP
+}
+
+incr step_num
+
+set msgStr "Start Sniffer"
+DoStep ${step_name}${step_num}-1 $msgStr {
+    LogMsg "--- $msgStr ---"
+    SetupCaptureControllerLan "host $MTA_IP || udp port 67 || host $CM_IP"
+    StartCaptureControllerLan
+} {PASS_STEP}
+
+incr step_num
+
+set msgStr "pktcMtaDevResetKrbTickets Reset Kerberos Tickets"
+DoStep ${step_name}${step_num}-1 $msgStr {    
+    LogMsg "--- $msgStr ---"
+    set val [SNMP_SET $oid_pktcMtaDevResetKrbTickets OCTET-STRING 0xC0 $MTA_IP]
+} {
+    if {$val == 0} {
+        LogMsg "Kerberos Tickets Have been cleared"
+        PASS_STEP
+    } else {
+        FAIL_STEP "Cannot reset Kerberos tickets"
+    }
+}
+
+incr step_num
+
+DoStep ${step_name}${step_num}-1 "Reset MTA" {
+    LogMsg "--- MTA is Resetting ---"
+    SNMP_SET $oid_pktcMtaDevResetNow INTEGER 1 $MTA_IP
+    actionWait "Wait 120 seconds to allow for MTA provisioning cycles" 120
+} {PASS_STEP}
+
+incr step_num
+
+DoStep ${step_name}${step_num}-1 "Monitor Provisioning Server" {
+    # Done Later
+} {PASS_STEP}
+
+incr step_num
+
+set msgStr "Stop Sniffer"
+DoStep ${step_name}${step_num}-1 $msgStr {
+    LogMsg "--- $msgStr ---"
+    StopCaptureControllerLan
+    SaveToFileControllerLan
+} { PASS_STEP }
+
+incr step_num
+
+DoStep ${step_name}${step_num}-1 "Save Provisioning service log to text file" {
+} {PASS_STEP}
+
+incr step_num
+
+
+########################## INVOKE PARSING TOOL ##################################
+
+DoStep ${step_name}${step_num}-1 "Parse all data into database" {
+    # Initial PARSER TOOL
+    Init_PART
+    
+    # Set up parser file
+    set PARSERFILE    $ETH_DEFAULT_TXT_FILE
+} { PASS_STEP }
+
+DoStep ${step_name}${step_num}-2 "Parse all data into database" {
+    # Parse data
+    set PARAMS_DHCP         "{DHCP {} {} {} {} {} {} {} {}}"
+    set PARAMS_CM_SRC       "{{} {} {} {} $CM_IP {} {} {} {}}"
+    set PARAMS_CM_DST       "{{} {} {} {} {} {} {} $CM_IP {}}"
+    set msgID_CM            [ParseFile $PARSERFILE "$PARAMS_DHCP $PARAMS_CM_SRC $PARAMS_CM_DST"]
+    set PARAMS_MTA_SRC      "{{} {} {} {} $MTA_IP {} {} {} {}}"
+    set PARAMS_MTA_DST      "{{} {} {} {} {} {} {} $MTA_IP {}}"
+    set msgID_MTA           [ParseFile $PARSERFILE "$PARAMS_DHCP $PARAMS_MTA_SRC $PARAMS_MTA_DST"]
+} { 
+    if { $::PART_RETURN == 0 } {
+        PASS_STEP
+    } else {
+        FAIL_STEP "Cannot find data"
+    }
+}
+
+set msgStr "AS-REP MUST contain an ERROR message."
+DoStep ${step_name}${step_num}-3 $msgStr {
+    LogMsg "AS-REP should contain an error, AS-ERROR"
+  } {
+    VerifyValue $msgID_MTA "INANY KRB KRB_ERROR KRB_TYPE" "EXISTS" ""
+    VerifyNotValue $msgID_MTA "INANY KRB KRB_AS_REP KRB_TYPE" "EXISTS" ""
+    }
+    
+    incr step_num
+    
+    set msgStr "MTA must go through MTA-1 through MTA-10 steps again"
+DoStep ${step_name}${step_num}-2 $msgStr {
+    LogMsg "Verify MTA Sequence 1-10 again and again (Check 3x's)"
+    
+    # Set MTA SEQUENCE to check
+    set MTA_SEQUENCE "DHCP:DISCOVER,DHCP:OFFER,DHCP:REQUEST,DHCP:ACK,\
+            DNS:DNS_QUERY_SRV,DNS:DNS_RESPONSE_SRV,DNS:DNS_QUERY_HOST,DNS:DNS_RESPONSE_HOST,\
+            KRB:KRB_AS_REQ,KRB:KRB_ERROR,DHCP:DISCOVER,DHCP:OFFER,DHCP:REQUEST,DHCP:ACK,\
+            DNS:DNS_QUERY_SRV,DNS:DNS_RESPONSE_SRV,DNS:DNS_QUERY_HOST,DNS:DNS_RESPONSE_HOST,\
+            KRB:KRB_AS_REQ,KRB:KRB_ERROR,DHCP:DISCOVER,DHCP:OFFER,DHCP:REQUEST,DHCP:ACK,\
+            DNS:DNS_QUERY_SRV,DNS:DNS_RESPONSE_SRV,DNS:DNS_QUERY_HOST,DNS:DNS_RESPONSE_HOST,\
+            KRB:KRB_AS_REQ,KRB:KRB_ERROR"
+    # Remove whitespace
+    regsub -all { } $MTA_SEQUENCE {} MTA_SEQUENCE
+} {
+    # Verify Sequence
+    VerifyValue $msgID_MTA "SEQUENCE $MTA_SEQUENCE" "" ""
+}
+
+################################################################################
+# Cleanup
+################################################################################
+
+set msgStr "Restore policy on DHCP Server (MTAFORCW_122)"
+DoStep ${step_name}${step_num}-1 $msgStr {
+} {
+    # verify_signal $msgStr
+    PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122
+    PROV_DEPLOY_DHCP
+    SNMPvN_RESET $CM_IP
+    actionWait "Wait 50 seconds for reset" 50 
+}
+
+Cleanup
+

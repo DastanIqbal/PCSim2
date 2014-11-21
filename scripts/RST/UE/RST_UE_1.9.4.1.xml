@@ -1,0 +1,107 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	PCPCII-139 : Update the Voicetronix modifiers to use the new values. (ghassler 07/10/2009)
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-UE 1.9.4.1" 
+	descrip="Rejection of incoming calls when on an emergency call" 
+	number="RST-UE 1.9.4.1" inspector="disable">
+	
+	<template file="./templates/CallOrigAtUETemp.xml" name="UE1"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Setup" sub="prelude"/>
+		<state ID="OnHook"/>
+		<state ID="Connected"/>
+		<state ID="Releasing"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<NE targets="UE1 service:sos  SCSCF1 PCSCF1"/>
+		
+		<state ID="Setup" sub="prelude" once="true">
+			<send protocol="utility" msgtype="DialDigits">
+				<mod modtype="add" hdr="number">
+					<expr>911</expr>
+				</mod>
+			</send>
+		</state>
+		
+		<state ID="Connected">
+			<prelude once="true">
+				<generate event="Branch1Event" fsm="UE2"/>
+			</prelude>
+			<transition to="EndCall1" event="Branch2Event"/>
+		</state>
+		
+		<state ID="EndCall1">
+			<prelude>
+				<send protocol="sip" msgtype="BYE"/>
+			</prelude>
+			<transition to="END" event="200-BYE"/>
+		</state>
+	</add_to>
+	
+	<fsm name="UE2">
+		<models>
+			<session/>
+		</models>
+		<NE sim_type="orig" elements="UE2 SCSCF1 PCSCF1" targets="UE2"/>
+		
+		<states initialstate="Register">
+			<state ID="Register">
+				<transition to="WaitCall1" event="Registered"/>
+			</state>
+			
+			<state ID="WaitCall1">
+				<transition to="Setup" event="Branch1Event"/>
+			</state>
+			
+			<state ID="Setup">
+				<prelude once="true">
+					<sleep time="1000"/>
+					<send protocol="sip" msgtype="Invite"/>
+				</prelude>
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+							<expr>486</expr>
+						</eq>
+						<then>
+							<verify step="2" requirements="REQ14071">
+								<eq>
+									<msg_ref type="sip">Response</msg_ref>
+									<expr>486-INVITE</expr>
+								</eq>
+							</verify>
+						</then>
+					</if>
+				</response>
+				<transition to="EndCall2" event="486-INVITE"/>
+				<transition to="Setup" event="1xx-INVITE"/>
+			</state>
+			
+			<state ID="EndCall2" ES="true" offHookOK="true">
+				<prelude>
+					<generate event="Branch2Event" fsm="UE1"/>
+				</prelude>
+			</state>
+		</states>
+	</fsm>
+</pc2xml>

@@ -1,0 +1,24 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+-->
+
+<pc2xml version="$Revision: 6076 $" 
+	name="UT-HDV-RST-UE 1.5.4.10" 
+	descrip="This is a unit test script for testing HDV_RST_UE_1.5.4.10 test script." 
+	number="1">
+		
+	<template file="$SCRIPT_PATH/RST/UE/ut/UT_RST_UE_1.5.4.10.xml"/>
+                
+</pc2xml>

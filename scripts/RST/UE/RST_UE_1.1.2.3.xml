@@ -1,0 +1,572 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	PCPCII-131 - Update script for the CW69 ECN changes. Change the template to Terminating 
+		case and add third call for steps 6-9. (ghassler 6/11/2009)
+	PCPCII-132 - Update the script to have a transition of the RTP event in both the Alerting
+		and Answer states. (ghassler 6/22/2009)
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-UE 1.1.2.3" 
+	descrip="BYE Delay Timer " 
+	number="RST-UE 1.1.2.3">
+	
+	<template file="./templates/CallTermAtUETemp.xml" name="UE1"/>
+
+	<remove_from fsm="UE1">
+		<state ID="Connected"/>
+		<state ID="OnHook"/>
+		<state ID="Releasing"/>
+	</remove_from>
+
+	<add_to fsm="UE1">
+		<NE targets="RTP"/>
+		
+		<!-- PCPCII-132 Add transitions for the Alerting and Answer states -->
+		<transition to="Alerting" from="Alerting" event="RTP"/>
+		<transition to="Answer" from="Answer" event="RTP"/>
+		
+		<state ID="Connected" timer="10000">
+			<prelude once="true">
+				<send protocol="sip" msgtype="ACK"/>
+				<generate event="Branch1Event" fsm="UE2"/>
+			</prelude>
+			<transition to="Connected" event="OffHookComplete"/>
+			<transition to="OnHook" event="TimerExpired"/>
+			<transition to="Connected" event="RTP"/>
+		</state>
+		
+		<!-- Step-2, Place the phone onhook. -->
+		<state ID="OnHook">
+			<prelude>
+				<!-- Step-2, Message Flow for test case 1.1.2.3 - Place the phone onhook. -->
+				<send protocol="utility" msgtype="OnHook"/>
+			</prelude>
+			<transition to="Verify" event="OnHookComplete"/>
+		</state>
+		
+		<!-- Step-2, Message Flow for test case 1.1.2.3 - 
+			Verify that the UE does not send the BYE message for a period equal -->
+		<state ID="Verify" timer="3800">
+			<response>
+				<verify step="2" requirements="REQ13439, REQ13441">
+					<and>
+						<eq>
+							<msg_ref type="event"/>
+							<expr>TimerExpired</expr>
+						</eq>
+						<neq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>BYE</expr>
+						</neq>
+					</and>
+				</verify>
+			</response>
+			<transition to="Bye State" event="TimerExpired"/>
+		</state>
+		
+		<state ID="Bye State">
+			<!-- Step-2, Message Flow for test case 1.1.2.3 - 
+				Verify that the UE does not send the BYE message for a period equal -->
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>BYE</expr>
+					</eq>
+					<then>
+						<verify step="2" requirements="REQ13439, REQ13441">
+							<eq>
+								<msg_ref type="sip">Request</msg_ref>
+								<expr>BYE</expr>
+							</eq>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<transition to="Call1" event="BYE"/>
+		</state>
+		
+		<state ID="Call1" ES="true">
+			<transition to="Setup2" event="SessionTerminated"/>
+		</state>
+		
+		<state ID="Setup2">
+			<prelude>
+				<send protocol="sip" msgtype="Invite"/>
+			</prelude>
+			<response>
+				<if>
+					<contains>
+						<msg_ref type="sip" hdr_instance="any">18x-Invite.Require</msg_ref>
+						<expr>100rel</expr>
+					</contains>
+					<then>
+						<!--Reliability required for test sending Prack message to peer.-->
+						<send protocol="sip" msgtype="Prack"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Proceeding2" event="100-INVITE"/>
+			<transition to="Alerting2" event="180-INVITE"/>
+			<transition to="Alerting2" event="183-INVITE"/>
+			<transition to="Connected2" event="200-INVITE"/>
+		</state>
+			
+		<state ID="Proceeding2">
+			<response>
+				<if>
+					<contains>
+						<msg_ref type="sip" hdr_instance="any">18x-Invite.Require</msg_ref>
+						<expr>100rel</expr>
+					</contains>
+					<then>
+						<!--Reliability required for test sending Prack message to peer.-->
+						<send protocol="sip" msgtype="Prack"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Alerting2" event="180-INVITE"/>
+			<transition to="Alerting2" event="183-INVITE"/>
+			<transition to="Connected2" event="200-INVITE"/>
+		</state>
+			
+		<state ID="Alerting2" timer="12000">
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="event"/>
+						<expr>TimerExpired</expr>
+					</eq>
+					<then>
+						<!--Take DUT phone off hook-->
+						<send protocol="utility" msgtype="OffHook"/>
+					</then>
+				</if>
+				<!-- Expected responses are 180, 183, PRACK, UPDATE, or 200 -->
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>UPDATE</expr>
+					</eq>
+					<then>
+						<!--QoS required for test, sending a 200-OK to Update message to peer.-->
+						<send protocol="sip" msgtype="200-Update"/>
+					</then>
+					<elseif>
+						<and>
+							<eq>
+								<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+								<expr>180</expr>
+							</eq>
+							<contains>
+								<msg_ref type="sip" hdr_instance="any">180-INVITE.Require</msg_ref>
+								<expr>100rel</expr>
+							</contains>
+						</and>
+						<then>
+							<!--Reliability required for test, sending Prack message to peer.-->
+							<send protocol="sip" msgtype="Prack"/>
+						</then>
+					</elseif>
+				</if>
+			</response>
+			<transition to="Alerting2" event="200-PRACK"/>
+			<transition to="Alerting2" event="UPDATE"/>
+			<transition to="Alerting2" event="18x-INVITE"/>
+			<!-- PCPCII-132 Add transitions for the Alerting2 and Answer2 states -->
+			<transition to="Alerting2" event="RTP"/>
+			<transition to="Answer2" event="TimerExpired"/>
+			<transition to="Connected2" event="200-INVITE"/>
+		</state>
+			
+		<state ID="Answer2">
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>UPDATE</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="200-Update"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Answer2" event="UPDATE"/>
+			<transition to="Answer2" event="200-PRACK"/>
+			<transition to="Answer2" event="18x-INVITE"/>
+			<transition to="Answer2" event="OffHookComplete"/>
+			<!-- PCPCII-132 Add transitions for the Alerting2 and Answer2 states -->
+			<transition to="Answer2" event="RTP"/>
+			<transition to="Connected2" event="200-INVITE"/>
+		</state>
+			
+		<state ID="Connected2">
+			<prelude once="true">
+				<send protocol="sip" msgtype="ACK"/>
+				<generate event="Branch2Event" fsm="UE2"/>
+				<sleep time="5000"/>
+				<!-- Step-4, Message Flow for test case 1.1.2.3 - 
+				Place the phone onhook. -->
+				<send protocol="utility" msgtype="OnHook"/>
+			</prelude>
+			<transition to="Connected2" event="OffHookComplete"/>
+			<transition to="2ndOffHookState" event="OnHookComplete"/>
+			<transition to="Connected2" event="RTP"/>
+		</state>
+		
+		<state ID="2ndOffHookState">
+			<prelude once="true">
+				<sleep time="1000"/>
+				<!-- Step-4, Message Flow for test case 1.1.2.3 . -->
+				<send protocol="utility" msgtype="OffHook"/>
+			</prelude>
+			<transition to="2ndOffHookState" event="OnHookComplete"/>
+			<transition to="2ndVerifyVoicePath" event="OffHookComplete"/>
+		</state>
+		
+		<state ID="2ndVerifyVoicePath" timer="6000">
+			<prelude once="true">
+				<var name="mediastopped">
+					<expr>false</expr>
+				</var>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="event"/>
+						<expr>TimerExpired</expr>
+					</eq>
+					<then>
+						<verify step="4" requirements="REQ13440">
+							<and>
+								<eq>
+									<msg_ref type="event"/>
+									<expr>TimerExpired</expr>
+								</eq>
+								<neq>
+									<msg_ref type="sip">Request</msg_ref>
+									<expr>BYE</expr>
+								</neq>
+							</and>
+						</verify>
+						<verify step="4" requirements="REQ13440">
+							<eq>
+								<var_ref name="mediastopped"/>
+								<expr>false</expr>
+							</eq>
+						</verify>
+					</then>
+					<elseif>
+						<eq>
+							<msg_ref type="event"/>
+							<expr>MediaComplete</expr>
+						</eq>
+						<then>
+							<assign name="mediastopped">
+								<expr>true</expr>
+							</assign>
+						</then>
+					</elseif>
+				</if>
+			</response>
+			<transition to="2ndReleasing" event="TimerExpired"/>
+			<transition to="2ndVerifyVoicePath" event="MediaComplete"/>
+		</state>
+		
+		<state ID="2ndReleasing">
+			<prelude once="true">
+				<!--Sending BYE to peer to terminate call.-->
+				<send protocol="utility" msgtype="OnHook"/>
+				<send protocol="sip" msgtype="BYE"/>
+			</prelude>
+			<transition to="2ndOnHook" event="OnHookComplete"/>
+			<transition to="2ndOnHook" event="200-Bye"/>
+			<transition to="2ndReleasing" event="MediaComplete"/>
+		</state>
+		
+		<state ID="2ndOnHook" timer="5000">
+			<response>
+				<if>
+					<and>
+						<neq>
+							<msg_ref type="utility">Request</msg_ref>
+							<expr>OnHookComplete</expr>
+						</neq>
+					<and>
+						<neq>
+							<msg_ref type="event"/>
+							<expr>TimerExpired</expr>
+						</neq>
+						<neq>
+							<msg_ref type="event"/>
+							<expr>MediaComplete</expr>
+						</neq>
+					</and>
+					</and>	
+					<then>
+						<verify step="5" requirements="REQ13442">
+							<neq>
+								<msg_ref type="sip">Request</msg_ref>
+								<expr>BYE</expr>
+							</neq>
+						</verify>
+						<verify step="5" requirements="REQ13442">
+							<eq>
+								<msg_ref type="sip">Response</msg_ref>
+								<expr>200-BYE</expr>
+							</eq>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<transition to="2ndOnHook" event="OnHookComplete"/>
+			<transition to="2ndOnHook" event="200-Bye"/>
+			<transition to="2ndOnHook" event="BYE"/>
+			<transition to="2ndOnHook" event="MediaComplete"/>
+			<transition to="3rdSetup" event="TimerExpired"/>
+		</state>
+		
+		<state ID="3rdSetup">
+			<prelude>
+				<send protocol="sip" msgtype="Invite"/>
+			</prelude>
+				<!-- Expected responses are 100, 180, 183 or 200 -->
+			<response>
+				<if>
+					<contains>
+						<msg_ref type="sip" hdr_instance="any">18x-Invite.Require</msg_ref>
+						<expr>100rel</expr>
+					</contains>
+					<then>
+						<!--Reliability required for test sending Prack message to peer.-->
+						<send protocol="sip" msgtype="Prack"/>
+					</then>
+				</if>
+			</response>
+			<transition to="3rdProceeding" event="100-INVITE"/>
+			<transition to="3rdAlerting" event="180-INVITE"/>
+			<transition to="3rdAlerting" event="183-INVITE"/>
+			<transition to="3rdConnected" event="200-INVITE"/>
+		</state>
+			
+		<state ID="3rdProceeding">
+			<!-- Expected responses are 180, 183 or 200 -->
+			<response>
+				<if>
+					<contains>
+						<msg_ref type="sip" hdr_instance="any">18x-Invite.Require</msg_ref>
+						<expr>100rel</expr>
+					</contains>
+					<then>
+						<!--Reliablity required for test sending Prack message to peer.-->
+						<send protocol="sip" msgtype="Prack"/>
+					</then>
+				</if>
+			</response>
+			<transition to="3rdAlerting" event="180-INVITE"/>
+			<transition to="3rdAlerting" event="183-INVITE"/>
+			<transition to="3rdConnected" event="200-INVITE"/>
+		</state>
+			
+		<state ID="3rdAlerting" timer="12000">
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="event"/>
+						<expr>TimerExpired</expr>
+					</eq>
+					<then>
+						<!--Take DUT phone off hook-->
+						<send protocol="utility" msgtype="OffHook"/>
+					</then>
+				</if>
+				<!-- Expected responses are 180, 183, PRACK, UPDATE, or 200 -->
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>UPDATE</expr>
+					</eq>
+					<then>
+						<!--QoS required for test, sending a 200-OK to Update message to peer.-->
+						<send protocol="sip" msgtype="200-Update"/>
+					</then>
+					<elseif>
+						<and>
+							<eq>
+								<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+								<expr>180</expr>
+							</eq>
+							<contains>
+								<msg_ref type="sip" hdr_instance="any">180-INVITE.Require</msg_ref>
+								<expr>100rel</expr>
+							</contains>
+						</and>
+						<then>
+							<!--Reliability required for test, sending Prack message to peer.-->
+							<send protocol="sip" msgtype="Prack"/>
+						</then>
+					</elseif>
+				</if>
+			</response>
+			<transition to="3rdAlerting" event="200-PRACK"/>
+			<transition to="3rdAlerting" event="UPDATE"/>
+			<transition to="3rdAlerting" event="18x-INVITE"/>
+			<transition to="3rdAlerting" event="RTP"/>
+			<transition to="3rdAnswer" event="TimerExpired"/>
+			<transition to="3rdConnected" event="200-INVITE"/>
+		</state>
+			
+		<state ID="3rdAnswer">
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>UPDATE</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="200-Update"/>
+					</then>
+				</if>
+			</response>
+			<transition to="3rdAnswer" event="UPDATE"/>
+			<transition to="3rdAnswer" event="200-PRACK"/>
+			<transition to="3rdAnswer" event="18x-INVITE"/>
+			<transition to="3rdAnswer" event="OffHookComplete"/>
+			<transition to="3rdAnswer" event="RTP"/>
+			<transition to="3rdConnected" event="200-INVITE"/>
+		</state>
+			
+		<state ID="3rdConnected" timer="3000">
+			<prelude once="true">
+				<send protocol="sip" msgtype="ACK"/>
+			</prelude>
+			<transition to="3rdConnected" event="OffHookComplete"/>
+			<transition to="3rdConnected" event="RTP"/>
+			<transition to="3rdConnected" event="MediaComplete"/>
+			<transition to="3rdOnHook" event="TimerExpired"/>
+		</state>
+		
+		<state ID="3rdOnHook">
+			<prelude once="true">
+				<send protocol="utility" msgtype="OnHook"/>
+			</prelude>
+			<transition to="3rdReleasing" event="OnHookComplete"/>
+			<transition to="3rdOnHook" event="MediaComplete"/>
+		</state>
+		
+		<state ID="3rdReleasing">
+			<prelude once="true">
+				<sleep time="1500"/>
+				<generate event="Branch3Event" fsm="UE2"/>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>BYE</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="200-BYE"/>
+					</then>
+				</if>
+			</response>
+			<transition to="WaitForSucceed" event="BYE"/>
+			<transition to="WaitBYE" event="SucceedEvent"/>
+			<transition to="3rdReleasing" event="MediaComplete"/>
+		</state>
+		
+		<state ID="WaitForSucceed">
+			<transition to="END" event="SucceedEvent"/>
+		</state>
+		
+		<state ID="WaitBYE" timer="5000">
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>BYE</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="200-BYE"/>
+					</then>
+				</if>
+			</response>
+			<transition to="END" event="BYE"/>
+			<transition to="END" event="TimerExpired"/>
+		</state>
+	</add_to>
+	
+	<fsm name="UE2">
+		<models>
+			<session/>
+		</models>
+		<NE sim_type="term" elements="UE2 SCSCF1 PCSCF1" targets="UE2"/>
+		
+		<states initialstate="Register">
+		
+			<state ID="Register">
+				<transition to="WaitCall1" event="Registered"/>
+			</state>
+			
+			<state ID="WaitCall1">
+				<transition to="WaitCall2" event="Branch1Event"/>
+			</state>
+			
+			<state ID="WaitCall2">
+				<transition to="Call3Begins" event="Branch2Event"/>
+			</state>
+			
+			<state ID="Call3Begins">
+				<transition to="Setup" event="Branch3Event"/>
+			</state>
+			
+			<state ID="Setup">
+				<prelude once="true">
+					<send protocol="sip" msgtype="Invite"/>
+				</prelude>
+				<!-- Expected responses are 100 or 486 -->
+				<response>
+					<if>
+						<gt>
+							<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+							<expr>100</expr>
+						</gt>
+						<then>
+							<verify step="8" requirements="REQ23434, REQ23435">
+								<eq>
+									<msg_ref type="sip">Response</msg_ref>
+									<expr>486-INVITE</expr>
+								</eq>
+								<then>
+									<send protocol="sip" msgtype="ACK"/>
+								</then>
+							</verify>
+						</then>
+					</if>
+				</response>
+				<transition to="Setup" event="100-INVITE"/>
+				<transition to="EndCall" event="xxx-INVITE"/>
+			</state>
+			
+			<state ID="EndCall" ES="true">
+				<prelude>
+					<generate event="SucceedEvent" fsm="UE1"/>
+				</prelude>
+			</state>
+		</states>
+	</fsm>
+</pc2xml>

@@ -1,0 +1,196 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	2011-09-20	Marc Weaver - Initial version
+	2011-11-15	Seung Lee - final versionfor
+
+
+
+
+-->
+<pc2xml version="$Revision: 1 $" 
+	name="ESG 1.7.1.1" 
+	descrip="Ability of SETA Function to Register with Service Provider Network" 
+	number="ESG 1.7.1.1">
+	
+	<template file="./templates/UERegTemp.xml" name="UE1"/>
+	<configure name="SIP Inspector Type" value="UE"/>
+	<configure name="SIP Inspector" value="enable"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="PendingRegistration"/>
+		<state ID="Authorization"/>
+		<state ID="Registered"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<state ID="PendingRegistration">
+			<prelude>
+				<start_capture>
+					<filter>
+						<var_expr>
+							<expr>host </expr>
+							<msg_ref type="platform">UE0.IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">UE0.IP2</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">PCSCF1.IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">UE1.IP</msg_ref>
+						</var_expr>
+					</filter>
+				</start_capture>
+			</prelude>
+			<response>
+				<if>
+					<or>
+						<neq>
+							<msg_ref type="platform">Platform.SIP Inspector Type</msg_ref>
+							<expr>UE</expr>
+						</neq>
+						<neq>
+							<msg_ref type="platform">Platform.SIP Inspector</msg_ref>
+							<expr>enable</expr>
+						</neq>
+					</or>
+					<then>
+						<log level="FATAL" expr="The SIP Inspector Type setting must equal enable and the SIP Inspector setting must equal UE for the test to be executed."/>
+						<generate event="FailEvent"/>
+					</then>
+				</if>
+				<verify step="2" requirements="RFC444">
+					<neq>
+						<msg_ref type="sip">REGISTER.Request-Line.Request-URI</msg_ref>
+						<expr></expr>
+					</neq>
+				</verify>
+				<verify step="3" requirements="RFC444">
+					<contains>
+						<msg_ref type="sip">REGISTER</msg_ref>
+						<expr>To:</expr>
+					</contains>
+				</verify>
+				<verify step="4" requirements="RFC444">
+					<contains>
+						<msg_ref type="sip">REGISTER</msg_ref>
+						<expr>From:</expr>
+					</contains>
+				</verify>
+				<verify step="5" requirements="RFC444">
+					<contains>
+						<msg_ref type="sip">REGISTER</msg_ref>
+						<expr>Call-ID:</expr>
+					</contains>
+				</verify>
+				<verify step="6" requirements="RFC444">
+					<contains>
+						<msg_ref type="sip">REGISTER</msg_ref>
+						<expr>CSeq:</expr>
+					</contains>
+				</verify>
+				<verify step="7" requirements="RFC446">
+					<or>
+						<contains>
+							<msg_ref type="sip">REGISTER.To.name-addr</msg_ref>
+							<expr>sip:</expr>
+						</contains>
+						<contains>
+							<msg_ref type="sip">REGISTER.To.name-addr</msg_ref>
+							<expr>sips:</expr>
+						</contains>
+					</or>
+				</verify>
+				<verify step="8" requirements="RFC445">
+					<dnc>
+						<msg_ref type="sip">REGISTER.Request-Line.Request-URI</msg_ref>
+						<expr>userinfo</expr>
+					</dnc>
+				</verify>
+				<verify step="8" requirements="RFC445">
+					<dnc>
+						<msg_ref type="sip">REGISTER.Request-Line.Request-URI</msg_ref>
+						<expr>@</expr>
+					</dnc>
+				</verify>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>REGISTER</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="401-REGISTER"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Authorization" event="REGISTER"/>
+		</state>
+		
+		<state ID="Authorization">
+			<response>
+				
+				<if>
+					<eq>
+						<msg_ref type="event"/>
+						<expr>AuthenticateSucceed</expr>
+					</eq>
+					<then>
+						<!-- this is to prevent the AuthenticateFailed from being forwarded
+										 to the next state on the AuthenticateSucceed -->
+					</then>
+					<elseif>
+						<and>
+							<eq>
+								<msg_ref type="sip">Request</msg_ref>
+								<expr>REGISTER</expr>
+							</eq>
+							<and>
+								<contains>
+									<msg_ref type="sip">REGISTER</msg_ref>
+									<expr>Authorization</expr>
+								</contains>
+								<digest/>
+							</and>
+						</and>
+						<then>
+							<verify step="12" requirements="RFC447">
+								<eq>
+									<msg_ref type="sip">REGISTER.CSeq.value</msg_ref>
+									<add_ref type="sip" msg_instance="prev">REGISTER.CSeq.value</add_ref>
+								</eq>
+							</verify>
+							<generate event="AuthenticateSucceed"/>
+						</then>
+						<else>
+							<generate event="AuthenticateFailed"/>
+							<send protocol="sip" msgtype="503-Register"/>
+						</else>
+					</elseif>
+				</if>
+			</response>
+			<transition to="Registered" event="AuthenticateSucceed"/>
+			<transition to="END" event="AuthenticateFailed"/>
+			<transition to="Registered" event="REGISTER"/>
+		</state>
+		
+		<state ID="Registered">
+			<prelude>
+				<send protocol="sip" msgtype="200-Register"/>
+				<generate event="SucceedEvent"/>
+			</prelude>
+			<postlude>
+				<stop_capture/>	
+			</postlude>
+			<transition to="END" event="SucceedEvent"/>
+		</state>
+	</add_to>
+</pc2xml>

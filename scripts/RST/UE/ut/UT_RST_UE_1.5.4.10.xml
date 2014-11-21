@@ -1,0 +1,78 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+-->
+
+<pc2xml version="$Revision: 6798 $" 
+	name="HDV-RST-UE 1.5.4.10" 
+	descrip="Call Transfer - Transferee" 
+	number="HDV-RST-UE 1.5.4.10">
+
+	<template file="./templates/UT/Xferee_DUT.xml"/>
+        
+        
+        <remove_from fsm="UE1">
+		<state ID="Notify200"/>
+                <state ID="UE2Setup"/>
+		
+	</remove_from>
+        <add_to fsm="UE1">
+                <state ID="Notify200">
+				<prelude>
+					<sleep time="3000"/>
+					<send protocol="sip" msgtype="NOTIFY" target="UE1" originator="DUT">
+						<mod modtype="replace" hdr="Subscription-State">
+							<expr> terminated;reason=noresource</expr>
+						</mod>
+					</send>	
+
+				</prelude>
+				<transition to="Call1Complete" event="200-NOTIFY"/>
+		</state>
+                <state ID="UE2Setup">
+				<prelude>
+					<send protocol="sip" msgtype="Invite" target="UE2" originator="DUT">
+						<mod modtype="add" hdr="Supported">
+							<expr>replaces</expr>
+						</mod>
+						<mod modtype="delete" hdr="Request-Line" param="Request-URI"/>
+						<mod modtype="add" hdr="Request-Line" param="Request-URI">
+							<expr> sip:UE2@pclab.com</expr>
+						</mod>	
+							
+						
+						
+					</send>	
+				</prelude>
+                                <response>
+					<if>
+						<contains>
+							<msg_ref type="sip" msg_instance="last" hdr_instance="any">18x-Invite.Require</msg_ref>
+							<expr>100rel</expr>
+						</contains>
+						<then>
+							<!--Reliablity required for test sending Prack message to peer.-->
+							<send protocol="sip" msgtype="Prack" target="UE2" originator="DUT"/>
+						</then>
+					</if>
+				</response>
+				<!-- Transitions for Setup state -->
+				<transition to="UE2Proceeding" event="100-INVITE"/>
+				<transition to="UE2Alerting" event="180-INVITE"/>
+				<transition to="UE2Alerting" event="183-INVITE"/>
+				<transition to="UE2Connected" event="200-INVITE"/>
+                </state>                
+	</add_to>	
+        
+</pc2xml>

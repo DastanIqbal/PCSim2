@@ -1,0 +1,122 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-UE 1.5.2.10" 
+	descrip="Call Waiting –Hold fails" 
+	number="RST-UE 1.5.2.10" inspector="disable">
+	
+	<template file="./templates/CallOrigAtUETemp.xml" name="UE1"/>
+	<template file="./templates/CallTermAtUETemp.xml" name="UE2"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Connected"/>
+		<state ID="Releasing"/>
+	</remove_from>
+	
+	<remove_from fsm="UE2">
+		<NE elements="UE1" targets="UE1"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<state ID="Connected">
+			<prelude>
+				<!-- Step 2 of test case 1.5.2.10  - Place a 
+					call to the UE-A (DUT) from UE-C as -->
+				<sleep time="3000"/>
+				<generate event="SucceedEvent" fsm="UE2"/>
+			</prelude>
+			<transition to="HookFlash" event="Branch1Event"/>
+		</state>
+		
+		<state ID="HookFlash">
+			<prelude>
+				<send protocol="utility" msgtype="HookFlash"/>
+			</prelude>
+			<transition to="RecvReinvite" event="HookFlashComplete"/>
+		</state>
+		
+		<state ID="RecvReinvite">
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>REInvite</expr>
+					</eq>
+					<then>
+						<!-- Step 3 of test case 1.5.2.10  - UE-B(SS) sends a Server 
+						internal Error to the Re-INVITE -->
+						<send protocol="sip" msgtype="500-Invite"/>
+					</then>
+				</if>
+			</response>
+			<!-- Step 3 of test case 1.5.2.10  - UE-A sends a RE-INVITE to UE-B as 
+			per step 1 of [UE Hook Flash Case Flow]. -->
+			<transition to="WaitAck" event="REInvite"/>
+		</state>
+		
+		<state ID="WaitAck">
+			<transition to="WaitToRelease" event="ACK"/>
+		</state>
+		
+		<state ID="WaitToRelease">
+			<postlude>
+				<log promptUser="True" yesExpected="True" verify="True" step="3" requirements="REQ13788, RFC690" expr="Verify that the original call, established in step#1 stays unaffected."/>
+			</postlude>
+			<transition to="OnHook" event="SucceedEvent"/>
+		</state>
+	</add_to>
+	
+	<add_to fsm="UE2">
+		<NE elements="UE2" targets="UE2"/>
+		
+		<transition from="Register" to="WaitState" event="Registered"/>
+		
+		<state ID="WaitState">
+			<transition to="Setup" event="SucceedEvent"/>
+		</state>
+		
+		<transition from="Setup" to="AlertingUac" event="ALERTING_UAC"/>
+		
+		<transition from="Proceeding" to="AlertingUac" event="ALERTING_UAC"/>
+		
+		<transition from="Alerting" to="AlertingUac" event="ALERTING_UAC"/>
+		
+		<state ID="AlertingUac">
+			<prelude>
+				<generate event="Branch1Event" fsm="UE1"/>
+				<!-- Step 2 of test case 1.5.2.  - Hook Flash on DUT-->
+			</prelude>
+			<response>
+				<verify step="3" requirements="REQ13788, RFC690">
+					<eq>
+						<msg_ref type="sip">Response</msg_ref>
+						<expr>486-INVITE</expr>
+					</eq>
+				</verify>
+			</response>
+			<transition to="EndSession" event="xxx-INVITE"/>
+		</state>
+		
+		<state ID="EndSession" ES="true">
+			<prelude>
+				<generate event="SucceedEvent" fsm="UE1"/>
+			</prelude>
+		</state>
+	</add_to>
+</pc2xml>

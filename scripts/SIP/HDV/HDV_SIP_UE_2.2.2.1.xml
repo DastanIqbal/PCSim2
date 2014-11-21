@@ -1,0 +1,110 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	
+
+
+-->
+<pc2xml version="$Revision: 7085 $" 
+	name="HDV_SIP_UE_2.2.2.1" 
+	descrip="Barge-In Enabled" 
+	number="HDV_SIP_UE_2.2.2.1" inspector="disable">
+	
+
+	<template file="./templates/CallTermAtUETemp.xml" name="UE1" /> 
+	<remove_from fsm="UE1">
+		<state ID="Alerting" /> 
+		<state ID="Setup" /> 
+		<state ID="Connected" />
+		<state ID="Answer" />
+		<state ID="Proceeding" />
+    <!--state ID="RealOrSimulatedUE" /-->
+	</remove_from>
+	
+<add_to fsm="UE1">
+	<NE targets=" *723035550001 3035550000" /> 
+	<transition from="Register" to="SendInvite1" event="Registered" />
+	
+		<state ID="SendInvite">
+			<prelude>
+				<send protocol="utility" msgtype="OffHook"/>
+			</prelude>
+		<transition to="SendInvite1" event="OffHookComplete" /> 
+		</state>
+		
+		<state ID="SendInvite1">
+			<response>
+				<if>
+					<eq>
+					<msg_ref type="sip">Request</msg_ref> 
+					<expr>Invite</expr> 
+					</eq>
+				<then>
+					<send protocol="sip" msgtype="180-INVITE" />
+					<sleep time="1000"/>
+					<log expr="Take the line 1 of the DUT off hook." />
+					<sleep time="1000"/>
+					<send protocol="sip" msgtype="200-INVITE" />
+				</then>
+				</if>
+                        </response>
+                <transition to="SendInvite1" event="Invite" />       
+		<transition to="SendAck" event="ACK" />
+		</state>
+		
+		
+		<state ID="SendAck" timer="3000">
+			<prelude>
+				
+				<sleep time="1000" />
+				<log promptUser="True" yesExpected="True" expr="A call session is established via first PP" />
+			</prelude>
+		<transition to="Nextline2" event="TimerExpired" /> 
+		</state>
+		
+		<state ID="Nextline2" timer="2000">
+			<prelude>
+				<log expr="Take the line 2 of the DUT off hook." />
+				<sleep time="1000" />
+				<log promptUser="True" yesExpected="True" verify="True" step="3" requirements="REQ23164,REQ23212,REQ23213,REQ23216" expr="Verify that the second PP joins the call and sends and receives the media" /> 
+				
+			</prelude>
+		<transition to="Nextline3" event="TimerExpired" />
+		</state>
+  
+		<state ID="Nextline3" timer="2000">
+			<prelude>
+				<log expr="Take the analog line of the DUT off hook." />
+				<sleep time="1000" />
+				<log promptUser="True" yesExpected="True" verify="True" step="4" requirements="REQ23164,REQ23212,REQ23213,REQ23217" expr="Verify that Analog phone joins the call and sends and receives the media" /> 
+				
+			</prelude>
+		<!--transition to="200Bye" event="DialDigitsComplete" /-->
+		<transition to="Releasing" event="TimerExpired" />
+		</state>
+
+		<!--state ID="200Bye" timer="2000">
+			<prelude>
+				<send protocol="sip" msgtype="200-BYE"/>
+			    	
+			</prelude>
+		<transition to="200Bye" event="BYE" />
+		<transition to="END" event="TimerExpired" />
+		</state-->
+		
+		    
+				
+</add_to>
+</pc2xml>	
+
+		

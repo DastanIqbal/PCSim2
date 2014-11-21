@@ -1,0 +1,105 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="SIP-UE 1.11.2" 
+	descrip="UAS Doesn’t use 100rel when UAC Doesn’t Support 100rel " 
+	number="SIP-UE 1.11.2">
+	
+	<template file="./templates/CallTermAtUETemp.xml" name="UE1"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Setup"/>
+		<state ID="Proceeding"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<state ID="Setup">
+			<prelude>
+				<send protocol="sip" msgtype="INVITE">
+					<!-- Step-1, Message Flow for test case SIP 1.11.2 - Remove the 
+						100rel, preconditions from the Supported header, if exist -->
+					<mod modtype="delete" hdr="Supported" param="option-tag">
+						<expr>100rel</expr>
+					</mod>
+					<mod modtype="delete" hdr="Supported" param="option-tag">
+						<expr>precondition</expr>
+					</mod>
+				</send>
+			</prelude>
+			<!-- Expected responses are 100, 180, 183 or 200 -->
+			<response>
+				<if>
+					<or>
+						<eq>
+							<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+							<expr>180</expr>
+						</eq>
+						<eq>
+							<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+							<expr>183</expr>
+						</eq>
+					</or>
+					<then>
+						<verify step="2" requirements="RFC4" group="100rel">
+							<dnc>
+								<msg_ref type="sip" hdr_instance="any">18x-Invite.Require</msg_ref>
+								<expr>100rel</expr>
+							</dnc>
+						</verify>
+					</then>
+				</if>
+				
+			</response>
+			<transition to="Proceeding" event="100-INVITE"/>
+			<transition to="END" event="180-INVITE"/>
+			<transition to="END" event="183-INVITE"/>
+		</state>
+		
+		<state ID="Proceeding">
+			<!-- Expected responses are 180, 183 or 200 -->
+			<response>
+				<!-- Step-1, Message Flow for test case SIP 1.11.2 - 
+				Note: This test requires the DUT to send at least one provisional response.  
+                              If no 18x response is received, exit the test. -->
+				<if>
+					<or>
+						<eq>
+							<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+							<expr>180</expr>
+						</eq>
+						<eq>
+							<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+							<expr>183</expr>
+						</eq>
+					</or>
+					<then>
+						<verify step="2" requirements="RFC4" group="100rel">
+							<dnc>
+								<msg_ref type="sip" hdr_instance="any">18x-Invite.Require</msg_ref>
+								<expr>100rel</expr>
+							</dnc>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<transition to="END" event="xxx-INVITE"/>
+		</state>
+	</add_to>
+</pc2xml>

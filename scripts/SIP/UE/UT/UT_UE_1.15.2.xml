@@ -1,0 +1,30 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+
+<pc2xml version="$Revision: 8188 $" name="UT_UE_1.15.2" descrip="This is a unit test script for testing the UE_1.15.2 test script." number="1">
+	<template name="UE0" file="$UT_PATH/Templates/ut/RegSub_DUT.xml"/>
+	<add_to fsm="UE0">
+		<transition from="Subscribe" to="Wait" event="503-Subscribe"/>
+		<transition from="Subscribe" to="END" event="200-Subscribe"/>
+		<state ID="Wait" timer="50000">
+			<transition to="Subscribe" event="TimerExpired"/>
+		</state>
+	</add_to>
+</pc2xml>

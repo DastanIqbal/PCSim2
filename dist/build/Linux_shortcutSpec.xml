@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes" ?>
+
+<shortcuts>
+
+  <skipIfNotSupported />
+
+  <programGroup defaultName="CableLabs/PCSim2" />
+
+
+  <shortcut
+     name="PCSim2"
+     programGroup="yes"
+     desktop="yes"
+     applications="no"
+     startMenu="no"
+     startup="no"
+     target="$INSTALL_PATH/bin/PCSim2.sh"
+     commandLine=""
+     iconFile="$INSTALL_PATH/bin/pcsim2.ico"
+     iconIndex="0"
+     initialState="noShow"
+	 workingDirectory="$INSTALL_PATH/bin"
+     description="PacketCable 2.0 Simultation Tool"
+     type="Application"
+     encoding="UTF-8"
+     terminal="true"
+     KdeSubstUID="false">
+     <createForPack name="Core"/>
+   
+   </shortcut>
+
+
+   <shortcut
+     name="PCSim2 Uninstaller"
+     programGroup="yes"
+     desktop="no"
+     applications="no"
+     startMenu="no"
+     startup="no"
+     target="$INSTALL_PATH/bin/PCSim2_Uninstaller.sh"
+     commandLine=""
+	 workingDirectory="$INSTALL_PATH/bin"
+     initialState="noShow"
+     type="Application"
+     encoding="UTF-8"
+     description="Uninstalls the PCSim2 tool.">
+     <createForPack name="Core" />
+   </shortcut>
+</shortcuts>

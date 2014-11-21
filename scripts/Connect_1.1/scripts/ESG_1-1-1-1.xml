@@ -1,0 +1,434 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History:
+ 	2011-09-20	prosenberg-watt - Initial version
+	2011-11-15	Seung Lee - final version
+
+
+
+
+-->
+<pc2xml version="$Revision: 1 $" 
+	name="ESG 1.1.1.1" 
+	descrip="Registration Mode" 
+	number="ESG 1.1.1.1">
+	
+	
+	<fsm name="Register">
+		<configure name="SIP Inspector Type" value="UE"/>
+		<configure name="SIP Inspector" value="enable"/>
+		
+		<models>
+			<registrar/>
+		</models>
+
+		<NE sim_type="term" elements="SCSCF1 PCSCF1" targets="SCSCF1 PCSCF1 3033920001 3034090001"/>
+
+		<states initialstate="Reboot">
+		
+			<state ID="Reboot" timer="5000">
+				<prelude once="true">
+					<start_capture>
+						<filter>
+							<var_expr>
+								<expr>host </expr>
+								<msg_ref type="platform">UE0.IP</msg_ref>
+								<expr> || host </expr>
+								<msg_ref type="platform">UE0.IP2</msg_ref>
+								<expr> || host </expr>
+								<msg_ref type="platform">PCSCF1.IP</msg_ref>
+								<expr> || host </expr>
+								<msg_ref type="platform">UE1.IP</msg_ref>
+							</var_expr>
+						</filter>
+					</start_capture>
+					<log expr="Reset or restart the PBX." step="2" promptUser="true"/>
+				</prelude>
+				<transition to="PendingRegistration" event="TimerExpired"/>
+			</state>
+			
+			<state ID="PendingRegistration">
+				<response>		
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>REGISTER</expr>
+						</eq>
+						<!-- Step-2 from the Default Message Flow - UE Registration (DUT) Sequence Diagram- send 401-REGISTER-->
+						<then>
+							<send protocol="sip" msgtype="401-REGISTER"/>
+						</then>
+					</if>
+					<var name="UE0domain">
+						<var_expr>
+								<expr>sip:</expr>
+								<msg_ref type="Platform">UE0.domain</msg_ref>
+						</var_expr>
+					</var>
+					
+					<var name="UE0pui">
+						<var_expr>
+								<expr>sip:</expr>
+								<msg_ref type="Platform">UE0.pui</msg_ref>
+						</var_expr>
+					</var>
+					
+					<var name="UE0IP">
+						<var_expr>
+							<expr>sip:</expr>
+							<msg_ref type="Platform">UE0.IP</msg_ref>
+							<expr>:</expr>
+							<msg_ref type="Platform">UE0.UDPPort</msg_ref>
+							<expr>;bnc</expr>
+						</var_expr>
+					</var>
+					
+					<verify step="3" requirements="REQ24336">
+						<eq>
+							<msg_ref type="sip">REGISTER.Request-Line.Request-URI</msg_ref>
+							<var_ref name="UE0domain"/>
+						</eq>
+					</verify>
+					<verify step="3" requirements="REQ24336">
+						<eq>
+							<msg_ref type="sip">REGISTER.Proxy-Require</msg_ref>
+							<expr>gin</expr>
+						</eq>
+					</verify>
+					<verify step="3" requirements="REQ24336">
+						<eq>
+							<msg_ref type="sip">REGISTER.Require</msg_ref>
+							<expr>gin</expr>
+						</eq>
+					</verify>
+					<verify step="3" requirements="REQ24336">
+						<eq>
+							<msg_ref type="sip">REGISTER.Supported</msg_ref>
+							<expr>path</expr>
+						</eq>
+					</verify>
+					<verify step="3" requirements="REQ24336">
+						<contains>
+							<msg_ref type="sip">REGISTER.To</msg_ref>
+							<var_ref name="UE0pui"/>
+						</contains>
+					</verify>
+					<verify step="3" requirements="REQ24336">
+						<contains>
+							<msg_ref type="sip">REGISTER.From</msg_ref>
+							<var_ref name="UE0pui"/>
+						</contains>
+					</verify>
+					<verify step="3" requirements="REQ24336">
+						<contains>
+							<msg_ref type="sip">REGISTER.Contact</msg_ref>
+							<var_ref name="UE0IP"/>
+						</contains>
+					</verify>
+					<verify step="3" requirements="REQ24336">
+						<contains>
+							<msg_ref type="sip">REGISTER.ALLOW-EVENT</msg_ref>
+							<expr>VQ-RTCPXR</expr>
+						</contains>
+					</verify>
+					
+				</response>
+				<transition to="Authorization" event="REGISTER"/>
+			</state>
+
+			<state ID="Authorization">
+				<response>
+					<if>
+						<or>
+							<eq>
+								<msg_ref type="event"/>
+								<expr>AuthenticateSucceed</expr>
+							</eq>
+							<eq>
+								<msg_ref type="event"/>
+								<expr>AuthenticateFailed</expr>
+							</eq>
+						</or>
+						<then>
+							<!-- this is to prevent the AuthenticateFailed from being forwarded
+									to the next state on the AuthenticateSucceed -->
+						</then>
+						<elseif>
+							<and>
+								<eq>
+									<msg_ref type="sip">Request</msg_ref>
+									<expr>REGISTER</expr>
+								</eq>
+								<and>
+									<contains>
+										<msg_ref type="sip">REGISTER</msg_ref>
+										<expr>Authorization</expr>
+									</contains>
+									<digest/>
+								</and>
+							</and>
+							<then>
+								<generate event="AuthenticateSucceed"/>
+							</then>
+							<else>
+								<generate event="AuthenticateFailed"/>
+								<send protocol="sip" msgtype="503-Register"/>
+							</else>
+						</elseif>
+					</if>
+				</response>
+
+				<transition to="Registered" event="AuthenticateSucceed" />
+				<transition to="END" event="AuthenticateFailed"/>
+				<transition to="Authorization" event="REGISTER"/>
+			</state>
+			
+			<state ID="Registered">
+				<prelude once="True">
+					<send protocol="sip" msgtype="200-Register"/>
+					<generate event="SucceedEvent" fsm="Proxy Term" />
+				</prelude>
+				
+				<postlude>
+					<stop_capture/>	
+				</postlude>
+				
+				<!-- Transitions for Registered state -->
+				<transition to="Registered" event="REGISTER"/>
+			</state>
+			
+		</states>
+	</fsm>
+	
+	<fsm name="Proxy Term">
+		<models>
+			<session/>
+		</models>
+
+		<NE sim_type="term" elements="SCSCF1 PCSCF1" targets="SCSCF1 PCSCF1 3033920001 3034090001"/>
+
+		<states initialstate="Register">
+
+			<state ID="Register" sleep="120000" >
+				<prelude>
+					<start_capture>
+						<filter>
+							<var_expr>
+								<expr>host </expr>
+								<msg_ref type="platform">UE0.IP</msg_ref>
+								<expr> || host </expr>
+								<msg_ref type="platform">UE0.IP2</msg_ref>
+								<expr> || host </expr>
+								<msg_ref type="platform">PCSCF1.IP</msg_ref>
+								<expr> || host </expr>
+								<msg_ref type="platform">UE1.IP</msg_ref>
+							</var_expr>
+						</filter>
+					</start_capture>
+				</prelude>
+				<transition to="OffHook" event="SucceedEvent"/>
+			</state>
+			
+			<state ID="OffHook">
+				<prelude>
+					<send protocol="utility" msgtype="OffHook">
+						<mod modtype="replace" hdr="voiceport">
+						   <msg_ref type="platform">Platform.voiceport1</msg_ref>
+						</mod>
+					</send>
+				</prelude>
+				<transition to="Setup" event="OffHookComplete"/>
+			</state>
+			
+			<!-- SETUP State -->
+			<!-- The state machine will wait in the Setup state until it 
+				 receives an Invite from the originating UE or the fail timeout occurs. -->
+			<state ID="Setup">
+				<prelude once="true">
+					<send protocol="utility" msgtype="DialDigits">
+						<mod modtype="add" hdr="number">
+							<msg_ref type="platform">UE0.phone number 1</msg_ref>
+						</mod>
+						<mod modtype="replace" hdr="voiceport">
+						   <msg_ref type="platform">Platform.voiceport1</msg_ref>
+						</mod>
+					</send>
+				</prelude>
+				<response>
+					<if>
+						<or>
+							<eq>
+								<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE1.IP</msg_ref>
+							</eq>
+							<eq>
+								<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE1.IP</msg_ref>
+							</eq>
+						</or>
+						<then>
+							<proxy target="UE0">
+								<mod modtype="replace" hdr="Request-Line" param="domain">
+									<msg_ref type="platform">UE0.IP</msg_ref>
+								</mod>
+							</proxy>
+						</then>
+						<elseif>
+							<or>
+								<eq>
+									<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+									<msg_ref type="platform">UE0.IP</msg_ref>
+								</eq>
+								<eq>
+									<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+									<msg_ref type="platform">UE0.IP</msg_ref>
+								</eq>
+							</or>
+							<then>
+								<proxy target="UE1"/>
+							</then>
+						</elseif>
+					</if>
+				</response>
+				<transition to="Setup" event="DialDigitsComplete"/>
+				<transition to="Setup" event="INVITE"/>
+				<transition to="Alerting" event="CANCEL"/>
+				<transition to="Alerting" event="xxx-INVITE"/>
+				<transition to="Setup" event="OffHookComplete"/>
+			</state>
+			<!-- Alerting State -->
+			<!-- The state machine will wait in the Setup state until it 
+				 receives an Invite from the originating UE or the fail timeout occurs. -->
+			<state ID="Alerting" timer="6000">
+				<response>
+					<if>
+						<or>
+							<eq>
+								<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE1.IP</msg_ref>
+							</eq>
+							<eq>
+								<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE1.IP</msg_ref>
+							</eq>
+						</or>
+						<then>
+							<proxy target="UE0"/>
+						</then>
+						<elseif>
+							<or>
+								<eq>
+									<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+									<msg_ref type="platform">UE0.IP</msg_ref>
+								</eq>
+								<eq>
+									<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+									<msg_ref type="platform">UE0.IP</msg_ref>
+								</eq>
+							</or>
+							<then>
+								<proxy target="UE1"/>
+							</then>
+						</elseif>
+					</if>
+					<if>
+						<eq>
+							<msg_ref type="event"/>
+							<expr>TimerExpired</expr>
+						</eq>
+						<then>
+							<log expr="Is the PBX extension ringing?" step="5" promptUser="true" verify="True"/>
+							<send protocol="utility" msgtype="OffHook">
+								<mod modtype="replace" hdr="voiceport">
+									<msg_ref type="platform">Platform.voiceport0</msg_ref>
+								</mod>
+							</send>
+						</then>
+					</if>
+				</response>
+				<transition to="Alerting" event="INVITE"/>
+				<transition to="Alerting" event="OPTIONS"/>
+				<transition to="Alerting" event="200-OPTIONS"/>
+				<transition to="Alerting" event="PRACK"/>
+				<transition to="Alerting" event="200-PRACK"/>
+				<transition to="Alerting" event="UPDATE"/>
+				<transition to="Alerting" event="200-UPDATE"/>
+				<transition to="Alerting" event="xxx-INVITE"/>
+				<transition to="Alerting" event="OffHookComplete"/>
+				<transition to="Connected" event="ACK"/>
+			</state>
+			<!-- CONNECTED State -->
+			<state ID="Connected" timer="10000">
+				<transition to="OnHook" event="TimerExpired"/>
+			</state>
+			<!-- OnHook State -->
+			<state ID="OnHook">
+				<prelude once="true">
+					<send protocol="utility" msgtype="OnHook">
+						<mod modtype="replace" hdr="voiceport">
+						   <msg_ref type="platform">Platform.voiceport1</msg_ref>
+						</mod>
+					</send>
+				</prelude>
+				<response>
+					<if>
+						<or>
+							<eq>
+								<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE1.IP</msg_ref>
+							</eq>
+							<eq>
+								<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE1.IP</msg_ref>
+							</eq>
+						</or>
+						<then>
+							<proxy target="UE0"/>
+						</then>
+						<elseif>
+							<or>
+								<eq>
+									<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+									<msg_ref type="platform">UE0.IP</msg_ref>
+								</eq>
+								<eq>
+									<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+									<msg_ref type="platform">UE0.IP</msg_ref>
+								</eq>
+							</or>
+							<then>
+								<proxy target="UE1"/>
+							</then>
+						</elseif>
+					</if>
+				</response>
+				<transition to="OnHook" event="OnHookComplete"/>
+				<transition to="OnHook" event="Bye"/>
+				<transition to="OnHookUE1" event="200-Bye"/>
+			</state>
+			<!-- OnHook State -->
+			<state ID="OnHookUE1">
+				<prelude>
+					<send protocol="utility" msgtype="OnHook"/>
+				</prelude>
+
+				<postlude>
+					<stop_capture/>	
+				</postlude>
+				
+				<transition to="END" event="OnHookComplete"/>
+			</state>
+		</states>
+	</fsm>
+	
+</pc2xml>

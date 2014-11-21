@@ -1,0 +1,168 @@
+#//****************************************************************************
+#// Filename: E-UE-DATA_1-1-1-7.test
+#// Author:   Matthew Forbes
+#// Creation Date: 11/09/2008
+#// Modified by:
+#//
+#//
+#//
+#//****************************************************************************
+#// Description:
+#//     TC2739 TEST CASE E-UE-DATA 1.1.1.7 Ability of eUE to Support Battery Backup MIBs
+#//        (Scenario 6)
+#//
+#// Objective:
+#//     If the eUE supports battery backup, this test verifies the read-only and read-write functionality
+#//     for a subset of battery backup MIB objects. Additionally, this test checks functionality for specific
+#//     battery usage.
+#//
+#// PacketCable DUT:
+#//     EDVA
+#//
+#// Test Steps:
+#//     - Initial configuration
+#//     - Start sniffer
+#//     - Reset EDVA
+#//     - Check Provisioning state
+#//     - Check values MIB values
+#//     - Check read-write capablities
+#//     - Stop Sniffer
+#//
+#// Notes:
+#//     - Requires provPrimitives.tcl & tftp_primitives.tcl.
+#//     - Requires the specific config file in $BASE_CFG_FILE_PATH in Provisioning Server.
+#//****************************************************************************
+
+set SCRIPT_VERSION { # $Id: E-UE-DATA_1-1-1-7.test 7406 2010-07-20 17:17:37Z dthakore $ }
+global SCRIPT_VERSION
+
+DoStep "E-UE-DATA_1-1-1-7_1-1" "Configure DUT" {
+    LogMsg "--- Configure DUT ---"
+    Init_PROV
+    PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122 Device_Level_Secure.cfg
+    PROV_DEPLOY_DHCP
+} {PASS_STEP}
+
+DoStep "E-UE-DATA_1-1-1-7_1-2" "Verify Battery" {
+    tk_messageBox -message "Please ensure a battery is installed in the EDVA and AC power is connected, then press OK"
+} {
+    PASS_STEP
+}
+
+################################# START SNIFFER ###############################
+
+DoStep "E-UE-DATA_1-1-1-7_1-3" "Start sniffer" {
+    LogMsg "--- Start sniffer ---"
+    Init_CONTROLLER_LAN
+    SetupCaptureControllerLan "host $MTA_IP || udp port 67 || host $CM_IP"
+    StartCaptureControllerLan
+} {PASS_STEP}
+
+################ RESET CM and MTA and VERIFY PROVISIONING STATE ################
+
+DoStep "E-UE-DATA_1-1-1-7_1-4" "Reset EDVA" {
+    set val [SNMPvN_RESET $CM_IP]
+    LogMsg "Reset of CM and DVA has passed"
+} {
+    IsEqual $val 0
+}
+DoStep "E-UE-DATA_1-1-1-7_1-5" "pktcMtaDevProvisioningState Content Verification" {
+    actionWait "Wait for EDVA to reboot" 65
+    # Get the OID from the EDVA and check it using our previously defined
+    set val [SNMP_GET $oid_pktcMtaDevProvisioningState $MTA_IP 20]
+    LogMsg "The Value of EDVA Provisioning State is: $val"
+} {
+    IsEqual $val 1
+}
+
+
+#
+# Set upsRebootWithDuration to 60
+#
+DoStep "E-UE-DATA_1-1-1-7_2-1" "Set upsRebootWithDuration to 60" {
+    set result [SNMPvN_SET .1.3.6.1.2.1.33.1.8.4.0 INTEGER 60 $CM_IP]
+} {
+    compare_value $result 0 ;# Verify set was successful
+}
+
+#
+# Retrieve value from previous step
+#
+DoStep "E-UE-DATA_1-1-1-7_3" "get upsRebootWithDuration" {
+    set result [SNMPvN_GET .1.3.6.1.2.1.33.1.8.4.0 $CM_IP]
+} {
+    # Verify value is equal to or less than what was set in previous step
+    set failval 0
+    if {$result > 60} {
+        set failval 1
+        LogMsg "!! upsRebootWithDuration is not less than or equal to 60"
+    }
+    FAIL_PASS_STEP $failval
+}
+
+#
+# Verify EDVA is alive
+#
+DoStep "E-UE-DATA_1-1-1-7_4" "Verify EDVA is alive" {
+    set result [SNMPvN_PING $CM_IP]
+    if {$result == 0} {
+        LogMsg "!! The MTA shut down after AC power was removed"
+    }
+} {
+    compare_value $result 1 ;# verify mta is alive (1)
+}
+
+#
+# Set upsShutdownType to 1
+#
+DoStep "E-UE-DATA_1-1-1-7_5" "set upsShutdownType to 1" {
+    set result [SNMPvN_SET .1.3.6.1.2.1.33.1.8.1.0 INTEGER 1 $CM_IP]
+} {
+    compare_value $result 0 ;# Verify set was successful
+}
+
+#
+# Disconnect AC
+#
+DoStep "E-UE-DATA_1-1-1-7_8" "Disconnect AC Power" {
+    tk_messageBox -message "Please disconnect AC power and press OK"
+} {
+    PASS_STEP
+}
+
+#
+# Verify device has lost power
+#
+DoStep "E-UE-DATA_1-1-1-7_10" "get upsShutdownType" {
+    LogMsg " Verify DUT shuts down "
+    set result [SNMPvN_PING $CM_IP]
+    if {$result == 1} {
+        LogMsg "!! The MTA did not shut down"
+    }
+} {
+    compare_value $result "0";# Verify MTA is not alive
+}
+
+#
+# Reconnect AC
+#
+DoStep "E-UE-DATA_1-1-1-7_12" "Reconnect AC" {
+    tk_messageBox -message "Please reconnect the AC, and press OK"
+    actionWait "Wait for MTA to reboot" 60
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMP_GET $oid_pktcMtaDevProvisioningState $MTA_IP 20]
+    LogMsg "The Value of EDVA Provisioning State is: $val"
+} {
+    IsEqual $val 1
+}
+
+##################### STOP SNIFFER AND SAVE CAPTURE FILES #####################
+
+DoStep "E-UE-DATA_1-1-1-7_9-1" "Stop sniffer" {
+    LogMsg "--- Stop sniffer ---"
+    StopCaptureControllerLan
+    SaveToFileControllerLan
+} { PASS_STEP }
+
+Cleanup
+

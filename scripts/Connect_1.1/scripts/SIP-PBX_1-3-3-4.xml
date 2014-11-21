@@ -1,0 +1,174 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	2011-11-15	Seung Lee - final versionfor
+
+
+
+
+-->
+
+<!-- First are the document type and the attributes for our document -->
+<pc2xml version="$Revision: 1 $" 
+	name="SIP-PBX 1.3.3.4" 
+	descrip="Blind Call Transfer (Early Media) SP Control" 
+	number="SIP-PBX 1.3.3.4">
+
+	<template file="./templates/CallTermAtUETemp.xml" name="UE1"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Register"/>
+		<state ID="Connected"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		
+		<state ID="Register">
+			<prelude>
+				<start_capture>
+					<filter>
+						<var_expr>
+							<expr>host </expr>
+							<msg_ref type="platform">UE0.IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">UE0.IP2</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">PCSCF1.IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">UE1.IP</msg_ref>
+						</var_expr>
+					</filter>
+				</start_capture>
+			</prelude>
+			<transition to="Setup" event="Registered"/>
+		</state>
+		
+		<state ID="Connected">
+			<prelude once="true">
+				<send protocol="sip" msgtype="ACK"/>
+				<generate event="Branch2Event"/>
+			</prelude>
+			<transition to="HoldCall" event="Branch2Event"/>
+		</state>
+		
+		<state ID="HoldCall">
+			<prelude once="true">
+				<sleep time="5000"/>
+				<send protocol="sip" msgtype="REINVITE">
+					<mod modtype="replace" hdr="mode" param="value">
+						<expr>inactive</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+						<expr>200</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="ACK"/>
+					</then>
+				</if>
+			</response>
+			<transition to="HoldCall" event="100-INVITE"/>
+			<transition to="REINV" event="200-INVITE"/>
+		</state>
+		
+		<state ID="REINV">
+			<prelude once="true">
+				<sleep time="5000"/>
+				<send protocol="sip" msgtype="REINVITE">
+					<mod modtype="replace" hdr="mode" param="value">
+						<expr>sendrecv</expr>
+					</mod>
+					<mod modtype="replace" hdr="o" param="user">
+						<msg_ref type="platform">UE2.phone number 1</msg_ref>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+						<expr>200</expr>
+					</eq>
+					<then>
+						<var name="targetIP">
+							<msg_ref type="sdp">Response.c.address</msg_ref>
+						</var>
+						<var name="targetPort">
+							<msg_ref type="sdp">Response.audio.port</msg_ref>
+						</var>
+						<start_stream name="tone1" file="../config/tones/tone1.rtp" format="G711">
+							<to>
+								<ip>
+									<var_ref name="targetIP"/>
+								</ip>
+								<port>
+									<var_ref name="targetPort"/>
+								</port>
+							</to>
+							<from>
+								<ip>
+									<msg_ref type="platform">Platform.STUN IP Address</msg_ref>
+								</ip>
+								<port>
+									<msg_ref type="platform">Platform.RTP Port1</msg_ref>
+								</port>
+							</from>
+						</start_stream>
+						<send protocol="sip" msgtype="ACK"/>
+						<log promptUser="True" yesExpected="True" verify="True" step="5" requirements="REQ24257, REQ24259" expr="Verify the special ring tone is audible on the SIP-PBX extension."/>
+						<generate event="SucceedEvent"/>
+			
+					</then>
+				</if>
+			</response>
+			<transition to="REINV" event="100-INVITE"/>
+			<transition to="REINV" event="200-INVITE"/>
+			<transition to="Transfer" event="SucceedEvent"/>
+		</state>
+		
+		<state ID="Transfer">
+			<prelude once="True">
+				<sleep time="5000"/>
+				<send protocol="sip" msgtype="REINVITE">
+					<mod modtype="replace" hdr="mode" param="value">
+						<expr>sendrecv</expr>
+					</mod>
+					<mod modtype="replace" hdr="o" param="user">
+						<msg_ref type="platform">UE2.phone number 1</msg_ref>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+						<expr>200</expr>
+					</eq>
+					<then>
+						<stop_stream name="tone1"/>
+						<send protocol="sip" msgtype="ACK"/>
+						<log promptUser="True" yesExpected="True" verify="True" step="6" requirements="REQ24257, REQ24259, REQ24268, REQ24269" expr="Verify the special ring tone is not audible any more on the SIP-PBX extension."/>
+						<generate event="Branch1Event"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Transfer" event="100-INVITE"/>
+			<transition to="Transfer" event="200-INVITE"/>
+			<transition to="Releasing" event="Branch1Event"/>
+		</state>
+	</add_to>
+</pc2xml>

@@ -1,0 +1,200 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	PCPCII-146 : Add a test to the if statement in the VerifyNoACK state to have the verify operate if an
+		ACK message is received. Also add a transition to end if we receive the ACK. (ghassler 10/30/2009)
+	PCPCII-173 : Update script to have new requirement for step 3. (ghassler 01/22/2010)
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="SIP-UE 1.6.1.1" 
+	descrip="UAC Use of Timers A and B (UDP case)" 
+	number="SIP-UE 1.6.1.1">
+	
+	<template file="./templates/CallOrigAtUETemp.xml" name="UE1"/>
+	<configure name="FSM Process Duplicate Messages" value="true"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Setup"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<state ID="Setup">
+			<prelude once="true">
+				<send protocol="utility" msgtype="DialDigits">
+					<mod modtype="add" hdr="number">
+						<msg_ref type="platform">UE1.phone number 1</msg_ref>
+					</mod>
+				</send>
+			</prelude>
+			<transition to="Setup" event="DialDigitsComplete"/>
+			<transition to="Timer1" event="Invite"/>
+		</state>
+		
+		<state ID="Timer1">
+			<response>
+				<if>
+					<neq>
+						<msg_ref type="event"/>
+						<expr>INVITE_RECEIVED_UAS</expr>
+					</neq>
+					<then>
+						<verify step="2" requirements="RFC950, RFC952, RFC954, RFC955, RFC956, RFC957, RFC958">
+							<and>
+								<gte>
+									<msg_ref type="sip">INVITE.TIMESTAMP</msg_ref>
+									<add_ref type="sip" msg_instance="prev" value="400">INVITE.TIMESTAMP</add_ref>
+								</gte>
+								<lte>
+									<msg_ref type="sip">INVITE.TIMESTAMP</msg_ref>
+									<add_ref type="sip" msg_instance="prev" value="600">INVITE.TIMESTAMP</add_ref>
+								</lte>
+							</and>
+						</verify>
+						<verify step="1" requirements="RFC951">
+							<eq>
+								<msg_ref type="sip">INVITE.Transport</msg_ref>
+								<expr>UDP</expr>
+							</eq>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<transition to="Timer2" event="Invite"/>
+		</state>
+		
+		<state ID="Timer2">
+			<response>
+				<verify step="2" requirements="RFC950, RFC952, RFC954, RFC955, RFC956, RFC957, RFC958">
+					<and>
+						<gte>
+							<msg_ref type="sip">INVITE.TIMESTAMP</msg_ref>
+							<add_ref type="sip" msg_instance="prev" value="900">INVITE.TIMESTAMP</add_ref>
+						</gte>
+						<lte>
+							<msg_ref type="sip">INVITE.TIMESTAMP</msg_ref>
+							<add_ref type="sip" msg_instance="prev" value="1100">INVITE.TIMESTAMP</add_ref>
+						</lte>
+					</and>
+				</verify>
+			</response>
+			<transition to="Timer3" event="Invite"/>
+		</state>
+		
+		<state ID="Timer3">
+			<response>
+				<verify step="2" requirements="RFC950, RFC952, RFC954, RFC955, RFC956, RFC957, RFC958">
+					<and>
+						<gte>
+							<msg_ref type="sip">INVITE.TIMESTAMP</msg_ref>
+							<add_ref type="sip" msg_instance="prev" value="1900">INVITE.TIMESTAMP</add_ref>
+						</gte>
+						<lte>
+							<msg_ref type="sip">INVITE.TIMESTAMP</msg_ref>
+							<add_ref type="sip" msg_instance="prev" value="2100">INVITE.TIMESTAMP</add_ref>
+						</lte>
+					</and>
+				</verify>
+			</response>
+			<transition to="Timer4" event="Invite"/>
+		</state>
+		
+		<state ID="Timer4">
+			<response>
+				<verify step="2" requirements="RFC950, RFC952, RFC954, RFC955, RFC956, RFC957, RFC958">
+					<and>
+						<gte>
+							<msg_ref type="sip">INVITE.TIMESTAMP</msg_ref>
+							<add_ref type="sip" msg_instance="prev" value="3900">INVITE.TIMESTAMP</add_ref>
+						</gte>
+						<lte>
+							<msg_ref type="sip">INVITE.TIMESTAMP</msg_ref>
+							<add_ref type="sip" msg_instance="prev" value="4100">INVITE.TIMESTAMP</add_ref>
+						</lte>
+					</and>
+				</verify>
+			</response>
+			<transition to="Timer5" event="Invite"/>
+		</state>
+		
+		<state ID="Timer5">
+			<response>
+				<verify step="2" requirements="RFC950, RFC952, RFC954, RFC955, RFC956, RFC957, RFC958">
+					<and>
+						<gte>
+							<msg_ref type="sip">INVITE.TIMESTAMP</msg_ref>
+							<add_ref type="sip" msg_instance="prev" value="7900">INVITE.TIMESTAMP</add_ref>
+						</gte>
+						<lte>
+							<msg_ref type="sip">INVITE.TIMESTAMP</msg_ref>
+							<add_ref type="sip" msg_instance="prev" value="8100">INVITE.TIMESTAMP</add_ref>
+						</lte>
+					</and>
+				</verify>
+			</response>
+			<transition to="Timer6" event="Invite"/>
+		</state>
+		
+		<state ID="Timer6">
+			<response>
+				<verify step="2" requirements="RFC950, RFC952, RFC954, RFC955, RFC956, RFC957, RFC958">
+					<and>
+						<gte>
+							<msg_ref type="sip">INVITE.TIMESTAMP</msg_ref>
+							<add_ref type="sip" msg_instance="prev" value="15900">INVITE.TIMESTAMP</add_ref>
+						</gte>
+						<lte>
+							<msg_ref type="sip">INVITE.TIMESTAMP</msg_ref>
+							<add_ref type="sip" msg_instance="prev" value="16100">INVITE.TIMESTAMP</add_ref>
+						</lte>
+					</and>
+				</verify>
+			</response>
+			<transition to="VerifyNoACK" event="Invite"/>
+		</state>
+		
+		<!-- Step 2 from test case SIP 1.6.1.1 - Wait for 32 seconds. -->
+		<state ID="VerifyNoACK" timer="12000">
+			<prelude>
+				<sleep time="2000"/>
+				<send protocol="sip" msgtype="404-INVITE"/>
+			</prelude>
+			<response>
+				<if>
+					<or>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>ACK</expr>
+						</eq>
+						<eq>
+							<msg_ref type="event"/>
+							<expr>TimerExpired</expr>
+						</eq>
+					</or>
+					<then>
+						<verify step="3" requirements="RFC670, RFC953, RFC959">
+							<neq>
+								<msg_ref type="sip">Request</msg_ref>
+								<expr>ACK</expr>
+							</neq>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<transition to="END" event="ACK"/>
+			<transition to="END" event="TimerExpired"/>
+		</state>
+	</add_to>
+</pc2xml>

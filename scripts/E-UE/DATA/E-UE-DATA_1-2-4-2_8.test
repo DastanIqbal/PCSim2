@@ -1,0 +1,98 @@
+#//********************************************************************
+#// Filename: E-UE-DATA_1-2-4-2_8.test
+#// Author: Matthew Forbes
+#// Creation Date: 11/10/2008
+#// Modified by:
+#//
+#//
+#//********************************************************************
+#// Description:
+#//    TC1592 Test Case E-UE-DATA_1-2-4-2_8 pktcDevEvLogEndpointName Content Verification
+#//
+#//
+#// Objective:
+#//    To verify the content of the MIB object pktcDevEvLogEndpointName
+#//
+#// PacketCable DUT:
+#//    MTA
+#//
+#// Test Steps:
+#//    - Initial configuration
+#//    - Start sniffer
+#//    - TFTP GET MTA config file
+#//    - TFTP PUT and SNMP RESET
+#//    - Check Provisioning state
+#//    - Perform mib check
+#//    - Stop sniffer
+#//    - Delete MTA config file
+#//    
+#//
+#// Notes:
+#//    - Requires the specific config file in $BASE_CFG_FILE_PATH in Provisioning Server.
+#//************************************************************************
+global SCRIPT_VERSION
+set SCRIPT_VERSION { # $Id: E-UE-DATA_1-2-4-2_8.test 7406 2010-07-20 17:17:37Z dthakore $ }
+
+set test_case E-UE-DATA_1-2-4-2_8-
+set step_num 1
+
+DoStep ${test_case}${step_num} "Initial Configuration" {
+    LogMsg "--- Init PROV module ---"
+    Init_PROV
+    # ProvCreateConfig 291 $MTA_MAC
+    PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122 Device_Level_Secure.cfg
+    PROV_DEPLOY_DHCP
+    
+} {PASS_STEP}
+
+
+DoStep ${test_case}[incr step_num] "Start sniffer" {
+    LogMsg "--- Start sniffer ---"
+    Init_CONTROLLER_LAN
+    SetupCaptureControllerLan "host $MTA_IP || udp port 67"
+    StartCaptureControllerLan 
+} {PASS_STEP}
+
+DoStep ${test_case}[incr step_num] "SNMP RESET" {
+    SNMP_SET $oid_pktcMtaDevResetNow INTEGER 1 $MTA_IP
+    actionWait "Wait for MTA to reboot" 60
+} {PASS_STEP}
+
+DoStep ${test_case}[incr step_num] "pktcMtaDevProvisioningState Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMP_GET $oid_pktcMtaDevProvisioningState $MTA_IP 20]
+    LogMsg "The Value of MTA Provisioning State is: $val"
+} {IsEqual $val 1}
+
+DoStep ${test_case}[incr step_num] "pktcDevEvLogIndex Content Verification" {
+    set command PASS_STEP
+    set index 0
+    set pc_event_text [list "Provisioning Complete"]     
+    set text_list [SNMP_TABLE_GET $oid_pktcDevEvLogText $MTA_IP LIST 20]
+    foreach pctext $pc_event_text {    
+        set search_index [lsearch $text_list $pctext]       
+        if {$search_index == -1} {
+            LogMsg "ERROR: Unable to locate Provisioning Complete Log index value = $search_index"
+            set command FAIL_STEP
+        } else {set index [expr $search_index +1]; break}   
+    }
+    set index [SNMP_TABLE_GET $oid_pktcDevEvLogIndex $MTA_IP $index] 
+    if {$index == ""} { set command FAIL_STEP } 
+} {eval $command}
+
+DoStep ${test_case}[incr step_num] "pktcDevEvLogEndpointName Content Verification" {
+    set type STRING
+    # set default_value "\<${MTA_NAME}\>\/\<${MTA_IP}\>"
+    set default_value "${MTA_NAME}\/${MTA_IP}"
+    set new_value "${MTA_NAME2}\/${MTA_IP2}"
+} {SnmpROVerify ${oid_pktcDevEvLogEndpointName}.$index $MTA_IP $type $default_value $new_value}
+
+DoStep ${test_case}[incr step_num] "Stop sniffer" {
+    LogMsg "--- Stop sniffer ---"
+    StopCaptureControllerLan
+    SaveToFileControllerLan 
+} {PASS_STEP}
+
+
+
+Cleanup

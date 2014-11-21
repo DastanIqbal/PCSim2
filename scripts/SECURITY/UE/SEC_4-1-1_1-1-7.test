@@ -1,0 +1,930 @@
+#//**************************************************************************
+#// Filename: SEC_1-1-7.test
+#// Author: Rachapong Pornwiriyangkura
+#// Creation Date: August 22, 2002
+#// Modified by : 
+#//     03-12-2003(Ikdia) 
+#//             - Added PASS_STEP at STEP 17,18,19,20.
+#//     04-09-2003(Titintorn Y)
+#//             - Add LogMsg in STEP 17 through 20 instead of comment out the verify messages.
+#//     Titintorn Yaemnoi on August 29, 2003
+#//     - Check for kvno in Step 16-2 and step 21-2
+#//     - Add PacketCable DUT
+#//     Titintorn Y. on October 23, 2003
+#//     - Add Reset Tickets.
+#//     - Add ethereal start/stop automatically
+#//     - Add verify SNMP is enable
+#//     Titintorn on December 3, 2003
+#//     - Check Pass/Fail in step 17-20
+#//     Titintorn on January 26, 2004
+#//     - change Wait for AP Request message after reset MTA to Wait for Provisioning Complete
+#//
+#//		03/18/09 WJN
+#//		- Changed removed set for oid_pktcMtaDevResetKrbTickets so platform default would be used
+#//		- Changed reboot to SNMP_set for PC2.0
+#//**************************************************************************
+#// Description:
+#//     TC755 TEST CASE SEC 1.1.7 AP Request During MTA 5 to MTA 14 
+#//
+#// Objective:
+#//     Verify that the MTA properly formats an AP_REQUEST message for 
+#//     establishing SNMPv3 keys with the Provisioning Server.
+#//
+#// PacketCable DUT:
+#//     MTA
+#//**************************************************************************
+global SCRIPT_VERSION
+set SCRIPT_VERSION { # $Id: SEC_4-1-1_1-1-7.test 7406 2010-07-20 17:17:37Z dthakore $ }
+
+set testName        "AP Request During MTA 5 to MTA 14"
+set stepName        "SEC_1-1-7_"
+set preStepName     "PRESTEP_SEC_1-1-7_"
+set majorStepCount  1   ;# Major step
+set minorStepCount  1   ;# Minor step
+
+Init_NCS
+
+##############################################################################
+# PRESTEP_SEC_1-1-7_1-1: Verify if SNMP is enable or not
+##############################################################################
+DoStep ${preStepName}${majorStepCount}-${minorStepCount} "verify snmp" {
+    puts "--- Verify if SNMP API is started ---" action
+} {
+    if {$SNMP_V3_API} {
+        puts "SNMPv3 API is already started"
+        PASS_STEP
+    } else {
+        puts "\
+            WARNING:
+            It seems as though you do not have a Provisioning server API application.
+            This test can not be executed without a API or sort of SNMPv3 Utility.
+            Please Enable SNMPv3 utility and restart TclSim. " action
+        FAIL_STEP "SNMPv3 API is not started"
+    }
+}
+incr majorStepCount
+
+##############################################################################
+# PRESTEP_SEC_1-1-7_2-1: Reset Tickets
+##############################################################################
+DoStep ${preStepName}${majorStepCount}-${minorStepCount} "Reset Tickets" {
+    # No messages
+} {
+    # Start sniffer
+    LogMsg "--- Start sniffer ---"
+    Init_CONTROLLER_LAN
+    SetupCaptureControllerLan "host $MTA_IP"
+    StartCaptureControllerLan 
+
+    LogMsg "--- Reset Tickets ---"    
+    # set oid_pktcMtaDevResetKrbTickets .1.3.6.1.4.1.4491.2.2.1.1.3.19.0
+    Init_PROV
+    set retCode [SNMP_SET $oid_pktcMtaDevResetKrbTickets \
+                          OCTET-STRING \
+                          0xC0 \
+                          $MTA_IP]
+
+    # Check if SNMP SET is successful
+    if {$retCode == 0} {
+        PASS_STEP
+    } else {
+        FAIL_STEP "Cannot reset tickets from NVRAM"
+    }
+}
+incr majorStepCount
+
+##############################################################################
+# SEC_1-1-7_3-1: Reset MTA
+##############################################################################
+DoStep ${preStepName}${majorStepCount}-${minorStepCount} "Reset MTA" {
+    
+    LogMsg "--- Reset MTA ---"
+    SNMP_SET $oid_pktcMtaDevResetNow INTEGER 1 $MTA_IP
+    
+    actionWait "Wait for Provisioning message" 90
+    set retCode [SNMP_GET $oid_pktcMtaDevProvisioningState $MTA_IP]
+    
+    # Perhaps MTA cannot reset with SNMP reset
+    if { $retCode != 1 } {
+        verify_signal "
+        1. MTA fail to reset with SNMP Reset command
+        2. Hard Reset MTA
+        3. Click 'YES' when ready"
+        set retCode [Wait_Msg msgIDSAEst 120]
+    }
+} {
+    if { $retCode == 1 } {
+        PASS_STEP
+        
+    } else {
+        FAIL_STEP "MTA does not send AP Request after reset"
+    }
+}
+incr majorStepCount
+
+##############################################################################
+# PRESTEP_SEC_1-1-7_4-1: Capture AP Request and print to a text file
+##############################################################################
+DoStep ${preStepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    LogMsg "--- Stop sniffer ---" action
+    StopCaptureControllerLanAfter ApReplyCMS
+    SaveToFileControllerLan 
+    }
+
+incr majorStepCount
+
+##############################################################################
+# PRESTEP_SEC_1-1-7_5-1: Decode AP Request message
+##############################################################################
+DoStep ${preStepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    puts "Set CONTINUE_PAST_STEP_ERROR flag"
+    set CONTINUE_PAST_STEP_ERROR 1 ;# Continue test next step even found one fail
+
+    set hexFileName     "SEC_1-1-7_Prov_ApReq.hex"
+    set binFileName     "SEC_1-1-7_Prov_ApReq.bin"
+
+    # Initial Parser LAN and check if it pass
+    if { [Init_PARSER_LAN "CHECKS" "$testName"] != 0 } {
+        LogMsg "!! Initial Parser LAN ERROR: - exiting"; 
+        Cleanup; 
+        return -1
+    }
+
+    # Collect raw data into array variable FR_INFO(frame#,RAWDATA,RAWDATA)
+    ParseKerberos
+    
+    # Find Provisioning AP Request. Start finding at the first frame
+    set provApRequestFrame [FindApRequest]
+    puts "AP Request frame for Provisioning server = $provApRequestFrame" action
+    
+    # Combine fragmented frame into a file.hex
+    CombineFragmentedMessage $provApRequestFrame $hexFileName
+    
+    # Convert ascii printed hex into binary file
+    ConvertHexFileToBinFile $hexFileName $binFileName
+    
+    # Call decoder
+    exec ${KRB_DECODER_FOLDER}/apdec.exe \
+         ${KERBEROS_FOLDER}/$binFileName \
+         $SNMPV3_KEY_FILE
+
+    # Pass binary data to PARSERSEC
+    set INPUT_FILE "$KERBEROS_FOLDER/${binFileName}_Decoded.txt"
+    Init_PARSER_SEC
+
+    PASS_STEP
+}
+set  majorStepCount 1
+
+##############################################################################
+# SEC_1-1-7_1-1: Verify Key Management Message ID
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    verifyValue {Key Management Message ID} \
+                {'02'H}
+}
+incr majorStepCount
+
+##############################################################################
+# SEC_1-1-7_2-1: Verify Domain Of Interpretation
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    verifyValue {Domain of Interpretation (DOI) Values} \
+                {2}
+}
+incr majorStepCount
+
+##############################################################################
+# SEC_1-1-7_3-1: Verify Protocol Version (Higher order nibble)
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    verifyValue {Protocol Version:
+                 Higher order nibble} \
+                {1}
+}
+incr minorStepCount
+
+##############################################################################
+# SEC_1-1-7_3-2: Verify Protocol Version (Lower order nibble)
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    verifyValue {Protocol Version:
+                 Lower order nibble} \
+                {0}
+}
+incr majorStepCount
+set  minorStepCount 1
+
+##############################################################################
+# SEC_1-1-7_4-1: Verify application number
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    # Cannot check Application number from the decoded message.
+    LogMsg "Tag value of AP-REQ is implicitly verified by decoder"
+    PASS_STEP
+}
+incr majorStepCount
+
+##############################################################################
+# SEC_1-1-7_5-1: Verify pvno
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    verifyValue {Kerberos AP Request:
+                 Protocol version number (pvno)} \
+                {5}
+}
+incr majorStepCount
+
+##############################################################################
+# SEC_1-1-7_6-1: Verify msg-type
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    verifyValue {Kerberos AP Request:
+                 Message type (msg-type)} \
+                {14}
+}
+incr majorStepCount
+
+##############################################################################
+# SEC_1-1-7_7-1: Verify tag value of ap-option 
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    # Cannot check Application number from the decoded message.
+    LogMsg "Tag value of ap-options is implicitly verified by decoder"
+    PASS_STEP
+}
+incr majorStepCount
+
+##############################################################################
+# SEC_1-1-7_8-1: Verify ap-option RESERVED bit
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    verifyValue {Kerberos AP Request:
+                 ap-options:
+                 RESERVED bit} \
+                {0}
+}
+incr minorStepCount
+
+##############################################################################
+# SEC_1-1-7_8-2: Verify ap-option USE-SESSION-KEY bit
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    verifyValue {Kerberos AP Request:
+                 ap-options:
+                 USE-SESSION-KEY bit} \
+                {0}
+}
+incr majorStepCount
+set  minorStepCount 1
+
+##############################################################################
+# SEC_1-1-7_9-1: Verify ap-option MUTUAL-REQUIRED bit
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    verifyValue {Kerberos AP Request:
+                 ap-options:
+                 MUTUAL-REQUIRED bit} \
+                {1}
+}
+incr majorStepCount
+
+##############################################################################
+# SEC_1-1-7_10-1: Verify tag value of ticket
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    # Cannot check Application number from the decoded message.
+    LogMsg "Tag value of ticket is implicitly verified by decoder"
+    PASS_STEP
+}
+incr majorStepCount
+
+##############################################################################
+# SEC_1-1-7_11-1: Verify tkt-vno
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    verifyValue {Kerberos AP Request:
+                 Ticket:
+                 Ticket version number (tkt-vno)} \
+                {5}
+}
+incr majorStepCount
+
+##############################################################################
+# SEC_1-1-7_12-1: Verify Realm
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    global REALM
+    
+    # Change to upper case
+    set REALM [string toupper $REALM]
+
+    verifyValue {Kerberos AP Request:
+                 Ticket:
+                 Realm (realm)} \
+                "$REALM"
+}
+incr majorStepCount
+
+##############################################################################
+# SEC_1-1-7_13-1: Verify tag value of sname
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    # Cannot check Application number from the decoded message.
+    LogMsg "Tag value of sname is implicitly verified by decoder"
+    PASS_STEP
+}
+incr majorStepCount
+
+##############################################################################
+# SEC_1-1-7_14-1: Verify sname:name-type
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    verifyValue {Kerberos AP Request:
+                 Ticket:
+                 Server name (sname): 
+                 name-type} \
+                {3}
+}
+incr majorStepCount
+
+##############################################################################
+# SEC_1-1-7_15-1: Verify sname:name-string:Number of elements
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    verifyValue {Kerberos AP Request:
+                 Ticket:
+                 Server name (sname): 
+                 name-string:
+                 Number of elements} \
+                {2}
+}
+incr minorStepCount
+
+##############################################################################
+# SEC_1-1-7_15-2: Verify sname:name-string:element[0]
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    verifyValue {Kerberos AP Request:
+                 Ticket:
+                 Server name (sname): 
+                 name-string:
+                 element[0]} \
+                {"mtaprovsrvr"}
+}
+incr minorStepCount
+
+##############################################################################
+# SEC_1-1-7_15-3: Verify sname:name-string:element[1]
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    global PROV_FQDN
+
+    # Change to lower case
+    set PROV_FQDN [string tolower $PROV_FQDN]
+
+    verifyValue {Kerberos AP Request:
+                 Ticket:
+                 Server name (sname): 
+                 name-string:
+                 element[1]} \
+                "$PROV_FQDN"
+}
+incr majorStepCount
+set  minorStepCount 1
+
+##############################################################################
+# SEC_1-1-7_16-1: Verify etype inside Ticket
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    verifyValue {Kerberos AP Request:
+                 Ticket:
+                 Encrypted part (enc-part):
+                 Encryption Type (etype)} \
+                 {5}
+}
+incr minorStepCount
+
+###############################################################################
+# SEC_1-1-7_16-2: Verify kvno inside Ticket
+###############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    verifyPresent {Kerberos AP Request:
+                   Ticket:
+                   Encrypted part (enc-part):
+                   Key Version number (kvno)}
+}
+incr majorStepCount
+set  minorStepCount 1
+##############################################################################
+# SEC_1-1-7_17-1: Verify flag in Ticket
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    set Pass 0 ;# Flag for pass test step
+     
+    # INITIAL (Bit 9), PRE-AUTHENT (Bit 10), and TRANSIT-POLICY-CHECKED 
+    # (Bit 12) may be set. Therefore, other bits must be 0.
+    LogMsg "INITIAL, PRE-AUTHENT, and TRANSIT-POLICY-CHECKED bit MAY be set"
+    verifyRegexp {Kerberos AP Request:
+                  Ticket:
+                  Encrypted part (enc-part):
+                  Ciphered text (cipher):
+                  flags} \
+                  {'00000000 0..0.000 00000000 00000000'B}
+                  
+    if { $Pass == 0 } {
+         PASS_STEP
+    } else {
+         LogMsg "!! KDC: INITIAL, PRE-AUTHENT, and TRANSIT-POLICY-CHECKED bit MAY NOT be set"
+    }
+}
+incr majorStepCount
+   
+##############################################################################
+# SEC_1-1-7_18-1: Verify cname:name-type inside Ticket
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    set Pass 0 ;# Flag for pass test step
+
+    verifyValue {Kerberos AP Request:
+                 Ticket:
+                 Encrypted part (enc-part):
+                 Ciphered text (cipher):
+                 Client Name (cname):
+                 name-type} \
+                {3}
+
+    if { $Pass == 0 } {
+         PASS_STEP
+    } else {
+         LogMsg "KDC improperly format cname:name-type:3"
+    }
+}
+incr majorStepCount
+
+##############################################################################
+# SEC_1-1-7_19-1: Verify cname:name-string:Number of elements inside Ticket
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    set Pass 0 ;# Flag for pass test step
+
+    verifyValue {Kerberos AP Request:
+                 Ticket:
+                 Encrypted part (enc-part):
+                 Ciphered text (cipher):
+                 Client Name (cname):
+                 name-string:
+                 Number of elements} \
+                {2}
+
+    if { $Pass == 0 } {
+         PASS_STEP
+    } else {
+         LogMsg "KDC improperly format cname:name-string:2"
+    }
+}
+incr minorStepCount
+
+##############################################################################
+# SEC_1-1-7_19-2: Verify cname:name-string:element[0] inside Ticket
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    set Pass 0 ;# Flag for pass test step
+
+    verifyValue {Kerberos AP Request:
+                 Ticket:
+                 Encrypted part (enc-part):
+                 Ciphered text (cipher):
+                 Client Name (cname):
+                 name-string:
+                 element[0]} \
+                {"mta"}
+    
+    if { $Pass == 0 } {
+         PASS_STEP
+    } else {
+         LogMsg "KDC improperly format cname:name-string[0]:mta"
+    }
+}
+incr minorStepCount
+
+##############################################################################
+# SEC_1-1-7_19-3: Verify cname:name-string:element[1] inside Ticket
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    global MTA_FQDN
+    set Pass 0 ;# Flag for pass test step
+    
+    # Change to lower case
+    set MTA_FQDN [string tolower $MTA_FQDN]
+
+    verifyValue {Kerberos AP Request:
+                 Ticket:
+                 Encrypted part (enc-part):
+                 Ciphered text (cipher):
+                 Client Name (cname):
+                 name-string:
+                 element[1]} \
+                "$MTA_FQDN"
+    
+     if { $Pass == 0 } {
+         PASS_STEP
+    } else {
+         LogMsg "KDC improperly format cname:name-string[1]:$MTA_FQDN"
+    }
+}
+incr majorStepCount
+set  minorStepCount 1
+
+##############################################################################
+# SEC_1-1-7_20-1: Verify starttime inside Ticket
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    set Pass 0 ;# Flag for pass test step
+    
+    verifyNotPresent {Kerberos AP Request:
+                      Ticket:
+                      Encrypted part (enc-part):
+                      Ciphered text (cipher):
+                      Start Time (starttime)}
+
+    if { $Pass == 0 } {
+         PASS_STEP
+    } else {
+         LogMsg "KDC improperly format start-time inside Ticket"
+    }
+}
+incr minorStepCount
+
+##############################################################################
+# SEC_1-1-7_20-2: Verify renew-till inside Ticket
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    set Pass 0 ;# Flag for pass test step
+
+    verifyNotPresent {Kerberos AP Request:
+                      Ticket:
+                      Encrypted part (enc-part):
+                      Ciphered text (cipher):
+                      Renew Time (renew-till)}
+
+    if { $Pass == 0 } {
+         PASS_STEP
+    } else {
+         LogMsg "KDC improperly format renew-time inside Ticket"
+    }
+}
+incr minorStepCount
+
+##############################################################################
+# SEC_1-1-7_20-3: Verify caddr inside Ticket
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    set Pass 0 ;# Flag for pass test step
+
+    verifyValue {Kerberos AP Request:
+                 Ticket:
+                 Encrypted part (enc-part):
+                 Ciphered text (cipher):
+                 Client address (caddr):
+                 element[0]:
+                 Address (address)} \
+                "$MTA_IP_IN_HEX"
+
+    if { $Pass == 0 } {
+         PASS_STEP
+    } else {
+         LogMsg "KDC improperly format caddr inside Ticket"
+    }
+}
+incr minorStepCount
+
+##############################################################################
+# SEC_1-1-7_20-4: Verify authorization-data inside Ticket
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    set Pass 0 ;# Flag for pass test step
+    
+    verifyNotPresent {Kerberos AP Request:
+                      Ticket:
+                      Encrypted part (enc-part):
+                      Ciphered text (cipher):
+                      Authorization Data (authorization-data)}
+
+    if { $Pass == 0 } {
+         PASS_STEP
+    } else {
+         LogMsg "KDC improperly format authorization-data inside Ticket"
+    }
+}
+incr majorStepCount
+set  minorStepCount 1
+
+##############################################################################
+# SEC_1-1-7_21-1: Verify Authenticator:etype
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    verifyValue {Kerberos AP Request:
+                 Authenticator:
+                 Encryption Type (etype)} \
+                {5}
+}
+incr minorStepCount
+
+###############################################################################
+# SEC_1-1-7_21-2: Verify Authenticator:kvno
+###############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    verifyNotPresent {Kerberos AP Request:
+                      Authenticator:
+                      Key Version number (kvno)}
+}
+incr majorStepCount
+set  minorStepCount 1
+##############################################################################
+# SEC_1-1-7_22-1: Verify Authenticator:seq-number
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    verifyPresent {Kerberos AP Request:
+                   Authenticator:
+                   Ciphered text (cipher):
+                   Sequence Number (seq-number)}
+}
+incr minorStepCount
+
+##############################################################################
+# SEC_1-1-7_22-2: Verify Authenticator:authorization-data
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    verifyNotPresent {Kerberos AP Request:
+                      Authenticator:
+                      Ciphered text (cipher):
+                      Authorization Data (authorization-data)}
+}
+incr majorStepCount
+set  minorStepCount 1
+
+##############################################################################
+# SEC_1-1-7_23-1: Verify Nonce 
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    verifyValue {Nonce} \
+                {0}
+}
+incr majorStepCount
+
+##############################################################################
+# SEC_1-1-7_24-1: Verify ASD:snmpEngineID Length
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    verifyPresent {Application-Specific data:
+                   Agent's SNMPEngineID Length}
+}
+incr minorStepCount
+
+##############################################################################
+# SEC_1-1-7_24-2: Verify ASD:snmpEngineID
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    verifyPresent {Application-Specific data:
+                   Agent's SNMPEngineID}
+}
+incr minorStepCount
+
+##############################################################################
+# SEC_1-1-7_24-3: Verify ASD:snmpEngineBoots
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    verifyPresent {Application-Specific data:
+                   Agent's SNMPEngineBoots}
+}
+incr minorStepCount
+
+##############################################################################
+# SEC_1-1-7_24-4: Verify ASD:snmpEngineTime
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    verifyPresent {Application-Specific data:
+                   Agent's SNMPEngineTime}
+}
+incr minorStepCount
+
+##############################################################################
+# SEC_1-1-7_24-5: Verify ASD:usmUserName Length
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    verifyPresent {Application-Specific data:
+                   usmUserName Length}
+}
+incr minorStepCount
+
+##############################################################################
+# SEC_1-1-7_24-6: Verify ASD:usmUserName
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    verifyValue {Application-Specific data:
+                 usmUserName} \
+                "\"eUE-Prov-$MTA_MAC\""
+}
+incr majorStepCount
+set  minorStepCount 1
+
+##############################################################################
+# SEC_1-1-7_25-1: Verify Cipher Suite:Required MD5/DES or MD5/ESP_NULL
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    set MD5_DES_PASS 0 ;# Flag when found MD5/DES suite
+    set MD5_NULL_PASS 0 ;# Flag when found MD5/ESP_NULL suite
+
+    # Get the number of entries
+    set numberOfEntries [getValue {List of ciphersuites:Number of entries}]
+
+    # Check all entries if it use the correct Encryption Transform
+    for {set i 0} {$i < $numberOfEntries} {incr i} {
+        # Check for MD5/DES
+        if { [verifyValue "List of ciphersuites:
+                           Authentication Algorithm\[$i\]" \
+                          {'21'H}] == $PASS &&
+             [verifyValue "List of ciphersuites:
+                           Encryption Transform\[$i\]" \
+                          {'21'H}] == $PASS } {
+             # Set MD5_DES to true
+             set MD5_DES_PASS 1 
+        # Check for MD5/ESP_NULL
+        } elseif { [verifyValue "List of ciphersuites:
+                                  Authentication Algorithm\[$i\]" \
+                                  {'21'H}] == $PASS &&
+                    [verifyValue "List of ciphersuites:
+                                  Encryption Transform\[$i\]" \
+                                  {'20'H}] == $PASS } {
+             # Set MD5_NULL_PASS to true
+             set MD5_NULL_PASS 1 
+        }
+    }
+
+    if { $MD5_DES_PASS == 1 && $MD5_NULL_PASS == 1 } {
+        PASS_STEP
+    } else {
+        if { $MD5_DES_PASS == 0 } {
+            LogMsg "Cannot find MD5/DES"
+        }
+        if { $MD5_NULL_PASS == 0 } {
+            LogMsg "Cannot find MD5/NULL"
+        }
+        FAIL_STEP
+    }
+}
+incr minorStepCount
+
+##############################################################################
+# SEC_1-1-7_25-2: Verify Cipher Suite:SHA1/DES or SHA1/ESP_NULL (Optional)
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    # Get the number of entries
+    set numberOfEntries [getValue {List of ciphersuites:Number of entries}]
+
+    # Check all entries if it use the correct Encryption Transform
+    for {set i 0} {$i < $numberOfEntries} {incr i} {
+        # Check for SHA1/DES
+        if { [verifyValue "List of ciphersuites:
+                           Authentication Algorithm\[$i\]" \
+                          {'22'H}] == $PASS &&
+             [verifyValue "List of ciphersuites:
+                           Encryption Transform\[$i\]" \
+                          {'21'H}] == $PASS } {
+            LogMsg "Found SHA1/DES"
+        # Check for SHA1/ESP_NULL
+        } elseif { [verifyValue "List of ciphersuites:
+                                 Authentication Algorithm\[$i\]" \
+                                {'22'H}] == $PASS &&
+                   [verifyValue "List of ciphersuites:
+                                 Encryption Transform\[$i\]" \
+                                {'20'H}] == $PASS } {
+            LogMsg "Found SHA1/ESP_NULL"
+        }
+    }
+
+    PASS_STEP
+}
+incr majorStepCount
+set  minorStepCount 1
+
+##############################################################################
+# SEC_1-1-7_26-1: Verify Re-establish flag
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    verifyValue {Re-establish flag} \
+                {0 (False)}
+}
+incr majorStepCount
+
+##############################################################################
+# SEC_1-1-7_27-1: Verify SHA1-HMAC
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    verifyLength {SHA-1 HMAC} \
+                 {20}
+}
+incr majorStepCount
+
+##############################################################################
+# Cleanup
+##############################################################################
+set CONTINUE_PAST_STEP_ERROR 0  ;# Reset Continue Past step
+Cleanup                         ;# Clean up NCS
+
+return $SUCCESS

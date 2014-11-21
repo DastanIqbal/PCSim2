@@ -1,0 +1,24 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+
+<pc2xml version="$Revision: 6076 $" name="UT_HDV_RST_UE_3.1.5.3" descrip="Unit test for Test case 3.1.5.3" number="1">
+	<template file="./templates/ut/Term_DUT.xml" name="UT_HDV_RST_UE_3.1.5.3"/>
+	
+</pc2xml>

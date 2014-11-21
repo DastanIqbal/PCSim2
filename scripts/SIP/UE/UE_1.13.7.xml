@@ -1,0 +1,56 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="SIP-UE 1.13.7" 
+	descrip="Handling of SDP at the originating UE" 
+	number="SIP-UE 1.13.7">
+	
+	<template file="./templates/CallOrigAtUETemp.xml" name="UE1"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Setup" sub="response"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<state ID="Setup" sub="response">
+			<if>
+				<eq>
+					<msg_ref type="sip">Request</msg_ref>
+					<expr>INVITE</expr>
+				</eq>
+				<then>
+					<verify step="1" requirements="REQ17093, REQ17094, REQ17095">
+						<contains>
+							<msg_ref type="sip" hdr_instance="any">INVITE.Supported</msg_ref>
+							<expr>precondition</expr>
+						</contains>
+					</verify>
+					<verify step="1" requirements="REQ17093, REQ17094, REQ17095">
+						<contains>
+							<msg_ref type="sip" hdr_instance="any">INVITE.Supported</msg_ref>
+							<expr>100rel</expr>
+						</contains>
+					</verify>
+				</then>
+			</if>
+		</state>
+		<transition from="Setup" to="END" event="INVITE"/>
+	</add_to>
+</pc2xml>

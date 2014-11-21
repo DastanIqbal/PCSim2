@@ -1,0 +1,172 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+ Change History: (Author & Date)
+
+
+
+-->
+<!-- First are the document type and the attributes for our document -->
+<pc2xml version="$Revision: 7768 $" name="EUE Prov 2.1.2.3" 
+		descrip="Ability of eUE to Recognize TLV43 Objects in the Configuration File When The Vendor ID Differs From That of the Device in IPv6" 
+		number="EUE Prov 2.1.2.3">
+
+	<!-- Next we define the each of state machines -->
+	<template file="./templates/EUE_Prov_B_1_1_1.xml" name="RebootCM"/>
+	
+	<add_to fsm="RebootCM">
+		<transition from="StartCapture_RebootWait" to="VerifyBootState" event="TimerExpired"/>
+	
+		<state ID="VerifyBootState">
+			<prelude once="true">
+				<send protocol="utility" msgtype="SNMPGet">
+					<mod modtype="add" hdr="oids">
+						<expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvisioningState.0</expr>
+					</mod>
+					<mod modtype="replace" hdr="agentip">
+						<msg_ref type="platform">DUT.IP Address</msg_ref>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="2">
+					<contains>
+						<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+						<expr>1</expr>
+					</contains>
+				</verify>
+				
+			</response>
+			<postlude>
+				<stop_capture/>
+			</postlude>
+			<transition to="Config" event="SNMPResp"/>
+			<transition to="Config" event="SNMPRespFailure"/>
+		</state>
+
+		<state ID="Config">
+			<prelude>
+				<log promptUser="true" expr="Configure the device with MAC_wrong_TLV43.BIN, deploy and clik OK."/>
+				<generate event="Branch1Event"/>
+				<start_capture>
+					<filter>
+						<var_expr>
+							<expr>host </expr>
+							<msg_ref type="platform">DUT.IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.DHCP Server IP</msg_ref>
+						</var_expr>
+					</filter>
+				</start_capture>
+			</prelude>
+			<transition to="RebootEUE" event="Branch1Event"/>
+		</state>
+
+		<state ID="RebootEUE" timer="90000">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPSet">
+                    <mod modtype="add" hdr="array">
+                        <var_expr>
+                            <expr>varBind 1 1 3 \r\n ][ , </expr>
+                            <expr>PKTC-IETF-MTA-MIB::pktcMtaDevResetNow.0,INTEGER,1][\r\n</expr>
+                        </var_expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPRespFailure</expr>
+                    </eq>
+                    <then>
+                        <fail/>
+                    </then>
+                </if>
+                <if>
+                    <or>
+                        <eq>
+                            <msg_ref type="sip">REGISTER.Contact.expires</msg_ref>
+                            <expr>0</expr>
+                        </eq>
+                        <eq>
+                            <msg_ref type="sip">REGISTER.Expires.value</msg_ref>
+                            <expr>0</expr>
+                        </eq>
+                    </or>
+                    <then>
+                        <send protocol="sip" msgtype="200-REGISTER"/>
+                    </then>
+                </if>
+            </response>
+            <transition to="VerifyOpState" event="TimerExpired"/>
+            <transition to="RebootEUE" event="SNMPResp"/>
+            <transition to="RebootEUE" event="REGISTER"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+		
+		<state ID="VerifyOpState" >
+			<!-- First we need to power cycle the UE to conduct the test -->
+			<prelude once="true">
+				<send protocol="utility" msgtype="SNMPGet">
+				<mod modtype="add" hdr="oids">
+					<expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvisioningState.0</expr>
+				</mod>
+				<mod modtype="replace" hdr="agentip">
+					<msg_ref type="platform">DUT.IP</msg_ref>
+				</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="5">
+						<eq>
+							<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+							<expr>4</expr>
+						</eq>
+				</verify>
+			</response>
+			<postlude>
+				<stop_capture/>
+			</postlude>
+			<transition to="VerifySoliciteKeyTimeout" event="SNMPResp"/>
+			<transition to="VerifySoliciteKeyTimeout" event="SNMPRespFailure"/>
+		</state>
+
+		<state ID="VerifySoliciteKeyTimeout">
+			<prelude>
+			<send protocol="utility" msgtype="SNMPGet">
+					<mod modtype="add" hdr="oids">
+						<expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvSolicitedKeyTimeout.0</expr>
+					</mod>
+					<mod modtype="replace" hdr="agentip">
+						<msg_ref type="platform">DUT.IP</msg_ref>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="5">
+					<eq>
+						<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+						<expr>120</expr>
+					</eq>
+				</verify>
+			</response>
+			<postlude>
+				<stop_capture/>
+			</postlude>
+			<transition to="END" event="SNMPResp"/>
+			<transition to="END" event="SNMPRespFailure"/>		
+		</state>
+	</add_to>
+</pc2xml>

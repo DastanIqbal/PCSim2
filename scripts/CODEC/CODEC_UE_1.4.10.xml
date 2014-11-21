@@ -1,0 +1,153 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	PCPCIIATP-124 : Update the script to reflect the change in the ATP. (ghassler 05/12/2010)
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="CODEC-MEDIA_1.4.10" 
+	descrip="UE Termination Session – Bandwidth Modifiers in Session Level" 
+	number="CODEC-MEDIA_1.4.10">
+	
+	<template file="./templates/CallTermAtUETemp.xml" name="UE1"/>
+
+	<remove_from fsm="UE1">
+		<state ID="Setup" sub="prelude"/>
+		<state ID="Connected"/>
+	</remove_from>
+
+	<add_to fsm="UE1">
+		<state ID="Setup" sub="prelude">
+			<!-- STEP 1 -->
+			<start_capture>
+				<filter>
+					<var_expr>
+						<expr>host </expr>
+						<msg_ref type="platform">PCSCF1.IP</msg_ref>
+						<expr> || host </expr>
+						<msg_ref type="platform">UE0.IP</msg_ref>
+						<expr> || host </expr>
+						<msg_ref type="platform">UE1.IP</msg_ref>
+					</var_expr>
+				</filter>
+			</start_capture>
+			<send protocol="sip" msgtype="Invite">
+				<mod modtype="delete" hdr="media-modifier"/>
+				<mod modtype="delete" hdr="TIAS-modifier"/>
+				<mod modtype="delete" hdr="max-packet-rate"/>
+				<mod modtype="replace" hdr="c" param="address">
+					<var_expr>
+						<msg_ref type="platform">UE1.IP</msg_ref>
+						<expr>\r\nb=AS:96\r\nb=TIAS:64000</expr>
+					</var_expr>
+				</mod>
+				<mod modtype="replace" hdr="t" param="stop">
+					<expr>0\r\na=maxprate:100</expr>
+				</mod>
+				<mod modtype="replace" hdr="audio" param="payload-type">
+					<expr>0 8</expr>
+				</mod>
+				<mod modtype="replace" hdr="rtpmap" param="clock-rate">
+					<expr>8000\r\na=rtpmap:8 PCMA/8000</expr>
+				</mod>
+				<mod modtype="replace" hdr="ptime" param="value">
+					<expr>10</expr>
+				</mod>
+			</send>
+		</state>
+		
+		<state ID="Connected">
+			<prelude once="true">
+				<send protocol="sip" msgtype="ACK"/>
+				<var name="sdp">
+					<msg_ref type="sip" msg_instance="last">200-INVITE.SDP</msg_ref>
+				</var>
+				<log step="1" requirements="RFC2610, RFC2613"
+					promptUser="true" verify="true"
+					expr="Verify that the b=AS, b=TIAS and a=maxprate lines appear after the first m=audio line and not before the t= line in the following.\n$sdp"/>
+				<send protocol="sip" msgtype="REINVITE">
+					<mod modtype="add" hdr="SDP">
+						<var_expr>
+							<expr>m=image 0 udptl t38\r\nb=AS:47\r\nb=TIAS:34400\r\na=maxprate:50\r\n</expr>
+							<expr>a=T38FaxRateManagement:transferredTCF\r\n</expr>
+							<!-- PCPCII-118 Change the value of the parameter from 200 to 160 -->
+							<expr>a=T38FaxMaxDatagram:160\r\n</expr>
+							<expr>a=T38FaxVersion:0\r\n</expr>
+							<expr>a=T38FaxUdpEC:t38UDPRedundancy</expr>
+						</var_expr>
+					</mod>
+					<mod modtype="replace" hdr="s" param="name">
+						<expr>VoiceFax</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>	
+					<eq>
+						<msg_ref type="sip">Response</msg_ref>
+						<expr>200-INVITE</expr>
+					</eq>
+					<then>
+						<assign name="sdp">
+							<msg_ref type="sip">200-INVITE.SDP</msg_ref>
+						</assign>
+						<send protocol="sip" msgtype="ACK"/>
+						<log step="3" requirements="RFC2610, RFC2613"
+							promptUser="true" verify="true"
+							expr="Verify that the b=AS and b=TIAS lines appear after the m=audio and m=image lines and not before the t= line in the following.\n$sdp"/>
+						<verify step="3" requirements="RFC2610, RFC2613">
+							<eq>
+								<msg_ref type="sip">200-INVITE.media-modifier.value</msg_ref>
+								<expr>127</expr>
+							</eq>
+						</verify>
+						<verify step="3" requirements="RFC2610, RFC2613">
+							<eq>
+								<msg_ref type="sip">200-INVITE.TIAS-modifier.value</msg_ref>
+								<expr>98400</expr>
+							</eq>
+						</verify>
+						<verify step="3" requirements="RFC2610, RFC2613">
+							<eq>
+								<msg_ref type="sip">200-INVITE.max-packet-rate.value</msg_ref>
+								<expr>50</expr>
+							</eq>
+						</verify>
+						<verify step="3" requirements="RFC2610, RFC2613">
+							<eq>
+								<msg_ref type="sip">200-INVITE.audio.payload-type</msg_ref>
+								<expr>0</expr>
+							</eq>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<transition to="Connected" event="OffHookComplete"/>
+			<transition to="Connected" event="1xx-INVITE"/>
+			<transition to="CheckMedia" event="200-INVITE"/>
+		</state>
+		
+		<state ID="CheckMedia">
+			<prelude>
+				<stop_capture/>
+				<log step="5" requirements="REQ12544"
+					promptUser="true" verify="true"
+					expr="In the capture file, verify that the RTP packets are being sent before the REINVITE and after the REINVITE.\n"/>
+				<generate event="SucceedEvent"/>
+			</prelude>
+			<transition to="Releasing" event="SucceedEvent"/>
+		</state>
+	</add_to>
+</pc2xml>

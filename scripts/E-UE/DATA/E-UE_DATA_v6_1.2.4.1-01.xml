@@ -1,0 +1,224 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+ Change History: (Author & Date)
+
+
+
+-->
+
+<pc2xml version="$Revision: 7768 $" 
+	name="E-UE_Data_1.2.4.1-01" 
+	descrip="Event Reporting and Syslog Messaging Parameters "
+	number="E-UE_Data_1.2.4.1-01">
+
+	<!-- template file="./templates/EUE_Prov_B_2_2_1.xml" name="SecureUE"/ -->
+	<template file="./templates/EUE_Prov_B_1_1_1.xml" name="EvControl"/>
+	<add_to fsm="EvControl">
+		
+		<!--transition from="IP4 Provision" to="VerifyPktcDevEvControl" event="SNMPResp" />
+		<transition from="IP6 Provision" to="VerifyPktcDevEvControl" event="SNMPResp" /-->
+		<transition from="StartCapture_RebootWait" to="EUEProvision" event="TimerExpired"/>
+
+        <state ID="EUEProvision" timer="30000">
+            <prelude once="true">				
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvisioningState.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+					<mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="5">
+                    <eq>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>1</expr>
+                    </eq>
+                </verify>
+            </response>
+            <transition to="NoteValues" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+		
+		<state ID="NoteValues">
+			<prelude once="true" >
+				<stop_capture/>
+				<parse_capture name="eUE_DHCPv6">
+					<parser_filter protocol="dhcpv6" clientMAC="DUT.MAC Address"/>
+				</parse_capture>
+				<parse_capture name="eUE_Syslog">
+					<parser_filter protocol="syslog" ip="DUT.IP"/>
+				</parse_capture>
+				
+				<var name="CorrelationID">
+					<capture_ref type="dhcpv6" name="eUE_DHCPv6">Request.Relay.Option17.suboption2172.show</capture_ref>
+				</var>
+				
+				<log promptUser="true"
+				expr="Note the actual value of Correlation ID from the following text.\n $CorrelationID" />
+				
+				<var name="SyslogMsg">
+					<capture_ref type="syslog" name="eUE_Syslog" msg_instance="last">syslog.msg.show</capture_ref>
+				</var>
+				
+				<generate event="Branch1Event"/>
+			</prelude>
+			<response>			
+				<verify step="7">
+					<and>
+						<contains>
+							<capture_ref type="syslog" name="eUE_Syslog" msg_instance="last">syslog.frame.protocols.show</capture_ref>
+							<expr>udp</expr>
+						</contains>
+						<eq>
+							<capture_ref type="syslog" name="eUE_Syslog" msg_instance="last">syslog.udp.dstport.show</capture_ref>
+							<expr>514</expr>
+						</eq>
+					</and>
+				</verify>
+				
+				<verify step="8">
+					<eq>
+						<capture_ref type="syslog" name="eUE_Syslog" msg_instance="last">syslog.facility.show</capture_ref>
+						<expr>16</expr>
+					</eq>
+				</verify>
+				
+				<verify step="9">
+					<and>
+						<contains>
+							<capture_ref type="syslog" name="eUE_Syslog" msg_instance="last">syslog.msg.show</capture_ref>
+							<msg_ref type="platform">DUT.FQDN</msg_ref>
+						</contains>
+						<and>
+							<contains>
+								<capture_ref type="syslog" name="eUE_Syslog" msg_instance="last">syslog.msg.show</capture_ref>
+								<expr>:</expr>
+							</contains>
+							<and>
+								<contains>
+									<capture_ref type="syslog" name="eUE_Syslog" msg_instance="last">syslog.msg.show</capture_ref>
+									<expr>MTA</expr>
+								</contains>
+								<contains>
+									<capture_ref type="syslog" name="eUE_Syslog" msg_instance="last">syslog.msg.show</capture_ref>
+									<expr>PACKETCABLE</expr>
+								</contains>						
+							</and>
+						</and>
+					</and>
+				</verify>
+				
+				<verify step="10">
+					<and>
+						<contains>
+							<capture_ref type="dhcpv6" name="eUE_DHCPv6">Reply.Relay.Option39.Domain.show</capture_ref>
+							<msg_ref type="platform">DUT.FQDN</msg_ref>
+						</contains>
+						<contains>
+							<capture_ref type="syslog" name="eUE_Syslog" msg_instance="last">syslog.msg.show</capture_ref>
+							<msg_ref type="platform">DUT.FQDN</msg_ref>
+						</contains>
+					</and>
+				</verify>	
+				
+				<verify step="11">
+					<and>
+						<contains>
+							<capture_ref type="syslog" name="eUE_Syslog" msg_instance="last">syslog.msg.show</capture_ref>
+							<expr>4000951500</expr>
+						</contains>
+						<contains ignoreCase="true">
+							<capture_ref type="syslog" name="eUE_Syslog" msg_instance="last">syslog.msg.show</capture_ref>
+							<expr>Provisioning Complete</expr>
+						</contains>
+					</and>
+				</verify>
+            </response>
+			
+			<postlude>
+				<log promptUser="true" verify="true" yestExpected="true" step="11"
+				expr="Does CorrelationID noted earlier matches to the value in the following? \n $SyslogMsg" />
+			</postlude>
+			
+            <transition to="checkEndPointName" event="Branch1Event"/>
+		</state>
+			
+		<state ID="checkEndPointName" timer="30000">
+			<prelude once="true" >
+			 	<send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>PKTC-EVENT-MIB::pktcDevEvLogEndpointName.1</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+					<mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+			</prelude>
+			<response>
+				<verify step="12">
+					<and>
+						<contains>
+							<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+							<!--host name and domain name -->
+							<capture_ref type="dhcpv6" name="eUE_DHCPv6">Reply.Relay.Option39.Domain.show</capture_ref>
+						</contains>
+						<contains>
+							<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+							<!-- IP Address -->
+							<capture_ref type="dhcpv6" name="eUE_DHCPv6">Reply.Relay.Option3.Option5.IPv6 address.show</capture_ref>
+							<!--capture_ref type="dhcpv6" name="eUE_DHCPv6">Reply.Relay.Option3.Option5.IPv6 address.value</capture_ref-->
+						</contains>
+					</and>
+				</verify>
+            </response>
+
+            <transition to="checkLogTime" event="SNMPResp"/>
+            <transition to="checkLogTime" event="SNMPRespFailure"/>
+		</state>
+		
+		<state ID="checkLogTime" timer="30000">
+			<prelude once="true" >
+			 	<send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>PKTC-EVENT-MIB::pktcDevEvLogTime.1</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+					<mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+			</prelude>
+			<response>
+				<verify step="13">
+					<isDate>
+						<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+					</isDate>
+				</verify>
+            </response>
+
+            <transition to="END" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+		</state>		
+	
+	</add_to>
+</pc2xml>

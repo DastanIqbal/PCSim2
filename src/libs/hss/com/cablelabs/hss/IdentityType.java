@@ -1,0 +1,6 @@
+package com.cablelabs.hss;
+
+public enum IdentityType {
+
+	PUBLIC_USER_IDENTITY, DISTINCT_PUBLIC_SERVICE_IDENTITY, WILDCARDED_PUBLIC_SERVICE_IDENTITY
+}

@@ -1,0 +1,150 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+
+<pc2xml version="$Revision: 8188 $" name="UT_SIP_Orig_Template" descrip="This is a unit test script for testing the UE originating template." number="1">
+		<template name="UE0" file="$UT_PATH/Templates/ut/Orig_DUT.xml"/>
+	<remove_from fsm="UE0">
+		<state ID="Connected"/>
+	</remove_from>
+	<add_to fsm="UE0">
+		<!-- CONNECTED State -->
+		<state ID="Connected">
+			<prelude once="true">
+					<send protocol="sip" msgtype="ACK" target="UE1" originator="DUT"/>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>REINVITE</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="100-INVITE" target="UE1" originator="DUT"/>
+					</then>
+				</if>
+				<if>
+					<and>
+						<eq>
+							<msg_ref type="extensions">precondition</msg_ref>
+							<expr>require</expr>
+						</eq>
+						<or>
+							<contains>
+								<msg_ref type="sip" hdr_instance="any">Invite.Require</msg_ref>
+								<expr>precondition</expr>
+							</contains>
+							<contains>
+								<msg_ref type="sip" hdr_instance="any">Invite.Supported</msg_ref>
+								<expr>precondition</expr>
+							</contains>
+						</or>
+					</and>
+					<then>
+						<!--Sending 183-Invite with answer-->
+						<sleep time="200"/>
+						<send protocol="sip" msgtype="183-Invite" target="UE1" originator="DUT"/>
+					</then>
+					<elseif>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>REINVITE</expr>
+						</eq>
+						<then>
+							<!--Sending 180-Invite with SS not supporting precondition.-->
+							<sleep time="200"/>
+							<send protocol="sip" msgtype="180-Invite" target="UE1" originator="DUT"/>
+						</then>
+					</elseif>
+				</if>
+			</response>
+			<!-- Transitions for Connected state -->
+			<transition to="ChangingMedia" event="REINVITE"/>
+		</state>
+		<!-- ChangingMedia State -->
+		<state ID="ChangingMedia" timer="3000">
+			<response>
+				<if>
+					<and>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>PRACK</expr>
+						</eq>
+						<contains>
+							<msg_ref type="sip" msg_instance="last" hdr_instance="any">18x-Invite.Require</msg_ref>
+							<expr>100rel</expr>
+						</contains>
+					</and>
+					<then>
+						<!--Reliablity required for test sending 200-Prack message to peer.-->
+						<send protocol="sip" msgtype="200-PRACK" target="UE1" originator="DUT"/>
+					</then>
+				</if>
+				<!-- Now test for an UPDATE message -->
+				<!-- Steps 6 and 7 in the Call-Orig-at_UE(DUT) Default Message Flow document. -->
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>UPDATE</expr>
+					</eq>
+					<then>
+						<!--QoS required or supported sending 200-Update message to peer.-->
+						<send protocol="sip" msgtype="200-Update" target="UE1" originator="DUT"/>
+					</then>
+				</if>
+				<!-- Test whether to send 180 -->
+				<!-- Step 8 in the Call-Orig-at_UE(DUT) Default Message Flow document. -->
+				<if>
+					<and>
+						<contains>
+							<msg_ref type="sip" msg_instance="last" hdr_instance="any">18x-Invite.Status-Code</msg_ref>
+							<expr>183</expr>
+						</contains>
+						<eq>
+							<msg_ref type="sdp">Request.qos-curr-remote.direction</msg_ref>
+							<msg_ref type="sdp">Request.qos-des-remote.direction</msg_ref>
+						</eq>
+					</and>
+					<then>
+						<!--Sending 180 for required preconditions.-->
+						<send protocol="sip" msgtype="180-Invite" target="UE1" originator="DUT"/>
+					</then>
+				</if>
+			</response>
+			<!-- Transitions for Alerting state -->
+			<transition to="ChangingMedia" event="PRACK"/>
+			<transition to="ChangingMedia" event="UPDATE"/>
+			<transition to="MediaResponse" event="TimerExpired"/>
+		</state>
+		<!-- MediaResponse State -->
+		<state ID="MediaResponse">
+			<prelude>
+				<send protocol="sip" msgtype="200-INVITE" target="UE1" originator="DUT"/>
+			</prelude>
+			<!-- Transitions for MediaResponse state -->
+			<transition to="NewMedia" event="ACK"/>
+		</state>
+		<state ID="NewMedia">
+			<postlude>
+				<send protocol="sip" msgtype="200-BYE" target="UE1" originator="DUT"/>
+			</postlude>
+			<transition to="END" event="BYE"/>
+		</state>
+	</add_to>
+</pc2xml>

@@ -1,0 +1,142 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+
+
+-->
+<pc2xml version="$Revision: 6714 $" 
+	name="HDV_SIP_UE_2.1.1.2" 
+	descrip="UE Sends Answer with Compatible CODEC" 
+	number="CORE-EDVA-SIP_2.1.1.2">
+	
+	<template file="./templates/CallTermAtUETemp.xml" name="UE1"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Setup" sub="prelude" />
+		<state ID="Proceeding"/>
+		<state ID="Alerting"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		
+		<state ID="Setup" sub="prelude" >
+			<!--  STEP 1 -->
+			<start_capture>
+				<filter>
+					<var_expr>
+						<expr>host </expr>
+						<msg_ref type="platform">UE0.IP</msg_ref>
+						<expr> || host </expr>
+						<msg_ref type="platform">Platform.SIP Stack 1 IP Address</msg_ref>
+					</var_expr>
+				</filter>
+			</start_capture>
+			
+			<!-- STEP 2 -->
+					<sleep time ="5000"/>
+					<send protocol="sip" msgtype="Invite"/>
+					
+				
+			<transition to="Proceeding" event="100-INVITE"/>
+		</state>	
+		<state ID="Proceeding">
+				
+				<response>
+					
+					<verify step="1" requirements="REQ23350 REQ23351">
+					<if>
+						<eq>
+							<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+							<expr>180</expr>
+						</eq>
+						
+						<then>
+								<!--Reliablity required for test, sending Prack message to peer.-->
+								<transition to="Alerting" event="180-INVITE"/>
+						</then>
+						
+					</if>
+					</verify>
+				</response>
+				<transition to="Alerting" event="180-INVITE"/>
+				<transition to="Alerting" event="183-INVITE"/>
+				<!--transition to="Connected" event="200-INVITE"/-->
+		</state>
+		<state ID="Alerting">
+				
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="event"/>
+							<expr>TimerExpired</expr>
+						</eq>
+						<then>
+							<!--Take DUT phone off hook-->
+							<send protocol="utility" msgtype="OffHook"/>
+						</then>
+					</if>
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>UPDATE</expr>
+						</eq>
+						<then>
+							
+							<send protocol="sip" msgtype="200-Update"/>
+						</then>
+					</if>	
+					<if>
+						<eq>
+							<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+							<expr>200</expr>
+						</eq>
+						<then>
+						<!--  STEPS 2 -->
+						<verify step="2" requirements="REQ23350 REQ23351">
+							
+								<and>
+									<gt>
+										<msg_ref type="sdp" msg_instance="last">200-Invite.audio.port</msg_ref>
+										<expr>0</expr>
+									</gt>
+									<lt>
+										<msg_ref type="sdp" msg_instance="last">200-Invite.audio.port</msg_ref>
+										<expr>65536</expr>
+									</lt>
+								</and>
+						</verify>		
+								<verify step="2" requirements="REQ23350 REQ23351">
+									
+									<eq>
+										<msg_ref type="sdp" msg_instance="last">200-Invite.audio.protocol</msg_ref>
+										<expr>RTP/AVP</expr>
+									</eq>
+								</verify>
+								
+							
+						
+						
+						<log promptUser="True" yesExpected="True" verify="True" 
+						step="4" requirements="REQ23353" 
+						expr="Verify that CC-Connect message triggered the DUT to send 200 OK message "/>
+						</then>
+					</if>
+				</response>
+				<transition to="Answer" event="18x-INVITE"/>
+				<transition to="Answer" event="OffHookComplete"/>
+				<transition to="Connected" event="200-INVITE"/>
+			
+			</state>	
+			
+		
+	</add_to>
+</pc2xml>

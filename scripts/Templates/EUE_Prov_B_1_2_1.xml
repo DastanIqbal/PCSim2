@@ -1,0 +1,99 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+<!-- First are the document type and the attributes for our document -->
+<pc2xml version="$Revision: 8188 $" name="EUE Prov B.1.2.1" descrip="This implements the common procedures for appendix B.1.2.1	of the EUE Prov ATP." number="EUE Prov B.1.2.1">
+	<!-- Next we define the each of state machines -->
+	<configure name="No Response Timeout" value="180000"/>
+	<fsm name="UEReset">
+		<models>
+			<session/>
+		</models>
+		<!-- Next we define all of the network elements -->
+		<NE sim_type="term" elements="SCSCF1 PCSCF1" targets="PCSCF1 SCSCF1 UE1"/>
+		<states initialstate="Reboot">
+			<state ID="Reboot" timer="5000">
+				<!-- First we need to power cycle the UE to conduct the test -->
+				<prelude once="true">
+					<start_capture>
+						<filter>
+							<var_expr>
+								<expr>host </expr>
+								<msg_ref type="platform">DUT.IP</msg_ref>
+								<expr> || host </expr>
+								<msg_ref type="platform">DUT.CM IP Address</msg_ref>
+								<expr> || host </expr>
+								<msg_ref type="platform">DUT.DHCP Gateway IP</msg_ref>
+								<expr> || host </expr>
+								<msg_ref type="platform">DUT.DHCP CM Gateway IP</msg_ref>
+								<expr> || host </expr>
+								<msg_ref type="platform">DUT.KDC IP Address</msg_ref>
+								<expr> || host </expr>
+								<msg_ref type="platform">DUT.TFTP Server IP</msg_ref>
+							</var_expr>
+						</filter>
+					</start_capture>
+					<send protocol="utility" msgtype="SNMPSet">
+						<mod modtype="add" hdr="array">
+							<var_expr>
+								<expr>varBind 1 1 3 \r\n ][ , </expr>
+								<expr>PKTC-IETF-MTA-MIB::pktcMtaDevResetNow.0,INTEGER,1][\r\n</expr>
+							</var_expr>
+						</mod>
+					</send>
+				</prelude>
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="utility">Response</msg_ref>
+							<expr>SNMPRespFailure</expr>
+						</eq>
+						<then>
+							<fail/>
+						</then>
+					</if>
+					<if>
+						<or>
+							<eq>
+								<msg_ref type="sip">REGISTER.Contact.expires</msg_ref>
+								<expr>0</expr>
+							</eq>
+							<eq>
+								<msg_ref type="sip">REGISTER.Expires.value</msg_ref>
+								<expr>0</expr>
+							</eq>
+						</or>
+						<then>
+							<send protocol="sip" msgtype="200-REGISTER"/>
+						</then>
+					</if>
+				</response>
+				<!-- Test cases deriving their functionality from this template
+					should change the following transition to some local state -->
+				<transition to="Reboot" event="SNMPResp"/>
+				<transition to="WaitForReboot" event="TimerExpired"/>
+				<transition to="END" event="SNMPRespFailure"/>
+				<transition to="Reboot" event="REGISTER"/>
+			</state>
+			
+			<state ID="WaitForReboot" timer="120000">
+				<transition to="END" event="TimerExpired"/>
+			</state>
+		</states>
+	</fsm>
+</pc2xml>

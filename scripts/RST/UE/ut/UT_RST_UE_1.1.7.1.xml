@@ -1,0 +1,83 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+
+<pc2xml version="$Revision: 8188 $" 
+	name="UT_RST_UE_1.1.7.1" 
+	descrip="This is a unit test for the RST_UE 1.1.7.1 test script" 
+	number="1">
+	
+	<template file="$SCRIPT_PATH/Templates/ut/Term_DUT.xml" name="DUT"/>
+
+	<remove_from fsm="DUT">
+		<state ID="Setup"/>
+	</remove_from>
+
+	<add_to fsm="DUT">
+		<states initialstate="Register"/>
+		<state ID="Setup">
+			<response>
+				<if>
+					<and>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>Invite</expr>
+						</eq>
+						<contains>
+							<msg_ref type="sdp" msg_instance="current">Invite.audio.payload-type</msg_ref>
+							<expr>8</expr>
+						</contains>
+					</and>
+					<then>
+						<send protocol="sip" msgtype="180-INVITE" target="UE1" originator="DUT" bodies="sdp">
+							<mod modtype="replace" hdr="audio" param="payload-type">
+								<expr>8</expr>
+							</mod>
+							<mod modtype="replace" hdr="rtpmap" param="codec-name">
+							<expr>PCMA</expr>
+							</mod>
+							<mod modtype="replace" hdr="rtpmap" param="payload-type">
+						<expr>8</expr>
+							</mod>
+							<mod modtype="add" hdr="require">
+								<expr>100rel</expr>
+							</mod>
+						</send>
+					</then>
+				</if>
+			</response>
+			<!-- Transitions for Setup state -->
+			<transition to="WaitCancel" event="INVITE"/>
+			<transition to="Register" event="TimerExpired"/>
+		</state>
+		<state ID="WaitCancel">
+			<postlude>
+				<send protocol="sip" msgtype="200-CANCEL" target="UE1" originator="DUT"/>
+				<send protocol="sip" msgtype="503-INVITE" target="UE1" originator="DUT"/>
+			</postlude>
+			<transition to="WaitAck" event="CANCEL"/>
+		</state>
+		
+		<state ID="WaitAck">
+			<transition to="END" event="ACK"/>
+		</state>
+		
+			
+	</add_to>
+</pc2xml>

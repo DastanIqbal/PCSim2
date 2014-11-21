@@ -1,0 +1,136 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="SIP-UE 1.1.1.5" 
+	descrip="Registration Action to Receiving a 423 Response" 
+	number="SIP-UE 1.1.1.5">
+	
+	<template file="./templates/UERegAndSubTemp.xml" name="UE1"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="PendingRegistration"/>
+		<state ID="Authorization"/>
+		<state ID="Registered"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<state ID="PendingRegistration">
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>REGISTER</expr>
+					</eq>
+					<!-- Step-3, Message Flow for test case SIP 1.1.1.5 -Build a 423 -->
+					<then>
+						<send protocol="sip" msgtype="423-REGISTER">
+							<mod modtype="add" hdr="Min-Expires">
+								<expr>700000</expr>
+							</mod>
+						</send>
+					</then>
+				</if>
+			</response>
+			<transition to="Authorization1" event="REGISTER"/>
+		</state>
+		
+		<state ID="Authorization1" timer="400000">
+			<response>
+				<verify step="3" requirements="REQ16882, REQ16883">
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>REGISTER</expr>
+					</eq>
+				</verify>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>REGISTER</expr>
+					</eq>
+					<!-- Step-3, Message Flow for test case SIP 1.1.1.5 -Build a 423 -->
+					<then>
+						<send protocol="sip" msgtype="401-REGISTER"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Authorization2" event="REGISTER"/>
+		</state>
+		
+		<state ID="Authorization2">
+			<response>
+				<verify step="4" requirements="REQ16883">
+					<or>
+						<!-- Step-3, Message Flow for test case SIP 1.1.1.5 - verify REGISTER-->
+						<gte>
+							<msg_ref type="sip">REGISTER.Contact.expires</msg_ref>
+							<expr>700000</expr>
+						</gte>
+						<!-- Step-4, Message Flow for test case SIP 1.1.1.5 -->
+						<gte>
+							<msg_ref type="sip">REGISTER.Expires.value</msg_ref>
+							<expr>700000</expr>
+						</gte>
+					</or>
+				</verify>
+				<if>
+					<eq>
+						<msg_ref type="event"/>
+						<expr>AuthenticateSucceed</expr>
+					</eq>
+					<then>
+						</then>
+					<elseif>
+						<and>
+							<eq>
+								<msg_ref type="sip">Request</msg_ref>
+								<expr>REGISTER</expr>
+							</eq>
+							<and>
+								<contains>
+									<msg_ref type="sip">REGISTER</msg_ref>
+									<expr>Authorization</expr>
+								</contains>
+								<digest/>
+							</and>
+						</and>
+						<then>
+							<generate event="AuthenticateSucceed"/>
+						</then>
+						<else>
+							<generate event="AuthenticateFailed"/>
+							<send protocol="sip" msgtype="503-Register"/>
+						</else>
+					</elseif>
+				</if>
+			</response>
+			<transition to="Registered" event="AuthenticateSucceed"/>
+			<transition to="END" event="AuthenticateFailed"/>
+			<transition to="Registered" event="REGISTER"/>
+		</state>
+		
+		<state ID="Registered">
+			<prelude>
+				<send protocol="sip" msgtype="200-Register"/>
+				<generate event="SucceedEvent"/>
+			</prelude>
+			<transition to="END" event="SucceedEvent"/>
+		</state>
+	</add_to>
+</pc2xml>

@@ -1,0 +1,123 @@
+#//**************************************************************************
+#// Filename: E-UE-PROV_2-1-3-4.test
+#// Author:   Matthew Forbes
+#// Creation Date: 11/04/08
+#// Modified by:  
+#//****************************************************************************
+#// Description:
+#//     TC2841 TEST CASE E-UE-PROV 2.1.3.4 Ability of eUE to Ignore SNMP Notification Rcvr
+#// Security Name when TLV38.7 is configured and SNMPv3 Receiver Types are not provided Via Configuration
+#//
+#// Objective:
+#//     To verify that the eUE ignores TLV 38.7 SNMP Notification
+#// Receiver Security Name when TLV 38.3 is not set to a value of 4 or 5.
+#//
+#// PacketCable DUT:
+#//     MTA
+#//
+#// Notes: 
+#//     - Requires provPrimitives.tcl & tftp_primitives.tcl.
+#//     - Requires the specific config file in $BASE_CFG_FILE_PATH in Provisioning Server.
+#//     - Requires parT.tcl parsing tool to parse data from capture file.
+#//****************************************************************************
+global SCRIPT_VERSION
+set SCRIPT_VERSION { # $Id: E-UE-PROV_2-1-3-4.test 7406 2010-07-20 17:17:37Z dthakore $ }
+
+DoStep "E-UE-PROV_2-1-3-4_1-1" "Initial configuration" {
+    LogMsg "--- Initial PROV module ---"
+    Init_PROV
+    # ProvCreateConfig 1450 $MTA_MAC
+
+} {PASS_STEP}
+
+
+DoStep "E-UE-PROV_2-1-3-4_3-1" "Configure provisioning server" {
+    LogMsg "--- Configure provisioning server ---"
+    PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122 cfg-2841.bin
+    PROV_DEPLOY_DHCP
+} {PASS_STEP}
+
+DoStep "PRESTEP_E-UE-PROV_2-1-3-4_4-1" "Start sniffer" {
+    LogMsg "--- Start sniffer ---"
+    Init_CONTROLLER_LAN
+    SetupCaptureControllerLan "host $MTA_IP || udp port 67"
+    StartCaptureControllerLan
+} {PASS_STEP}
+
+DoStep "E-UE-PROV_2-1-3-4_4-2" "SNMP RESET" {
+    SNMP_SET $oid_pktcMtaDevResetNow INTEGER 1 $MTA_IP
+    actionWait "Wait 60 seconds for reboot" 60
+} {PASS_STEP}
+
+
+DoStep "E-UE-PROV_2-1-3-4_5-1" "pktcMtaDevProvisioningState Content Verification" {
+    # Get the OID from the MTA and check it using our previously defined
+    set val [SNMP_GET $oid_pktcMtaDevProvisioningState $MTA_IP 20]
+    LogMsg "The Value of MTA Provisioning State is: $val"
+} {
+    IsEqual $val 1
+}
+
+DoStep "E-UE-PROV_2-1-3-4_6-1" "Stop sniffer" {
+    LogMsg "--- Stop sniffer ---"
+    StopCaptureControllerLan
+    SaveToFileControllerLan
+} {PASS_STEP}
+
+########################## INVOKE PARSING TOOL ##################################
+
+DoStep "E-UE-PROV_2-1-3-4_7-1" "Analyze flow data" {
+    # Initial PARSER TOOL
+    Init_PART
+    
+    # Set up parser file
+    set PARSERFILE    $ETH_DEFAULT_TXT_FILE
+} { PASS_STEP }
+
+DoStep "E-UE-PROV_2-1-3-4_7-2" "Parse all data into database" {
+    # Parse data    
+    set PARAMS_MTA_SRC      "{{} {} {} {} $MTA_IP {} {} {} {}}"
+    set PARAMS_MTA_DST      "{{} {} {} {} {} {} {} $MTA_IP {}}"
+    set msgID_MTA           [ParseFile $PARSERFILE "$PARAMS_MTA_SRC $PARAMS_MTA_DST"]
+} {
+    if { $::PART_RETURN == 0 } {
+        PASS_STEP
+    } else {
+        FAIL_STEP "Cannot find data"
+    }
+}
+
+######################### VERIFY SNMP OF MESSAGES ##########################
+
+DoStep "E-UE-PROV_2-1-3-4_7-3" "Verify SNMPv3 INFORM from DUT to SNMP Entity(Option 122.3)" {
+    set CONTINUE_PAST_STEP_ERROR 1
+    LogMsg "Verify SNMPv3 INFORM from DUT to SNMP Entity"
+} {
+    # Verify SNMPv3 INFORM
+    VerifyValue $msgID_MTA "INANY SNMP SNMP_INFORM SNMP_VERSION" "IS" "3" AND \
+            "HEADERSRCIP" "IS" "$MTA_IP" AND \
+            "HEADERDSTIP" "IS" "$PROV_SNMP_IP"
+            
+}
+    
+DoStep "E-UE-PROV_2-1-3-4_7-4" "Verify SNMPv2 INFORM from DUT to IP1($PROV_SNMP_IP)" {
+    LogMsg "Verify SNMPv2 INFORM from DUT to IP1 from config file ($PROV_SNMP_IP)"
+} {
+    # Verify SNMPv2 INFORM
+    VerifyValue $msgID_MTA "INANY SNMP SNMP_INFORM SNMP_VERSION" "IS" "2C" AND \
+            "HEADERSRCIP" "IS" "$MTA_IP" AND \
+            "HEADERDSTIP" "IS" "$PROV_SNMP_IP"
+}
+
+
+set CONTINUE_PAST_STEP_ERROR 0
+
+DoStep "E-UE-PROV_2-1-3-4_8-1" "SNMP RESET" {
+    # ProvCreateConfig 291 $MTA_MAC
+    PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122 Device_Level_Secure.cfg
+    PROV_DEPLOY_DHCP
+    SNMP_SET $oid_pktcMtaDevResetNow INTEGER 1 $MTA_IP
+    actionWait "Wait for CM/MTA to reboot" 40
+} {PASS_STEP}
+
+Cleanup

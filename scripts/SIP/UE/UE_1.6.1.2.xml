@@ -1,0 +1,72 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="SIP-UE 1.6.1.2" 
+	descrip="UAC Use of Timers A and B (TCP case)" 
+	number="SIP-UE 1.6.1.2">
+	
+	<template file="./templates/CallOrigAtUETemp.xml" name="UE1"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Setup"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<!-- Step 2 from test case SIP 1.6.1.2 - Wait for 32 seconds. -->
+		<state ID="Setup">
+			<prelude once="true">
+				<send protocol="utility" msgtype="DialDigits">
+					<mod modtype="add" hdr="number">
+						<msg_ref type="platform">UE1.phone number 1</msg_ref>
+					</mod>
+				</send>
+			</prelude>
+			<transition to="Setup" event="DialDigitsComplete"/>
+			<transition to="InviteReceived" event="Invite"/>
+		</state>
+		
+		<state ID="InviteReceived" timer="32000">
+			<transition to="Verify" event="TimerExpired"/>
+		</state>
+		
+		<state ID="Verify" timer="10000">
+			<prelude>
+				<!-- Step 3 from test case SIP 1.6.1.2 - The SS transmits an error 
+				response of 404 to the INVITE Not Found to the UE. -->
+				<send protocol="sip" msgtype="404-INVITE"/>
+			</prelude>
+			<response>
+				<verify step="3" requirements="RFC953, RFC959">
+					<and>
+						<eq>
+							<msg_ref type="event"/>
+							<expr>TimerExpired</expr>
+						</eq>
+						<neq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>ACK</expr>
+						</neq>
+					</and>
+				</verify>
+			</response>
+			<transition to="END" event="TimerExpired"/>
+		</state>
+	</add_to>
+</pc2xml>

@@ -1,0 +1,333 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+ Change History: (Author & Date)
+	PCPCII-115 : Remove the second capture from the test. The user would like only one
+		capture file for the test. (ghassler 2/26/2009)
+	PCPCII-140 : Update the script to match all of the changes made to the D09 version of the
+		ATP. (ghassler 08/04/2009)
+	PCPCIIATP-182 : Remove the test for the telephone-event in step 10. (ghassler 08/26/2010)
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="CODEC-MEDIA_1.2.7" 
+	descrip="Telephone Event Negotiation Failure" 
+	number="CODEC-MEDIA_1.2.7">
+	
+	<template file="./templates/Proxy.xml" name="SCSCF1"/>
+	
+	<remove_from fsm="SCSCF1">
+		<state ID="OffHook"/>
+		<state ID="Connected"/>
+	</remove_from>
+	
+	<add_to fsm="SCSCF1">
+		<state ID="Register" sub="prelude">
+			<!-- Step-1 test case Appendix B.10 Common Test Procedures -->
+			<log promptUser="true" 
+				expr="Connect the SAGE 930 or their equivalents to UE0 and UE1."/>
+		</state>
+		
+		<state ID="OffHook">
+			<prelude>
+				<start_capture>
+					<filter>
+						<var_expr>
+							<expr>host </expr>
+							<msg_ref type="platform">PCSCF1.IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">UE0.IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">UE1.IP</msg_ref>
+						</var_expr>
+					</filter>
+				</start_capture>
+				<sleep time="5000"/>
+				<send protocol="utility" msgtype="OffHook"/>
+			</prelude>
+			<transition to="Setup" event="OffHookComplete"/>
+		</state>
+		
+		<state ID="Connected">
+			<prelude>
+				<!-- Step - 1 test case Appendix B.10 Common Test Procedures -->
+				<log expr="From the DUT, send 0, 1, 2, 3, and 4 on the SAGE 930 or equivalent."/>
+								
+				<log step="1" promptUser="True" yesExpected="True" verify="True" 
+					expr="Verify RTP packets reception on the SAGE device."/>
+					
+				<log step="4" 
+					promptUser="True" yesExpected="True" verify="True" 
+					expr="Verify that there is still two voice traffic.\n"/>
+					
+				<!-- Step - 5 test case Appendix B.10 Common Test Procedures -->
+				<log expr="From UE1, send 5, 6, 7, 8, and 9 on the SAGE 930 or equivalent."/>
+				
+				<log step="5" requirements="REQ12539, REQ12540" 
+					promptUser="True" yesExpected="True" verify="True" 
+					expr="Verify DTMF packet reception on the SAGE device."/>
+					
+				<log step="7" 
+					promptUser="True" yesExpected="True" verify="True" 
+					expr="Verify that there is still two voice traffic.\n"/>
+					
+				<stop_capture/>
+				
+				<!-- Step - 2 test case Appendix B.10 Common Test Procedures -->
+				<log step="2" requirements="REQ12539, REQ12540" 
+					promptUser="True" yesExpected="True" verify="True" 
+					expr="Verify in the capture, UE1's SDP answer does not contain a=rtpmap: * telephone-event/8000, where * is a dynamic codec value (96-127) or format attributes: a=fmpt: (96-127) 0-15.\n"/>
+					
+					
+				<!-- Step - 3 test case Appendix B.10 Common Test Procedures -->
+				<log step="3" requirements="REQ12539, REQ12540" 
+					promptUser="True" yesExpected="True" verify="True" 
+					expr="Verify in the capture that there are no RFC4733 DTMF Packets from UE-1 to DUT for digits 0, 1, 2, 3, and 4.\n"/>
+				
+											
+				<!-- Step - 6 test case Appendix B.10 Common Test Procedures -->
+				<log step="6" requirements="REQ12539, REQ12540" 
+					promptUser="True" yesExpected="True" verify="True" 
+					expr="Verify in the capture that there are no RFC4733 DTMF Packets from DUT to UE-1 for digits 5, 6, 7, 8, and 9.\n"/>
+					
+				<generate event="SucceedEvent"/>
+			</prelude>
+			<transition to="OnHook" event="SucceedEvent"/>
+		</state>
+		
+		<transition from="OnHookUE1" to="ConfigureRelay" event="OnHookComplete"/>
+		
+		<state ID="ConfigureRelay">
+			<prelude>
+				<log promptUser="true"
+					expr="Configure UE-1 with DTMF Relay and the DUT without it.\n"/>
+				<start_capture>
+					<filter>
+						<var_expr>
+							<expr>host </expr>
+							<msg_ref type="platform">PCSCF1.IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">UE0.IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">UE1.IP</msg_ref>
+						</var_expr>
+					</filter>
+				</start_capture>
+				<send protocol="utility" msgtype="OffHook"/>
+			</prelude>
+			<transition to="Setup2" event="OffHookComplete"/>		
+		</state>
+			
+		
+		<state ID="Setup2">
+			<prelude once="true">
+				<send protocol="utility" msgtype="DialDigits">
+					<mod modtype="add" hdr="number">
+						<msg_ref type="platform">UE1.phone number 1</msg_ref>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<or>
+						<eq>
+							<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+							<msg_ref type="platform">UE1.IP</msg_ref>
+						</eq>
+						<eq>
+							<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+							<msg_ref type="platform">UE1.IP</msg_ref>
+						</eq>
+					</or>
+					<then>
+						<proxy target="UE0"/>
+					</then>
+					<elseif>
+						<or>
+							<eq>
+								<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE0.IP</msg_ref>
+							</eq>
+							<eq>
+								<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE0.IP</msg_ref>
+							</eq>
+						</or>
+						<then>
+							<proxy target="UE1"/>
+						</then>
+					</elseif>
+				</if>
+			</response>
+			<transition to="Setup2" event="DialDigitsComplete"/>
+			<transition to="Setup2" event="INVITE"/>
+			<transition to="Alerting2" event="CANCEL"/>
+			<transition to="Alerting2" event="xxx-INVITE"/>
+			<transition to="Setup2" event="OffHookComplete"/>
+		</state>
+		
+		<state ID="Alerting2" timer="6000">
+			<response>
+				<if>
+					<or>
+						<eq>
+							<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+							<msg_ref type="platform">UE1.IP</msg_ref>
+						</eq>
+						<eq>
+							<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+							<msg_ref type="platform">UE1.IP</msg_ref>
+						</eq>
+					</or>
+					<then>
+						<proxy target="UE0"/>
+					</then>
+					<elseif>
+						<or>
+							<eq>
+								<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE0.IP</msg_ref>
+							</eq>
+							<eq>
+								<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE0.IP</msg_ref>
+							</eq>
+						</or>
+						<then>
+							<proxy target="UE1"/>
+						</then>
+					</elseif>
+				</if>
+				<if>
+					<eq>
+						<msg_ref type="event"/>
+						<expr>TimerExpired</expr>
+					</eq>
+					<then>
+						<send protocol="utility" msgtype="OffHook">
+							<mod modtype="replace" hdr="voiceport">
+								<msg_ref type="platform">Platform.voiceport1</msg_ref>
+							</mod>
+						</send>
+					</then>
+				</if>
+			</response>
+			<transition to="Alerting2" event="INVITE"/>
+			<transition to="Alerting2" event="OPTIONS"/>
+			<transition to="Alerting2" event="200-OPTIONS"/>
+			<transition to="Alerting2" event="PRACK"/>
+			<transition to="Alerting2" event="200-PRACK"/>
+			<transition to="Alerting2" event="UPDATE"/>
+			<transition to="Alerting2" event="200-UPDATE"/>
+			<transition to="Alerting2" event="xxx-INVITE"/>
+			<transition to="Alerting2" event="OffHookComplete"/>
+			<transition to="Connected2" event="ACK"/>
+		</state>
+		
+		<state ID="Connected2">
+			<prelude>
+				<!-- Step - 11 test case Appendix B.10 Common Test Procedures -->
+				<log expr="From the DUT, send 0, 1, 2, 3, and 4 on the SAGE 930 or equivalent."/>
+								
+				<log step="11" promptUser="True" yesExpected="True" verify="True" 
+					expr="Verify RTP packets reception on the SAGE device."/>
+					
+				<log step="13" 
+					promptUser="True" yesExpected="True" verify="True" 
+					expr="Verify that there is still two voice traffic.\n"/>
+					
+				<!-- Step - 14 test case Appendix B.10 Common Test Procedures -->
+				<log expr="From UE1, send 5, 6, 7, 8, and 9 on the SAGE 930 or equivalent."/>
+				
+				<log step="14" requirements="REQ12539, REQ12540" 
+					promptUser="True" yesExpected="True" verify="True" 
+					expr="Verify DTMF packet reception on the SAGE device."/>
+					
+				<log step="16" 
+					promptUser="True" yesExpected="True" verify="True" 
+					expr="Verify that there is still two voice traffic.\n"/>
+				<generate event="SucceedEvent"/>
+			</prelude>	
+			<postlude>
+				<stop_capture/>
+				
+				<!-- Step - 10 test case Appendix B.10 Common Test Procedures -->
+				<log step="10" 
+					promptUser="True" yesExpected="True" verify="True" 
+					expr="Verify in the capture, UE1's SDP answer contains the format attributes: a=fmpt: (96-127) 0-15, and\nif present the ptime attribute for the telephone-event is the same value as the codec's ptime attribute.\n"/>
+				
+				<!-- Step - 12 test case Appendix B.10 Common Test Procedures -->
+				<log step="12" requirements="REQ12539, REQ12540" 
+					promptUser="True" yesExpected="True" verify="True" 
+					expr="Verify in the capture that there are no RFC4733 DTMF Packets from UE-1 to DUT for digits 0, 1, 2, 3, and 4.\n"/>
+				
+				<!-- Step - 15 test case Appendix B.10 Common Test Procedures -->
+				<log step="15" requirements="REQ12539, REQ12540" 
+					promptUser="True" yesExpected="True" verify="True" 
+					expr="Verify in the capture that there are no RFC4733 DTMF Packets from DUT to UE-1 for digits 5, 6, 7, 8, and 9.\n"/>
+			</postlude>			
+			
+			<transition to="OnHook2" event="SucceedEvent"/>
+		</state>
+			
+		<state ID="OnHook2">
+			<prelude once="true">
+				<send protocol="utility" msgtype="OnHook"/>
+			</prelude>
+			<response>
+				<if>
+					<or>
+						<eq>
+							<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+							<msg_ref type="platform">UE1.IP</msg_ref>
+						</eq>
+						<eq>
+							<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+							<msg_ref type="platform">UE1.IP</msg_ref>
+						</eq>
+					</or>
+					<then>
+						<proxy target="UE0"/>
+					</then>
+					<elseif>
+						<or>
+							<eq>
+								<msg_ref type="sip">Request.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE0.IP</msg_ref>
+							</eq>
+							<eq>
+								<msg_ref type="sip">Response.SourceAddress.IP</msg_ref>
+								<msg_ref type="platform">UE0.IP</msg_ref>
+							</eq>
+						</or>
+						<then>
+							<proxy target="UE1"/>
+						</then>
+					</elseif>
+				</if>
+			</response>
+			<transition to="OnHook2" event="OnHookComplete"/>
+			<transition to="OnHook2" event="Bye"/>
+			<transition to="OnHookUE1-2" event="200-Bye"/>
+		</state>
+		
+		<state ID="OnHookUE1-2">
+			<prelude>
+				<send protocol="utility" msgtype="OnHook">
+					<mod modtype="replace" hdr="voiceport">
+						<msg_ref type="platform">Platform.voiceport1</msg_ref>
+					</mod>
+				</send>
+			</prelude>
+			<transition to="END" event="OnHookComplete"/>
+		</state>
+	</add_to>
+</pc2xml>

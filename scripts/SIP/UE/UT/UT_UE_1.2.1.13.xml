@@ -1,0 +1,24 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+
+<!-- First are the document type and the attributes for our document -->
+<pc2xml version="$Revision: 8188 $" name="UT_SIP-UE 1.2.1.13" descrip="Basic Session Establishment: UE Terminates Session UE Sends BYE " number="UT_SIP-UE 1.2.1.13">
+	<template name="UT_SIP-UE 1.2.1.13" file="./templates/ut/Term_DUT.xml"/>
+</pc2xml>

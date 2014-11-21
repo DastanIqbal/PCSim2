@@ -1,0 +1,456 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+
+<!-- First are the document type and the attributes for our document -->
+<pc2xml version="$Revision: 8188 $" name="NAT_UE_1.2.5.14" descrip="Call to Full-ICE UE from a Lite-ICE UE (DUT) - turn candidate" number="NAT_UE_1.2.5.14">
+	<template file="./templates/CallOrigAtUETemp.xml" name="UE1"/>
+	<remove_from fsm="UE1">
+		<state ID="Setup"/>
+		<state ID="Alerting"/>
+		<state ID="Answer"/>
+		<state ID="Connected"/>
+<!--		<state ID="Alerting"/>
+		<state ID="Proceeding"/> -->
+	</remove_from>
+	<add_to fsm="UE1">
+		
+		<state ID="Setup">
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>Invite</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="100-INVITE"/>
+						<var name="sdp">
+							<msg_ref type="sip">INVITE.SDP</msg_ref>
+						</var>
+						<var name="ip"> 
+							<msg_ref type="sdp">INVITE.c.address</msg_ref>
+						</var>
+						<var name="port"> 
+							<msg_ref type="sdp">INVITE.audio.port</msg_ref>
+						</var>
+									
+						<verify step="1" requirements="RFC4361,RFC4365,RFC4367,RFC4369,RFC4371,RFC4446,RFC4496,RFC4497,RFC4501,RFC4506,RFC4509,RFC4510" >
+							<contains>
+								<msg_ref type="sip">INVITE.SDP</msg_ref>
+								<expr>a=ice-lite</expr>
+							</contains>
+						</verify>
+								
+						<verify step="1" requirements="RFC4361,RFC4365,RFC4367,RFC4369,RFC4371,RFC4446,RFC4496,RFC4497,RFC4501,RFC4506,RFC4509,RFC4510" >
+							<contains>
+								<msg_ref type="sdp">INVITE.host-1.component-id</msg_ref>
+								<expr>1</expr>
+							</contains>
+						</verify>
+						
+						<verify step="1" requirements="RFC4361,RFC4365,RFC4367,RFC4369,RFC4371,RFC4446,RFC4496,RFC4497,RFC4501,RFC4506,RFC4509,RFC4510" >
+							<contains>
+								<msg_ref type="sdp">INVITE.host-2.component-id</msg_ref>
+								<expr>2</expr>
+							</contains>
+						</verify>
+						<!--  This verify is checking that the foundations are the same and that 
+							component-id starts at 1 and is incremented by 1 -->
+						<verify step="1" requirements="RFC4361,RFC4365,RFC4367,RFC4369,RFC4371,RFC4446,RFC4496,RFC4497,RFC4501,RFC4506,RFC4509,RFC4510" >
+							<eq>
+								<msg_ref type="sdp">INVITE.host-1.foundation</msg_ref>
+								<msg_ref type="sdp">INVITE.host-2.foundation</msg_ref>
+							</eq>
+						</verify>
+						
+						<verify step="1" requirements="RFC4361,RFC4365,RFC4367,RFC4369,RFC4371,RFC4446,RFC4496,RFC4497,RFC4501,RFC4506,RFC4509,RFC4510" >
+							<dnc>
+								<msg_ref type="sdp">INVITE.host-1</msg_ref>
+								<expr>raddr</expr>
+							</dnc>
+						</verify>
+						
+						<verify step="1" requirements="RFC4361,RFC4365,RFC4367,RFC4369,RFC4371,RFC4446,RFC4496,RFC4497,RFC4501,RFC4506,RFC4509,RFC4510" >
+							<dnc>
+								<msg_ref type="sdp">INVITE.host-1</msg_ref>
+								<expr>rport</expr>
+							</dnc>
+						</verify>
+
+						<verify step="1" requirements="RFC4361,RFC4365,RFC4367,RFC4369,RFC4371,RFC4446,RFC4496,RFC4497,RFC4501,RFC4506,RFC4509,RFC4510" >
+							<contains>
+								<msg_ref type="sip">INVITE.SDP</msg_ref>
+								<expr>a=ice-pwd:</expr>
+							</contains>
+						</verify>
+
+						<verify step="1" requirements="RFC4361,RFC4365,RFC4367,RFC4369,RFC4371,RFC4446,RFC4496,RFC4497,RFC4501,RFC4506,RFC4509,RFC4510" >
+							<gte>
+								<msg_ref type="sdp" length="true">INVITE.ice-pwd.value</msg_ref>
+								<expr>22</expr>
+							</gte>
+						</verify>
+
+						<verify step="1" requirements="RFC4361,RFC4365,RFC4367,RFC4369,RFC4371,RFC4446,RFC4496,RFC4497,RFC4501,RFC4506,RFC4509,RFC4510" >
+							<contains>
+								<msg_ref type="sip">INVITE.SDP</msg_ref>
+								<expr>a=ice-ufrag:</expr>
+							</contains>
+						</verify>
+
+						<verify step="1" requirements="RFC4361,RFC4365,RFC4367,RFC4369,RFC4371,RFC4446,RFC4496,RFC4497,RFC4501,RFC4506,RFC4509,RFC4510" >
+							<gte>
+								<msg_ref type="sdp" length="true">INVITE.ice-ufrag.value</msg_ref>
+								<expr>4</expr>
+							</gte>
+						</verify>
+						
+						<verify step="1" requirements="RFC4361,RFC4365,RFC4367,RFC4369,RFC4371,RFC4446,RFC4496,RFC4497,RFC4501,RFC4506,RFC4509,RFC4510" >
+							<contains>
+								<msg_ref type="sip">INVITE.SDP</msg_ref>
+								<expr>a=rtcp</expr>
+							</contains>
+						</verify>
+						<generate event="Branch1Event" fsm="STUN1"/>
+					</then>
+				</if>
+			</response>
+			<!-- Transitions for Setup state -->
+			<transition to="Setup" event="INVITE"/>
+			<transition to="Alerting" event="Branch2Event"/>
+		</state>
+		
+		<state ID="Alerting">
+			<prelude once="true">
+				<send protocol="sip" msgtype="200-Invite">
+					<mod modtype="replace" hdr="c" param="address">
+						<msg_ref type="platform">Platform.TURN IP Address</msg_ref>
+					</mod>
+					<mod modtype="replace" hdr="audio" param="port">
+						<msg_ref type="platform">Platform.TURN UDP Port</msg_ref>
+					</mod>
+					<mod modtype="add" hdr="SDP">
+						<var_expr>
+							<expr>a=ice-pwd:</expr>
+							<msg_ref type="platform">UE1.STUN Password Credential</msg_ref>
+							<expr>\r\na=ice-ufrag:</expr>
+							<msg_ref type="platform">UE1.STUN Username Credential</msg_ref>
+							<expr>\r\na=candidate:1 1 UDP </expr>
+							<msg_ref type="platform">UE1.STUN Priority</msg_ref>
+							<expr> </expr>
+							<msg_ref type="platform">UE1.IP</msg_ref>
+							<expr> </expr>
+							<msg_ref type="platform">UE1.SDPPort</msg_ref>
+							<expr> typ host unknownAttr unknownVal\r\n</expr>
+							<expr>a=candidate:2 1 UDP </expr>
+							<msg_ref type="platform">Platform.STUN Server Priority</msg_ref>
+							<expr> </expr>
+							<msg_ref type="platform">Platform.STUN IP Address</msg_ref>
+							<expr> </expr>
+							<msg_ref type="platform">Platform.STUN UDP Port</msg_ref>
+							<expr> typ srflx raddr </expr>
+							<msg_ref type="platform">UE1.IP</msg_ref>
+							<expr> rport </expr>
+							<msg_ref type="platform">UE1.SDPPort</msg_ref>
+							<expr>unknownAttr unknownVal\r\n</expr>
+							<expr>a=candidate:3 1 UDP </expr>
+							<msg_ref type="platform">Platform.TURN Server Priority</msg_ref>
+							<expr> </expr>
+							<msg_ref type="platform">Platform.TURN IP Address</msg_ref>
+							<expr> </expr>
+							<msg_ref type="platform">Platform.TURN UDP Port</msg_ref>
+							<expr> typ relay raddr </expr>
+							<msg_ref type="platform">Platform.TURN IP Address</msg_ref>
+							<expr> rport </expr>
+							<msg_ref type="platform">Platform.TURN UDP Port</msg_ref>
+							<expr>unknownAttr unknownVal</expr>
+						</var_expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>ACK</expr>
+					</eq>
+					<then>
+						<verify step="5" requirements="RFC4502">
+							<eq>
+								<msg_ref type="sip">Request</msg_ref>
+								<expr>ACK</expr>
+							</eq>
+						</verify>
+						<generate event="Branch3Event" fsm="STUN1"/>					
+					</then>
+				</if>
+			</response>
+			<transition to="Connected" event="ACK"/>
+		</state>
+		
+		<state ID="Connected">
+			<transition to="SendReinvite" event="Branch4Event"/>
+		</state>
+		<!-- SendReinvite STATE -->
+		<state ID="SendReinvite">
+			<prelude once="true">
+				<send protocol="sip" msgtype="ReInvite">
+					<mod modtype="replace" hdr="c" param="address">
+						<msg_ref type="platform">UE1.IP</msg_ref>
+					</mod>
+					<mod modtype="replace" hdr="audio" param="port">
+						<msg_ref type="platform">UE1.SDPPort</msg_ref>
+					</mod>
+					<mod modtype="add" hdr="SDP">
+						<var_expr>
+							<expr>a=ice-pwd:</expr>
+							<msg_ref type="platform">UE1.STUN Password Credential</msg_ref>
+							<expr>\r\na=ice-ufrag:</expr>
+							<msg_ref type="platform">UE1.STUN Username Credential</msg_ref>
+							<expr>\r\na=candidate:1 1 UDP </expr>
+							<msg_ref type="platform">UE1.STUN Priority</msg_ref>
+							<expr> </expr>
+							<msg_ref type="platform">UE1.IP</msg_ref>
+							<expr> </expr>
+							<msg_ref type="platform">UE1.SDPPort</msg_ref>
+							<!-- add remote candidates in the ReINVITE request -->
+							<expr>\r\na=remote-candidates:1 </expr>
+							<msg_ref type="platform">UE1.IP</msg_ref>
+							<expr> </expr>
+							<msg_ref type="platform">UE1.SDPPort</msg_ref>
+						</var_expr>
+					</mod>				
+				</send>
+			</prelude>
+				
+			<transition to="SendReinvite" event="1xx-INVITE"/>
+			<transition to="MediaSelected" event="200-INVITE"/>
+		</state>
+		<!-- MediaSelected STATE -->
+		<state ID="MediaSelected" timer="4000">
+			<prelude>
+				<send protocol="sip" msgtype="ACK"/>
+			</prelude>
+			
+			<!-- Transitions for Connected state -->
+			<transition to="Releasing1" event="TimerExpired"/>
+		</state>
+		<!-- RELEASING STATE -->
+		<state ID="Releasing1">
+			<prelude>
+				<send protocol="sip" msgtype="Bye"/>
+			</prelude>
+			<!-- Transitions for Releasing state -->
+			<transition to="OnHook1" event="200-BYE"/>
+		</state>
+		<!-- ONHOOK STATE -->
+		<state ID="OnHook1">
+			<prelude>
+				<send protocol="utility" msgtype="OnHook"/>
+			</prelude>
+			<postlude>
+				<generate event="SucceedEvent" fsm="STUN1"/>
+			</postlude>
+			<transition to="END" event="OnHookComplete"/>
+		</state>
+	</add_to>
+	<fsm name="STUN1">
+		<models>
+			<stun/>
+		</models>
+		<NE sim_type="term" elements="SCSCF1 PCSCF1" targets="SCSCF1"/>
+	
+		<states initialstate="WaitBranch1Event"> 
+			<!-- Its important for STUN FSM to wait for Branch4Event. Its done to test step 3 of the testcase -->
+			<!-- WaitBranch1Event STATE -->
+			<state ID="WaitBranch1Event">
+				<response>
+					<!-- While we are waiting for the Branch1Event, we need to respond to any
+						BindingRequest messages that the DUT may send. -->
+					<if>
+						<eq>
+							<msg_ref type="stun">BindingRequest.DestinationAddress.Port</msg_ref>
+							<msg_ref type="platform">Platform.SIP Stack 1 UDP Port</msg_ref>
+						</eq>
+						<then>
+							<send protocol="stun" msgtype="BindingResponse"/>
+						</then>
+					</if>
+				</response>
+				<transition to="WaitBranch1Event" event="BindingRequest"/>
+				<transition to="HostCandidate" event="Branch1Event"/>
+	`		</state>
+		
+			<!-- HostCandidate State -->
+			<state ID="HostCandidate">
+				<prelude once="true">
+					<send protocol="stun" msgtype="BindingRequest" originator="UE1" ice="true" integrity="true">
+						<mod modtype="replace" hdr="Username">
+							<msg_ref type="platform">UE1.username</msg_ref>
+						</mod>
+						<mod modtype="replace" hdr="Priority">
+							<msg_ref type="platform">UE1.STUN Priority</msg_ref>
+						</mod>
+						<mod modtype="replace" hdr="Ice-Controlling">
+							<expr>234567</expr>
+						</mod>
+						<to>
+							<ip>
+								<var_ref name="ip"/>
+							</ip>
+							<port>
+								<var_ref name="port"/>
+							</port>
+						</to>
+					</send>
+				</prelude>
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="stun">Response</msg_ref>
+							<expr>BindingResponse</expr>
+						</eq>
+						<then>
+						
+							<verify step="3" requirements="RFC4373,RFC4408,RFC4409,RFC4411,RFC4415,RFC4416,RFC4417,RFC4529">
+								<eq>
+									<msg_ref type="stun">message</msg_ref>
+									<expr>BindingResponse</expr>
+								</eq>
+							</verify>
+							<verify step="3" requirements="RFC4373,RFC4408,RFC4409,RFC4411,RFC4415,RFC4416,RFC4417,RFC4529">
+								<contains>
+									<msg_ref type="stun">BindingResponse</msg_ref>
+									<expr>FINGERPRINT</expr>
+								</contains>
+							</verify>
+							<verify step="3" requirements="RFC4373,RFC4408,RFC4409,RFC4411,RFC4415,RFC4416,RFC4417,RFC4529">
+								<notnull>
+									<msg_ref type="stun">BindingResponse.FingerPrint.hash</msg_ref>
+								</notnull>
+							</verify>
+							<verify step="3" requirements="RFC4373,RFC4408,RFC4409,RFC4411,RFC4415,RFC4416,RFC4417,RFC4529">
+								<contains>
+									<msg_ref type="stun">BindingResponse</msg_ref>
+									<expr>MESSAGE-INTEGRITY</expr>
+								</contains>
+							</verify>
+							<generate event="Branch2Event" fsm="UE1"/>
+						</then>
+					</if>
+					<if>
+						<eq>
+							<msg_ref type="stun">BindingRequest.DestinationAddress.Port</msg_ref>
+							<msg_ref type="platform">Platform.SIP Stack 1 UDP Port</msg_ref>
+						</eq>
+						<then>
+							<send protocol="stun" msgtype="BindingResponse"/>
+						</then>
+					</if>
+				</response>
+				<transition to="WaitBranch3Event" event="BindingResponse"/>
+				<transition to="HostCandidate" event="BindingRequest"/>
+			</state>
+			
+			<state ID="WaitBranch3Event">
+				<response>
+					<!-- While we are waiting for the Branch1Event, we need to respond to any
+						BindingRequest messages that the DUT may send. -->
+					<if>
+						<eq>
+							<msg_ref type="stun">BindingRequest.DestinationAddress.Port</msg_ref>
+							<msg_ref type="platform">Platform.SIP Stack 1 UDP Port</msg_ref>
+						</eq>
+						<then>
+							<send protocol="stun" msgtype="BindingResponse"/>
+						</then>
+					</if>
+				</response>
+				<transition to="WaitBranch3Event" event="BindingRequest"/>
+				<transition to="UseCandidate" event="Branch3Event"/>
+			</state>
+				
+			<state ID="UseCandidate">
+				<prelude once="true">
+					<send protocol="stun" msgtype="BindingRequest" originator="TURN" ice="true" candidate="true">
+						<to>
+							<ip>
+								<var_ref name="ip"/>
+							</ip>
+							<port>
+								<var_ref name="port"/>
+							</port>
+						</to>
+					</send>
+				</prelude>
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="stun">Response</msg_ref>
+							<expr>BindingResponse</expr>
+						</eq>
+						<then>
+							<verify step="6" requirements="RFC4408,RFC4373,RFC4382,RFC4416,RFC4409">
+								<eq>
+									<msg_ref type="stun">message</msg_ref>
+									<expr>BindingResponse</expr>
+								</eq>
+							</verify>
+						</then>
+					</if>
+					<if>
+						<eq>
+							<msg_ref type="stun">BindingRequest.DestinationAddress.Port</msg_ref>
+							<msg_ref type="platform">Platform.SIP Stack 1 UDP Port</msg_ref>
+						</eq>
+						<then>
+							<send protocol="stun" msgtype="BindingResponse"/>
+						</then>
+					</if>
+				</response>
+				<!-- Transitions for BindingReq state -->
+				<transition to="StunServer" event="BindingResponse"/>
+				<transition to="UseCandidate" event="BindingRequest"/>
+			</state>
+			<!-- BindingReq2 State -->
+			<state ID="StunServer">
+				<prelude once="true">
+					<generate event="Branch4Event" fsm="UE1"/>
+				</prelude>
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="stun">BindingRequest.DestinationAddress.Port</msg_ref>
+							<msg_ref type="platform">Platform.SIP Stack 1 UDP Port</msg_ref>
+						</eq>
+						<then>
+							<send protocol="stun" msgtype="BindingResponse"/>
+						</then>
+					</if>
+				</response>
+				<!-- Transitions for BindingReq state -->
+				<transition to="StunServer" event="BindingResponse"/>
+				<transition to="EndStun" event="SucceedEvent"/>
+			</state>
+			<!-- EndStun State -->
+			<state ID="EndStun" ES="true" offHookOK="true"/>
+				
+		</states>
+	</fsm>
+</pc2xml>

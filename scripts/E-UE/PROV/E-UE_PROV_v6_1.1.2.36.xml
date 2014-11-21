@@ -1,0 +1,64 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+Change History: (Author & Date)
+
+
+-->
+<!-- Document type and attributes. -->
+<pc2xml version="$Revision: 6076 $"
+        name="E-UE_PROV_1.1.2.36"
+        descrip="eUE remains disabled until re-initialized by CM."
+        number="E-UE_PROV_1.1.2.36">
+
+
+    <!-- Reset UE; start capture. -->
+    <template file="./templates/EUE_Prov_B_1_1_1.xml" name="RejectConfig"/>
+
+    <add_to fsm="RejectConfig">
+        <transition from="StartCapture_RebootWait" to="EDVAFailsProvision" event="TimerExpired"/>
+        
+        <!-- E/MTA DUT reports provisioning failConfigFileError code (3) to the provisioning service (SNMP Entity). -->
+        <!-- eUE does not send DHCP SOLICIT. -->
+        <state ID="EDVAFailsProvision" timer="30000">
+            <prelude once="true">
+                <sleep time="30000"/>
+                
+                <parse_capture name="eUE_Prov" file="X_eUEv6/1-1-2-36.pcap">
+                    <parser_filter protocol="dhcpv6" clientMAC="DUT.MAC Address"/>
+                </parse_capture>
+
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>DOCS-CABLE-DEVICE-MIB::docsDevServerBootState.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">UE0.IP</msg_ref>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="6">
+                    <contains>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>3</expr>
+                    </contains>
+                </verify>
+                <verify step="7">
+                    <null>
+                        <capture_ref type="dhcpv6" name="eUE_Prov" msg_instance="any" >Solicit.num</capture_ref>
+                    </null>
+                </verify>
+            </response>
+			<transition to="END" event="TimerExpired"/>
+        </state>
+    </add_to>
+</pc2xml>

@@ -1,0 +1,59 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+
+<pc2xml version="$Revision: 8188 $" name="UT_UE_1.18.1" descrip="This is a unit test script for the UE_1.18.1 test script." number="1">
+	<template name="RegUE0" file="$UT_PATH/Templates/ut/Reg_DUT.xml"/>
+	<template name="UE0" file="$UT_PATH/Templates/ut/Orig_DUT.xml"/>
+	<add_to fsm="RegUE0">
+		<NE ext_require="gruu"/>
+		<transition from="Register" to="WaitSuccess" event="200-Register"/>
+		<transition from="Digest" to="WaitSuccess" event="200-Register"/>
+		<state ID="WaitSuccess">
+			<transition to="END" event="SucceedEvent"/>
+		</state>
+	</add_to>
+	<remove_from fsm="UE0">
+		<state ID="Setup"/>
+	</remove_from>
+	<add_to fsm="UE0">
+		<NE ext_require="gruu"/>
+		<state ID="Setup">
+			<!-- Step 1 from the Default Message Flow Call-Term-at-UE(DUT) Sequence Diagram -
+               Test 18x response for reliability for possible Prack message- send Invite -->
+			<prelude>
+				<sleep time="12000"/>
+				<send protocol="sip" msgtype="Invite" target="UE1" originator="DUT">
+					<mod modtype="replace" hdr="Route" hdr_instance="2">
+						<expr>&lt;sip:P1.test.com;lr&gt;,&lt;sip:P2.localtest.com;lr&gt;,&lt;sip:P3.wildtest.com;lr&gt;</expr>
+					</mod>
+				</send>
+			</prelude>
+			<!-- Transitions for Setup state -->
+			<transition to="ACK" event="500-INVITE"/>
+		</state>
+		<state ID="ACK">
+			<prelude>
+				<send protocol="sip" msgtype="ACK" target="UE1" originator="DUT"/>
+				<generate event="SucceedEvent" fsm="RegUE0"/>
+			</prelude>
+		</state>
+		<states initialstate="Setup"/>
+	</add_to>
+</pc2xml>

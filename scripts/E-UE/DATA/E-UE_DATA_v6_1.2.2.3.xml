@@ -1,0 +1,756 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+ Change History: (Author & Date)
+-->
+<!-- Document type and attributes. -->
+<pc2xml version="$Revision: 6076 $"
+        name="E-UE_DATA_1.2.2.3"
+        descrip="eUE ability to properly implement the pktcEUEUsrAppMapTable defined in CL-PKTC-EUE-USER-MIB."
+        number="E-UE_DATA_1.2.2.3">
+
+
+    <!-- Reset UE; start capture. -->
+    <template file="./templates/EUE_Prov_B_1_1_1.xml" name="EUEDevOpTable"/>
+
+    <add_to fsm="EUEDevOpTable">
+        <transition from="StartCapture_RebootWait" to="EUEProvisions1" event="TimerExpired"/>
+
+
+<!-- vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv -->
+<!-- ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ -->
+        <!-- 11 E-UE DUT provisions successfully and becomes operational. -->
+        <state ID="EUEProvisions1">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvisioningState.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="11">
+                    <contains>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>1</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="MIBWalk1" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+        <!-- 12 Repeat Steps 3-5 above. -->
+        <!-- 12-3 SNMPv3 Walk pktcEUEUsrAppMapTable.
+               eUE returns following table of objects and values shown for each object.
+               Note: There must be one index shown for each user. -->
+                    <!-- pktcEUEUsrAppMapAppOrgID = 4491 -->
+                    <!-- pktcEUEUsrAppMapAppIdentifier = RST (1) -->
+                    <!-- pktcEUEUsrAppMapAppIndexRef = 0 -->
+                    <!-- pktcEUEUsrAppMapAppAdminStat = active(1) -->
+                    <!-- pktcEUEUsrAppMapAppAdminStatInfo = status information may or may not be present. -->
+                    <!-- pktcEUEUsrAppMapAppOperStat = inactive(2) -->
+                    <!-- pktcEUEUsrAppMapAppOperStatInfo = status information may or may not be present. -->
+                    <!-- pktcEUEUsrAppMapRowStatus = active(1) -->
+        <state ID="MIBWalk1">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPGetTable">
+                    <mod modtype="add" hdr="oids">
+                        <expr>CL-PKTC-EUE-USER-MIB::pktcEUEUsrAppMapTable</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+                    <mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPRespFailure</expr>
+                    </eq>
+                <then>
+                    <fail/>
+                </then>
+                </if>
+                <verify step="12-3">
+                    <and>
+                       <!-- pktcEUEUsrAppMapAppOrgID = 4491 -->
+                       <eq>
+                           <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                           <expr>4491</expr>
+                       </eq>
+                    <and>
+                       <!-- pktcEUEUsrAppMapAppIdentifier = RST (1) -->
+                       <eq>
+                           <msg_ref type="utility" index="0 1 2">SNMPResp.varBind</msg_ref>
+                           <expr>1</expr>
+                       </eq>
+                    <and>
+                       <!-- pktcEUEUsrAppMapAppIndexRef = 0 -->
+                       <eq>
+                           <msg_ref type="utility" index="0 2 2">SNMPResp.varBind</msg_ref>
+                           <expr>0</expr>
+                       </eq>
+                    <and>
+                       <!-- pktcEUEUsrAppMapAppAdminStat = active(1) -->
+                       <eq>
+                           <msg_ref type="utility" index="0 3 2">SNMPResp.varBind</msg_ref>
+                           <expr>1</expr>
+                       </eq>
+                    <and>
+                       <!-- pktcEUEUsrAppMapAppAdminStatInfo = status information may or may not be present. -->
+                       <contains>
+                           <msg_ref type="utility" index="0 4 0">SNMPResp.varBind</msg_ref>
+						   <expr>""</expr>
+                       </contains>
+                    <and>
+                       <!-- pktcEUEUsrAppMapAppOperStat = inactive(2) -->
+                       <eq>
+                           <msg_ref type="utility" index="0 5 2">SNMPResp.varBind</msg_ref>
+                           <expr>2</expr>
+                       </eq>
+                    <and>
+                       <!-- pktcEUEUsrAppMapAppOperStatInfo = status information may or may not be present. -->
+                       <contains>
+                           <msg_ref type="utility" index="0 6 2">SNMPResp.varBind</msg_ref>
+						   <expr>"IndexRef is zero"</expr>
+                       </contains>
+                       <!-- pktcEUEUsrAppMapRowStatus = active(1) -->
+                       <eq>
+                           <msg_ref type="utility" index="0 7 2">SNMPResp.varBind</msg_ref>
+                           <expr>1</expr>
+                       </eq>
+                    </and>
+                    </and>
+                    </and>
+                    </and>
+                    </and>
+                    </and>
+                    </and>
+                </verify>
+            </response>
+			<postlude>
+                <stop_capture/>
+            </postlude>
+            <transition to="ReConfigure2" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+
+<!-- vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv -->
+<!-- ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ -->
+        <!-- 12-4 Stop IP capture and save trace file.
+               Configure so that pktcEUEUsrIMPIId contains different value for private identity
+               and pktcEUEUsrIMPUId contains different value for public identity.  -->
+        <!-- 12-5 Repeat Steps 2,3 above.
+               Indexed values per pktcEUEUsrIMPIId and pktcEUEUsrIMPUId reflect
+               modifications made to config file in Step 4. -->
+
+        <!-- <state ID="ReConfigure2"
+               provFile="E-UE_PROV_v6_2.1.2.1_2.bin"
+               policyFile="MTAFORCW122_test"
+               nextState="Reset2"/>
+                   Indexed values pktcEUEUsrIMPUId reflect modifications in Step 8. -->
+
+		<state ID="ReConfigure2">
+			<prelude>
+				<log promptUser="true" expr="Section 2: Configure the device with Bin File: v6.C.1.2.4a.bin and Policy: X_eUEv6, Save, Deploy DHCPv6 and click OK."/>
+				<generate event="Branch1Event"/>
+			</prelude>
+			<transition to="Reset2" event="Branch1Event"/>
+		</state> 
+				   
+        <state ID="Reset2" timer="120000">
+            <prelude once="true">
+                <start_capture>
+                    <filter>
+                        <var_expr>
+							<expr>host </expr>
+							<msg_ref type="platform">DUT.IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.CM IP Address</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.DHCP Server IP</msg_ref>
+						</var_expr>
+                    </filter>
+                </start_capture>
+
+                <send protocol="utility" msgtype="SNMPSet">
+                    <mod modtype="add" hdr="array">
+                        <var_expr>
+                            <expr>varBind 1 1 3 \r\n ][ , </expr>
+                            <expr>DOCS-CABLE-DEVICE-MIB::docsDevResetNow.0,INTEGER,1][\r\n</expr>
+                        </var_expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.CM IP Address</msg_ref>
+                    </mod>
+                    <!-- Always use version 2c for a CM reset -->
+					<mod modtype="replace" hdr="version">
+						<expr>2c</expr>
+					</mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPRespFailure</expr>
+                    </eq>
+                    <then>
+                        <fail/>
+                    </then>
+                </if>
+                <if>
+                    <or>
+                        <eq>
+                            <msg_ref type="sip">REGISTER.Contact.expires</msg_ref>
+                            <expr>0</expr>
+                        </eq>
+                        <eq>
+                            <msg_ref type="sip">REGISTER.Expires.value</msg_ref>
+                            <expr>0</expr>
+                        </eq>
+                    </or>
+                    <then>
+                        <send protocol="sip" msgtype="200-REGISTER"/>
+                    </then>
+                </if>
+            </response>
+            <transition to="EUEProvisions2" event="TimerExpired"/>
+            <transition to="Reset2" event="SNMPResp"/>
+            <transition to="Reset2" event="REGISTER"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+        <state ID="EUEProvisions2">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvisioningState.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="12a-2">
+                    <contains>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>1</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="MIBWalk2" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+        <!-- 12a-3 SNMPv3 Walk pktcEUEUsrAppMapTable. -->
+        <state ID="MIBWalk2">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPGetTable">
+                    <mod modtype="add" hdr="oids">
+                        <expr>CL-PKTC-EUE-USER-MIB::pktcEUEUsrAppMapTable</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+                    <mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPRespFailure</expr>
+                    </eq>
+                <then>
+                    <fail/>
+                </then>
+                </if>
+                <verify step="12a-3">
+                    <and>
+                       <!-- pktcEUEUsrAppMapAppOrgID = 4491 -->
+                       <eq>
+                           <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                           <expr>4491</expr>
+                       </eq>
+                    <and>
+                       <!-- pktcEUEUsrAppMapAppIdentifier = RST (1) -->
+                       <eq>
+                           <msg_ref type="utility" index="0 1 2">SNMPResp.varBind</msg_ref>
+                           <expr>1</expr>
+                       </eq>
+                    <and>
+                       <!-- pktcEUEUsrAppMapAppIndexRef = 0 -->
+                       <eq>
+                           <msg_ref type="utility" index="0 2 2">SNMPResp.varBind</msg_ref>
+                           <expr>0</expr>
+                       </eq>
+                    <and>
+                       <!-- pktcEUEUsrAppMapAppAdminStat = active(1) -->
+                       <eq>
+                           <msg_ref type="utility" index="0 3 2">SNMPResp.varBind</msg_ref>
+                           <expr>1</expr>
+                       </eq>
+                    <and>
+                       <!-- pktcEUEUsrAppMapAppAdminStatInfo = status information may or may not be present. -->
+                       <contains>
+                           <msg_ref type="utility" index="0 4 0">SNMPResp.varBind</msg_ref>
+						   <expr>""</expr>
+                       </contains>
+                    <and>
+                       <!-- pktcEUEUsrAppMapAppOperStat = inactive(2) -->
+                       <eq>
+                           <msg_ref type="utility" index="0 5 2">SNMPResp.varBind</msg_ref>
+                           <expr>2</expr>
+                       </eq>
+                    <and>
+                       <!-- pktcEUEUsrAppMapAppOperStatInfo = status information may or may not be present. -->
+                       <contains>
+                           <msg_ref type="utility" index="0 6 2">SNMPResp.varBind</msg_ref>
+						   <expr>"IndexRef is zero"</expr>
+                       </contains>
+                       <!-- pktcEUEUsrAppMapRowStatus = active(1) -->
+                       <eq>
+                           <msg_ref type="utility" index="0 7 2">SNMPResp.varBind</msg_ref>
+                           <expr>1</expr>
+                       </eq>
+                    </and>
+                    </and>
+                    </and>
+                    </and>
+                    </and>
+                    </and>
+                    </and>
+                </verify>
+            </response>
+			<postlude>
+                <stop_capture/>
+            </postlude>
+            <transition to="ReConfigure3" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+
+<!-- vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv -->
+<!-- ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ -->
+        <!-- 15h Using SNMPv2 manager repeat Steps 3 - 5 above. -->
+        <!-- 15h-2 Stop IP capture and save trace file.
+               Configure so that pktcEUEUsrIMPIId contains different value for private identity
+               and pktcEUEUsrIMPUId contains different value for public identity.
+               Indexed values per pktcEUEUsrIMPIId and pktcEUEUsrIMPUId reflect
+               modifications made to config file in Step 4. -->
+
+        <!-- <state ID="ReConfigure3"
+               provFile="E-UE_PROV_v6_2.1.2.1_2.bin"
+               policyFile="MTAFORCW122_test"
+               nextState="Reset3"/>
+                   Indexed values pktcEUEUsrIMPUId reflect modifications in Step 8. -->
+
+		<state ID="ReConfigure3">
+			<prelude>
+				<log promptUser="true" expr="Section 3: Configure the device with Bin File: v6.C.1.2.4_Hybrid.bin and Policy: X_eUEv6_Hybrid, Save, Deploy DHCPv6 and click OK."/>
+				<generate event="Branch1Event"/>
+			</prelude>
+			<transition to="Reset3" event="Branch1Event"/>
+		</state>
+				   
+        <state ID="Reset3" timer="120000">
+            <prelude once="true">
+                <start_capture>
+                    <filter>
+                        <var_expr>
+							<expr>host </expr>
+							<msg_ref type="platform">DUT.IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.CM IP Address</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.DHCP Server IP</msg_ref>
+						</var_expr>
+                    </filter>
+                </start_capture>
+
+                <send protocol="utility" msgtype="SNMPSet">
+                    <mod modtype="add" hdr="array">
+                        <var_expr>
+                            <expr>varBind 1 1 3 \r\n ][ , </expr>
+                            <expr>DOCS-CABLE-DEVICE-MIB::docsDevResetNow.0,INTEGER,1][\r\n</expr>
+                        </var_expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.CM IP Address</msg_ref>
+                    </mod>
+                    <!-- Always use version 2c for a CM reset -->
+					<mod modtype="replace" hdr="version">
+						<expr>2c</expr>
+					</mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPRespFailure</expr>
+                    </eq>
+                    <then>
+                        <fail/>
+                    </then>
+                </if>
+                <if>
+                    <or>
+                        <eq>
+                            <msg_ref type="sip">REGISTER.Contact.expires</msg_ref>
+                            <expr>0</expr>
+                        </eq>
+                        <eq>
+                            <msg_ref type="sip">REGISTER.Expires.value</msg_ref>
+                            <expr>0</expr>
+                        </eq>
+                    </or>
+                    <then>
+                        <send protocol="sip" msgtype="200-REGISTER"/>
+                    </then>
+                </if>
+            </response>
+            <transition to="EUEProvisions3" event="TimerExpired"/>
+            <transition to="Reset3" event="SNMPResp"/>
+            <transition to="Reset3" event="REGISTER"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+        <state ID="EUEProvisions3">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvisioningState.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+					<!-- Always use version 2c for Hybrid Mode -->
+					<mod modtype="replace" hdr="version">
+						<expr>2c</expr>
+					</mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="15h-2">
+                    <contains>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>1</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="MIBWalk3" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+        <state ID="MIBWalk3">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPGetTable">
+                    <mod modtype="add" hdr="oids">
+                        <expr>CL-PKTC-EUE-USER-MIB::pktcEUEUsrAppMapTable</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+                    <!-- Always use version 2c for Hybrid Mode -->
+					<mod modtype="replace" hdr="version">
+						<expr>2c</expr>
+					</mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPRespFailure</expr>
+                    </eq>
+                <then>
+                    <fail/>
+                </then>
+                </if>
+                <verify step="15h-3">
+                    <and>
+                       <!-- pktcEUEUsrAppMapAppOrgID = 4491 -->
+                       <eq>
+                           <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                           <expr>4491</expr>
+                       </eq>
+                    <and>
+                       <!-- pktcEUEUsrAppMapAppIdentifier = RST (1) -->
+                       <eq>
+                           <msg_ref type="utility" index="0 1 2">SNMPResp.varBind</msg_ref>
+                           <expr>1</expr>
+                       </eq>
+                    <and>
+                       <!-- pktcEUEUsrAppMapAppIndexRef = 0 -->
+                       <eq>
+                           <msg_ref type="utility" index="0 2 2">SNMPResp.varBind</msg_ref>
+                           <expr>0</expr>
+                       </eq>
+                    <and>
+                       <!-- pktcEUEUsrAppMapAppAdminStat = active(1) -->
+                       <eq>
+                           <msg_ref type="utility" index="0 3 2">SNMPResp.varBind</msg_ref>
+                           <expr>1</expr>
+                       </eq>
+                    <and>
+                       <!-- pktcEUEUsrAppMapAppAdminStatInfo = status information may or may not be present. -->
+                       <contains>
+                           <msg_ref type="utility" index="0 4 0">SNMPResp.varBind</msg_ref>
+						   <expr>""</expr>
+                       </contains>
+                    <and>
+                       <!-- pktcEUEUsrAppMapAppOperStat = inactive(2) -->
+                       <eq>
+                           <msg_ref type="utility" index="0 5 2">SNMPResp.varBind</msg_ref>
+                           <expr>2</expr>
+                       </eq>
+                    <and>
+                       <!-- pktcEUEUsrAppMapAppOperStatInfo = status information may or may not be present. -->
+                       <contains>
+                           <msg_ref type="utility" index="0 6 2">SNMPResp.varBind</msg_ref>
+						   <expr>"IndexRef is zero"</expr>
+                       </contains>
+                       <!-- pktcEUEUsrAppMapRowStatus = active(1) -->
+                       <eq>
+                           <msg_ref type="utility" index="0 7 2">SNMPResp.varBind</msg_ref>
+                           <expr>1</expr>
+                       </eq>
+                    </and>
+                    </and>
+                    </and>
+                    </and>
+                    </and>
+                    </and>
+                    </and>
+                </verify>
+            </response>
+			<postlude>
+                <stop_capture/>
+            </postlude>
+            <transition to="ReConfigure4" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+
+<!-- vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv -->
+<!-- ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ -->
+        <!-- 15ah-2 Stop IP capture and save trace file.
+               Configure so that pktcEUEUsrIMPIId contains different value for private identity
+               and pktcEUEUsrIMPUId contains different value for public identity.  -->
+
+        <!-- <state ID="ReConfigure4"
+               provFile="E-UE_PROV_v6_2.1.2.1_2.bin"
+               policyFile="MTAFORCW122_test"
+               nextState="Reset4"/>
+                   Indexed values pktcEUEUsrIMPUId reflect modifications in Step 8. -->
+
+		<state ID="ReConfigure4">
+			<prelude>
+				<log promptUser="true" expr="Section 4: Configure the device with Bin File: v6.C.1.2.4a_Hybrid.bin and Policy: X_eUEv6_Hybrid, Save, Deploy DHCPv6 and click OK."/>
+				<generate event="Branch1Event"/>
+			</prelude>
+			<transition to="Reset4" event="Branch1Event"/>
+		</state>
+		
+        <state ID="Reset4" timer="120000">
+            <prelude once="true">
+                <start_capture>
+                    <filter>
+                        <var_expr>
+							<expr>host </expr>
+							<msg_ref type="platform">DUT.IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.CM IP Address</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.DHCP Server IP</msg_ref>
+						</var_expr>
+                    </filter>
+                </start_capture>
+
+                <send protocol="utility" msgtype="SNMPSet">
+                    <mod modtype="add" hdr="array">
+                        <var_expr>
+                            <expr>varBind 1 1 3 \r\n ][ , </expr>
+                            <expr>DOCS-CABLE-DEVICE-MIB::docsDevResetNow.0,INTEGER,1][\r\n</expr>
+                        </var_expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.CM IP Address</msg_ref>
+                    </mod>
+                    <!-- Always use version 2c for a CM reset -->
+					<mod modtype="replace" hdr="version">
+						<expr>2c</expr>
+					</mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPRespFailure</expr>
+                    </eq>
+                    <then>
+                        <fail/>
+                    </then>
+                </if>
+                <if>
+                    <or>
+                        <eq>
+                            <msg_ref type="sip">REGISTER.Contact.expires</msg_ref>
+                            <expr>0</expr>
+                        </eq>
+                        <eq>
+                            <msg_ref type="sip">REGISTER.Expires.value</msg_ref>
+                            <expr>0</expr>
+                        </eq>
+                    </or>
+                    <then>
+                        <send protocol="sip" msgtype="200-REGISTER"/>
+                    </then>
+                </if>
+            </response>
+            <transition to="EUEProvisions4" event="TimerExpired"/>
+            <transition to="Reset4" event="SNMPResp"/>
+            <transition to="Reset4" event="REGISTER"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+        <state ID="EUEProvisions4">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvisioningState.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+					<!-- Always use version 2c for Hybrid Mode -->
+					<mod modtype="replace" hdr="version">
+						<expr>2c</expr>
+					</mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="15ah-2">
+                    <contains>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>1</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="MIBWalk4" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+        <!-- 15ah-3 SNMPv3 Walk pktcEUEUsrAppMapTable. -->
+        <state ID="MIBWalk4">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPGetTable">
+                    <mod modtype="add" hdr="oids">
+                        <expr>CL-PKTC-EUE-USER-MIB::pktcEUEUsrAppMapTable</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+                    <!-- Always use version 2c for Hybrid Mode -->
+					<mod modtype="replace" hdr="version">
+						<expr>2c</expr>
+					</mod>
+                </send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPRespFailure</expr>
+                    </eq>
+                <then>
+                    <fail/>
+                </then>
+                </if>
+                <verify step="15ah-3">
+                    <and>
+                       <!-- pktcEUEUsrAppMapAppOrgID = 4491 -->
+                       <eq>
+                           <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                           <expr>4491</expr>
+                       </eq>
+                    <and>
+                       <!-- pktcEUEUsrAppMapAppIdentifier = RST (1) -->
+                       <eq>
+                           <msg_ref type="utility" index="0 1 2">SNMPResp.varBind</msg_ref>
+                           <expr>1</expr>
+                       </eq>
+                    <and>
+                       <!-- pktcEUEUsrAppMapAppIndexRef = 0 -->
+                       <eq>
+                           <msg_ref type="utility" index="0 2 2">SNMPResp.varBind</msg_ref>
+                           <expr>0</expr>
+                       </eq>
+                    <and>
+                       <!-- pktcEUEUsrAppMapAppAdminStat = active(1) -->
+                       <eq>
+                           <msg_ref type="utility" index="0 3 2">SNMPResp.varBind</msg_ref>
+                           <expr>1</expr>
+                       </eq>
+                    <and>
+                       <!-- pktcEUEUsrAppMapAppAdminStatInfo = status information may or may not be present. -->
+                       <contains>
+                           <msg_ref type="utility" index="0 4 0">SNMPResp.varBind</msg_ref>
+						   <expr>""</expr>
+                       </contains>
+                    <and>
+                       <!-- pktcEUEUsrAppMapAppOperStat = inactive(2) -->
+                       <eq>
+                           <msg_ref type="utility" index="0 5 2">SNMPResp.varBind</msg_ref>
+                           <expr>2</expr>
+                       </eq>
+                    <and>
+                       <!-- pktcEUEUsrAppMapAppOperStatInfo = status information may or may not be present. -->
+                       <contains>
+                           <msg_ref type="utility" index="0 6 2">SNMPResp.varBind</msg_ref>
+						   <expr>"IndexRef is zero"</expr>
+                       </contains>
+                       <!-- pktcEUEUsrAppMapRowStatus = active(1) -->
+                       <eq>
+                           <msg_ref type="utility" index="0 7 2">SNMPResp.varBind</msg_ref>
+                           <expr>1</expr>
+                       </eq>
+                    </and>
+                    </and>
+                    </and>
+                    </and>
+                    </and>
+                    </and>
+                    </and>
+                </verify>
+            </response>
+			<postlude>
+                <stop_capture/>
+            </postlude>
+            <transition to="END" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+    </add_to>
+</pc2xml>

@@ -1,0 +1,117 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+Change History: (Author & Date)
+
+
+-->
+<!-- Document type and attributes. -->
+<pc2xml version="$Revision: 6076 $"
+        name="E-UE_PROV_1.1.2.3"
+        descrip="eUE resolves TFTP server IP address via DNS from FQDN provided in DHCP configuration."
+        number="E-UE_PROV_1.1.2.3">
+
+
+    <!-- Reset UE; start capture. -->
+    <template file="./templates/EUE_Prov_B_1_1_1.xml" name="ResolvesTFTP"/>
+
+
+
+    <add_to fsm="ResolvesTFTP">
+        <transition from="StartCapture_RebootWait" to="CMProvisioned" event="TimerExpired"/>
+
+
+        <state ID="CMProvisioned">
+            <prelude once="true">
+                <stop_capture/>
+                <parse_capture name="eUE_Prov">
+                    <parser_filter ip="DUT.IP"/>
+                </parse_capture>
+                <parse_capture name="eUE_DHCPc6">
+                    <parser_filter protocol="dhcpv6" clientMAC="DUT.MAC Address"/>
+                </parse_capture>
+            </prelude>
+            <transition to="EDVAProvisions" event="SucceedEvent"/>
+        </state>
+
+
+        <!-- E/MTA DUT reports provisioning pass code (1) to provisioning service (SNMP Entity). -->
+        <state ID="EDVAProvisions">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>DOCS-CABLE-DEVICE-MIB::docsDevServerBootState.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">UE0.IP</msg_ref>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="2">
+                    <contains>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>1</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="RequestToSet" event="SNMPResp"/>
+        </state>
+
+
+
+        <!-- 3. eUE sends DNS AAAA request to resolve TFTP-FQDN.
+             4. eUE eUE received TFTP IP address from DNS server.
+             5. eUE sent TFTP read request to the IP address of TFTP server.
+             6. SNMP Set Request; pktcMtaDevConfigFile format tftp://FQDN/MTA config file name. -->
+        <state ID="RequestToSet">
+            <prelude>
+                <var name="tftp_fqdn">
+                    <var_expr>
+                        <expr>tftp://</expr>
+                        <msg_ref type="platform">DUT.TFTP FQDN</msg_ref>
+                        <expr>/</expr>
+                        <msg_ref type="platform">DUT.SC File</msg_ref>
+                    </var_expr>
+                </var>
+            </prelude>
+            <postlude>
+                <verify step="3, 4, 5, 6">
+                    <and>
+                        <eq>
+                            <capture_ref type="dns" name="eUE_Prov" hdr_instance="any">Query.qry.name.show</capture_ref>
+                            <msg_ref type="platform">DUT.TFPT FQDN</msg_ref>
+                        </eq>
+                    <and>
+                        <contains>
+                            <capture_ref type="dhcpv6" name="eUE_DHCPv6">Reply.Option2171.show</capture_ref>
+                            <msg_ref type="platform">DUT.TFPT FQDN</msg_ref>
+                        </contains>
+                    <and>
+                        <eq>
+                            <!-- should this be type tftp? -->
+                            <capture_ref type="dns" name="eUE_Prov">Read Request.source_file.show</capture_ref>
+                            <msg_ref type="platform">DUT.BC File</msg_ref>
+                        </eq>
+                        <eq>
+                            <capture_ref type="snmp" name="eUE_Prov" 
+                                         msg_instance="last" 
+                                         convertTo="string">Set Request.1-3-6-1-2-1-140-1-2-9-0.octets.value</capture_ref>
+                            <var_ref name="tftp_fqdn"/>
+                        </eq>
+                    </and>
+                    </and>
+                    </and>
+                </verify>
+            </postlude>
+        </state>
+    </add_to>
+</pc2xml>

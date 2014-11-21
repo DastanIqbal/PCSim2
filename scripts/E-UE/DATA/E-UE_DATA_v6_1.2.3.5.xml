@@ -1,0 +1,219 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+ Change History: (Author & Date)
+
+
+
+-->
+
+
+<!-- First are the document type and the attributes for our document -->
+<pc2xml version="$Revision: 7768 $" 
+	name="E-UE_DATA_1.2.3.5" 
+	descrip="Ability of eUE to Implement the Realm Table"
+	number="E-UE_DATA_1.2.3.5">
+
+	<!-- Step 1 -->
+	<template file="./templates/EUE_Prov_B_1_1_1.xml" name="RealmTable"/>
+
+	<add_to fsm="RealmTable">
+		<transition from="StartCapture_RebootWait" to="EUEProvision1" event="TimerExpired"/>
+
+		<!-- Step 2 The E-UE DUT provisions successfully and becomes operational. -->
+        <state ID="EUEProvision1">
+            <prelude once="true">				
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvisioningState.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+					<mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="7">
+                    <contains>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>1</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="VerifyRealmAvail" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+		
+		<!-- Step 3 Perform an SNMP query on pktcMtaDevRealmAvailSlot using the eUE interface. -->
+		<state ID="VerifyRealmAvail">
+			<prelude once="true">
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>PKTC-IETF-MTA-MIB::pktcMtaDevRealmAvailSlot.0</expr>
+                    </mod>
+					<mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+                    <mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+            	<if>
+					<eq>
+						<msg_ref type="utility">Response</msg_ref>
+						<expr>SNMPResp</expr>
+					</eq>
+					<then>
+						<verify step="8-3">
+							<eq>
+								<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                                <expr>0</expr>
+							</eq>
+						</verify>
+					</then>
+				</if>
+				<transition to="END" event="SNMPRespFailure" />
+				<transition to="VerifyDevRealmTable" event="SNMPResp" />
+            </response>
+		</state>
+		
+		<!-- Step 4 Perform an SNMP query on the usmUserTable using the eUE interface. -->
+		<state ID="VerifyDevRealmTable">
+			<prelude once="true">
+                <send protocol="utility" msgtype="SNMPGetTable">
+                    <mod modtype="add" hdr="oids">
+                        <expr>PKTC-IETF-MTA-MIB::pktcMtaDevRealmTable</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP Address</msg_ref>
+                    </mod>
+                    <mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+			    <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPRespFailure</expr>
+                    </eq>
+                <then>
+                    <fail/>
+                </then>
+                </if>   
+				<verify step="8-4">
+					<and>
+						<!-- pktcMtaDevRealmName = labrealm.com -->
+						<or>
+							<eq>
+								<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+								<expr>LABREALM.COM</expr>
+							</eq>
+							<eq>
+								<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+								<expr>labrealm.com</expr>
+							</eq>
+						</or>
+					<and>	
+						<!-- pktcMtaDevRealmPkinitGracePeriod = 15 -->
+						<eq>
+							<msg_ref type="utility" index="0 1 2">SNMPResp.varBind</msg_ref>
+							<expr>15</expr>
+						</eq>
+					<and>
+						<!-- pktcMtaDevRealmTgsGracePeriod = 10  -->
+						<eq>
+							<msg_ref type="utility" index="0 2 2">SNMPResp.varBind</msg_ref>
+							<expr>10</expr>
+						</eq>						
+					<and>
+						<!-- pktcMtaDevRealmOrgName = CableLabs -->
+						<eq>
+							<msg_ref type="utility" index="0 3 2">SNMPResp.varBind</msg_ref>
+							<expr>CableLabs</expr>
+						</eq>						
+					<and>	
+						<!-- pktcMtaDevRealmUnsolicitedKeyMaxTimeout = 100 -->
+						<eq>
+							<msg_ref type="utility" index="0 4 2">SNMPResp.varBind</msg_ref>
+							<expr>100</expr>
+						</eq>						
+					<and>	
+						<!-- pktcMtaDevRealmUnsolicitedKeyNomTimeout = 3000 -->
+						<eq>
+							<msg_ref type="utility" index="0 5 2">SNMPResp.varBind</msg_ref>
+							<expr>3000</expr>
+						</eq>	
+						<!-- pktcMtaDevRealmUnsolicitedKeyMaxRetries = 5 -->
+						<eq>
+							<msg_ref type="utility" index="0 6 2">SNMPResp.varBind</msg_ref>
+							<expr>5</expr>
+						</eq>						
+					</and>					
+					</and>
+					</and>
+					</and>
+					</and>
+					</and>					
+				</verify>
+			</response>
+
+			<transition to="VerifyDevRealmStatus" event="SNMPResp" />
+			<transition to="END" event="SNMPRespFailure" />
+		</state>
+		
+		<!-- pktcMtaDevRealmStatus = not accessible -->		
+		<state ID="VerifyDevRealmStatus">
+		    <prelude once="true">				
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>PKTC-IETF-MTA-MIB::pktcMtaDevRealmStatus</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+					<mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+				</send>
+            </prelude>
+            <response>
+			    <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPRespFailure</expr>
+                    </eq>
+                <then>
+                    <fail/>
+                </then>
+                </if>
+                <verify step="8-4">
+                    <contains>
+                        <msg_ref type="utility" index="0 0 1">SNMPResp.varBind</msg_ref>
+                        <expr>No</expr>
+                    </contains>
+                </verify>
+            </response>
+			<postlude>
+				<stop_capture/>
+			</postlude>	
+			<transition to="END" event="SNMPResp" />
+			<transition to="END" event="SNMPRespFailure" />	
+		</state>
+	</add_to>
+</pc2xml>

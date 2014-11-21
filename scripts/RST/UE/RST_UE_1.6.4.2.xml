@@ -1,0 +1,125 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	PCPCII-89 : Update the script to verify the 200-Notify message when it arrives in the Registered
+		state. The previous version could hang or not test the correct message depending upon the 
+		message sequence during the test. (glhassler 12/17/2008)
+	PCPCII-103 : Remove the Wait200Notify state and have the verification occur in the AnswerSubscribe
+		state and transition to END on the 200-NOTIFY. (ghassler 1/7/09)
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-UE 1.6.4.2" 
+	descrip="Out of order VMWI-NOTIFY and new message count" 
+	number="RST-UE 1.6.4.2" inspector="disable">
+	
+	<template file="./templates/UERegAndSubTemp.xml" name="Registrar"/>
+	
+	<remove_from fsm="Registrar">
+		<state ID="Registered"/>
+	</remove_from>
+	
+	<add_to fsm="Registrar">
+		<state ID="Registered">
+			<prelude once="true">
+				<var name="id">
+					<expr>false</expr>
+				</var>
+				<send protocol="sip" msgtype="200-Register"/>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">SUBSCRIBE.Event.event-type</msg_ref>
+						<expr>reg</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="200-SUBSCRIBE"/>
+						<send protocol="sip" msgtype="NOTIFY"/>
+					</then>
+				</if>
+				<if>
+					<eq>
+						<msg_ref type="sip">SUBSCRIBE.Event.event-type</msg_ref>
+						<expr>message-summary</expr>
+					</eq>
+					<then>
+						<assign name="id">
+							<msg_ref type="sip">SUBSCRIBE.Call-ID</msg_ref>
+						</assign>
+						<send protocol="sip" msgtype="NOTIFY"/>
+					</then>
+				</if>
+				<if>
+					<eq>
+						<msg_ref type="sip">200-NOTIFY.Call-ID</msg_ref>
+						<var_ref name="id"/>
+					</eq>
+					<then>
+						<verify step="2" requirements="RFC1870">
+							<eq>
+								<msg_ref type="sip">Response</msg_ref>
+								<expr>200-NOTIFY</expr>
+							</eq>
+						</verify>
+						<generate event="Branch1Event"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Registered" event="SUBSCRIBE"/>
+			<transition to="Registered" event="200-NOTIFY"/>
+			<transition to="AnswerSubscribe" event="Branch1Event"/>
+		</state>
+		
+		<state ID="AnswerSubscribe">
+			<prelude>
+				<send protocol="sip" msgtype="200-SUBSCRIBE" origReq="SUBSCRIBE" orig_instance="2"/>
+				<send protocol="sip" msgtype="NOTIFY" origReq="SUBSCRIBE" orig_instance="2">
+					<!-- Step 4 test case SIP 1.6.4.2-->
+					<mod modtype="replace" hdr="Voice-Message" body="simple-message-summary">
+						<expr>4294967294/0 (0/0)</expr>
+					</mod>
+				</send>
+			</prelude>
+			<!-- PCPCII-103 Move the response tag from the Wait200Notify state to this
+				state for validation of the message -->
+			<response>
+				<verify step="4" requirements="RFC1864">
+					<eq>
+						<msg_ref type="sip">Response</msg_ref>
+						<expr>200-NOTIFY</expr>
+					</eq>
+				</verify>
+			</response>
+			<!-- PCPCII-103 Change the transition to the next state from Wait200Notify to END -->
+			<transition to="END" event="200-NOTIFY"/>
+		</state>
+		
+		<!--  PCPCII-103 Remove this obsolete state
+		<state ID="Wait200Notify">
+			<response>
+				<verify step="4" requirements="RFC1864">
+					<eq>
+						<msg_ref type="sip">Response</msg_ref>
+						<expr>200-NOTIFY</expr>
+					</eq>
+				</verify>
+			</response>
+			<transition to="END" event="200-NOTIFY"/>
+		</state>
+		 -->
+	</add_to>
+</pc2xml>

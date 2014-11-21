@@ -1,0 +1,124 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+ Change History: (Author & Date)
+	PCPCIIATP-114 : Update the fmtp media line to use '=' instead of ':' between a parameter and its 
+			value. (ghassler 01/13/2010)
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="CODEC-MEDIA_1.3.2.4" 
+	descrip="UE T.38 Without Redundancy" 
+	number="CODEC-MEDIA_1.3.2.4">
+	
+	<template file="./templates/CallTermAtUETemp.xml" name="UE1"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Connected"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<state ID="Connected">
+			<prelude once="true">
+				<send protocol="sip" msgtype="ACK"/>
+			</prelude>
+			<response>
+				<!-- We need to determine the fax rate being used by the DUT -->
+				
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>REINVITE</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="100-INVITE"/>
+						<var name="rate">
+							<msg_ref type="sdp">REINVITE.fax-version.value</msg_ref>
+						</var>
+						<var name="codec">
+							<msg_ref type="sdp">REINVITE.audio.payload-type</msg_ref>
+						</var>
+						<!-- STEP 2 -->
+						<send protocol="sip" msgtype="200-INVITE">
+							<mod modtype="delete" hdr="audio"/>
+							<mod modtype="delete" hdr="media-modifier"/>
+							<mod modtype="delete" hdr="TIAS-modifier"/>
+							<mod modtype="delete" hdr="max-packet-rate"/>
+							<mod modtype="delete" hdr="rtpmap"/>
+							<mod modtype="delete" hdr="mode"/>
+							<mod modtype="delete" hdr="ptime"/>
+							<mod modtype="add" hdr="SDP">
+								<var_expr>
+									<expr>m=audio </expr>
+									<msg_ref type="platform">UE1.SDPPort2</msg_ref>
+									<expr> RTP/AVP </expr>
+									<var_ref name="codec"/>
+									<expr>\r\na=rtpmap:107 t38/8000\r\na=ptime:20\r\n</expr>
+									<expr>a=fmtp:107 T38FaxRateManagement=transferredTCF;T38FaxVersion=</expr>
+									<var_ref name="rate"/>
+									<expr>;T38FaxMaxDatagram=173</expr>
+								</var_expr>
+							</mod>
+							<mod modtype="replace" hdr="s" param="name">
+								<expr>VoiceFax</expr>
+							</mod>
+						</send>
+					</then>
+				</if>
+			</response>
+			<transition to="ChangeMedia" event="REINVITE"/>
+		</state>
+			
+		<state ID="ChangeMedia">
+			<transition to="WaitFax" event="ACK"/>
+		</state>
+		
+		<state ID="WaitFax" timer="5000">
+			<response>
+				<if>
+					<or>
+						<eq>	
+							<msg_ref type="event"/>
+							<expr>TimerExpired</expr>
+						</eq>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>BYE</expr>
+						</eq>
+					</or>
+					<then>
+						<verify step="3" requirements="REQ16640, REQ12493">
+							<and>
+								<neq>	
+									<msg_ref type="event"/>
+									<expr>TimerExpired</expr>
+								</neq>
+								<eq>
+									<msg_ref type="sip">Request</msg_ref>
+									<expr>BYE</expr>
+								</eq>
+							</and>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<postlude>
+				<stop_capture/>
+			</postlude>
+			<transition to="END" event="TimerExpired"/>		
+			<transition to="END" event="BYE"/>			
+		</state>		
+	
+	</add_to>
+</pc2xml>

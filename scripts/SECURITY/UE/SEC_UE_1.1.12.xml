@@ -1,0 +1,257 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" name="SECURITY 1.1.12" 
+	descrip="UE Authenticates to the Network (TCP)" 
+	number="SECURITY 1.1.12">
+	
+	<template file="./templates/UERegAndSubTemp.xml" name="Registrar"/>
+
+	<remove_from fsm="Registrar">
+		<state ID="PendingRegistration"/>
+		<state ID="Authorization"/>
+		<state ID="Registered"/>
+	</remove_from>
+	
+	<add_to fsm="Registrar">
+		<state ID="PendingRegistration">
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>REGISTER</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="401-REGISTER"/>
+					</then>
+				</if>
+				<verify step="3" requirements="REQ22285">
+					<contains>
+						<msg_ref type="sip">REGISTER</msg_ref>
+						<expr>Authorization: </expr>
+					</contains>
+				</verify>
+				<!--  Note the quotes around the parameters are automatically removed by the system -->
+				<verify step="4" requirements="REQ19549">
+					<or>
+						<contains>
+							<msg_ref type="sip">REGISTER.Contact.name-addr</msg_ref>
+							<msg_ref type="platform">DUT.FQDN</msg_ref>
+						</contains>
+						<contains>
+							<msg_ref type="sip">REGISTER.Contact.name-addr</msg_ref>
+							<msg_ref type="platform">DUT.IP</msg_ref>
+						</contains>
+					</or>
+				</verify>
+				<verify step="5" requirements="REQ16858">
+					<and>
+						<or>
+							<contains>
+								<msg_ref type="sip">REGISTER.Via.sent-by</msg_ref>
+								<msg_ref type="platform">DUT.FQDN</msg_ref>
+							</contains>
+							<contains>
+								<msg_ref type="sip">REGISTER.Via.sent-by</msg_ref>
+								<msg_ref type="platform">DUT.IP</msg_ref>
+							</contains>
+						</or>
+						<contains>
+							<msg_ref type="sip">REGISTER.Via</msg_ref>
+							<expr>SIP/2.0/TCP</expr>
+						</contains>
+					</and>
+				</verify>
+				<verify step="5" requirements="REQ16858">
+					<eq>
+						<msg_ref type="sip">REGISTER.Transport</msg_ref>
+						<expr>TCP</expr>
+					</eq>
+				</verify>
+				<verify step="6" requirements="REQ22285">
+					<eq>
+						<msg_ref type="sip">REGISTER.Authorization.realm</msg_ref>
+						<msg_ref type="platform">DUT.domain</msg_ref>
+					</eq>
+				</verify>
+				<verify step="6" requirements="REQ22285">
+					<contains>
+						<msg_ref type="sip">REGISTER.Authorization.uri</msg_ref>
+						<msg_ref type="platform">DUT.domain</msg_ref>
+					</contains>
+				</verify>
+				<verify step="6" requirements="REQ22285">
+					<contains>
+						<msg_ref type="sip">REGISTER.Authorization.nonce</msg_ref>
+						<expr/>
+					</contains>
+				</verify>
+				<verify step="6" requirements="REQ22285">
+					<contains>
+						<msg_ref type="sip">REGISTER.Authorization.response</msg_ref>
+						<expr/>
+					</contains>
+				</verify>
+				<verify step="6" requirements="REQ22285">
+					<contains>
+						<msg_ref type="sip">REGISTER.Authorization.username</msg_ref>
+						<msg_ref type="platform">DUT.prui</msg_ref>
+					</contains>
+				</verify>
+				<verify step="8" requirements="RFC2411, RFC2412, REQ19722">
+					<contains>
+						<msg_ref type="sip">REGISTER.Request-Line.Request-URI</msg_ref>
+						<msg_ref type="platform">DUT.domain</msg_ref>
+					</contains>
+				</verify>
+			</response>
+			<transition to="Authorization" event="REGISTER"/>
+		</state>
+		
+		<state ID="Authorization">
+			<response>
+				<if>
+					<or>
+						<eq>
+							<msg_ref type="event"/>
+							<expr>AuthenticateSucceed</expr>
+						</eq>
+						<eq>
+							<msg_ref type="event"/>
+							<expr>AuthenticateFailed</expr>
+						</eq>
+					</or>
+					<then>
+						<!-- this is to prevent the AuthenticateFailed from being forwarded
+									to the next state on the AuthenticateSucceed -->
+					</then>
+					<elseif>
+						<and>
+							<eq>
+								<msg_ref type="sip">Request</msg_ref>
+								<expr>REGISTER</expr>
+							</eq>
+							<and>
+								<contains>
+									<msg_ref type="sip">REGISTER</msg_ref>
+									<expr>Authorization</expr>
+								</contains>
+								<digest/>
+							</and>
+						</and>
+						<then>
+							<generate event="AuthenticateSucceed"/>
+							<verify step="9" requirements="REQ16961, REQ19270, REQ22287">
+								<and>
+									<eq>
+										<msg_ref type="sip">REGISTER.Call-ID.value</msg_ref>
+										<msg_ref type="sip" msg_instance="prev">REGISTER.Call-ID.value</msg_ref>
+									</eq>
+									<eq>
+										<msg_ref type="sip">REGISTER.Call-ID.value</msg_ref>
+										<msg_ref type="sip" msg_instance="last">401-REGISTER.Call-ID.value</msg_ref>
+									</eq>
+								</and>
+							</verify>
+							<verify step="10" requirements="RFC1286, RFC2404, REQ19560">
+								<and>
+									<eq>
+										<msg_ref type="sip" hdr_instance="any">REGISTER.Authorization.qop</msg_ref>
+										<expr>auth</expr>
+									</eq>
+									<eq>
+										<msg_ref type="sip" hdr_instance="any">REGISTER.Authorization.qop</msg_ref>
+										<msg_ref type="sip" msg_instance="last">401-REGISTER.WWW-Authenticate.qop</msg_ref>
+									</eq>
+								</and>
+							</verify>
+							<verify step="11" requirements="RFC2406, REQ19560">
+								<neq>
+									<msg_ref type="sip">REGISTER.Authorization.cnonce</msg_ref>
+									<expr/>
+								</neq>
+							</verify>
+							<verify step="12" requirements="RFC2408, REQ19560, REQ19722">
+								<contains>
+									<msg_ref type="sip">REGISTER.Authorization.nc</msg_ref>
+									<expr>00000001</expr>
+								</contains>
+							</verify>
+							<verify step="13" requirements="REQ19559, REQ19722, REQ19560">
+								<digest/>
+							</verify>
+							<verify step="14" requirements="REQ19722">
+								<eq>
+									<msg_ref type="sip">REGISTER.Authorization.realm</msg_ref>
+									<msg_ref type="sip" msg_instance="last">401-REGISTER.WWW-Authenticate.realm</msg_ref>
+								</eq>
+							</verify>
+							<verify step="15" requirements="REQ19722">
+								<eq>
+									<msg_ref type="sip">REGISTER.Authorization.nonce</msg_ref>
+									<msg_ref type="sip" msg_instance="last">401-REGISTER.WWW-Authenticate.nonce</msg_ref>
+								</eq>
+							</verify>
+							<verify step="16" requirements="REQ19722, REQ20206">
+								<neq>
+									<msg_ref type="sip">REGISTER.Authorization.username</msg_ref>
+									<expr/>
+								</neq>
+							</verify>
+						</then>
+						<else>
+							<generate event="AuthenticateFailed"/>
+							<send protocol="sip" msgtype="503-Register"/>
+						</else>
+					</elseif>
+				</if>
+			</response>
+			<transition to="Registered" event="AuthenticateSucceed"/>
+			<transition to="END" event="AuthenticateFailed"/>
+			<transition to="Authorization" event="REGISTER"/>
+		</state>
+		
+		<state ID="Registered">
+			<prelude>
+				<send protocol="sip" msgtype="200-Register"/>
+			</prelude>
+			<response>
+				<if>
+					<and>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>SUBSCRIBE</expr>
+						</eq>
+						<contains>
+							<msg_ref type="sip">SUBSCRIBE.Event</msg_ref>
+							<expr>reg</expr>
+						</contains>
+					</and>
+					<then>
+						<send protocol="sip" msgtype="200-SUBSCRIBE"/>
+						<sleep time="100"/>
+						<send protocol="sip" msgtype="NOTIFY"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Notification" event="SUBSCRIBE"/>
+		</state>
+		<transition from="Notification" to="END" event="200-NOTIFY"/>
+	</add_to>
+</pc2xml>

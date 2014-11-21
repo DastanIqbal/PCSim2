@@ -1,0 +1,67 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	PCPCIIATP-94 : Update the script to have a=x:NASCAR instead of x=NASCAR:18. (ghassler 01/06/2010)	
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="CODEC-MEDIA_1.4.8" 
+	descrip="UE Terminating-Unrecognized Parameters are Ignored" 
+	number="CODEC-MEDIA_1.4.8">
+	
+	<template file="./templates/CallTermAtUETemp.xml" name="UE1"/>
+
+	<remove_from fsm="UE1">
+		<state ID="Setup" sub="prelude"/>
+		<state ID="Connected"/>
+	</remove_from>
+
+	<add_to fsm="UE1">
+		<state ID="Setup" sub="prelude">
+			<!-- STEP 2 -->
+			<send protocol="sip" msgtype="Invite">
+				<mod modtype="delete" hdr="audio"/>
+				<mod modtype="delete" hdr="media-modifier"/>
+				<mod modtype="delete" hdr="TIAS-modifier"/>
+				<mod modtype="delete" hdr="max-packet-rate"/>
+				<mod modtype="delete" hdr="rtpmap"/>
+				<mod modtype="delete" hdr="mode"/>
+				<mod modtype="delete" hdr="ptime"/>
+				<mod modtype="add" hdr="SDP">
+					<var_expr>
+						<expr>a=x:NASCAR\r\nm=audio </expr>
+						<msg_ref type="platform">UE1.SDPPort</msg_ref>
+						<expr> RTP/AVP 0 8\r\nb=AS:80\r\nb=TIAS:64000\r\nb=SLR:722\r\n</expr>
+						<expr>a=maxprate:50\r\na=ptime:20\r\na=rtpmap:0 PCMU/8000\r\na=RichardPetty:43</expr>
+					</var_expr>
+				</mod>
+			</send>
+		</state>
+		
+		<state ID="Connected" timer="5000">
+			<prelude once="true">
+				<verify step="1" requirements="RFC2638, RFC2639, RFC2683">
+					<eq>
+						<msg_ref type="sip" msg_instance="last">Response</msg_ref>
+						<expr>200-INVITE</expr>
+					</eq>
+				</verify>
+				<send protocol="sip" msgtype="ACK"/>
+			</prelude>
+			<transition to="Connected" event="OffHookComplete"/>
+			<transition to="Releasing" event="TimerExpired"/>
+		</state>
+	</add_to>
+</pc2xml>

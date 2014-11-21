@@ -1,0 +1,357 @@
+#//*****************************************************************************
+#// Filename: E-UE_PROV_1-1-2-19.test
+#// Author:   Dan Smith
+#//           Matthew Forbes
+#// Creation Date: August 5, 2004
+#// Modified by: Matthew Forbes, 3/7/2005, added INRANGE to check for exponential
+#//              time delay between retries for DHCP Discovers
+#//              Matthew Forbes, 4/25/08, changed return 1 to FAIL_STEP in time differential checks
+#//*****************************************************************************
+#// Description:
+#//     TC1189 TEST CASE PROV E-UE_PROV_1-1-2-19o test the behavior of the MTA in the scenario when
+#//     the DHCP Servers with IP Addresses in both sub-option 1 and 2 are unavailable.
+#//
+#// Objective:
+#//     To test the ability of the MTA to return to MTA-1 provisioning flow in the
+#//     scenario when the DHCP Server with IP Address in sub-option 1 is unavailable
+#//     and DHCP Server with IP Address in sub-option 2 is also unavailable.
+#//
+#// PacketCable DUT:
+#//     MTA
+#//
+#// Test Steps:
+#//     - Initial configuration
+#//     - Configure provisioning service CM policy (Option122, sub-options 1 & 2 with
+#//       valid IPs, but unavailable)
+#//     - Start sniffer
+#//     - Reset DUT
+#//     - Allow two minutes for MTA to attempt to provision and send at least three
+#//       DHCP Discover messages
+#//     - Stop sniffer
+#//     - Invoke parsing tool and validate using Pass/Fail scripts
+#//     - Restore policy on provisioning server
+#//     - Delete MTA config file
+#//
+#// Notes:
+#//     - Requires provPrimitives.tcl & tftp_primitives.tcl.
+#//     - Requires the specific config file in $BASE_CFG_FILE_PATH in Provisioning Server.
+#//     - Requires parT.tcl parsing tool to parse data from capture file.
+#//*****************************************************************************
+
+
+########
+# Notes: 5-Aug-2004 (DLS)
+#
+# - Use Future ParT Release: SEQUENCE-I API to Identify (n) DHCP Discover Msg (optional)
+# - Add CM.bin and MTA.bin config file TFTP logic (optional)
+# - Defile better method for CM DHCP 122.1 Server configuration?
+# - Add Sequence Timming logic to verify Backoff DHCP Discovers
+# - Add UI field to verify Bad IP 1 and 2?
+# - Re-Provision MTA to healthy state?
+#
+########
+
+##
+##
+##
+global SCRIPT_VERSION
+set SCRIPT_VERSION { # $Id: E-UE-PROV_1-1-2-19.test 7406 2010-07-20 17:17:37Z dthakore $ }
+
+#################### Init Provision and TFTP modules ################
+
+
+DoStep "E-UE_PROV_1-1-2-19_1-1" "Initial configuration" {
+    LogMsg "--- Initial PROV module ---"
+    Init_PROV
+    # ProvCreateConfig 291 $MTA_MAC
+} { PASS_STEP }
+
+################################################################################
+# if {000} {
+######################## (Automatic) Provision CM / MTA ######################
+    
+
+#################### (Manual) CONFIGURE POLICY SERVER CM / MTA ################
+
+DoStep "E-UE_PROV_1-1-2-19_2-1" "Configure DHCP Server" {
+    # verify_signal "Configure Provisioning server policy for CM, option 122, sub-options \
+    # 1 and 2 with valid, but unavailable IP addresses (CMTC1189)"
+    PROV_MODIFY_DEVICE $CM_MAC CMTC1189
+    PROV_DEPLOY_DHCP
+} { PASS_STEP }
+
+############################## START SNIFFER ##################################
+
+DoStep "E-UE_PROV_1-1-2-19_3-1" "Start sniffer" {
+    LogMsg "--- Start sniffer --- "
+    Init_CONTROLLER_LAN
+    SetupCaptureControllerLan "host $MTA_IP || udp port 67 || host $CM_IP"
+    StartCaptureControllerLan
+} {PASS_STEP}
+
+########################## Reset CM / MTA #######################################
+
+DoStep "E-UE_PROV_1-1-2-19_4-1" "Reset CM/MTA" {
+    set val [SNMPvN_RESET $CM_IP]
+    LogMsg "--- Reset CM/MTA ---"
+} {
+    IsEqual $val 0
+}
+
+############################### STOP SNIFFER ##################################
+
+#### PONG-Change-Future ParT Release: SEQUENCE-I API
+
+DoStep "E-UE_PROV_1-1-2-19_5-1" "Wait for DHCP Discover messages and Stop sniffer" {
+    LogMsg "---Analyze and Stop sniffer ---"
+    # verify_signal "Monitor sniffer trace and verify at least 3 DHCP Discover Messages \
+            # from the MTA"
+    # verify_signal "Monitor sniffer trace and verify exponential timout between DHCP \
+            # Discover Messages"
+            actionWait "Wait 120 seconds for DHCP Discover messages" 120
+    StopCaptureControllerLan
+    SaveToFileControllerLan
+} { PASS_STEP }
+
+################################################################################
+# }
+######################## INVOKE PARSING TOOL ##################################
+
+DoStep "E-UE_PROV_1-1-2-19_6-1" "Analyze flow data" {
+    # Initial PARSER TOOL
+    Init_PART
+    
+    # Set up parser file
+    set PARSERFILE    $ETH_DEFAULT_TXT_FILE
+    
+    # Find CM MAC with colons
+    set  CM_MAC_COL [AddColMac $CM_MAC]
+    set MTA_MAC_COL [AddColMac $MTA_MAC]
+    
+} { PASS_STEP }
+
+####################### PARSE DATA TO DATASTORE ##################################
+
+DoStep "E-UE_PROV_1-1-2-19_6-2" "Parse all data into database" {
+    # Parse data
+    set PARAMS_DHCP         "{DHCP {} {} {} {} {} {} {} {}}"
+    
+    # set PARAMS_CM_SRC       "{{} {} {} {} $CM_IP {} {} {} {}}"
+    # set PARAMS_CM_DST       "{{} {} {} {} {} {} {} $CM_IP {}}"
+    # set msgID_CM            [ParseFile $PARSERFILE "$PARAMS_DHCP $PARAMS_CM_SRC $PARAMS_CM_DST"]
+    set msgID_CM            [ParseFile $PARSERFILE "$PARAMS_DHCP"]
+    
+    # set PARAMS_MTA_SRC      "{{} {} {} {} $MTA_IP {} {} {} {}}"
+    # set PARAMS_MTA_DST      "{{} {} {} {} {} {} {} $MTA_IP {}}"
+    # set msgID_MTA           [ParseFile $PARSERFILE "$PARAMS_DHCP $PARAMS_MTA_SRC $PARAMS_MTA_DST"]
+    set msgID_MTA           [ParseFile $PARSERFILE "$PARAMS_DHCP"]
+} {
+    if { $::PART_RETURN == 0 } {
+        PASS_STEP
+    } else {
+        FAIL_STEP "Failed ParT ParseFile operation."
+    }
+}
+
+DoStep "E-UE_PROV_1-1-2-19_6-3" "Verify DHCP Discover Exponential Backoff" {
+    #DECLARE A NEW VARIABLE
+    catch { unset ::MATT }
+    variable ::MATT
+    #CALL INRANGE TO RETURN THE TIMESTAMPS FOR ALL THE AS-REQs PARSED FROM THE FILE AND ORIGINATED BY THE MTA
+    VerifyValue $msgID_MTA "INRANGEALL(AFTER:-1,BEFORE:-1):(::MATT):(DISCOVER) DHCP DISCOVER OPTIONCLIENTHWADDRESS" "IS" "$MTA_MAC_COL"
+    # tk_messageBox -message "DELETEME: The packets which match this type are: $::MATT($msgID_MTA_KRB) "
+    
+    
+    if { [ llength $::MATT($msgID_MTA) ] < 3 } {
+        verify_signal "ERROR: The capture file captured less than 2 AS-REQ, increase the time to wait and please rerun the test case! Abort?"
+    }
+    #Get the time for the first packet
+    set timeOfCurrentPacket $::MATT($msgID_MTA,[ lindex $::MATT($msgID_MTA) 0],TIMESP)
+    set frameCurrentPacket  $::MATT($msgID_MTA,[ lindex $::MATT($msgID_MTA) 0],FNUM)
+    
+    # tk_messageBox -message "DELETEME: Dealing with FNUM: $frameCurrentPacket , [ lindex $::MATT($msgID_MTA) 0]"
+    # tk_messageBox -message "DELETEME: RANGE NEXT:   [ lrange $::MATT($msgID_MTA) 1 end ]"
+    
+    set timeOfNextPacket $::MATT($msgID_MTA,[ lindex $::MATT($msgID_MTA) 1],TIMESP)
+    set frameNextPacket  $::MATT($msgID_MTA,[ lindex $::MATT($msgID_MTA) 1],FNUM)
+    
+    set diffTime [ expr $timeOfNextPacket - $timeOfCurrentPacket ]
+    
+    if { ( $diffTime > 5.1 ) || ( $diffTime < 2.9 ) } {
+        verify_signal "ERROR: The time difference between retries is NOT within the acceptable range (3.5.1-5sec) DIFF TIME = $diffTime; Frames under consideration include $frameCurrentPacket and $frameNextPacket. Is this correct?"
+        LogMsg "Fail: The time difference between retries is NOT within the acceptable range (2.9-5sec); DIFF TIME = $diffTime" 49
+        #return 1
+        #Changed return 1 to FAIL_STEP 4/25/08 - MLF
+        FAIL_STEP
+    } else {
+        # verify_signal "PASS: The time difference between retries is within the acceptable range (3.5-5.1sec); Frames under consideration include $frameCurrentPacket and $frameNextPacket; DIFF TIME = $diffTime; Continue?"
+        LogMsg "PASS: The time difference between retries is within the acceptable range (2.9-5.1sec); DIFF TIME = $diffTime" 49
+    }
+    
+    # tk_messageBox -message "DELETEME: Dealing with FNUM: $frameNextPacket "
+    # tk_messageBox -message "DELETEME: CURRENT PACKET: $timeOfCurrentPacket ($frameCurrentPacket) NEXT PACKET: $timeOfNextPacket ($frameNextPacket) DIFF = [ expr $timeOfNextPacket - $timeOfCurrentPacket ]"
+    LogMsg "CURRENT PACKET: $timeOfCurrentPacket ($frameCurrentPacket) NEXT PACKET: $timeOfNextPacket ($frameNextPacket) DIFF = [ expr $timeOfNextPacket - $timeOfCurrentPacket ]" 49
+        set timeOfCurrentPacket $::MATT($msgID_MTA,[ lindex $::MATT($msgID_MTA) 1],TIMESP)
+        set frameCurrentPacket  $::MATT($msgID_MTA,[ lindex $::MATT($msgID_MTA) 1],FNUM)
+        
+        # tk_messageBox -message "DELETEME: Dealing with FNUM: $frameCurrentPacket , [ lindex $::MATT($msgID_MTA) 1]"
+        # tk_messageBox -message "DELETEME: RANGE NEXT:   [ lrange $::MATT($msgID_MTA) 2 end ]"
+        
+        set timeOfNextPacket $::MATT($msgID_MTA,[ lindex $::MATT($msgID_MTA) 2],TIMESP)
+        set frameNextPacket  $::MATT($msgID_MTA,[ lindex $::MATT($msgID_MTA) 2],FNUM)
+        
+        set diffTime [ expr $timeOfNextPacket - $timeOfCurrentPacket ]
+        
+        if { ( $diffTime > 9.5 ) || ( $diffTime < 6.9 ) } {
+            verify_signal "ERROR: The time difference between retries is NOT within the acceptable range (6.9-9.5sec)DIFF TIME = $diffTime; Frames under consideration include $frameCurrentPacket and $frameNextPacket. Is this correct?"
+            LogMsg "Fail: The time difference between retries is NOT within the acceptable range (6.9-9.5sec); DIFF TIME = $diffTime" 49
+            #return 1
+            #Changed return 1 to FAIL_STEP 4/25/08 - MLF
+            FAIL_STEP
+        } else {
+            # verify_signal "PASS: The time difference between retries is within the acceptable range (6.9-9.5sec). Frames under consideration include $frameCurrentPacket and $frameNextPacket, DIFF TIME = $diffTime, Continue?"
+            LogMsg "PASS: The time difference between retries is within the acceptable range (6.9-9.5sec); DIFF TIME = $diffTime" 49
+        }
+        
+        # tk_messageBox -message "DELETEME: Dealing with FNUM: $frameNextPacket "
+        # tk_messageBox -message "DELETEME: CURRENT PACKET: $timeOfCurrentPacket ($frameCurrentPacket) NEXT PACKET: $timeOfNextPacket ($frameNextPacket) DIFF = [ expr $timeOfNextPacket - $timeOfCurrentPacket ]"
+        LogMsg "CURRENT PACKET: $timeOfCurrentPacket ($frameCurrentPacket) NEXT PACKET: $timeOfNextPacket ($frameNextPacket) DIFF = [ expr $timeOfNextPacket - $timeOfCurrentPacket ]" 49
+        #
+        set timeOfCurrentPacket $::MATT($msgID_MTA,[ lindex $::MATT($msgID_MTA) 2],TIMESP)
+        set frameCurrentPacket  $::MATT($msgID_MTA,[ lindex $::MATT($msgID_MTA) 2],FNUM)
+        
+        # tk_messageBox -message "DELETEME: Dealing with FNUM: $frameCurrentPacket , [ lindex $::MATT($msgID_MTA) 2]"
+        # tk_messageBox -message "DELETEME: RANGE NEXT:   [ lrange $::MATT($msgID_MTA) 3 end ]"
+        
+        set timeOfNextPacket $::MATT($msgID_MTA,[ lindex $::MATT($msgID_MTA) 3],TIMESP)
+        set frameNextPacket  $::MATT($msgID_MTA,[ lindex $::MATT($msgID_MTA) 3],FNUM)
+        
+        set diffTime [ expr $timeOfNextPacket - $timeOfCurrentPacket ]
+        
+        if { ( $diffTime > 17.5 ) || ( $diffTime < 14.9 ) } {
+            verify_signal "ERROR: The time difference between retries is NOT within the acceptable range (14.9-17.5sec)DIFF TIME = $diffTime; Frames under consideration include $frameCurrentPacket and $frameNextPacket. Is this correct?"
+            LogMsg "Fail: The time difference between retries is NOT within the acceptable range (14.9-17.5sec); DIFF TIME = $diffTime" 49
+            #return 1
+            #Changed return 1 to FAIL_STEP 4/25/08 - MLF
+            FAIL_STEP
+        } else {
+            # verify_signal "PASS: The time difference between retries is within the acceptable range (14.9-17.5sec); Frames under consideration include $frameCurrentPacket and $frameNextPacket; DIFF TIME = $diffTime; Continue?"
+            LogMsg "PASS: The time difference between retries is within the acceptable range (14.9-17.5sec); DIFF TIME = $diffTime" 49
+        }
+        
+        # tk_messageBox -message "DELETEME: Dealing with FNUM: $frameNextPacket "
+        # tk_messageBox -message "DELETEME: CURRENT PACKET: $timeOfCurrentPacket ($frameCurrentPacket) NEXT PACKET: $timeOfNextPacket ($frameNextPacket) DIFF = [ expr $timeOfNextPacket - $timeOfCurrentPacket ]"
+        LogMsg "CURRENT PACKET: $timeOfCurrentPacket ($frameCurrentPacket) NEXT PACKET: $timeOfNextPacket ($frameNextPacket) DIFF = [ expr $timeOfNextPacket - $timeOfCurrentPacket ]" 49
+} {PASS_STEP}
+
+############################ VERIFY CM DHCP 122.1 ###############################
+ 
+DoStep "E-UE_PROV_1-1-2-19_7-1" "Verify CM DHCP Offer contains 122.1" {
+    LogMsg "--- Verify CM DHCP Offer contains 122.1 ---"
+    # Set within first DoStep after ParT ParseFile
+    set CONTINUE_PAST_STEP_ERROR 1
+} {
+    VerifyValue $msgID_CM "INANY DHCP OFFER OPTION122SUBOPTION1" "EXISTS" "" AND \
+            "OPTIONCLIENTHWADDRESS" "IS" "$CM_MAC_COL"
+}
+
+############################ VERIFY CM DHCP 122.2 ###############################
+
+DoStep "E-UE_PROV_1-1-2-19_7-2" "Verify CM DHCP Offer contains 122.1" {
+    LogMsg "--- Verify CM DHCP Offer contains 122.1 ---"
+    
+} {
+    VerifyValue $msgID_CM "INANY DHCP OFFER OPTION122SUBOPTION2" "EXISTS" "" AND \
+            "OPTIONCLIENTHWADDRESS" "IS" "$CM_MAC_COL"
+}
+############################ VERIFY MTA DHCP DISCOVER ###############################
+ 
+DoStep "E-UE_PROV_1-1-2-19_7-3" "Verify MTA sends DHCP Discover" {
+    LogMsg "--- Verify MTA sends DHCP Discover ---"
+} {
+    VerifyValue $msgID_MTA "INANY DHCP DISCOVER OPTION53" "EXISTS" "" AND \
+            "OPTIONCLIENTHWADDRESS" "IS" "$MTA_MAC_COL"
+}
+
+###################### VERIFY 3 DHCP DISCOVERs IN SEQUENCE ##########################
+
+#PONG-change- Future ParT Release: SEQUENCE-I API
+set msgStr "Verify MTA DHCP:DISCOVER Sequence"
+DoStep "E-UE_PROV_1-1-2-19_7-4" $msgStr {
+    LogMsg "--- $msgStr ---"
+    
+    # Set SEQUENCE to check
+    set MTA_SEQUENCE "DHCP:DISCOVER,DHCP:DISCOVER,DHCP:DISCOVER"
+    
+    # Remove whitespace
+    regsub -all { } $MTA_SEQUENCE {} MTA_SEQUENCE
+} {
+    # Verify Sequence
+    VerifyValue $msgID_MTA "SEQUENCE $MTA_SEQUENCE" "" ""
+}
+
+##################### VERIFY THAT SO1 AND SO2 DO NOT SEND OFFERS ###################
+
+DoStep "E-UE_PROV_1-1-2-19_7-5" "Confirm that DHCP OFFERs do not come from server in sub-option 1" {
+    LogMsg "---Verify DHCP OFFERs: not from sub-option 1---"
+} {
+    set dhcp [GetValue $msgID_MTA "INANY DHCP OFFER HEADERSRCIP"]
+    VerifyNotValue $msgID_CM "INANY DHCP OFFER OPTION122SUBOPTION1" "IS" "$dhcp.*" AND \
+            "OPTIONCLIENTHWADDRESS" "IS" "$CM_MAC_COL"
+}
+
+
+
+DoStep "E-UE_PROV_1-1-2-19_7-6" "Confirm that DHCP OFFERs do not come from server in sub-option 2" {
+    LogMsg "---Verify DHCP OFFERs: not from sub-option 2---"
+} {
+    VerifyNotValue $msgID_CM "INANY DHCP OFFER OPTION122SUBOPTION2" "IS" "$dhcp.*" AND \
+    "OPTIONCLIENTHWADDRESS" "IS" "$CM_MAC_COL"
+}
+
+######################### VERIFY NO DHCP REQUEST FROM MTA ##########################
+
+DoStep "E-UE_PROV_1-1-2-19_7-7" "Verify MTA does NOT send DHCP Request" {
+    LogMsg "--- Verify MTA does NOT send DHCP Request ---"
+} {
+    VerifyNotValue $msgID_MTA "INANY DHCP REQUEST OPTION53" "EXISTS" "" AND \
+            "OPTIONCLIENTHWADDRESS" "IS" "$MTA_MAC_COL"
+}
+
+################################################################################
+# Cleanup
+################################################################################
+
+DoStep "E-UE_PROV_1-1-2-19_8-1" "Restore Policy for CM" {
+    # verify_signal "Restore Policy for CM (CMFORCW_122)"
+    PROV_MODIFY_DEVICE $CM_MAC CMFORCW_122
+    PROV_DEPLOY_DHCP
+} {PASS_STEP}
+
+################ Reset CM and MTA and Verify Provisioning ################
+
+DoStep "E-UE_PROV_1-1-2-19_8-2" "Reset CM and MTA" {
+    set val [SNMPvN_RESET $CM_IP]
+    LogMsg "Reset of CM and MTA has passed"
+} {
+    IsEqual $val 0
+}
+
+DoStep "E-UE_PROV_1-1-2-19_8-3" "pktcMTADevProvisioningState Content Verification" {
+    # Wait for a minute to let CM/MTA starting to reboot
+    actionWait "Wait 60 seconds for CM/MTA to reboot" 60
+    # Get the OID from the MTA and check it using our previously defined
+    set val [GetProvState 1 600]
+    LogMsg "MTA Provisioning State"
+    LogMsg "             - Expected : 1"
+    LogMsg "             - Received : $val"
+} {
+    IsEqual $val 1
+}
+
+# Clear
+set CONTINUE_PAST_STEP_ERROR 0
+
+Cleanup
+
+return 0

@@ -1,0 +1,86 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-UE 1.2.2.7" 
+	descrip="non-DST (Daylight Saving Time) to DST transition " 
+	number="RST-UE 1.2.2.7" 
+	inspector="disable">
+
+	<template file="./templates/CallTermAtUETemp.xml" name="UE1"/>
+
+	<remove_from fsm="UE1">
+		<state ID="Setup"/>
+	</remove_from>
+
+	<add_to fsm="UE1">
+		<NE targets="*69"/>
+		
+		<state ID="Setup">
+			<prelude>
+				<send protocol="sip" msgtype="Invite">
+					<mod modtype="add" hdr="P-Asserted-Identity">
+						<var_expr>
+							<expr>&lt;sip:</expr>
+							<msg_ref type="platform">UE1.pui</msg_ref>
+							<expr>&gt;</expr>
+						</var_expr>
+					</mod>
+				</send>
+			</prelude>
+			<transition to="EndCall1" event="1xx-INVITE"/>
+		</state>
+		
+		<state ID="EndCall1" ES="true">
+			<prelude>
+				<sleep time="20000"/>
+			</prelude>
+			<transition to="DUTOffHook" event="SessionTerminated"/>
+		</state>
+		
+		<state ID="DUTOffHook">
+			<prelude>
+				<log expr="Starting to sleep for 7 minutes"/>
+				<sleep time="420000"/>
+				<send protocol="utility" msgtype="OffHook"/>
+			</prelude>
+			<transition to="DSTSetup" event="OffHookComplete"/>
+		</state>
+		
+		<state ID="DSTSetup">
+			<prelude>
+				<send protocol="sip" msgtype="Invite">
+					<mod modtype="add" hdr="P-Asserted-Identity">
+						<var_expr>
+							<expr>&lt;sip:</expr>
+							<msg_ref type="platform">UE1.pui</msg_ref>
+							<expr>&gt;</expr>
+						</var_expr>
+					</mod>
+				</send>
+			</prelude>
+			<postlude>
+				<log promptUser="true" verify="true"
+					step="6" requirements="REQ23447, REQ23448, REQ23449, REQ23450"
+					expr="Does the Caller-Id display show the time in Daylight Saving Time?"/>
+			</postlude>
+			<transition to="END" event="xxx-INVITE"/>
+		</state>
+	</add_to>
+</pc2xml>

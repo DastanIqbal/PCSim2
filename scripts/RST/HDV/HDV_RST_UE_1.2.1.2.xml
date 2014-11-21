@@ -1,0 +1,101 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+<pc2xml version="$Revision: 6839 $" 
+	name="HDV-RST-UE 1.2.1.2" 
+	descrip="Presentation status anonymous? " 
+	number="HDV-RST-UE 1.2.1.2">
+	
+	<template file="./templates/CallOrigAtUETemp.xml" name="UE1"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Setup"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<state ID="Setup" timer="10000">
+			<prelude once="true">
+				<send protocol="utility" msgtype="DialDigits">
+					<mod modtype="add" hdr="number">
+						<msg_ref type="platform">UE1.phone number 1</msg_ref>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>INVITE</expr>
+					</eq>
+					<then>
+						<verify step="1" requirements="REQ23192,REQ23195">
+							<contains>
+								<msg_ref type="sip" hdr_instance="any">Invite.Privacy</msg_ref>
+								<expr>id</expr>
+							</contains>
+						</verify>
+                                           
+					</then>
+				</if>
+			</response>
+			<transition to="Setup" event="DialDigitsComplete"/>
+			<transition to="SendAck" event="INVITE"/>
+			<transition to="SendAck" event="TimerExpired"/>
+		</state>
+		
+		<state ID="SendAck">
+			<prelude>
+				<send protocol="sip" msgtype="500-INVITE"/>
+			</prelude>
+			<transition to="Setup2" event="ACK"/>
+		</state>
+		
+		<state ID="Setup2">
+			<prelude once="true">
+				<send protocol="utility" msgtype="DialDigits">
+					<mod modtype="add" hdr="number">
+						<msg_ref type="platform">UE1.phone number 1</msg_ref>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>INVITE</expr>
+					</eq>
+					<then>
+					<log promptUser="True" yesExpected="True" verify="True" 
+						step="1" requirements="REQ23192,REQ23195 " 
+						expr="verify the FP sets the presentation indicator field for both the display number and display name to presentation restricted"/>	
+					</then>
+				</if>
+			</response>
+			<transition to="Setup2" event="DialDigitsComplete"/>
+			<transition to="SendAck2" event="INVITE"/>
+		</state>
+		
+		<state ID="SendAck2">
+			<prelude>
+				<send protocol="sip" msgtype="500-INVITE"/>
+			</prelude>
+			<transition to="END" event="ACK"/>
+		</state>
+	</add_to>
+</pc2xml>

@@ -1,0 +1,187 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	PCPCII-139 : Update the Voicetronix modifiers to use the new values. (ghassler 07/10/2009)
+	PCPCII-174 : Update the script to the D11 version of the ATP (ghassler 01/28/2010)
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-UE 1.9.3.1" 
+	descrip="No AR allowed after an emergency call " 
+	number="RST-UE 1.9.3.1">
+	
+	<fsm name="UE1">
+		<models>
+			<session/>
+		</models>
+		
+		<NE sim_type="orig" elements="UE1 SCSCF1 PCSCF1" targets="UE1 service:sos 0911 911"/>
+		
+		<states initialstate="Register">
+			<state ID="Register">
+				<transition to="OffHook1" event="Registered"/>
+			</state>
+			
+			<!-- CALL NUMBER 1 -->
+			<state ID="OffHook1">
+				<prelude>
+					<!-- Step 1 test case SIP 1.1.1.1-->
+					<send protocol="utility" msgtype="OffHook"/>
+				</prelude>
+				<transition to="Setup1" event="OffHookComplete"/>
+			</state>
+			
+			<!-- SETUP State -->
+			<!-- The state machine will wait in the Setup state until it 
+				 receives an Invite from the originating UE or the fail timeout occurs. -->
+			<!-- Step 1 of the Call-Orig-at_UE(DUT) Default Message Flow document. -->
+			<state ID="Setup1">
+				<prelude once="true">
+					<send protocol="utility" msgtype="DialDigits">
+						<mod modtype="add" hdr="number">
+							<expr>911</expr>
+						</mod>
+					</send>
+				</prelude>
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>INVITE</expr>
+						</eq>
+						<then>
+							<verify step="1" requirements="REQ14062, REQ14065">
+								<eq>
+									<msg_ref type="sip">Request</msg_ref>
+									<expr>INVITE</expr>
+								</eq>
+							</verify>
+							<send protocol="sip" msgtype="200-INVITE"/>
+						</then>
+					</if>
+				</response>
+				<transition to="Setup1" event="DialDigitsComplete"/>
+				<transition to="Answer1" event="INVITE"/>
+			</state>
+			
+			<state ID="Answer1">
+				<transition to="Answer1" event="DialDigitsComplete"/>
+				<transition to="EndCall1" event="ACK"/>
+			</state>
+			
+			<state ID="EndCall1" ES="true">
+				<prelude>
+					<send protocol="sip" msgtype="BYE"/>
+				</prelude>
+				<transition to="OffHook2" event="SessionTerminated"/>
+			</state>
+			
+			<!-- CALL NUMBER 2 -->
+			<state ID="OffHook2">
+				<prelude>
+					<!-- We provide 1 sec gap between OnHook and OffHook-->
+					<sleep time="1000"/>
+					<send protocol="utility" msgtype="OffHook"/>
+				</prelude>
+				<transition to="Setup2" event="OffHookComplete"/>
+			</state>
+			
+			<state ID="Setup2">
+				<prelude once="true">
+					<send protocol="utility" msgtype="DialDigits">
+						<mod modtype="add" hdr="number">
+							<expr>0911</expr>
+						</mod>
+					</send>
+				</prelude>
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>INVITE</expr>
+						</eq>
+						<then>
+							<verify step="3" requirements="REQ14062, REQ14065">
+								<eq>
+									<msg_ref type="sip">Request</msg_ref>
+									<expr>INVITE</expr>
+								</eq>
+							</verify>
+							<send protocol="sip" msgtype="200-INVITE"/>
+						</then>
+					</if>
+				</response>
+				<transition to="Setup2" event="DialDigitsComplete"/>
+				<transition to="Answer2" event="INVITE"/>
+			</state>
+			
+			<state ID="Answer2">
+				<transition to="Answer2" event="DialDigitsComplete"/>
+				<transition to="EndCall2" event="ACK"/>
+			</state>
+			
+			<state ID="EndCall2" ES="true">
+				<prelude>
+					<send protocol="sip" msgtype="BYE"/>
+				</prelude>
+				<transition to="OffHook3" event="SessionTerminated"/>
+			</state>
+			
+			<!-- CALL NUMBER 3 -->
+			<state ID="OffHook3">
+				<prelude>
+					<!-- We provide 1 sec gap between OnHook and OffHook-->
+					<sleep time="1000"/>
+					<send protocol="utility" msgtype="OffHook"/>
+				</prelude>
+				<transition to="Call3" event="OffHookComplete"/>
+			</state>
+			
+			<state ID="Call3">
+				<prelude once="true">
+					<send protocol="utility" msgtype="DialDigits">
+						<mod modtype="add" hdr="number">
+							<expr>1911</expr>
+						</mod>
+					</send>
+				</prelude>
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>INVITE</expr>
+						</eq>
+						<then>
+							<verify step="5" requirements="REQ14062, REQ14065">
+								<eq>
+									<msg_ref type="sip">Request</msg_ref>
+									<expr>INVITE</expr>
+								</eq>
+							</verify>
+							<send protocol="sip" msgtype="200-INVITE"/>
+						</then>
+					</if>
+				</response>
+				<transition to="Call3" event="DialDigitsComplete"/>
+				<transition to="Answer3" event="Invite"/>
+			</state>
+			
+			<state ID="Answer3">
+				<transition to="Answer3" event="DialDigitsComplete"/>
+				<transition to="END" event="ACK"/>
+			</state>
+		</states>
+	</fsm>
+</pc2xml>

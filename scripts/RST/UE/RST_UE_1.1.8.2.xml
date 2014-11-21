@@ -1,0 +1,54 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-UE 1.1.8.2" 
+	descrip="RST UE Cancels INVITE when Originator Goes On-Hook" 
+	number="RST-UE 1.1.8.2" inspector="disable">
+	
+	<template file="./templates/CallOrigAtUETemp.xml" name="UE1"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Answer"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<state ID="Answer">
+			<prelude>
+				<!-- Step 2 from the test case 1.1.8.2- 
+				Terminate the SIP session at the UE. 
+				(e.g. Go on-hook on phone connected to the UE)-->
+				<send protocol="utility" msgtype="OnHook"/>
+			</prelude>
+			<transition to="CANCEL" event="OnHookComplete"/>
+		</state>
+		
+		<state ID="CANCEL">
+			<response>
+				<verify step="2" requirements="REQ13504">
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>CANCEL</expr>
+					</eq>
+				</verify>
+			</response>
+			<transition to="END" event="CANCEL"/>
+		</state>
+	</add_to>
+</pc2xml>

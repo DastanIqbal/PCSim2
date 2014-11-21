@@ -1,0 +1,84 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+
+<pc2xml version="$Revision: 8188 $" name="UT_SIP-UE 1.1.2.3" descrip="Timer F Expiration" number="UT_SIP-UE 1.1.2.3">
+	<template name="DUT-A" file="./templates/UT/Orig_DUT.xml"/>
+	<template name="DUT-B" file="./templates/UT/Orig_DUT.xml"/>
+	<add_to fsm="UT_SIP-UE 1.1.2.3">
+		<states initialstate="PendingRegister1"/>
+		<state ID="PendingRegister1" timer="500">
+			<transition to="Register" event="TimerExpired"/>
+		</state>
+	</add_to>
+	<remove_from fsm="DUT-A">
+		<state ID="PendingRegister"/>
+		<state ID="Register"/>
+		<state ID="Digest"/>
+		<state ID="Setup"/>
+		<state ID="Answer"/>
+		<state ID="Proceeding"/>
+		<state ID="Alerting"/>
+		<state ID="Connected"/>
+	</remove_from>
+	<add_to fsm="DUT-B">
+		<states initialstate="WaitSucceedEvent"/>
+		<state ID="WaitSucceedEvent" timer="85000">
+			<transition to="Setup" event="SucceedEvent"/>
+		</state>
+	</add_to>
+	<remove_from fsm="DUT-B">
+		<state ID="PendingRegister"/>
+		<state ID="Register"/>
+		<state ID="Digest"/>
+	</remove_from>
+	<add_to fsm="DUT-A">
+		<state ID="Register">
+			<prelude>
+				<send protocol="sip" msgtype="Register" target="PCSCF1" originator="DUT"/>
+			</prelude>
+			<transition to="Digest" event="401-Register"/>
+		</state>
+		<state ID="Digest">
+			<prelude>
+				<send protocol="sip" msgtype="Register" target="PCSCF1" originator="DUT"/>
+			</prelude>
+			<transition to="Re-Register" event="200-Register"/>
+		</state>
+		<state ID="Re-Register" timer="85000">
+			<prelude>
+				<sleep time="80000"/>
+				<send protocol="sip" msgtype="Register" target="PCSCF1" originator="DUT"/>
+			</prelude>
+			<postlude>
+				<generate event="SucceedEvent" fsm="DUT-B"/>
+			</postlude>
+			<transition to="Re-Register1" event="TimerExpired"/>
+		</state>
+		<state ID="Re-Register1">
+			<prelude>
+				<sleep time="120000"/>
+				<send protocol="sip" msgtype="Register" target="PCSCF1" originator="DUT">
+					<generate event="SucceedEvent"/>
+				</send>
+			</prelude>
+			<transition to="END" event="SucceedEvent"/>
+		</state>
+	</add_to>
+</pc2xml>

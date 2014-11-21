@@ -1,0 +1,256 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="SIP-UE 1.6.3.2" 
+	descrip="UAS Error Response Handling and Timer H" 
+	number="SIP-UE 1.6.3.2">
+	
+	<template file="./templates/CallTermAtUETemp.xml" name="UE1"/>
+	<configure name="FSM Process Duplicate Messages" value="true"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Setup"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<state ID="Setup">
+			<prelude>
+				<send protocol="sip" msgtype="Invite">
+					<!-- Step 1 from the test case SIP 1.6.3.2 - 
+					Start a SIP session from the SS by executing step 1 of 
+					[UE terminating case] with the following exception: -->
+					<mod modtype="replace" hdr="Request-Line" param="username">
+						<expr>UE2</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="1" requirements="RFC1009">
+					<eq>
+						<msg_ref type="sip">Response</msg_ref>
+						<expr>404-INVITE</expr>
+					</eq>
+				</verify>
+			</response>
+			<transition to="Timer1" event="404-INVITE"/>
+		</state>
+		
+		<state ID="Timer1">
+			<response>
+				<verify step="2" requirements="RFC1010">
+					<and>
+						<gte>
+							<msg_ref type="sip">404-INVITE.TIMESTAMP</msg_ref>
+							<add_ref type="sip" msg_instance="prev" value="400">404-INVITE.TIMESTAMP</add_ref>
+						</gte>
+						<lte>
+							<msg_ref type="sip">404-INVITE.TIMESTAMP</msg_ref>
+							<add_ref type="sip" msg_instance="prev" value="600">404-INVITE.TIMESTAMP</add_ref>
+						</lte>
+					</and>
+				</verify>
+			</response>
+			<transition to="Timer2" event="404-INVITE"/>
+		</state>
+		
+		<state ID="Timer2">
+			<response>
+				<verify step="2" requirements="RFC1010">
+					<and>
+						<gte>
+							<msg_ref type="sip">404-INVITE.TIMESTAMP</msg_ref>
+							<add_ref type="sip" msg_instance="prev" value="900">404-INVITE.TIMESTAMP</add_ref>
+						</gte>
+						<lte>
+							<msg_ref type="sip">404-INVITE.TIMESTAMP</msg_ref>
+							<add_ref type="sip" msg_instance="prev" value="1100">404-INVITE.TIMESTAMP</add_ref>
+						</lte>
+					</and>
+				</verify>
+			</response>
+			<transition to="Timer3" event="404-INVITE"/>
+		</state>
+		
+		<state ID="Timer3">
+			<response>
+				<verify step="2" requirements="RFC1010">
+					<and>
+						<gte>
+							<msg_ref type="sip">404-INVITE.TIMESTAMP</msg_ref>
+							<add_ref type="sip" msg_instance="prev" value="1900">404-INVITE.TIMESTAMP</add_ref>
+						</gte>
+						<lte>
+							<msg_ref type="sip">404-INVITE.TIMESTAMP</msg_ref>
+							<add_ref type="sip" msg_instance="prev" value="2100">404-INVITE.TIMESTAMP</add_ref>
+						</lte>
+					</and>
+				</verify>
+			</response>
+			<transition to="Timer4" event="404-INVITE"/>
+		</state>
+		
+		<state ID="Timer4">
+			<response>
+				<verify step="2" requirements="RFC1010">
+					<and>
+						<gte>
+							<msg_ref type="sip">404-INVITE.TIMESTAMP</msg_ref>
+							<add_ref type="sip" msg_instance="prev" value="3900">404-INVITE.TIMESTAMP</add_ref>
+						</gte>
+						<lte>
+							<msg_ref type="sip">404-INVITE.TIMESTAMP</msg_ref>
+							<add_ref type="sip" msg_instance="prev" value="4100">404-INVITE.TIMESTAMP</add_ref>
+						</lte>
+					</and>
+				</verify>
+			</response>
+			<transition to="Timer5" event="404-INVITE"/>
+		</state>
+		
+		<state ID="Timer5">
+			<response>
+				<verify step="2" requirements="RFC1010">
+					<and>
+						<gte>
+							<msg_ref type="sip">404-INVITE.TIMESTAMP</msg_ref>
+							<add_ref type="sip" msg_instance="prev" value="3900">404-INVITE.TIMESTAMP</add_ref>
+						</gte>
+						<lte>
+							<msg_ref type="sip">404-INVITE.TIMESTAMP</msg_ref>
+							<add_ref type="sip" msg_instance="prev" value="4100">404-INVITE.TIMESTAMP</add_ref>
+						</lte>
+					</and>
+				</verify>
+			</response>
+			<transition to="Timer6" event="404-INVITE"/>
+		</state>
+		
+		<state ID="Timer6">
+			<response>
+				<verify step="2" requirements="RFC1010">
+					<and>
+						<gte>
+							<msg_ref type="sip">404-INVITE.TIMESTAMP</msg_ref>
+							<add_ref type="sip" msg_instance="prev" value="3900">404-INVITE.TIMESTAMP</add_ref>
+						</gte>
+						<lte>
+							<msg_ref type="sip">404-INVITE.TIMESTAMP</msg_ref>
+							<add_ref type="sip" msg_instance="prev" value="4100">404-INVITE.TIMESTAMP</add_ref>
+						</lte>
+					</and>
+				</verify>
+			</response>
+			<transition to="Timer7" event="404-INVITE"/>
+		</state>
+		
+		<state ID="Timer7">
+			<response>
+				<verify step="2" requirements="RFC1010">
+					<and>
+						<gte>
+							<msg_ref type="sip">404-INVITE.TIMESTAMP</msg_ref>
+							<add_ref type="sip" msg_instance="prev" value="3900">404-INVITE.TIMESTAMP</add_ref>
+						</gte>
+						<lte>
+							<msg_ref type="sip">404-INVITE.TIMESTAMP</msg_ref>
+							<add_ref type="sip" msg_instance="prev" value="4100">404-INVITE.TIMESTAMP</add_ref>
+						</lte>
+					</and>
+				</verify>
+			</response>
+			<transition to="Timer8" event="404-INVITE"/>
+		</state>
+		
+		<state ID="Timer8">
+			<response>
+				<verify step="2" requirements="RFC1010">
+					<and>
+						<gte>
+							<msg_ref type="sip">404-INVITE.TIMESTAMP</msg_ref>
+							<add_ref type="sip" msg_instance="prev" value="3900">404-INVITE.TIMESTAMP</add_ref>
+						</gte>
+						<lte>
+							<msg_ref type="sip">404-INVITE.TIMESTAMP</msg_ref>
+							<add_ref type="sip" msg_instance="prev" value="4100">404-INVITE.TIMESTAMP</add_ref>
+						</lte>
+					</and>
+				</verify>
+			</response>
+			<transition to="Timer9" event="404-INVITE"/>
+		</state>
+		
+		<state ID="Timer9">
+			<response>
+				<verify step="2" requirements="RFC1010">
+					<and>
+						<gte>
+							<msg_ref type="sip">404-INVITE.TIMESTAMP</msg_ref>
+							<add_ref type="sip" msg_instance="prev" value="3900">404-INVITE.TIMESTAMP</add_ref>
+						</gte>
+						<lte>
+							<msg_ref type="sip">404-INVITE.TIMESTAMP</msg_ref>
+							<add_ref type="sip" msg_instance="prev" value="4100">404-INVITE.TIMESTAMP</add_ref>
+						</lte>
+					</and>
+				</verify>
+			</response>
+			<transition to="Timer10" event="404-INVITE"/>
+		</state>
+		
+		<state ID="Timer10">
+			<response>
+				<verify step="2" requirements="RFC1010">
+					<and>
+						<gte>
+							<msg_ref type="sip">404-INVITE.TIMESTAMP</msg_ref>
+							<add_ref type="sip" msg_instance="prev" value="3900">404-INVITE.TIMESTAMP</add_ref>
+						</gte>
+						<lte>
+							<msg_ref type="sip">404-INVITE.TIMESTAMP</msg_ref>
+							<add_ref type="sip" msg_instance="prev" value="4100">404-INVITE.TIMESTAMP</add_ref>
+						</lte>
+					</and>
+				</verify>
+			</response>
+			<transition to="Verify404" event="404-INVITE"/>
+		</state>
+		
+		<state ID="Verify404" timer="4000">
+			<response>
+				<verify step="3" requirements="RFC1011 RFC1013">
+					<or>
+						<eq>
+							<msg_ref type="event"/>
+							<expr>TimerExpired</expr>
+						</eq>
+						<neq>
+							<msg_ref type="sip">Response</msg_ref>
+							<expr>404-INVITE</expr>
+						</neq>
+					</or>
+				</verify>
+			</response>
+			<!-- Step 3 from the test case SIP 1.6.3.2 - 
+				Verify the 404 is NOT retransmitted again. -->
+			<transition to="END" event="404-INVITE"/>
+			<transition to="END" event="TimerExpired"/>
+		</state>
+	</add_to>
+</pc2xml>

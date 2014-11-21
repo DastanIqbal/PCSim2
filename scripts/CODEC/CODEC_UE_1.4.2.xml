@@ -1,0 +1,165 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+ Change History: (Author & Date)
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="CODEC-MEDIA_1.4.2" 
+	descrip="UE Terminating- Removal of Media Stream" 
+	number="CODEC-MEDIA_1.4.2">
+	
+	<template file="./templates/CallTermAtUETemp.xml" name="UE1"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Setup"/>
+		<state ID="Connected"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<state ID="Setup">
+			<prelude>
+				<!--  STEP 1 -->
+				<start_capture>
+					<filter>
+						<var_expr>
+							<expr>host </expr>
+							<msg_ref type="platform">UE0.IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">Platform.SIP Stack 1 IP Address</msg_ref>
+						</var_expr>
+					</filter>
+				</start_capture>
+				<send protocol="sip" msgtype="Invite"/>
+				
+			</prelude>
+			<!-- Expected responses are 100, 180, 183 or 200 -->
+			<response>
+				<if>
+					<contains>
+						<msg_ref type="sip" hdr_instance="any">18x-Invite.Require</msg_ref>
+						<expr>100rel</expr>
+					</contains>
+					<then>
+						<!--Reliablity required for test sending Prack message to peer.-->
+						<send protocol="sip" msgtype="Prack"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Proceeding" event="100-INVITE"/>
+			<transition to="Alerting" event="180-INVITE"/>
+			<transition to="Alerting" event="183-INVITE"/>
+			<transition to="Connected" event="200-INVITE"/>
+		</state>
+		
+		<state ID="Connected" timer="20000">
+			<prelude once="true">
+				<send protocol="sip" msgtype="ACK"/>
+				<sleep time="5000"/>
+				<send protocol="sip" msgtype="REINVITE">
+					<mod modtype="replace" hdr="audio" param="port">
+						<expr>0</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Response</msg_ref>
+						<expr>200-INVITE</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="ACK"/>
+						<var name="answer">
+							<msg_ref type="sip" msg_instance="last">200-INVITE</msg_ref>
+						</var>
+																		
+						<verify step="3" requirements="RFC2337">
+							<eq>
+								<var_ref name="answer" protocol="sdp" hdr="audio" param="port"/>
+								<expr>0</expr>
+							</eq>
+						</verify>
+						
+						<verify step="3" requirements="RFC2337">
+							<or>
+								<contains>
+									<var_ref name="answer" protocol="sdp" hdr="media-modifier" param="value"/>
+									<expr>80</expr>
+								</contains>
+								<null>
+									<var_ref name="answer" protocol="sdp" hdr="media-modifier" param="value"/>
+								</null>
+							</or>
+						</verify>
+						
+						<verify step="3" requirements="RFC2337">
+							<or>
+								<contains>
+									<var_ref name="answer" protocol="sdp" hdr="TIAS-modifier" param="value"/>
+									<expr>64000</expr>
+								</contains>
+								<null>
+									<var_ref name="answer" protocol="sdp" hdr="TIAS-modifier" param="value"/>
+								</null>
+							</or>
+						</verify>
+						
+						<verify step="3" requirements="RFC2337">
+							<or>
+								<eq>
+									<var_ref name="answer" protocol="sdp" hdr="max-packet-rate" param="value"/>
+									<expr>50</expr>
+								</eq>
+							<or>
+								<eq>
+									<var_ref name="answer" protocol="sdp" hdr="max-packet-rate" param="value"/>
+									<expr>50.0</expr>
+								</eq>
+								<null>
+									<var_ref name="answer" protocol="sdp" hdr="max-packet-rate" param="value"/>
+								</null>
+							</or>
+							</or>
+						</verify>
+						
+						<verify step="3" requirements="RFC2337">
+							<or>
+								<eq>
+									<var_ref name="answer" protocol="sdp" hdr="ptime" param="value"/>
+									<expr>20</expr>
+								</eq>
+								<null>
+									<var_ref name="answer" protocol="sdp" hdr="ptime" param="value"/>
+								</null>
+							</or>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<transition to="Connected" event="OffHookComplete"/>
+			<transition to="Connected" event="1xx-INVITE"/>
+			<transition to="Connected" event="200-INVITE"/>
+			<transition to="RTPStopped" event="TimerExpired"/>
+		</state>
+		
+		<state ID="RTPStopped" timer="2000">
+			<postlude>
+				<stop_capture/>
+				<log verify="true" promptUser="true" step="4" requirements="RFC2267"
+					expr="Verify that the DUT stopped sending RTP after the REINVITE?"/>
+			</postlude>
+			<transition to="END" event="TimerExpired"/>
+		</state> 
+	</add_to>
+</pc2xml>

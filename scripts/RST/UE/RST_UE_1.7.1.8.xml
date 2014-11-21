@@ -1,0 +1,123 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	PCPCII-139 : Update the Voicetronix modifiers to use the new values. (ghassler 07/10/2009)
+
+
+
+
+-->
+
+<!-- First are the document type and the attributes for our document -->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-UE 1.7.1.8" 
+	descrip=" Customer Originated Trace – feature enabled – multiple call scenario  " 
+	number="RST-UE 1.7.1.8" inspector="disable">
+	
+	<template file="./templates/CallTermAtUETemp.xml" name="UE1"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Setup"/>
+		<state ID="OnHook"/>
+	</remove_from>
+	<add_to fsm="UE1">
+		<NE targets="UE1"/>
+		
+		<state ID="Setup">
+			<prelude>
+				<send protocol="sip" msgtype="Invite">
+					<!-- Step 1 test case SIP 1.7.1.8 - The INVITE message must 
+						contain the P-Asserted-Identity header.-->
+					<mod modtype="add" hdr="P-Asserted-Identity" param="name-addr">
+						<var_expr>
+							<expr>&lt;sip:</expr>
+							<msg_ref type="platform">UE1.pui</msg_ref>
+							<expr>&gt;</expr>
+						</var_expr>
+					</mod>
+				</send>
+			</prelude>
+			<!-- Expected responses are 100, 180, 183 or 200 -->
+			<response>
+				<if>
+					<contains>
+						<msg_ref type="sip" msg_instance="last" hdr_instance="any">18x-Invite.Require</msg_ref>
+						<expr>100rel</expr>
+					</contains>
+					<then>
+						<!--Reliability required for test sending Prack message to peer.-->
+						<send protocol="sip" msgtype="Prack"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Proceeding" event="100-INVITE"/>
+			<transition to="Alerting" event="180-INVITE"/>
+			<transition to="Alerting" event="183-INVITE"/>
+			<transition to="Connected" event="200-INVITE"/>
+		</state>
+		
+		<state ID="OnHook">
+			<prelude>
+				<send protocol="utility" msgtype="OnHook"/>
+			</prelude>
+			<transition to="EndTheCall" event="OnHookComplete"/>
+		</state>
+		
+		<state ID="EndTheCall" ES="true">
+			<transition to="2ndOffHook" event="SessionTerminated"/>
+		</state>
+		
+		<state ID="2ndOffHook">
+			<prelude>
+				<send protocol="utility" msgtype="OffHook"/>
+			</prelude>
+			<transition to="2ndSetup" event="OffHookComplete"/>
+		</state>
+		
+		<state ID="2ndSetup">
+			<prelude once="true">
+				<!-- Step 5 test case SIP 1.7.1.8- Initiate the auto recall feature at the UE 
+				(Dial the VSC-*69). This will cause the UE to send an INVITE message. -->
+				<send protocol="utility" msgtype="DialDigits">
+					<mod modtype="replace" hdr="number">
+						<expr>*69</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>Invite</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="488-INVITE"/>
+					</then>
+				</if>
+			</response>
+			<transition to="2ndSetup" event="DialDigitsComplete"/>
+			<transition to="Verify" event="INVITE"/>
+		</state>
+		
+		<state ID="Verify">
+			<prelude>
+				<!-- Step 4 test case SIP 1.7.1.8 - Verify the UE plays an 
+				error announcement and sends an ACK." -->
+				<log step="4" requirements="REQ13975" 
+					promptUser="True" verify="True" 
+					expr="Verify the UE plays an error announcement?"/>
+			</prelude>
+			<transition to="END" event="ACK"/>
+		</state>
+	</add_to>
+</pc2xml>

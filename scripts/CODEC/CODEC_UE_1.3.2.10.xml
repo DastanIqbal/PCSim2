@@ -1,0 +1,74 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+ Change History: (Author & Date)
+	PCPCII-269 : Add a rtpmap line for t38 to the SDP, remove a CRLF and use the value 114. (ghassler 05/12/2010)
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="CODEC-MEDIA_1.3.2.10" 
+	descrip="UE Transferred TCF Error (UE Terminating)" 
+	number="CODEC-MEDIA_1.3.2.10">
+	
+	<template file="./templates/CallTermAtUETemp.xml" name="UE1"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Connected"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<state ID="Connected">
+			<prelude once="true">
+				<send protocol="sip" msgtype="ACK"/>
+				<sleep time="5000"/>
+				<send protocol="sip" msgtype="REINVITE">
+					<mod modtype="delete" hdr="audio"/>
+					<mod modtype="delete" hdr="media-modifier"/>
+					<mod modtype="delete" hdr="TIAS-modifier"/>
+					<mod modtype="delete" hdr="max-packet-rate"/>
+					<mod modtype="delete" hdr="rtpmap"/>
+					<mod modtype="delete" hdr="mode"/>
+					<mod modtype="delete" hdr="ptime"/>
+					<mod modtype="add" hdr="SDP">
+						<var_expr>
+							<expr>m=audio </expr>
+							<msg_ref type="platform">UE1.SDPPort2</msg_ref>
+							<expr> RTP/AVP 0 114\r\na=rtpmap:114 t38/8000\r\na=ptime:20\r\na=rtpmap:101 RED/8000\r\na=fmtp:101 0/0\r\n</expr>
+							<expr>a=fmtp:101 T38FaxVersion=0;T38FaxMaxDatagram=173;T38FaxRateManagement=BogusABC</expr>
+						</var_expr>
+					</mod>
+					<mod modtype="replace" hdr="s" param="name">
+						<expr>VoiceFax</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<gte>
+						<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+						<expr>200</expr>
+					</gte>
+					<then>
+						<send protocol="sip" msgtype="ACK"/>
+						<verify step="2" requirements="REQ12596">
+							<eq>
+								<msg_ref type="sip">Response</msg_ref>
+								<expr>415-INVITE</expr>
+							</eq>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<transition to="Connected" event="OffHookComplete"/>
+			<transition to="Releasing" event="xxx-INVITE"/>
+		</state>
+	</add_to>
+</pc2xml>

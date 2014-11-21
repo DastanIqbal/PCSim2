@@ -1,0 +1,167 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+
+<pc2xml version="$Revision: 8188 $" name="UT_RST_UE_1.2.2.5" descrip="UT" number="1">
+	<fsm name="UE1">
+		<models>
+			<session/>
+		</models>
+		<NE sim_type="term" elements="DUT" targets="UE0 DUT"/>
+		<states initialstate="Setup1">
+			<!-- REGISTER1 State -->
+			<state ID="Register1">
+				<prelude>
+					<send protocol="sip" msgtype="Register" target="PCSCF1" originator="DUT"/>
+				</prelude>
+				<transition to="Digest1" event="401-Register"/>
+				<transition to="Setup1" event="200-Register"/>
+			</state>
+			<state ID="Digest1">
+				<prelude>
+					<send protocol="sip" msgtype="Register" target="PCSCF1" originator="DUT"/>
+				</prelude>
+				<transition to="Setup1" event="200-Register"/>
+			</state>
+			<!-- SETUP1 State -->
+			<state ID="Setup1">
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>Invite</expr>
+						</eq>
+						<then>
+							<send protocol="sip" msgtype="100-INVITE" target="UE1" originator="DUT"/>
+						</then>
+					</if>
+					<if>
+						<and>
+							<eq>
+								<msg_ref type="extensions">precondition</msg_ref>
+								<expr>require</expr>
+							</eq>
+							<or>
+								<contains>
+									<msg_ref type="sip" hdr_instance="any">Invite.Require</msg_ref>
+									<expr>precondition</expr>
+								</contains>
+								<contains>
+									<msg_ref type="sip" hdr_instance="any">Invite.Supported</msg_ref>
+									<expr>precondition</expr>
+								</contains>
+							</or>
+						</and>
+						<then>
+							<!--Sending 183-Invite with answer-->
+							<send protocol="sip" msgtype="183-Invite" target="UE1" originator="DUT"/>
+						</then>
+						<elseif>
+							<eq>
+								<msg_ref type="sip">Request</msg_ref>
+								<expr>Invite</expr>
+							</eq>
+							<then>
+								<!--Sending 180-Invite with SS not supporting precondition.-->
+								<send protocol="sip" msgtype="180-Invite" target="UE1" originator="DUT"/>
+							</then>
+						</elseif>
+					</if>
+				</response>
+				<!-- Transitions for Setup1 state -->
+				<transition to="Alerting1" event="INVITE"/>
+			</state>
+			<!-- ALERTING1 State -->
+			<state ID="Alerting1">
+				<response>
+					<if>
+						<and>
+							<eq>
+								<msg_ref type="sip">Request</msg_ref>
+								<expr>PRACK</expr>
+							</eq>
+							<contains>
+								<msg_ref type="sip" msg_instance="last" hdr_instance="any">18x-Invite.Require</msg_ref>
+								<expr>100rel</expr>
+							</contains>
+						</and>
+						<then>
+							<!--Reliablity required for test sending 200-Prack message to peer.-->
+							<send protocol="sip" msgtype="200-PRACK" target="UE1" originator="DUT"/>
+						</then>
+					</if>
+					<!-- Now test for an UPDATE message -->
+					<!-- Steps 6 and 7 in the Call-Orig-at_UE(DUT) Default Message Flow document. -->
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>UPDATE</expr>
+						</eq>
+						<then>
+							<!--QoS required or supported sending 200-Update message to peer.-->
+							<send protocol="sip" msgtype="200-Update" target="UE1" originator="DUT"/>
+						</then>
+					</if>
+					<!-- Test whether to send 180 -->
+					<!-- Step 8 in the Call-Orig-at_UE(DUT) Default Message Flow document. -->
+					<if>
+						<and>
+							<contains>
+								<msg_ref type="sip" msg_instance="last" hdr_instance="any">18x-Invite.Status-Code</msg_ref>
+								<expr>183</expr>
+							</contains>
+							<eq>
+								<msg_ref type="sdp">Request.qos-curr-remote.direction</msg_ref>
+								<msg_ref type="sdp">Request.qos-des-remote.direction</msg_ref>
+							</eq>
+						</and>
+						<then>
+							<!--Sending 180 for required preconditions.-->
+							<send protocol="sip" msgtype="180-Invite" target="UE1" originator="DUT"/>
+						</then>
+					</if>
+				</response>
+				<!-- Transitions for Alerting1 state -->
+				<transition to="Alerting1" event="PRACK"/>
+				<transition to="Alerting1" event="UPDATE"/>
+				<transition to="Answer1" event="ALERTING_UAS"/>
+			</state>
+			<!-- ANSWER1 State -->
+			<state ID="Answer1">
+				<response>
+					<!-- Now test for an UPDATE message -->
+					<!-- Steps 6 and 7 in the Call-Orig-at_UE(DUT) Default Message Flow document. -->
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>UPDATE</expr>
+						</eq>
+						<then>
+							<!--QoS required or supported sending 200-Update message to peer.-->
+							<send protocol="sip" msgtype="200-Update" target="UE1" originator="DUT"/>
+						</then>
+					</if>
+				</response>
+				<!-- Transitions for Answer1 state -->
+				<transition to="Answer1" event="UPDATE"/>
+				<transition to="END" event="CANCEL"/>
+			</state>
+		</states>
+	</fsm>
+</pc2xml>

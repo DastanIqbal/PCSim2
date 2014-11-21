@@ -1,0 +1,114 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+Change History: (Author & Date)
+
+
+-->
+<!-- Document type and attributes. -->
+<pc2xml version="$Revision: 6076 $"
+        name="E-UE_PROV_1.1.2.37"
+        descrip="eCM performs DHCP back-off and retries when required DHCP sub-options not provided."
+        number="E-UE_PROV_1.1.2.37">
+
+
+    <!-- Reset UE; start capture. -->
+    <template file="./templates/EUE_Prov_B_1_1_1.xml" name="SNMPVersions"/>
+    
+    <remove_from fsm="SNMPVersions">
+	<state ID="StartCapture_RebootWait"/>
+    </remove_from>
+    
+    <add_to fsm="SNMPVersions">
+	
+	<state ID="StartCapture_RebootWait" timer="180000">
+		<prelude once="true" >
+			<start_capture>
+				<filter>
+					<var_expr>
+						<expr>host </expr>
+						<msg_ref type="platform">DUT.IP</msg_ref>
+						<expr> || host </expr>
+						<msg_ref type="platform">DUT.CM IP Address</msg_ref>
+						<expr> || host </expr>
+						<msg_ref type="platform">DUT.DHCP Server IP</msg_ref>
+					</var_expr>
+				</filter>
+			</start_capture>
+		</prelude>
+		<transition to="EDVAFailsProvision" event="TimerExpired"/>
+		<!-- the following transition on the SNMPRespFailure has been as a temporary solution until PACT is fixed -->
+		<transition to="StartCapture_RebootWait" event="SNMPRespFailure"/>
+	</state>
+
+        <state ID="EDVAFailsProvision">
+            <prelude once="true">
+                <sleep time="30000"/>
+		<stop_capture/>
+                
+                <parse_capture name="eCM_DHCPv6">
+                    <parser_filter protocol="dhcpv6" clientMAC="DUT.CM MAC Address"/>
+                </parse_capture>
+
+                <verify step="8">
+			<and>
+				<notnull>
+				    <capture_ref type="dhcpv6" name="eCM_DHCPv6" msg_instance="4">Solicit.num</capture_ref>
+				</notnull>
+				<null>
+				    <capture_ref type="dhcpv6" name="eCM_DHCPv6" msg_instance="6">Solicit.num</capture_ref>
+				</null>
+			</and>
+                </verify>
+
+                <!-- Each of these messages are sent exponentially apart e.g., intervals of 4, 8, 16, 32, 64 seconds. -->
+                <verify step="8">
+			<and>
+				<and>
+					<lt>
+					    <capture_ref type="dhcpv6" name="eCM_DHCPv6" msg_instance="1" add="0.75">Solicit.timestamp</capture_ref>
+					    <capture_ref type="dhcpv6" name="eCM_DHCPv6" msg_instance="2">Solicit.timestamp</capture_ref>
+					</lt>
+					<gt>
+					    <capture_ref type="dhcpv6" name="eCM_DHCPv6" msg_instance="1" add="1.25">Solicit.timestamp</capture_ref>
+					    <capture_ref type="dhcpv6" name="eCM_DHCPv6" msg_instance="2">Solicit.timestamp</capture_ref>
+					</gt>
+				</and>
+				<and>
+					<and>
+						<lt>
+						    <capture_ref type="dhcpv6" name="eCM_DHCPv6" msg_instance="2" add="1.75">Solicit.timestamp</capture_ref>
+						    <capture_ref type="dhcpv6" name="eCM_DHCPv6" msg_instance="3">Solicit.timestamp</capture_ref>
+						</lt>
+						<gt>
+						    <capture_ref type="dhcpv6" name="eCM_DHCPv6" msg_instance="2" add="2.25">Solicit.timestamp</capture_ref>
+						    <capture_ref type="dhcpv6" name="eCM_DHCPv6" msg_instance="3">Solicit.timestamp</capture_ref>
+						</gt>
+					</and>
+					<and>
+						<lt>
+						    <capture_ref type="dhcpv6" name="eCM_DHCPv6" msg_instance="3" add="3.75">Solicit.timestamp</capture_ref>
+						    <capture_ref type="dhcpv6" name="eCM_DHCPv6" msg_instance="4">Solicit.timestamp</capture_ref>
+						</lt>
+						<gt>
+						    <capture_ref type="dhcpv6" name="eCM_DHCPv6" msg_instance="3" add="4.25">Solicit.timestamp</capture_ref>
+						    <capture_ref type="dhcpv6" name="eCM_DHCPv6" msg_instance="4">Solicit.timestamp</capture_ref>
+						</gt>
+					</and>
+				</and>
+			</and>
+                </verify>
+		<generate event="SucceedEvent"/>
+            </prelude>
+	    <transition to="END" event="SucceedEvent"/>
+        </state>
+    </add_to>
+</pc2xml>

@@ -1,0 +1,194 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+ Change History: (Author & Date)
+
+
+
+-->
+<!-- First are the document type and the attributes for our document -->
+<pc2xml version="$Revision: 7768 $" name="EUE Prov 1.1.4.14" 
+		descrip="Ability of IPv6 eUE to Report Its Capabilities" 
+		number="EUE Prov 1.1.4.14">
+
+	<!-- Next we define the each of state machines -->
+	<template file="./templates/EUE_Prov_B_1_1_1.xml" name="RebootCM"/>
+	
+	<add_to fsm="RebootCM">
+		<transition from="StartCapture_RebootWait" to="VerifyBootState" event="TimerExpired"/>
+	
+		<state ID="VerifyBootState">
+			<prelude once="true">
+				<send protocol="utility" msgtype="SNMPGet">
+					<mod modtype="add" hdr="oids">
+						<expr>DOCS-IF3-MIB::docsIf3CmStatusValue.2</expr>
+					</mod>
+					<!-- check for DOCSIS 2.0 eCM. -->
+					<!--mod modtype="add" hdr="oids">
+						<expr>DOCS-CABLE-DEVICE-MIB::docsDevServerBootState.0</expr>
+					</mod-->
+					<mod modtype="replace" hdr="agentip">
+						<msg_ref type="platform">DUT.CM IP Address</msg_ref>
+					</mod>
+					<mod modtype="replace" hdr="version">
+						<expr>2c</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="2">
+					<contains>
+						<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+						<expr>1</expr>
+					</contains>
+				</verify>
+			</response>
+			
+			<transition to="VerifyProvState" event="SNMPResp"/>
+			<transition to="VerifyProvState" event="SNMPRespFailure"/>
+		</state>
+		
+		<state ID="VerifyProvState">
+			<prelude>
+				<send protocol="utility" msgtype="SNMPGet">
+					<mod modtype="add" hdr="oids">
+						<expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvisioningState.0</expr>
+					</mod>
+					<mod modtype="replace" hdr="agentip">
+						<msg_ref type="platform">DUT.IP</msg_ref>
+					</mod>
+					<mod modtype="replace" hdr="version">
+						<expr>3</expr>
+					</mod>
+				</send>
+				
+			</prelude>
+			<response>
+				<verify step="2">
+					<eq>
+						<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+						<expr>1</expr>
+					</eq>
+				</verify>
+			</response>
+			<postlude>
+				<stop_capture/>
+				<parse_capture name="eUE_DHCPv6">
+					<parser_filter protocol="dhcpv6" clientMAC="DUT.MAC Address"/>
+				</parse_capture>
+				<verify step="3">
+					<and>
+						<notnull>
+							<capture_ref type="dhcpv6" name="eUE_DHCPv6">Solicit.Relay.Option17</capture_ref>
+						</notnull>
+						<notnull>
+							<capture_ref type="dhcpv6" name="eUE_DHCPv6">Solicit.Relay.Option17.Suboption 35</capture_ref>
+						</notnull>
+					</and>
+				</verify>
+				<verify step="3">
+					<and>
+						<notnull>
+							<capture_ref type="dhcpv6" name="eUE_DHCPv6">Request.Relay.Option17</capture_ref>
+						</notnull>
+						<notnull>
+							<capture_ref type="dhcpv6" name="eUE_DHCPv6">Request.Relay.Option17.Suboption 35</capture_ref>
+						</notnull>
+					</and>
+				</verify>
+				
+				<verify step="4">
+					<contains>
+						<capture_ref type="dhcpv6" name="eUE_DHCPv6">Solicit.Relay.Option16.enterprise.show</capture_ref>
+						<expr>4491</expr>
+					</contains>
+				</verify>				
+				
+				<verify step="4">
+					<contains>
+						<capture_ref type="dhcpv6" name="eUE_DHCPv6">Solicit.Relay.Option16.vendor-class-data.show</capture_ref>
+						<expr>pktc2.0</expr>
+					</contains>
+				</verify>
+				    
+				<verify step="4">
+					<contains>
+						<capture_ref type="dhcpv6" name="eUE_DHCPv6">Solicit.Relay.Option17.Suboption 35.show</capture_ref>
+						<expr>TLV5</expr>
+					</contains>
+				</verify>
+				
+				<verify step="4">
+					<contains>
+						<capture_ref type="dhcpv6" name="eUE_DHCPv6">Solicit.Relay.Option17.Suboption 35.show</capture_ref>
+						<!-- 5.1 - value '2' (PacketCable2.0)-->
+						<expr>010102</expr>
+					</contains>
+				</verify>
+				
+				<verify step="4">
+				<!-- 5.3 - 0 = no; 1 = yes(TGT support)-->
+					<or>
+						<contains>
+							<capture_ref type="dhcpv6" name="eUE_DHCPv6">Solicit.Relay.Option17.Suboption 35.show</capture_ref>
+							<expr>030100</expr>
+						</contains>
+						<contains>
+							<capture_ref type="dhcpv6" name="eUE_DHCPv6">Solicit.Relay.Option17.Suboption 35.show</capture_ref>
+							<expr>030101</expr>
+						</contains>
+					</or>
+				</verify>
+
+				<verify step="4">
+				<!-- 5.4 - 0 = no; 1 = yes(HTTP support)-->
+					<or>
+						<contains>
+							<capture_ref type="dhcpv6" name="eUE_DHCPv6">Solicit.Relay.Option17.Suboption 35.show</capture_ref>
+							<expr>040100</expr>
+						</contains>
+						<contains>
+							<capture_ref type="dhcpv6" name="eUE_DHCPv6">Solicit.Relay.Option17.Suboption 35.show</capture_ref>
+							<expr>040101</expr>
+						</contains>
+					</or>
+				</verify>
+
+				<verify step="4">
+				<!-- 5.26 - 0 = no; 1 = yes(certificate bootstrapping support)-->
+					<or>
+						<contains>
+							<capture_ref type="dhcpv6" name="eUE_DHCPv6">Solicit.Relay.Option17.Suboption 35.show</capture_ref>
+							<expr>1a0100</expr>
+						</contains>
+						<contains>
+							<capture_ref type="dhcpv6" name="eUE_DHCPv6">Solicit.Relay.Option17.Suboption 35.show</capture_ref>
+							<expr>1a0101</expr>
+						</contains>
+					</or>
+				</verify>
+
+				<verify step="4">
+				<!-- 5.38 - 0 = single stack (default); 1 = dualstack(HTTP support)-->
+					<contains>
+						<capture_ref type="dhcpv6" name="eUE_DHCPv6">Solicit.Relay.Option17.Suboption 35.show</capture_ref>
+						<expr>260101</expr>
+					</contains>
+				</verify>				
+				
+			</postlude>
+			<transition to="END" event="SNMPResp"/>
+			<transition to="END" event="SNMPRespFailure"/>
+		</state>
+					
+	
+	</add_to>
+</pc2xml>

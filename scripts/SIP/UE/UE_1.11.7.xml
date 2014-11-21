@@ -1,0 +1,85 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="SIP-UE 1.11.7" 
+	descrip="UAC – Retransmission of Reliable Provisional Response is ignored" 
+	number="SIP-UE 1.11.7">
+	
+	<template file="./templates/CallOrigAtUETemp.xml" name="UE1"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Setup"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<NE ext_require="100rel" ext_supported="100rel"/>
+		<state ID="Setup">
+			<prelude once="true">
+				<send protocol="utility" msgtype="DialDigits">
+					<mod modtype="add" hdr="number">
+						<msg_ref type="platform">UE1.phone number 1</msg_ref>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<!-- If the current message that we received is an Invite, answer with
+              			a 100-trying -->
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>Invite</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="100-INVITE"/>
+						<!--Sending 183-Invite with answer-->
+						<sleep time="200"/>
+						<send protocol="sip" msgtype="183-Invite"/>
+						
+					</then>
+				</if>
+				
+			</response>
+			<transition to="Setup" event="DialDigitsComplete"/>
+			<transition to="WaitPrack" event="INVITE"/>
+		</state>
+		
+		<state ID="WaitPrack">
+			<postlude>
+				<send protocol="sip" msgtype="200-PRACK"/>
+				<sleep time="200"/>
+				<retransmit protocol="sip" msgtype="183-Invite"/>
+			</postlude>
+			<transition to="WaitPrack" event="DialDigitsComplete"/>
+			<transition to="NoSecondPrack" event="PRACK"/>
+		</state>
+		
+		<state ID="NoSecondPrack" timer="4000">
+			<response>
+				<verify step="3" requirements="RFC25">
+					<neq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>PRACK</expr>
+					</neq>
+				</verify>
+			</response>
+			<transition to="END" event="TimerExpired"/>
+		</state>
+	</add_to>
+</pc2xml>

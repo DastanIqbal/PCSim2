@@ -1,0 +1,193 @@
+#//*****************************************************************************
+#// Filename: E-UE-PROV_1-1-1-4.test
+#// Author:   Matthew Forbes
+#// Creation Date: February 18, 2009
+#// Modified by:
+#//*****************************************************************************
+#// Description:
+#//     TC2764 TEST CASE E-UE-PROV 1.1.1.4 - Secure Provisioning Under RF Loss
+#//     
+#//
+#// Objective:
+#//     This test verifies the ability of the E-UE to complete the end to end provisioning process in secure   
+#//     mode for both the eCM and eUE components of the device when a condition of RF loss is introduced. The 
+#//     test also addresses all possible combinations of provisioning the eCM and eUE in IPv4 and IPv6 modes.
+#//
+#// PacketCable DUT:
+#//     eUE
+#//
+#// Test Steps:
+#//     - Initial configuration
+#//     - Reset DUT
+#//     - Check Provisioning state
+#//     - Invoke SNMPv3 API and clear Kerberos Tickets
+#//     - Start sniffer
+#//     - Disconnect RF cable from DUT
+#//     - Re-connect RFcable to DUT
+#//     - Check Provisioning state
+#//     - Stop sniffer
+#//     - Invoke parsing tool and validate using Pass/Fail scripts
+#//     - Invoke SNMPv3 API and bulk query MIB objects and validate values
+#//
+#// Notes:
+#//     - Requires provPrimitives.tcl & tftp_primitives.tcl.
+#//     - Requires the specific config file in $BASE_CFG_FILE_PATH in Provisioning Server.
+#//     - Requires parT.tcl parsing tool to parse data from capture file.
+#//*****************************************************************************
+global SCRIPT_VERSION
+set SCRIPT_VERSION { # $Id: E-UE-PROV_1-1-1-4.test 7406 2010-07-20 17:17:37Z dthakore $ }
+
+set step_name E-UE-PROV_1-1-1-4_
+set step_num 1
+
+
+DoStep ${step_name}${step_num}-PreStep-1 "Initialize Test Platform" { 
+   Init_PROV
+   Init_CONTROLLER_LAN
+   # ProvCreateConfig 291 $MTA_MAC
+} { PASS_STEP }
+
+incr step_num
+
+set msgStr "Configure DHCP server for secure provisioning"
+DoStep ${step_name}${step_num}-1 $msgStr {
+} { 
+    # verify_signal $msgStr
+    PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122 Device_Level_Secure.cfg
+    PROV_DEPLOY_DHCP
+}
+
+incr step_num
+
+set msgStr "Reset CM/MTA"
+DoStep ${step_name}${step_num}-1 $msgStr {
+    set val [SNMPvN_RESET $CM_IP]
+    LogMsg "--- Reset of CM and MTA has passed ---"
+} {
+    IsEqual $val 0
+}
+
+incr step_num
+
+set msgStr "pktcMTADevProvisioningState Content Verification"
+DoStep ${step_name}${step_num}-1 $msgStr {
+        # Wait for 70 seconds to let CM/MTA starting to reboot
+        actionWait "Wait for CM/MTA to reboot" 70
+        # Get the OID from the MTA and check it using our previously defined
+        set val [GetProvState 1 600]
+        LogMsg "MTA Provisioning State"
+        LogMsg "             - Expected : 1"
+        LogMsg "             - Received : $val"
+} {
+    IsEqual $val 1
+}
+
+incr step_num
+
+set msgStr "Start Sniffer"
+DoStep ${step_name}${step_num}-1 $msgStr {
+    LogMsg "--- $msgStr ---"
+    SetupCaptureControllerLan "host $MTA_IP || udp port 67 || host $CM_IP"
+    StartCaptureControllerLan
+} {PASS_STEP}
+
+incr step_num
+
+set msgStr "pktcMtaDevResetKrbTickets Reset Kerberos Tickets"
+DoStep ${step_name}${step_num}-1 $msgStr {    
+    LogMsg "--- $msgStr ---"
+    set val [SNMP_SET $oid_pktcMtaDevResetKrbTickets OCTET-STRING 0xC0 $MTA_IP]
+} {
+    if {$val == 0} {
+        LogMsg "Kerberos Tickets Have been cleared"
+        PASS_STEP
+    } else {
+        FAIL_STEP "Cannot reset Kerberos tickets"
+    }
+}
+
+
+################ Disconnect and connect DUT and Verify Provisioning ################
+
+incr step_num
+
+DoStep ${step_name}${step_num}-1 "Disconnect coax from DUT" {
+    LogMsg "--- Disconnect coax from DUT ---"
+    verify_signal "Disconnect RF cable from DUT"
+    LogMsg "--- Device is resetting, Please Wait ---"
+    actionWait "Allow 60 seconds for reset, Please Wait" 60
+} {PASS_STEP}
+
+incr step_num
+
+DoStep ${step_name}${step_num}-1 "Re-connect coax from DUT" {
+    LogMsg "--- Re-connect coax from DUT ---"
+    verify_signal "Re-connect RF cable to DUT"
+} {PASS_STEP}
+
+incr step_num
+
+DoStep ${step_name}${step_num}-1 "Monitor Provisioning Server" {
+    # Wait for a minute to let CM/MTA starting to reboot
+    actionWait "Wait for CM/MTA to reboot" 70
+    # Get the OID from the MTA and check it using our previously defined
+    set val [GetProvState 1 600]
+    LogMsg "MTA Provisioning State"
+    LogMsg "             - Expected : 1"
+    LogMsg "             - Received : $val"
+} {
+    IsEqual $val 1
+}
+
+incr step_num
+
+set msgStr "Stop Sniffer"
+DoStep ${step_name}${step_num}-1 $msgStr {
+    LogMsg "--- $msgStr ---"
+    StopCaptureControllerLan
+    SaveToFileControllerLan
+} { PASS_STEP }
+
+
+# incr step_num
+
+
+########################## INVOKE PARSING TOOL ##################################
+
+################################################################################
+# DoStep ${step_name}${step_num}-1 "Parse all data into database" {
+#     # Initial PARSER TOOL
+#     Init_PART
+#     
+#     # Set up parser file
+#     set PARSERFILE    $ETH_DEFAULT_TXT_FILE
+# } { PASS_STEP }
+# 
+# DoStep ${step_name}${step_num}-2 "Parse all data into database" {
+#     # Parse data
+#     set PARAMS_DHCP         "{DHCP {} {} {} {} {} {} {} {}}"
+#     set PARAMS_CM_SRC       "{{} {} {} {} $CM_IP {} {} {} {}}"
+#     set PARAMS_CM_DST       "{{} {} {} {} {} {} {} $CM_IP {}}"
+#     set msgID_CM            [ParseFile $PARSERFILE "$PARAMS_DHCP $PARAMS_CM_SRC $PARAMS_CM_DST"]
+#     set PARAMS_MTA_SRC      "{{} {} {} {} $MTA_IP {} {} {} {}}"
+#     set PARAMS_MTA_DST      "{{} {} {} {} {} {} {} $MTA_IP {}}"
+#     set msgID_MTA           [ParseFile $PARSERFILE "$PARAMS_DHCP $PARAMS_MTA_SRC $PARAMS_MTA_DST"]
+#     
+# } { 
+#     if { $::PART_RETURN == 0 } {
+#         PASS_STEP
+#     } else {
+#         FAIL_STEP "Cannot find data"
+#     }
+# }
+################################################################################
+
+
+################################################################################
+# Cleanup
+################################################################################
+
+
+
+Cleanup
+

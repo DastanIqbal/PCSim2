@@ -1,0 +1,88 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	PCPCII-139 : Update the Voicetronix modifiers to use the new values. (ghassler 07/10/2009)
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-UE 1.3.4.1" 
+	descrip="SCF Feature Availability Status Not Available " 
+	number="RST-UE 1.3.4.1">
+	
+	<fsm name="UE1">
+		<models>
+			<session/>
+		</models>
+	
+		<NE sim_type="term" elements="UE1 PCSCF2 SCSCF1 PCSCF1" targets="UE1 *63"/>
+		
+		<states initialstate="Register">
+			<state ID="Register">
+				<transition to="OffHook" event="Registered"/>
+			</state>
+			
+			<state ID="OffHook">
+				<prelude>
+					<send protocol="utility" msgtype="OffHook"/>
+				</prelude>
+				<transition to="Wait" event="OffHookComplete"/>
+			</state>
+			
+			<!-- Wait State -->
+			<state ID="Wait" timer="10000">
+				<prelude once="true">
+					<!-- Step 1 test case SIP 1.3.4.1-->
+					<send protocol="utility" msgtype="DialDigits">
+						<mod modtype="add" hdr="number">
+							<expr>*63</expr>
+						</mod>
+					</send>
+				</prelude>
+				<response>
+					<if>
+						<or>
+							<eq>
+								<msg_ref type="event"/>
+								<expr>TimerExpired</expr>
+							</eq>
+							<eq>
+								<msg_ref type="sip">Request</msg_ref>
+								<expr>INVITE</expr>
+							</eq>
+						</or>
+						<then>
+							<verify step="1" requirements="REQ13708">
+								<and>
+									<eq>
+										<msg_ref type="event"/>
+										<expr>TimerExpired</expr>
+									</eq>
+									<neq>
+										<msg_ref type="sip">Request</msg_ref>
+										<expr>INVITE</expr>
+									</neq>
+								</and>
+							</verify>
+						</then>
+					</if>
+				</response>
+				<transition to="Wait" event="DialDigitsComplete"/>
+				<transition to="END" event="TimerExpired"/>
+				<transition to="END" event="INVITE"/>
+			</state>
+		</states>
+	</fsm>
+</pc2xml>

@@ -1,0 +1,240 @@
+<?xml version="1.0"?>
+
+<!--
+######################################################################################
+##                                                                                  ##
+## (c) 2008 Cable Television Laboratories, Inc.  All rights reserved.  Any use      ##
+## of this documentation/package is subject to the terms and conditions of the      ##
+## CableLabs License provided to you on download of the documentation/package       ##
+## and also available at www.cablemodem.com.                                        ##
+##                                                                                  ##
+######################################################################################
+
+
+ Change History: (Author & Date)
+	PCPCII-139 : Update the Voicetronix modifiers to use the new values. (ghassler 07/10/2009)
+
+
+
+
+-->
+<pc2xml version="$Revision: 6675 $" name="RST-UE 1.6.8.1" descrip="NBCS" number="RST-UE 1.6.8.1" inspector="disable">
+    <template file="./templates/CallTermAtUETemp.xml" name="UE1" /> 
+      <add_to fsm="UE1">
+	  <transition from="Register" to="SendInvite" event="Registered" />
+	    
+	  <state ID="SendInvite">
+	    <prelude>
+		<sleep time="10000"/>
+		    <send protocol="sip" msgtype="Invite">
+		    <mod modtype="add" hdr="Alert-Info">
+		    <expr>urn:cablelabs:packetcable:applications:rst:alert:silence</expr> 
+		    </mod>
+		    </send>
+	    </prelude>
+	    <response>
+	      <if>
+		<eq>
+		    <msg_ref type="sip">Response</msg_ref> 
+		    <expr>180-Invite</expr> 
+		</eq>
+ 		<then>
+		    <verify step="1" requirements="REQ23588,REQ23589" >
+		<eq>
+		    <msg_ref type="sip">Response</msg_ref>
+		    <expr>180-Invite</expr>
+		</eq>
+		</verify>
+		</then>
+	      </if>
+	  </response>
+	    <postlude>
+		<sleep time="2000" />
+		    <log promptUser="True" yesExpected="True" verify="True" step="1" requirements="REQ23588,REQ23589" expr="Verify there is no ringing on the DUT side" /> 
+	    </postlude>
+	  <transition to="Next" event="180-INVITE" />
+	  <transition to="Next" event="TimerExpired" />
+	  </state>
+	  
+	  <state ID="Next">
+	      <prelude>
+		  <generate event="SucceedEvent" fsm="UE2" /> 
+	      </prelude>
+	    <transition to="SendACK1" event="SucceedEvent" />
+	  </state>
+  
+	  <state ID="SendACK1" timer="2500">
+	      
+		<response>
+		<if>
+		  <eq>
+		  <msg_ref type="sip">Response</msg_ref> 
+		  <expr>200-INVITE</expr> 
+		  </eq>
+		 <then>
+		 </then>
+		</if>
+              </response>
+	    <transition to="SendACK1" event="200-INVITE" />
+            <transition to="Verify" event="TimerExpired" />
+           </state>
+	  
+	   <state ID="Verify" timer="2000" once ="true">
+                <prelude once ="true">
+                  <send protocol="sip" msgtype="ACK" bodies="SDP">
+		 </send>
+                  <sleep time="500" /> 
+                   <log promptUser="True" yesExpected="True" verify="True" step="" requirements="REQ23589" expr="Verify that the DUT relays the RTP stream from both Voice Mail server and UE-B." /> 
+                   <sleep time="500" /> 
+                  <log promptUser="True" yesExpected="True" verify="True" step="" requirements="REQ23589" expr="Verify that there is no RTP stream from the DUT" /> 
+                </prelude>
+            <transition to="Next3" event="TimerExpired" /> 
+            </state>
+	   
+	   <state ID="Next3" >
+	      <prelude>
+		  <generate event="Branch1Event" fsm="UE2" /> 
+	      </prelude>
+	      <transition to="ReceiveBye" event="Branch2Event" />
+	   </state>
+	   
+	   <state ID="ReceiveBye" timer="3000" >
+	     	<prelude>
+			<!--Sending BYE to peer to terminate call.-->
+			<sleep time="2000"/>
+			<send protocol="sip" msgtype="BYE"/>
+		</prelude>
+				<!-- Transitions for Releasing state -->
+		<transition to="OnHook1" event="200-Bye"/>
+	    </state>
+			<!-- OnHook State -->
+	    <state ID="OnHook1">
+		<prelude>
+			<send protocol="utility" msgtype="OnHook"/>
+		</prelude>
+			<!-- Transitions for OnHook state -->
+			<transition to="END" event="OnHookComplete"/>
+	    </state>
+	    
+	    <!--transition to="END" event="TimerExpired" /-->
+	    
+	</add_to>
+
+
+    <fsm name="UE2">
+	<models>
+	    <session /> 
+	</models>
+	
+    <NE sim_type="term" elements="UE2 PCSCF2 SCSCF1 PCSCF1" targets="UE2" />
+    <states initialstate="WaitSucceedEvent">
+      
+    <state ID="WaitSucceedEvent">
+      <transition to="SendInvite1" event="SucceedEvent" /> 
+    </state>
+
+	  <state ID="SendInvite1">
+	      <prelude>
+		  <send protocol="sip" msgtype="Invite">
+		  <mod modtype="add" hdr="Join">
+		  <var_expr>
+		  <msg_ref type="sip" msg_instance="last" fsm="UE1" >180-INVITE.Call-ID.value</msg_ref>
+		  <expr>;to-tag=</expr> 
+		  <msg_ref type="sip" msg_instance="last" fsm="UE1" >180-INVITE.To.tag</msg_ref>
+		  <expr>;from-tag=</expr> 
+		  <msg_ref type="sip" msg_instance="last" fsm="UE1" >180-INVITE.From.tag</msg_ref>
+		  </var_expr>
+		  </mod>
+		  <mod modtype="add" hdr="Answer-Mode">
+		  <expr>AUTO</expr>
+		  </mod>
+		  <mod modtype="delete" hdr="SDP">
+		  </mod>
+		  
+		  </send>
+	      </prelude>
+		<response>
+		    <if>
+		       <eq>
+			<msg_ref type="sip">Response</msg_ref> 
+			<expr>200-INVITE</expr> 
+		      </eq>
+		    <then>
+		      <verify step="2" requirements="REQ23599">
+		      <eq>
+		      <msg_ref type="sip">Response</msg_ref> 
+		      <expr>200-INVITE</expr> 
+		      </eq>
+		      </verify>
+		     
+			<verify step="2" requirements=" REQ23589 " >
+			<contains>
+                        <msg_ref type="sip" >200-Invite.Content-Type.media-subtype</msg_ref>
+                        <expr>sdp</expr>
+			</contains>
+			</verify>
+			
+                    </then>
+                    </if>
+                </response>
+             <transition to="SendAck" event="200-INVITE" /> 
+            </state>
+	  
+	    <state ID="SendAck" timer="1000">
+                <prelude>
+                  <send protocol="sip" msgtype="ACK" bodies="SDP">
+		 </send>
+                </prelude>
+              <transition to="Next2" event="TimerExpired" /> 
+            </state>
+	       
+	        <state ID="Next2">
+                  <prelude>
+                        <generate event="SucceedEvent" fsm="UE1" /> 
+                  </prelude>
+              <transition to="ReceiveBye2" event="Branch1Event" />
+	      </state>
+	       
+              <state ID="ReceiveBye2" timer="1500" once="true">
+                   <response>
+                     <if>
+                       <eq>
+                        <msg_ref type="sip">Request</msg_ref> 
+                        <expr>BYE</expr> 
+                        </eq>
+                    <then>
+                        <verify step="4" requirements="REQ23606,REQ23607">
+                            <eq>
+		      <msg_ref type="sip">Request</msg_ref> 
+		      <expr>BYE</expr> 
+		      </eq>
+		      </verify>
+                    <send protocol="sip" msgtype="200-BYE" /> 
+                    </then>
+                      </if>
+                      </response>
+                <transition to="ReceiveBye2" event="BYE" />
+                 <transition to="LastInvite1" event="TimerExpired" />
+               </state>
+	      
+               <state ID="LastInvite1">
+	      <prelude>
+		  <send protocol="sip" msgtype="INVITE"/>
+              </prelude>
+              <transition to="Next4" event="486-INVITE" />
+               </state>
+               
+	      <state ID="Next4" ES="true">
+                  <prelude>
+                    <log promptUser="True" yesExpected="True" verify="True" step="" requirements="REQ23608" expr="Verify that the DUT responds
+with 486 Busy." />
+                    <sleep time="1000"/>
+                    <send protocol="sip" msgtype="ACK"/>
+                    <sleep time="500"/>
+                     <generate event="Branch2Event" fsm="UE1" /> 
+                  </prelude>
+		</state>
+	      
+	       </states>
+          </fsm>
+</pc2xml>

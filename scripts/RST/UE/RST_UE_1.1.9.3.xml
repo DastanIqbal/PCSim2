@@ -1,0 +1,149 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+ Change History: (Author & Date)
+	PCPCII-163 - Move the streaming to occur as soon as possible in the script once the answer is sent. (ghassler 12/7/2009)
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-UE 1.1.9.3" 
+	descrip="UE plays back audio received on early media" 
+	number="RST-UE 1.1.9.3" inspector="disable">
+	
+	<template file="./templates/CallOrigAtUETemp.xml" name="UE1"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Setup"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<state ID="Setup">
+			<prelude once="true">
+				<send protocol="utility" msgtype="DialDigits">
+					<mod modtype="add" hdr="number">
+						<msg_ref type="platform">UE1.phone number 1</msg_ref>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<!-- If the current message that we received is an Invite, answer with
+               a 100-trying -->
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>Invite</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="100-INVITE"/>
+					</then>
+				</if>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>Invite</expr>
+					</eq>
+					<then>
+						<!--Sending 180-Invite with SS not supporting precondition.-->
+						<send protocol="sip" msgtype="180-Invite" bodies="SDP"/>
+						<start_stream name="vm" file="../config/tones/tone1.rtp" format="G711">
+							<to>
+									<ip>
+										<msg_ref type="sdp" msg_instance="last">INVITE.c.address</msg_ref>
+									</ip>
+									<port>
+										<msg_ref type="sdp" msg_instance="last">INVITE.audio.port</msg_ref>
+									</port>
+								</to>
+								<from>
+									<ip>
+										<msg_ref type="platform">Platform.STUN IP Address</msg_ref>
+									</ip>
+									<port>
+										<msg_ref type="platform">Platform.RTP Port1</msg_ref>
+									</port>
+								</from>
+							</start_stream>
+
+					</then>
+				</if>
+			</response>
+			<transition to="Setup" event="DialDigitsComplete"/>
+			<transition to="Dialog" event="INVITE"/>
+		</state>
+		
+		<state ID="Dialog" timer="5000">
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>PRACK</expr>
+					</eq>
+					<then>
+						<verify step="2" requirements="REQ13499, RFC2496, RFC2497" group="prack">
+							<contains>
+								<msg_ref type="sip" hdr_instance="any">PRACK.Content-Disposition.value</msg_ref>
+								<expr>early-session</expr>
+							</contains>
+						</verify>
+						<!--Reliability required for test sending 200-Prack message to peer.-->
+						<send protocol="sip" msgtype="200-PRACK">
+							<mod modtype="delete" hdr="SDP"/>
+						</send>
+						<start_stream name="vm" file="../config/tones/voice20.rtp" format="G711-20">
+							<to>
+								<ip>
+									<msg_ref type="sdp" msg_instance="last">PRACK.c.address</msg_ref>
+								</ip>
+								<port>
+									<msg_ref type="sdp" msg_instance="last">PRACK.audio.port</msg_ref>
+								</port>
+							</to>
+							<from>
+								<ip>
+									<msg_ref type="platform">Platform.STUN IP Address</msg_ref>
+								</ip>
+								<port>
+									<msg_ref type="platform">Platform.RTP Port1</msg_ref>
+								</port>
+							</from>
+						</start_stream>
+						<log promptUser="true" yesExpected="true" verify="true" 
+							step="2" requirements="REQ13499, RFC2496, RFC2497" group="ringing" 
+							expr="Verify that that audible voice20 can be heard on the DUT."/>
+					</then>
+					<elseif>
+						<eq>
+							<msg_ref type="event"/>
+							<expr>TimerExpired</expr>
+						</eq>
+						<then>
+							<verify step="2" requirements="REQ13499, RFC2496, RFC2497" group="prack">
+								<eq>
+									<msg_ref type="event"/>
+									<expr>TimerExpired</expr>
+								</eq>
+							</verify>
+							<log promptUser="true" yesExpected="true" verify="true" 
+								step="2" requirements="REQ13499, RFC2496, RFC2497" group="ringing" 
+								expr="Verify that that audible voice20 can be heard on the DUT."/>
+						</then>
+					</elseif>
+				</if>
+			</response>
+			<transition to="Dialog" event="DialDigitsComplete"/>
+			<transition to="END" event="TimerExpired"/>
+			<transition to="END" event="PRACK"/>
+		</state>
+	</add_to>
+</pc2xml>

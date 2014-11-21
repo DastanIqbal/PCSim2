@@ -1,0 +1,76 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="SIP-UE 1.8.2" 
+	descrip="Verification of Cseq numbering." 
+	number="SIP-UE 1.8.2">
+	
+	<template file="./templates/CallTermAtUETemp.xml" name="UE1"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Releasing"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<state ID="Releasing">
+			<prelude>
+				<!--Sending BYE to peer to terminate call.-->
+				<send protocol="sip" msgtype="BYE">
+					<!--Step 2 test case SIP 1.8.2 - The  SS sends a BYE with a CSeq value of 1-->
+					<mod modtype="replace" hdr="CSeq" param="value">
+						<expr>1</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="2" requirements="RFC646">
+					<eq>
+						<msg_ref type="sip">500-BYE.CSeq.value</msg_ref>
+						<expr>1</expr>
+					</eq>
+				</verify>
+			</response>
+			<!--Step 2 test case SIP 1.8.2 - Verify that the UAS responds 
+				with a 500 Server Internal Error-->
+			<transition to="Releasing1" event="500-Bye"/>
+		</state>
+		
+		<state ID="Releasing1">
+			<prelude>
+				<!--Sending BYE to peer to terminate call.-->
+				<send protocol="sip" msgtype="BYE">
+					<!--Step 2 test case SIP 1.8.2 - The  SS sends a BYE with a CSeq value of 1-->
+					<mod modtype="replace" hdr="CSeq" param="value">
+						<add_ref type="sip" msg_instance="prev" value="2">Request.CSeq.value</add_ref>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="3" requirements="RFC647">
+					<eq>
+						<msg_ref type="sip">200-BYE.CSeq.value</msg_ref>
+						<msg_ref type="sip" msg_instance="last">BYE.CSeq.value</msg_ref>
+					</eq>
+				</verify>
+			</response>
+			<transition to="OnHook" event="200-Bye"/>
+		</state>
+	</add_to>
+</pc2xml>

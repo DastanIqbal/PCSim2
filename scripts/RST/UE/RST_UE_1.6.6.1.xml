@@ -1,0 +1,85 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	PCPCII-139 : Update the Voicetronix modifiers to use the new values. (ghassler 07/10/2009)
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-UE 1.6.6.1" 
+	descrip="Customer Originated Trace – feature disabled " 
+	number="RST-UE 1.6.6.1" inspector="disable">
+	
+	<template file="./templates/CallTermAtUETemp.xml" name="UE1"/>
+	<template file="./templates/CallOrigAtUETemp.xml" name="UE2"/>
+	
+	<add_to fsm="UE2">
+		<states initialstate="WaitSucceed"/>
+		<state ID="WaitSucceed">
+			<transition from="WaitSucceed" to="OffHook" event="SucceedEvent"/>
+		</state>
+	</add_to>
+
+	<remove_from fsm="UE1">
+		<state ID="OnHook"/>
+	</remove_from>
+	
+	<remove_from fsm="UE2">
+		<NE elements="UE1 PCSCF2 SCSCF1 PCSCF1" targets="UE1"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<NE targets="UE1"/>
+		
+		<state ID="OnHook">
+			<prelude>
+				<send protocol="utility" msgtype="OnHook"/>
+			</prelude>
+			<postlude>
+				<generate event="SucceedEvent" fsm="UE2"/>
+			</postlude>
+			<transition to="EndSession" event="OnHookComplete"/>
+		</state>
+		
+		<state ID="EndSession" ES="True"/>
+	</add_to>
+	
+	<add_to fsm="UE2">
+		<NE elements="UE2 PCSCF2 SCSCF1 PCSCF1" targets="UE2"/>
+		
+		<transition from="OffHook" to="Dial" event="OffHookComplete"/>
+		
+		<state ID="Dial">
+			<prelude>
+				<!-- Step 3 test case SIP 1.6.6.1 - Initiate the COT feature at the UE -->
+				<send protocol="utility" msgtype="DialDigits">
+					<mod modtype="replace" hdr="number">
+						<expr>*57</expr>
+					</mod>
+				</send>
+			</prelude>
+			<transition to="Verify" event="DialDigitsComplete"/>
+		</state>
+		
+		<state ID="Verify" timer="5000">
+			<prelude>
+				<log step="3" requirements="REQ13943, REQ14437" 
+					promptUser="True" yesExpected="True" verify="True" 
+					expr="COT feature is not available, and verify that the UE plays a\ndenial announcement or tone to the user?"/>
+			</prelude>
+			<transition to="END" event="TimerExpired"/>
+		</state>
+	</add_to>
+</pc2xml>

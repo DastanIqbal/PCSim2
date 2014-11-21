@@ -1,0 +1,127 @@
+#//*****************************************************************************
+#// Filename: E-UE-PROV_1-1-2-9.test
+#// Author:   Matthew Forbes
+#// Creation Date: February 13, 2009
+#// Modified by:
+#//*****************************************************************************
+#// Description:
+#//     TC2775 TEST CASE E-UE-PROV 1-1-2-9 Unrecognized Value of Telephony Service Provider
+#//     SNMP Entity
+#//
+#// Objective:
+#//     Test the capability of the E/MTA DUT to respond to KDC error message for
+#//     the wrong value for the Telephony Service provider SNMP Entity
+#//
+#// PacketCable DUT:
+#//     MTA
+#//
+#// Test Steps:
+#//     - Initialize MTA config file setup
+#//     - Setup DHCP Server Telephony Service Provider FQDN 122.3 = faultyvalue
+#//     - Ensure DNS resolves "faultyvalue" FQDN
+#//     - Setup DHCP server to select Secure Provisioning flow with proper 122 values
+#//     - Start Sniffer
+#//     - Clear Kerberos Tickets
+#//     - Reset DUT
+#//     - Check Provisioning state
+#//     - Stop sniffer
+#//     - Invoke parsing tool and validate using Pass/Fail scripts
+#//     - Delete MTA config file
+#//
+#// Notes:
+#//     - Requires provPrimitives.tcl & tftp_primitives.tcl.
+#//     - Requires the specific config file in $BASE_CFG_FILE_PATH in Provisioning Server.
+#//     - Requires parT.tcl parsing tool to parse data from capture file.
+#//*****************************************************************************
+global SCRIPT_VERSION
+set SCRIPT_VERSION { # $Id: E-UE-PROV_1-1-2-9.test 7406 2010-07-20 17:17:37Z dthakore $ }
+
+set step_name E-UE-PROV_1-1-2-9_
+set step_num 1
+
+
+DoStep ${step_name}${step_num}-PreStep-1 "Initialize Test Platform" { 
+   Init_PROV
+   Init_CONTROLLER_LAN
+   # ProvCreateConfig 291 $MTA_MAC
+} { PASS_STEP }
+
+incr step_num
+
+set msgStr "Configure DHCP server option 122 suboption 3 with a faulty value (MTATC763)"
+DoStep ${step_name}${step_num}-1 $msgStr {
+} { 
+    # verify_signal $msgStr
+    PROV_MODIFY_DEVICE $MTA_MAC MTATC938 Device_Level_Secure.cfg
+    PROV_DEPLOY_DHCP
+}
+
+incr step_num
+
+set msgStr "Start Sniffer"
+DoStep ${step_name}${step_num}-1 $msgStr {
+    LogMsg "--- $msgStr ---"
+    SetupCaptureControllerLan "host $MTA_IP || udp port 67 || host $CM_IP"
+    StartCaptureControllerLan
+} {PASS_STEP}
+
+
+incr step_num
+
+DoStep ${step_name}${step_num}-1 "Reset MTA" {
+    LogMsg "--- MTA is Resetting ---"
+    SNMP_SET $oid_pktcMtaDevResetNow INTEGER 1 $MTA_IP
+    actionWait "Wait 60 seconds for provisioning to complete" 60
+} {PASS_STEP}
+
+incr step_num
+
+DoStep ${step_name}${step_num}-1 "Check value pktcMtaDevRealmUnsolicitedKeyNomTimeout" {
+    LogMsg "--- Check MIB Value ---"
+    set val [SNMP_GET $pktcMtaDevRealmUnsolicitedKeyNomTimeout.1 $MTA_IP 20]
+} {
+    IsEqual $val 8000
+}
+
+DoStep ${step_name}${step_num}-2 "Check value pktcMtaDevRealmUnsolicitedKeyMaxTimeout" {
+    LogMsg "--- Check MIB Value ---"
+    set val [SNMP_GET $pktcMtaDevRealmUnsolicitedKeyMaxTimeout.1 $MTA_IP 20]
+} {
+    IsEqual $val 255
+}
+
+DoStep ${step_name}${step_num}-3 "Check value pktcMtaDevRealmUnsolicitedKeyMaxRetries" {
+    LogMsg "--- Check MIB Value ---"
+    set val [SNMP_GET $pktcMtaDevRealmUnsolicitedKeyMaxRetries.1 $MTA_IP 20]
+} {
+    IsEqual $val 1
+}
+
+incr step_num
+
+set msgStr "Stop Sniffer"
+DoStep ${step_name}${step_num}-1 $msgStr {
+    LogMsg "--- $msgStr ---"
+    StopCaptureControllerLan
+    SaveToFileControllerLan
+} { PASS_STEP }
+
+
+################################################################################
+# Cleanup
+################################################################################
+
+incr step_num
+
+set msgStr "Restore policy on DHCP Server (MTAFORCW_122)"
+DoStep ${step_name}${step_num}-1 $msgStr {
+} {
+    # verify_signal $msgStr
+    PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122
+    PROV_DEPLOY_DHCP
+    SNMPvN_RESET $CM_IP
+    actionWait "Wait 50 seconds for reset" 50 
+}
+
+Cleanup
+

@@ -1,0 +1,96 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-UE 1.5.4.13" 
+	descrip="Call Transfer Failure – Transferred-To " 
+	number="RST-UE 1.5.4.13" inspector="disable">
+	
+	<template file="./templates/Call_Transfer_Transferred-To.xml"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="UE1Connected"/>
+		<state ID="UE1EndSession"/>
+	</remove_from>
+	
+	<remove_from fsm="UE2">
+		<state ID="UE2Setup"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<state ID="UE1Connected" time="10000">
+			<prelude>
+				<send protocol="sip" msgtype="ACK"/>
+				<generate event="SucceedEvent" fsm="UE2"/>
+			</prelude>
+			<transition to="UE1EndSession" event="TimerExpired"/>
+		</state>
+		
+		<state ID="UE1EndSession" ES="True"/>
+	</add_to>
+	
+	<add_to fsm="UE2">
+		<NE targets="UE2"/>
+		<state ID="UE2Setup">
+			<prelude>
+				<send protocol="sip" msgtype="Invite">
+					<mod modtype="add" hdr="Replaces">
+						<var_expr>
+							<msg_ref type="sip" msg_instance="last" fsm="UE1">Invite.Call-ID.value</msg_ref>
+							<expr>;to-tag=7743;from-tag=</expr>
+							<msg_ref type="sip" msg_instance="last" fsm="UE1">Invite.From.tag</msg_ref>
+						</var_expr>
+					</mod>
+				</send>
+			</prelude>
+			<!-- Expected responses are 100, 180, 183 or 200 -->
+			<response>
+				<if>
+					<gt>
+						<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+						<expr>100</expr>
+					</gt>
+					<then>
+						<verify step="5" requirements="REQ13850, REQ14518" group="dne">
+							<eq>
+								<msg_ref type="sip">Response</msg_ref>
+								<expr>481-INVITE</expr>
+							</eq>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<!-- Step 5 of test case 1.5.4.13 - -->
+			<transition to="WaitFinal" event="100-INVITE"/>
+			<transition to="END" event="xxx-INVITE"/>
+		</state>
+		
+		<state ID="WaitFinal">
+			<response>
+				<verify step="5" requirements="REQ13850, REQ14518" group="dne">
+					<eq>
+						<msg_ref type="sip">Response</msg_ref>
+						<expr>481-INVITE</expr>
+					</eq>
+				</verify>
+			</response>
+			<transition to="END" event="xxx-INVITE"/>
+		</state>
+	</add_to>
+</pc2xml>

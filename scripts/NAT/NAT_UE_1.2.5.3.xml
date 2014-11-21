@@ -1,0 +1,119 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="NAT_UE_1.2.5.3" 
+	descrip="Call from UE(Lite-ICE) to a UE (Lite-ICE)" 
+	number="NAT_UE_1.2.5.3">
+	
+	<template file="./templates/CallTermAtUETemp.xml" name="UE1"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Setup"/>
+		<state ID="Answer"/>
+		<state ID="Alerting"/>
+		<state ID="Proceeding"/>
+		<state ID="Connected"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<NE targets="RTP"/>
+		<state ID="Setup" timer="12000">
+			<prelude once="true">
+				<var name="answer">
+					<expr>false</expr>
+				</var>
+				<send protocol="sip" msgtype="Invite"/>
+			</prelude>
+			<!-- Expected responses are 100, 180, 183 or 200 -->
+			<response>
+				<if>
+					<contains>
+						<msg_ref type="sip" hdr_instance="any">18x-Invite.Require</msg_ref>
+						<expr>100rel</expr>
+					</contains>
+					<then>
+						<!--Reliablity required for test sending Prack message to peer.-->
+						<send protocol="sip" msgtype="Prack"/>
+					</then>
+				</if>
+				<if>
+					<and>
+						<eq>
+							<var_ref name="answer"/>
+							<expr>false</expr>
+						</eq>
+						<contains>
+							<msg_ref type="sip">Response.SDP</msg_ref>
+							<expr>rtpmap</expr>
+						</contains>
+					</and>
+					<then>
+						<assign name="answer">
+							<expr>true</expr>
+						</assign>
+						<verify step="3" requirements="RFC4367">
+							<contains>
+								<msg_ref type="sip">Response.SDP</msg_ref>
+								<expr>a=ice-lite</expr>
+							</contains>
+						</verify>
+					</then>
+				</if>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>UPDATE</expr>
+					</eq>
+					<then>
+						<!--QoS required for test, sending a 200-OK to Update message to peer.-->
+						<send protocol="sip" msgtype="200-Update"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Setup" event="100-INVITE"/>
+			<transition to="Setup" event="180-INVITE"/>
+			<transition to="Setup" event="183-INVITE"/>
+			<transition to="Setup" event="xxx-INVITE"/>
+			<transition to="Setup" event="PRACK"/>
+			<transition to="Setup" event="200-UPDATE"/>
+			<transition to="Setup" event="RTP"/>
+			<transition to="END" event="Branch1Event"/>
+			<transition to="Answer" event="TimerExpired"/>
+		</state>
+	
+		<state ID="Answer">
+			<prelude once="true">
+				<send protocol="utility" msgtype="OffHook"/>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>UPDATE</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="200-Update"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Answer" event="UPDATE"/>
+			<transition to="Answer" event="200-PRACK"/>
+			<transition to="Answer" event="18x-INVITE"/>
+			<transition to="Answer" event="OffHookComplete"/>
+		</state>
+	</add_to>
+</pc2xml>

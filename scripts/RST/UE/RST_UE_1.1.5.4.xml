@@ -1,0 +1,437 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-UE 1.1.5.4" 
+	descrip="Conditional Keep-Alive Mechanism" 
+	number="RST-UE 1.1.5.4">
+	
+	<template file="./templates/CallOrigAtUETemp.xml" name="UE1"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Connected"/>
+		<state ID="OnHook"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<transition from="Register" to="WaitStun" event="Registered"/>
+		<state ID="WaitStun">
+			<transition to="OffHook" event="Branch1Event"/>
+		</state>
+		<transition from="OffHook" to="VerifyDialTone" event="OffHookComplete"/>
+		
+		<state ID="VerifyDialTone">
+			<prelude>
+				<send protocol="utility" msgtype="VerifyDialTone"/>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="utility">Response</msg_ref>
+						<expr>VerifyDialToneComplete</expr>
+					</eq>
+					<then>
+						<verify step="2" requirements="REQ24097">
+							<eq>
+								<msg_ref type="utility">Response</msg_ref>
+								<expr>VerifyDialToneComplete</expr>
+							</eq>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<transition to="Setup" event="VerifyDialToneComplete"/>
+			<transition to="END" event="VerifyDialToneError"/>
+		</state>
+		
+		<state ID="Connected">
+				<!-- Transitions for Connected state -->
+				<transition to="VerifyVoice" event="Branch2Event"/>
+			</state>
+		<state ID="VerifyVoice">	
+			<prelude>
+				<send protocol="utility" msgtype="VerifyVoicePath2Way">
+					<mod modtype="replace" hdr="from voiceport">
+						<msg_ref type="platform">Platform.voiceport0</msg_ref>
+					</mod>
+					<mod modtype="replace" hdr="to voiceport">
+						<msg_ref type="platform">Platform.voiceport1</msg_ref>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="2" requirements="REQ23114, REQ23115, REQ24097">
+					<eq>
+						<msg_ref type="utility">Response</msg_ref>
+						<expr>VerifyVoicePath2WayComplete</expr>
+					</eq>
+				</verify>				
+			</response>
+			<postlude>
+			</postlude>
+			<transition to="OnHook" event="VerifyVoicePath2WayComplete"/>
+		</state>
+		<state ID="OnHook">
+				<prelude>
+					<send protocol="utility" msgtype="OnHook"/>
+				</prelude>
+				<response>
+					<verify step="5" requirements="REQ23117, REQ23119, REQ24097">
+						<eq>
+							<msg_ref type="utility">Response</msg_ref>
+							<expr>OnHookComplete</expr>
+						</eq>
+					</verify>
+				</response>
+				<!-- Transitions for OnHook state -->
+				<transition to="Release" event="OnHookComplete"/>
+			</state>
+		<state ID="Release">
+				<postlude>
+					<!--Sending BYE to peer to terminate call.-->
+					<send protocol="sip" msgtype="200-BYE"/>
+				</postlude>
+				<!-- Transitions for Releasing state -->
+				<transition to="OffHook2" event="Bye"/>
+		</state>
+		
+		<state ID="OffHook2">
+			<prelude>
+					<send protocol="utility" msgtype="OffHook"/>
+				</prelude>
+				<!-- Transitions for OffHook state -->
+				<transition to="VerifyDialTone2" event="OffHookComplete"/>
+		</state>
+		
+		<state ID="VerifyDialTone2">
+			<prelude>
+				<send protocol="utility" msgtype="VerifyDialTone">
+					<mod modtype="replace" hdr="voiceExpected">
+						<expr>no</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="utility">Response</msg_ref>
+						<expr>VerifyDialToneComplete</expr>
+					</eq>
+					<then>
+						<verify step="6" requirements="REQ23117, REQ23119, REQ24097">
+							<eq>
+								<msg_ref type="utility">Response</msg_ref>
+								<expr>VerifyDialToneComplete</expr>
+							</eq>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<transition to="OnHook2" event="VerifyDialToneComplete"/>
+			<transition to="END" event="VerifyDialToneError"/>
+		</state>
+		
+		<state ID="OnHook2">
+				<prelude>
+					<send protocol="utility" msgtype="OnHook"/>
+					<generate event="Branch2Event" fsm="STUN"/>
+					<generate event="Branch2Event" fsm="Registrar"/>
+				</prelude>
+				
+				<!-- Transitions for OnHook state -->
+				<transition to="WaitRegister" event="OnHookComplete"/>
+		</state>
+		
+		<state ID="WaitRegister">
+			<transition to="OffHook3" event="Registered"/>
+		</state>
+		
+		<state ID="OffHook3">
+			<prelude>
+					<send protocol="utility" msgtype="OffHook"/>
+				</prelude>
+				<!-- Transitions for OffHook state -->
+				<transition to="VerifyDialTone3" event="OffHookComplete"/>
+		</state>
+		
+		<state ID="VerifyDialTone3">
+			<prelude>
+				<send protocol="utility" msgtype="VerifyDialTone"/>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="utility">Response</msg_ref>
+						<expr>VerifyDialToneComplete</expr>
+					</eq>
+					<then>
+						<verify step="6" requirements="REQ24097">
+							<eq>
+								<msg_ref type="utility">Response</msg_ref>
+								<expr>VerifyDialToneComplete</expr>
+							</eq>
+						</verify>
+						<verify>
+							<eq>
+								<var_ref name="stun_rcvd"/>
+								<expr>F</expr>
+							</eq>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<transition to="END" event="VerifyDialToneComplete"/>
+			<transition to="END" event="VerifyDialToneError"/>
+		</state>
+		
+	</add_to>
+	
+	<fsm name="Registrar">
+		<models>
+			<registrar/>
+		</models>
+		
+		<NE sim_type="term" elements="SCSCF1 PCSCF1" targets="SCSCF1"/>
+		
+		<states initialstate="Reboot">
+			<state ID="Reboot" timer="5000">
+				<!-- Power cycle the UE to conduct the test -->
+				<prelude once="true">
+					<send protocol="utility" msgtype="SNMPSet">
+						<mod modtype="add" hdr="array">
+							<var_expr>
+								<expr>varBind 1 1 3 \r\n ][ , </expr>
+								<expr>PKTC-IETF-MTA-MIB::pktcMtaDevResetNow.0,INTEGER,1][\r\n</expr>
+							</var_expr>
+						</mod>
+					</send>
+				</prelude>
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="utility">Response</msg_ref>
+							<expr>SNMPRespFailure</expr>
+						</eq>
+						<then>
+							<fail/>
+						</then>
+					</if>
+					<if>
+						<or>
+							<eq>
+								<msg_ref type="sip">REGISTER.Contact.expires</msg_ref>
+								<expr>0</expr>
+							</eq>
+							<eq>
+								<msg_ref type="sip">REGISTER.Expires.value</msg_ref>
+								<expr>0</expr>
+							</eq>
+						</or>
+						<then>
+							<send protocol="sip" msgtype="200-REGISTER"/>
+						</then>
+					</if>
+				</response>
+				<transition to="Reboot" event="SNMPResp"/>
+				<transition to="PendingRegistration" event="TimerExpired"/>
+				<transition to="END" event="SNMPRespFailure"/>
+				<transition to="Reboot" event="REGISTER"/>
+			</state>
+			
+			<state ID="PendingRegistration">
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>REGISTER</expr>
+						</eq>
+						<then>
+							<send protocol="sip" msgtype="401-REGISTER"/>
+						</then>
+					</if>
+				</response>
+				<transition to="Authorization" event="REGISTER"/>
+			</state>
+			
+			<state ID="Authorization">
+				<response>
+					<if>
+						<or>
+							<eq>
+								<msg_ref type="event"/>
+								<expr>AuthenticateSucceed</expr>
+							</eq>
+							<eq>
+								<msg_ref type="event"/>
+								<expr>AuthenticateFailed</expr>
+							</eq>
+						</or>
+						<then>
+							<!-- this is to prevent the AuthenticateFailed from being forwarded
+									to the next state on the AuthenticateSucceed -->
+						</then>
+						<elseif>
+							<and>
+								<eq>
+									<msg_ref type="sip">Request</msg_ref>
+									<expr>REGISTER</expr>
+								</eq>
+								<and>
+									<contains>
+										<msg_ref type="sip">REGISTER</msg_ref>
+										<expr>Authorization</expr>
+									</contains>
+									<digest/>
+								</and>
+							</and>
+							<then>
+								<generate event="AuthenticateSucceed"/>
+								<generate event="AuthenticateSucceed" fsm="Stun"/>
+								<send protocol="sip" msgtype="200-Register">
+									<mod modtype="add" hdr="Require">
+										<expr>outbound</expr>
+									</mod>
+								</send>
+							</then>
+							<else>
+								<generate event="AuthenticateFailed"/>
+								<send protocol="sip" msgtype="503-Register"/>
+							</else>
+						</elseif>
+					</if>
+				</response>
+				<transition to="Registered" event="AuthenticateSucceed"/>
+				<transition to="END" event="AuthenticateFailed"/>
+				<transition to="Authorization" event="REGISTER"/>
+			</state>
+			
+			<state ID="Registered">
+				<response>
+					<if>
+						<and>
+							<eq>
+								<msg_ref type="sip">Request</msg_ref>
+								<expr>SUBSCRIBE</expr>
+							</eq>
+							<contains>
+								<msg_ref type="sip">SUBSCRIBE.Event</msg_ref>
+								<expr>reg</expr>
+							</contains>
+						</and>
+						<then>
+							<send protocol="sip" msgtype="200-SUBSCRIBE"/>
+							<sleep time="100"/>
+							<send protocol="sip" msgtype="NOTIFY"/>
+						</then>
+					</if>
+				</response>
+				<transition to="Registered" event="REGISTER"/>
+				<transition to="Notification" event="SUBSCRIBE"/>
+			</state>
+			
+			<state ID="Notification">
+				<transition to="WaitStunKA" event="200-NOTIFY"/>
+			</state>
+			
+			<state ID="WaitStunKA">
+				<transition to="IgnoreRegisters" event="Branch1Event"/>
+			</state>
+			
+			<state ID="IgnoreRegisters">
+				<transition to="PendingRegistration" event="Branch2Event"/>
+			</state>
+			
+		</states>
+	</fsm>
+	
+	<fsm name="Stun">
+		<models>
+			<stun/>
+		</models>
+		
+		<NE sim_type="term" elements="SCSCF1 PCSCF1" targets="PCSCF1"/>
+		
+		<states initialstate="WaitReg">
+			<state ID="WaitReg">
+				<response>
+					<var name="stun_rcvd">
+						<expr>F</expr>
+					</var>
+				</response>
+				<transition to="ProcessBindingReq" event="AuthenticateSucceed"/>
+			</state>
+			
+			<state ID="ProcessBindingReq">
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="stun">Request</msg_ref>
+							<expr>BindingRequest</expr>
+						</eq>
+						<then>
+							<verify step="1" requirements="REQ24097">
+								<eq>
+									<msg_ref type="stun">Request</msg_ref>
+									<expr>BindingRequest</expr>
+								</eq>	
+							</verify>
+							<generate event="Branch1Event" fsm="Registrar"/>
+							<generate event="Branch1Event" fsm="UE1"/>
+							<send protocol="stun" msgtype="BindingResponse"/>
+						</then>
+					</if>
+				</response>
+				<transition to="ProcessBindingReq" event="BindingRequest"/>
+				<transition to="IgnoreBindingReq" event="Branch2Event"/>
+			</state>
+			
+			<state ID="IgnoreBindingReq" timer="60000">
+				<transition to="IgnoreBindingReq" event="BindingRequest"/>
+				<transition to="ResetKeepAlive" event="TimerExpired"/>
+			</state>
+			
+			<state ID="ResetKeepAlive">
+				<prelude>
+					<generate event="Branch2Event" fsm="UE1"/>
+				</prelude>
+				
+				<transition to="ResetKeepAlive" event="BindingRequest"/>
+				<transition to="NoBindingReq" event="Branch2Event"/>
+			</state>
+			
+			<state ID="NoBindingReq">
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="stun">Request</msg_ref>
+							<expr>BindingRequest</expr>
+						</eq>
+						<then>
+							<assign name="stun_rcvd">
+								<expr>T</expr>
+							</assign>
+						</then>
+					</if>
+				</response>
+				<transition to="Done" event="BindingRequest"/>
+			</state>
+			
+			<!-- PCPCII-95 Add the offHookOK attribute to this state -->
+			<state ID="Done" ES="true" offHookOK="true"/>
+		</states>
+	</fsm>
+</pc2xml>

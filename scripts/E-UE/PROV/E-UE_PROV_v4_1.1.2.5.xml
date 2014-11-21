@@ -1,0 +1,116 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+ Change History: (Author & Date)
+
+-->
+
+
+<!-- Document type and attributes. -->
+<pc2xml version="$Revision: 6076 $"
+        name="E-UE_PROV_1.1.2.5"
+        descrip="Sub-options 1 and 2."
+        number="E-UE_PROV_1.1.2.5">
+
+
+    <!-- Device reboot; start capture. -->
+    <template file="./templates/EUE_Prov_B_1_1_1.xml" name="SubOptions1-2"/>
+
+
+    <add_to fsm="SubOptions1-2">
+        <transition from="StartCapture_RebootWait" to="Step_8a" event="TimerExpired"/>
+
+
+        <!-- Verify CM initialization steps completed. -->
+        <state ID="Step_8a">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>DOCS-CABLE-DEVICE-MIB::docsDevServerBootState.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.CM IP Address</msg_ref>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="8">
+                    <contains>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>1</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="Step_6" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+
+        <!-- Verify E/MTA DUT does not complete initialization. -->
+        <state ID="Step_6">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>DOCS-CABLE-DEVICE-MIB::docsDevServerBootState.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">UE0.IP</msg_ref>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="11">
+                    <contains>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>0</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="Step_8b" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+
+        <state ID="Step_8b">
+            <verify step="8">
+                <and>
+                    <!-- CM DHCP OFFER contains option 122, sub options 1, with IP
+                         that does not respond to MTA DHCP DISCOVER message. -->
+                    <neq>
+                        <capture_ref type="bootp" name="eCM_DHCP">Offer.Option122.suboption1</capture_ref>
+                        <capture_ref type="bootp" name="eUE_DHCP">Offer.ip.your.show</capture_ref>
+                    </neq>
+                <and>
+                    <!-- CM DHCP OFFER contains option 122, sub options 2, with IP
+                         that does not respond to MTA DHCP DISCOVER message. -->
+                    <neq>
+                        <capture_ref type="bootp" name="eCM_V4">Offer.Option122.suboption2</capture_ref>
+                        <capture_ref type="bootp" name="eUE_DHCP">Offer.ip.your.show</capture_ref>
+                    </neq>
+                <and>
+                    <!-- E/MTA DUT does NOT reply to the DHCP OFFERs with a DHCP REQUEST. -->
+                    <neq>
+                        <capture_ref type="bootp" name="eUE_DHCP" substring="45">Request.Option50.show</capture_ref>
+                        <capture_ref type="bootp" name="eCM_DHCP">Offer.Option122.suboption1</capture_ref>
+                    </neq>
+                    <!-- E/MTA sends a broadcast DHCP DISCOVER.
+                         E/MTA continues to broadcast DHCP DISCOVER messages. -->
+                    <neq>
+                        <capture_ref type="bootp" name="eUE_DHCP">Discover.num</capture_ref>
+                        <capture_ref type="bootp" name="eUE_DHCP" msg_instqance="last">Discover.num</capture_ref>
+                    </neq>
+                </and>
+                </and>
+                </and>
+            </verify>
+        </state>
+    </add_to>
+</pc2xml>

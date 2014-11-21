@@ -1,0 +1,147 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	PCPCII-131 : Update the script to the new version in D09. (ghassler 06/11/2009)
+	PCPCII-139 : Update the Voicetronix modifiers to use the new values. (ghassler 07/10/2009)
+	PCPCII-174 : Update the script to the D11 version of the ATP (ghassler 01/26/2010)
+	PCPCII-404 : The script is missing the on hook operation in step 2 of D11. It is missing a transition for
+		HookFlashComplete in step 5. (ghassler 06/28./2010)
+	PCPCIIAPPSATP-140 : Update the script to test for reorder tone instead of busy for step 1. (ghassler 08/09/2010)
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-UE 1.5.2.2" 
+	descrip="Call Waiting – Inactive  " 
+	number="RST-UE 1.5.2.2">
+
+	<template file="./templates/CallOrigAtUETemp.xml" name="UE1"/> 
+	
+	<remove_from fsm="UE1">
+		<state ID="Connected"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<transition from="OffHook" to="CW" event="OffHookComplete"/>
+		
+		<state ID="CW">
+			<prelude>
+				<!-- Step 1 -->
+				<send protocol="utility" msgtype="DialDigits">
+					<mod modtype="add" hdr="number">
+						<expr>*70</expr>
+					</mod>
+				</send>
+			</prelude>
+			<transition to="VerifyReorder" event="DialDigitsComplete"/>
+		</state>
+		
+		<state ID="VerifyReorder">
+			<prelude>
+				<send protocol="utility" msgtype="VerifyReorder"/>
+				
+				<generate event="Branch1Event"/>
+			</prelude>
+			<response>
+				<verify step="1" requirements="REQ13781">
+					<eq>
+						<msg_ref type="utility">Response</msg_ref>
+						<expr>VerifyReorderComplete</expr>
+					</eq>
+				</verify>
+			</response>
+			<transition to="OnHook2" event="VerifyReorderComplete"/>	
+			<transition to="OnHook2" event="VerifyReorderError"/>
+		</state>
+		
+		<state ID="OnHook2">
+			<prelude>
+				<send protocol="utility" msgtype="OnHook"/>
+			</prelude>
+			<transition to="OffHook2" event="OnHookComplete"/>
+		</state>
+		
+		<state ID="OffHook2">
+			<prelude>
+				<sleep time="5000"/>
+				<send protocol="utility" msgtype="OffHook"/>
+			</prelude>
+			<transition to="Setup" event="OffHookComplete"/>
+		</state>
+		
+		<state ID="Connected" timer="2000">
+			<transition to="HookFlash" event="TimerExpired"/>
+		</state>
+		
+		<state ID="HookFlash">
+			<prelude once="true">
+				<send protocol="utility" msgtype="HookFlash"/>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>REINVITE</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="100-INVITE"/>
+						<send protocol="sip" msgtype="200-INVITE"/>
+					</then>
+				</if>
+			</response>
+			<transition to="HookFlash" event="HookFlashComplete"/>
+			<transition to="HookFlash" event="REINVITE"/>
+			<transition to="CW2" event="ACK"/>
+		</state>
+		
+		<state ID="CW2">
+			<prelude>
+				<!-- Step 6 -->
+				<send protocol="utility" msgtype="DialDigits">
+					<mod modtype="add" hdr="number">
+						<expr>*70</expr>
+					</mod>
+				</send>
+			</prelude>
+			<postlude>
+				<log promptUser="true" verify="true"
+					step="6" requirements="REQ23437"
+					expr="Did you hear a short error tone?"/>
+			</postlude>
+			<transition to="Voice" event="DialDigitsComplete"/>
+		</state>
+		
+		<state ID="Voice">
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>REINVITE</expr>
+					</eq>
+					<then>
+						<verify step="6" requirements="REQ23437">
+							<eq>
+								<msg_ref type="sip">Request</msg_ref>
+								<expr>REINVITE</expr>
+							</eq>
+							<then>
+								<send protocol="sip" msgtype="100-INVITE"/>
+								<send protocol="sip" msgtype="200-INVITE"/>
+							</then>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<transition to="Voice" event="REINVITE"/>
+			<transition to="END" event="ACK"/>
+		</state>
+	</add_to>
+</pc2xml>

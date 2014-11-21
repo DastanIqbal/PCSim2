@@ -1,0 +1,77 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+Change History: (Author & Date)
+
+-->
+<!-- Document type and attributes. -->
+<pc2xml version="$Revision: 6076 $"
+        name="E-UE_PROV_1.1.2.45"
+        descrip="eUE periodically retries initialization when no ToD is received by eCM."
+        number="E-UE_PROV_1.1.2.45">
+
+
+    <!-- Reset UE; start capture. -->
+    <template file="./templates/EUE_Prov_B_1_1_1.xml" name="ToD_Retrevial"/>
+
+    <add_to fsm="ToD_Retrevial">
+        <transition from="StartCapture_RebootWait" to="CMProvisions_VerifySolicits" event="TimerExpired"/>
+
+
+        <state ID="CMProvisions_VerifySolicits">
+            <prelude once="true">
+		<send protocol="utility" msgtype="SNMPGet">
+			<mod modtype="add" hdr="oids">
+				<expr>DOCS-IF3-MIB::docsIf3CmStatusValue.2</expr>
+			</mod>
+			<!-- check for DOCSIS 2.0 eCM. -->
+			<!--mod modtype="add" hdr="oids">
+				<expr>DOCS-CABLE-DEVICE-MIB::docsDevServerBootState.0</expr>
+			</mod-->
+			<mod modtype="replace" hdr="agentip">
+				<msg_ref type="platform">DUT.CM IP Address</msg_ref>
+			</mod>
+			<mod modtype="replace" hdr="version">
+				<expr>2c</expr>
+			</mod>
+                </send>
+                <sleep time="600000"/>
+               <stop_capture/>
+               <parse_capture name="eUE_DHCPv6">
+                   <parser_filter protocol="dhcpv6" clientMAC="DUT.MAC Address"/>
+               </parse_capture>
+            </prelude>
+            <response>
+                <!-- 6 Verify that eCM component of DUT is in Operational state. -->
+                <verify step="5">
+                    <contains>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>1</expr>
+                    </contains>
+                </verify>
+
+                <!-- 7 Wait for period of time of 600 seconds. 
+                       Verify eUE sends at least two but no more than six Solicit messages. -->
+                <verify step="6">
+                    <and>
+                        <notnull>
+                            <capture_ref type="dhcpv6" name="eUE_DHCPv6" msg_instance="2">Solicit.num</capture_ref>
+                        </notnull>
+                        <null>
+                            <capture_ref type="dhcpv6" name="eUE_DHCPv6" msg_instance="7">Solicit.num</capture_ref>
+                        </null>
+                    </and>
+                </verify>
+            </response>
+            <transition to="END" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+    </add_to>
+</pc2xml>

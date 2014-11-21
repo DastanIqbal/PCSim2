@@ -1,0 +1,67 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-UE 1.5.4.19" 
+	descrip="Call Transfer fails by Incoming Call Only setting - Transferor" 
+	number="RST-UE 1.5.4.19" inspector="disable">
+	
+	<template file="./templates/Call_Transfer_Transferor.xml"/>
+	
+		<add_to fsm="UE1 Calls DUT">
+	   <transition from="UE1Wait" to="END" event="Branch1Event"/>
+	  	
+	</add_to>
+	
+	<add_to fsm="UE2 Calls DUT">
+		<NE targets="UE2"/>
+		
+		<transition from="DUTRegister" to="WaitDialForUE2" event="Registered"/>
+		
+		<state ID="WaitDialForUE2">
+			<transition to="NoInvite" event="Branch1Event"/>
+		</state>
+		
+		<state ID="NoInvite" timer="20000">
+			<response>
+				<if>
+					<or>
+					<eq>
+						<msg_ref type="event"/>
+						<expr>TimerExpired</expr>
+					</eq>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>INVITE</expr>
+					</eq>
+					</or>
+					<then>
+						<verify step="3" requirements="REQ24435">
+							<neq>
+								<msg_ref type="sip">Request</msg_ref>
+								<expr>INVITE</expr>
+							</neq>
+						</verify>
+						<generate event="Branch1Event" fsm="UE1 Calls DUT"/>
+					</then>
+				</if>
+				
+			</response>
+			<transition to="UE2EndDialog" event="TimerExpired"/>
+		</state>
+	</add_to>
+</pc2xml>

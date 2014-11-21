@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="iso-8859-1" standalone="yes" ?>
+
+<!-- 
+    The installation xml document for IZPack to
+    create and installer for PCSim2.
+    
+-->
+
+<installation version="1.0">
+
+    <!-- 
+        The info section.
+        The meaning of the tags should be natural ...
+    -->
+    <info>
+        <appname>PCSim2</appname>
+        <appversion>-1.0.0-beta</appversion>
+        <authors>
+            <author name="Garey Hassler" email="pc_tools@cablelabs.com"/>
+        </authors>
+		<appsubpath>CableLabs/PCSim2/</appsubpath>
+    </info>
+    
+    <!-- 
+        The gui preferences indication.
+        Sets the installer window to 640x480. It will not be able to change the size.
+    -->
+    <guiprefs width="640" height="480" resizable="no"/>
+    
+    <!-- 
+        The locale section.
+        Asks here to include the English and French langpacks.
+    -->
+    <locale>
+        <langpack iso3="eng"/>
+    </locale>
+    
+    <!-- 
+        The resources section.
+        The ids must be these ones if you want to use the LicencePanel and/or the InfoPanel.
+    -->
+    <resources>
+        <res id="HTMLLicencePanel.licence" src="../docs/PacketCable PCSim2 License.htm"/>
+        <res id="InfoPanel.info" src="../docs/PCSim2_release_notes.txt"/>
+		<res id="shortcutSpec.xml" src="Linux_shortcutSpec.xml"/>
+    </resources>
+
+		<!-- Native libraries for Shortcut panel -->
+    
+    <!-- 
+        The panels section.
+        We indicate here which panels we want to use. The order will be respected.
+    -->
+    <panels>
+        <panel classname="CheckedHelloPanel"/>
+        <panel classname="HTMLLicencePanel"/>
+        <panel classname="InfoPanel"/> 
+        <panel classname="TargetPanel"/> 
+        <panel classname="ShortcutPanel"/>
+        <panel classname="PacksPanel"/>
+        <panel classname="SummaryPanel"/>
+        <panel classname="InstallPanel"/>
+        <panel classname="FinishPanel"/>
+    </panels>
+    
+    <!-- 
+        The packs section.
+        We specify here our packs.
+    -->
+    <packs>
+        <pack name="PCSim2" required="yes">
+            <description>The simulator tool</description>
+            <file src="../bin" targetdir="$INSTALL_PATH" override="true"/>
+            <file src="../config" targetdir="$INSTALL_PATH" override="askfalse"/>
+            <file src="../docs" targetdir="$INSTALL_PATH" override="true"/>
+            <file src="../lib" targetdir="$INSTALL_PATH" override="true"/>
+            <file src="../logs" targetdir="$INSTALL_PATH" override="update"/>
+        </pack>
+    </packs>
+    
+</installation>

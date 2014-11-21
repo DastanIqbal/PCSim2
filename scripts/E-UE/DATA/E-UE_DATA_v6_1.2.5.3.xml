@@ -1,0 +1,217 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+ Change History: (Author & Date)
+
+
+
+-->
+
+<!-- First are the document type and the attributes for our document -->
+<pc2xml version="$Revision: 7768 $" 
+		name="E-UE_DATA_1.2.5.3" 
+		descrip="Ability of eUE to Implement the USM User Table"
+		number="E-UE_DATA_1.2.5.3">
+
+	<!-- Step 1 -->
+	<template file="./templates/EUE_Prov_B_1_1_1.xml" name="USMUserTable"/>
+
+	<add_to fsm="USMUserTable">
+		<transition from="StartCapture_RebootWait" to="EUEProvision" event="TimerExpired"/>
+
+		<states initialstate="Note">
+		
+		<state ID="Note">
+			<prelude>
+				<log promptUser="true" expr="To verify MAC address of eDVA, make sure the full mac address of eDVA with colons is included in DUT.mib1 in config file."/>
+				<generate event="Branch1Event"/>
+			</prelude>
+			<transition to="Reboot" event="Branch1Event"/>
+		</state>
+		
+        <state ID="EUEProvision" timer="10000">
+            <prelude once="true">				
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvisioningState.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+					<mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="6">
+                    <eq>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>1</expr>
+                    </eq>
+                </verify>
+            </response>
+            <transition to="VerifyUsmUserTable" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+		
+		<!-- Step 7 Perform an SNMP query on the usmUserTable using the eUE interface. -->
+		<state ID="VerifyUsmUserTable" timer="10000">
+			<prelude once="true">
+				<send protocol="utility" msgtype="SNMPGetTable">
+					<mod modtype="add" hdr="oids">
+						<expr>SNMP-USER-BASED-SM-MIB::usmUserTable</expr>
+					</mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+					<mod modtype="replace" hdr="version">
+						<expr>3</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<!-- usmUserEngineID - not accessible -->
+				<!-- verify step="6-usmUserEngineID">
+					<eq>
+						<msg_ref type="utility" index="0 x 2">SNMPResp.varBind</msg_ref>
+						<msg_ref type="platform">DUT.mib</msg_ref>
+					</eq>
+				</verify -->
+				<!-- usmUserName - not accessible -->				
+				<!--verify step="6-usmUserName">
+					<and>
+						<startsWith>
+							<msg_ref type="utility" index="0 x 2">SNMPResp.varBind</msg_ref>
+							<expr>eUE-Prov-</expr>
+						</startsWith>
+						<endsWith>
+							<msg_ref type="utility" index="0 x 2">SNMPResp.varBind</msg_ref>
+							<msg_ref type="platform">DUT.CM MAC Address Colon</msg_ref>
+						</endsWith>
+					</and>
+				</verify-->
+				<!-- usmUserSecurityName - not accessible -->
+				<verify step="6-usmUserSecurityName">
+					<and>
+						<startsWith>
+							<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+							<expr>eUE-Prov-</expr>
+						</startsWith>
+						<contains ignoreCase="True">
+							<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+							<msg_ref type="platform">DUT.mib1</msg_ref>
+						</contains>
+					</and>
+				</verify>
+				<verify step="6-usmUserCloneFrom">
+					<eq>
+						<msg_ref type="utility" index="0 1 0">SNMPResp.varBind</msg_ref>
+						<expr>zeroDotZero</expr>
+					</eq>
+				</verify>
+				<verify step="6-usmUserAuthProtocol">
+					<or>
+						<eq>
+							<msg_ref type="utility" index="0 2 0">SNMPResp.varBind</msg_ref>
+							<expr>usmHMACMD5AuthProtocol</expr>
+						</eq>
+						<eq>
+							<msg_ref type="utility" index="0 2 0">SNMPResp.varBind</msg_ref>
+							<expr>usmHMACSHAAuthProtocol</expr>
+						</eq>
+					</or>
+					
+				</verify>
+				<verify step="6-usmUserAuthKeyChange">
+					<or>
+						<notnull>
+							<msg_ref type="utility" index="0 3 2">SNMPResp.varBind</msg_ref>
+						</notnull>
+						<eq>
+							<msg_ref type="utility" index="0 3 2">SNMPResp.varBind</msg_ref>
+							<expr></expr>
+						</eq>
+					</or>
+				</verify>
+				<verify step="6-usmUserOwnAuthKeyChange">
+					<or>
+						<notnull>
+							<msg_ref type="utility" index="0 4 2">SNMPResp.varBind</msg_ref>
+						</notnull>
+						<eq>
+							<msg_ref type="utility" index="0 4 2">SNMPResp.varBind</msg_ref>
+							<expr></expr>
+						</eq>
+					</or>
+				</verify>
+				<verify step="6-usmUserPrivProtocol">
+					<eq>
+						<msg_ref type="utility" index="0 5 0">SNMPResp.varBind</msg_ref>
+						<expr>usmNoPrivProtocol</expr>
+					</eq>
+				</verify>
+				<verify step="6-usmUserPrivKeyChange">
+					<or>
+						<notnull>
+							<msg_ref type="utility" index="0 6 2">SNMPResp.varBind</msg_ref>
+						</notnull>
+						<eq>
+							<msg_ref type="utility" index="0 6 2">SNMPResp.varBind</msg_ref>
+							<expr></expr>
+						</eq>
+					</or>
+				</verify>
+				<verify step="6-usmUserOwnPrivKeyChange">
+					<or>
+						<notnull>
+							<msg_ref type="utility" index="0 7 2">SNMPResp.varBind</msg_ref>
+						</notnull>
+						<eq>
+							<msg_ref type="utility" index="0 7 2">SNMPResp.varBind</msg_ref>
+							<expr></expr>
+						</eq>
+					</or>
+				</verify>
+				<verify step="6-usmUserPublic">
+					<or>
+						<notnull>
+							<msg_ref type="utility" index="0 8 2">SNMPResp.varBind</msg_ref>
+						</notnull>
+						<eq>
+							<msg_ref type="utility" index="0 8 2">SNMPResp.varBind</msg_ref>
+							<expr></expr>
+						</eq>
+					</or>
+				</verify>
+				<verify step="6-usmUserStorageType">
+					<eq>
+						<msg_ref type="utility" index="0 9 2">SNMPResp.varBind</msg_ref>
+						<expr>2</expr> <!-- 2=volatile -->
+					</eq>
+				</verify>
+				<verify step="6-usmUserStatus">
+					<eq>
+						<msg_ref type="utility" index="0 10 2">SNMPResp.varBind</msg_ref>
+						<expr>1</expr> <!-- 1=active -->
+					</eq>
+				</verify>
+			</response>
+			<postlude>
+				<stop_capture />
+			</postlude>
+			<transition to="END" event="SNMPResp" />
+			<transition to="END" event="SNMPRespFailure" />
+		</state>
+		</states>		
+	</add_to>
+</pc2xml>

@@ -1,0 +1,136 @@
+This file defines the changes that have been made to the JAIN-SIP stack 
+for purposes of integrating the libraries into the PC 2.0 Test Platform.
+Some of the changes have been made to integrate other libraries such as
+stun4j and a common logging mechanism into the SIP libraries.
+
+The intent of this file is to provide a guide to the changes that are
+required for integrating new releases of the JAIN-SIP stack into the
+Platform. It is important to note that this is only a guide as subsequent
+releases of the SIP stack may undergo significant design changes between
+each release and the information provided in this file may become 
+inaccurrate or obsolete.
+
+In an effort to provide clarity and information to other developers. All
+code modifications to the JAIN-SIP stack should begin with a comment block
+beginning with "PC 2.0" and description of the change.
+
+1. Automatic transmitting of TRYING for an INVITE.
+gov.nist.javax.sip.stack.SIPServerTransaction.java
+The run method of the SendTrying class was complete commented out of the
+system since its basic operation is to respond to any INVITE that the 
+stack receives from a peer with a TRYING whenever the application layer
+fails to respond to it in 200ms. Since for the PC 2.0's requirements,
+the application is responsible for all responses, the code should be
+removed.
+
+2. Processing of STUN packets received on a SIP transport channel.
+	gov.nist.javax.sip.SipStackImpl.java
+Added a boolean flag to the stack to allow the global enabling/disabling
+of STUN message processing received on a port used by the SIP stack. The
+flag is owned by the gov.nist.javax.sip.stack.SIPMessageStack.java and
+is controlled by the property setting of "gov.nist.javax.sip.EMBEDDED_STUN".
+
+	gov.nist.java.sip.stack.SIPMessageStack.java
+
+Added the boolean flag, embeddedStun, to the class. It is set in the 
+gov.nist.javax.sip.SipStackImpl.java class during construction based upon
+the property setting of "gov.nist.javax.sip.EMBEDDED_STUN".
+
+	gov.nist.java.sip.stack.MessageProcessor.java
+
+Added two imports to the class to allow the forwarding of STUN messages
+received on a SIP message processor to the STUN stack. This change creates
+a dependency between the JAIN-SIP stack and the STUN library.
+	import com.cablelabs.stun.EmbeddedStun;
+	import com.cablelabs.stun.EmbeddedStunListener;
+
+Also create the local variables in order to deliver STUN messages to the 
+STUN stack for processing and to allow the STUN stack to share the socket
+the message was received upon for transmitting any responses.
+	protected static EmbeddedStunListener stunListener = EmbeddedStunListener.getInstance();
+	protected EmbeddedStun embeddedStun = null;
+	
+	gov.nist.java.sip.stack.UDPMessageProcessor.java
+The start method add a significant portion of its code commented out for 
+supporting STUN processing on port 3478, the default STUN port. Since STUN
+packets in PC 2.0 actually are transported over the same channel as the SIP
+packets, a new design was integrated into the processors. The change for 
+this specific class is directly below the old code that has been commented
+out.
+In the run method code has been added to examine every packet received by
+the processor over its' socket for the possiblity that it is a STUN message.
+If "embedded stun" processing is enabled, then all STUN message will be 
+delivered to the STUN stack for processing.
+
+
+3. Integration of Apache Logging model into the JAIN-SIP stack.
+	gov.nist.core.LogWriter.java
+	gov.nist.javax.sip.stack.ServerLog.java
+	gov.nist.javax.sip.stack.SIPMessageStack.java
+Each of these class underwent major revisioning to attempt to minimize the 
+changes to all of the other files that log a message to a file. The files
+have been altered to encapsulate the new logging library.
+
+	gov.nist.javax.sip.SipStackImpl.java
+	gov.nist.javax.sip.stack.MessageChannel.java
+	gov.nist.javax.sip.stack.TCPMessageChannel.java
+	gov.nist.javax.sip.stack.TLSMessageChannel.java
+	gov.nist.javax.sip.stack.UDPMessageChannel.java
+	gov.nist.javax.sip.stack.SIPDialog.java
+	gov.nist.javax.sip.stack.SIPClientTransaction.java
+	gov.nist.
+Each of these files had minor changes to invoked the proper methods of the 
+ServerLog or LogWriter classes. Each of the changes made for logging are
+commented with the standard "PC 2.0" heading.
+
+4. Changes to complete error testing for SIP adherence to 3261.
+
+	gov.nist.javax.sip.parser.StringMsgParser
+Added the InspectionListener to the parseMessage method to notify the SIPInspector that an error
+occurred in the stack while trying to parse a message.
+
+	gov.nist.core.NameValueList
+Added a LogWriter to the class as well as added a log message to declare an error when 
+a parameter appears more than once in a header.
+
+	gov.nist.javax.sip.parser.Parser.java
+Added keyword throw to createParserExpection method calls in the sipVersion method and
+changed the message syntax of the expection.
+
+5. In order to provide support for the transmission of modified SIP messages, the
+stack had to have several methods converted from protected to public and a new method 
+added to the SipProvierImpl class.
+
+A list of classes affected by change are:
+	gov.nist.javax.sip.SipProviderImpl.java
+	gov.nist.javax.sip.stack.SIPTransaction.java
+	gov.nist.javax.sip.stack.UDPMessageChannel.java
+	gov.nist.javax.sip.stack.TCPMessageChannel.java
+	gov.nist.javax.sip.stack.TLSMessageChannel.java
+	
+6. Modified the setNonceCount and getNonceCount methods of AuthenticationHeader to 
+retrieve/receive a String argument instead of an int. The value was already stored as
+a String, but the conversion to integer resulted in leading zeros to be truncated which
+results in an invalid digest calculation.
+	gov.nist.javax.sip.header.AuthenticationHeader.java
+
+7. Modified the ListeningPoint.java interface to include the getHost() method that is 
+defined in the ListeningPointImpl.java class for easy retrieval of the IP address being 
+used by a SipProvider class.
+
+8. Modified the TCPMessageChannel.java and TLSMessageChannel.java classes to not automatically
+reconnect a TCP socket when it has been lost. 
+
+9. Changed several of the thread names created in the stack to be more meaningful to the
+PCSim2 users. The threads changed include the following:
+	gov.nist.javax.sip.stack.UDPMessageProcessor
+	gov.nist.javax.sip.stack.TCPMessageProcessor (also moved location to below socket creation)
+	gov.nist.javax.sip.stack.TLSMessageProcessor (also moved location to below socket creation)
+	
+10. The MessageChannel objects are automatically setting the value of the rport and received
+parameters upon receiving a SIP message. Since the Distributor handles this validation processing, 
+comment out this code in each of the channel objects.
+	gov.nist.javax.sip.stack.UDPMessageChannel.java
+	gov.nist.javax.sip.stack.TCpMessageChannel.java
+	gov.nist.javax.sip.stack.TLSMessageChannel.java
+	

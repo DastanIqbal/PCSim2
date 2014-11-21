@@ -1,0 +1,84 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+
+<pc2xml version="$Revision: 8188 $" name="UT_UE_1.10.1" descrip="This is a unit test script for testing the UE_1.10.1 test script." number="1">
+	<template name="UE0" file="$UT_PATH/Templates/ut/Term_DUT.xml"/>
+	<remove_from fsm="UE0">
+		<state ID="Setup" sub="response"/>
+	</remove_from>
+	<add_to fsm="UE0">
+		<!-- SETUP State -->
+		<state ID="Setup" sub="response">
+			<if>
+				<and>
+					<eq>
+						<msg_ref type="sip">INVITE.Request-Line.lrrr</msg_ref>
+						<expr>lrrr</expr>
+					</eq>
+					<and>
+						<eq>
+							<msg_ref type="sip">INVITE.Request-Line.tranpart</msg_ref>
+							<expr>tcp</expr>
+						</eq>
+						<eq>
+							<msg_ref type="sip">INVITE.Request-Line.phuser</msg_ref>
+							<expr>phone</expr>
+						</eq>
+					</and>
+				</and>
+				<then>
+					<send protocol="sip" msgtype="100-INVITE" target="UE1" originator="DUT"/>
+				</then>
+			</if>
+			<if>
+				<and>
+					<eq>
+						<msg_ref type="extensions">precondition</msg_ref>
+						<expr>require</expr>
+					</eq>
+					<or>
+						<contains>
+							<msg_ref type="sip" hdr_instance="any">Invite.Require</msg_ref>
+							<expr>precondition</expr>
+						</contains>
+						<contains>
+							<msg_ref type="sip" hdr_instance="any">Invite.Supported</msg_ref>
+							<expr>precondition</expr>
+						</contains>
+					</or>
+				</and>
+				<then>
+					<!--Sending 183-Invite with answer-->
+					<send protocol="sip" msgtype="183-Invite" target="UE1" originator="DUT"/>
+				</then>
+				<elseif>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>Invite</expr>
+					</eq>
+					<then>
+						<!--Sending 180-Invite with SS not supporting precondition.-->
+						<send protocol="sip" msgtype="180-Invite" target="UE1" originator="DUT"/>
+					</then>
+				</elseif>
+			</if>
+		</state>
+	</add_to>
+</pc2xml>

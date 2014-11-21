@@ -1,0 +1,288 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+-->
+<!-- First are the document type and the attributes for our document -->
+<pc2xml version="$Revision: 6675 $" 
+	name="Proxy Template" 
+	descrip="Template for the Proxy Operations " 
+	number="1">
+	
+	<fsm name="Proxy">
+		<models>
+			<session/>
+		</models>
+
+		<NE sim_type="term" elements="SCSCF2 PCSCF2 SCSCF1 PCSCF1" targets="SCSCF1 PCSCF1 SCSCF2 PCSCF2"/>
+		
+		<states initialstate="Setup">
+			
+			<!-- state ID="Register">
+				<transition to="RegisterUE1" event="Registered"/>
+			</state>
+			
+			<state ID="RegisterUE1">
+				<transition to="Setup" event="Registered"/>
+			</state-->
+				
+			<state ID="Setup">
+				<response>
+					<if>
+						<or>
+							<eq>
+								<msg_ref type="sip">Request.SourceAddress.Port</msg_ref>
+								<msg_ref type="platform">UE1.UDPPort</msg_ref>
+							</eq>
+							<eq>
+								<msg_ref type="sip">Response.SourceAddress.Port</msg_ref>
+								<msg_ref type="platform">UE1.UDPPort</msg_ref>
+							</eq>
+						</or>
+						<then>
+							<proxy target="UE5" stack="SIP Stack 2"/>
+						</then>
+						<elseif>
+							<or>
+								<eq>
+									<msg_ref type="sip">Request.SourceAddress.Port</msg_ref>
+									<msg_ref type="platform">UE5.UDPPort</msg_ref>
+								</eq>
+								<eq>
+									<msg_ref type="sip">Response.SourceAddress.Port</msg_ref>
+									<msg_ref type="platform">UE5.UDPPort</msg_ref>
+								</eq>
+							</or>
+							<then>
+								<proxy target="UE1" stack="SIP Stack 1"/>
+							</then>
+						</elseif>
+					</if>
+				</response>
+				<transition to="Setup" event="DialDigitsComplete"/>
+				<transition to="Setup" event="INVITE"/>
+				<transition to="Alerting" event="CANCEL"/>
+				<transition to="Alerting" event="xxx-INVITE"/>
+				<transition to="Setup" event="OffHookComplete"/>
+			</state>
+		
+			<state ID="Alerting" timer="6000">
+				<response>
+					<if>
+						<or>
+							<eq>
+								<msg_ref type="sip">Request.SourceAddress.Port</msg_ref>
+								<msg_ref type="platform">UE1.UDPPort</msg_ref>
+							</eq>
+							<eq>
+								<msg_ref type="sip">Response.SourceAddress.Port</msg_ref>
+								<msg_ref type="platform">UE1.UDPPort</msg_ref>
+							</eq>
+						</or>
+						<then>
+							<proxy target="UE5" stack="SIP Stack 2"/>
+						</then>
+						<elseif>
+							<or>
+								<eq>
+									<msg_ref type="sip">Request.SourceAddress.Port</msg_ref>
+									<msg_ref type="platform">UE5.UDPPort</msg_ref>
+								</eq>
+								<eq>
+									<msg_ref type="sip">Response.SourceAddress.Port</msg_ref>
+									<msg_ref type="platform">UE5.UDPPort</msg_ref>
+								</eq>
+							</or>
+							<then>
+								<proxy target="UE1" stack="SIP Stack 1"/>
+							</then>
+						</elseif>
+					</if>
+				</response>
+				<transition to="Alerting" event="INVITE"/>
+				<transition to="Alerting" event="OPTIONS"/>
+				<transition to="Alerting" event="200-OPTIONS"/>
+				<transition to="Alerting" event="PRACK"/>
+				<transition to="Alerting" event="200-PRACK"/>
+				<transition to="Alerting" event="UPDATE"/>
+				<transition to="Alerting" event="200-UPDATE"/>
+				<transition to="Alerting" event="xxx-INVITE"/>
+				<transition to="Alerting" event="OffHookComplete"/>
+				<transition to="Connected" event="ACK"/>
+			</state>
+			
+			<state ID="Connected">
+				<response>
+					<if>
+						<or>
+							<eq>
+								<msg_ref type="sip">Request.SourceAddress.Port</msg_ref>
+								<msg_ref type="platform">UE1.UDPPort</msg_ref>
+							</eq>
+							<eq>
+								<msg_ref type="sip">Response.SourceAddress.Port</msg_ref>
+								<msg_ref type="platform">UE1.UDPPort</msg_ref>
+							</eq>
+						</or>
+						<then>
+							<proxy target="UE5" stack="SIP Stack 2"/>
+						</then>
+						<elseif>
+							<or>
+								<eq>
+									<msg_ref type="sip">Request.SourceAddress.Port</msg_ref>
+									<msg_ref type="platform">UE5.UDPPort</msg_ref>
+								</eq>
+								<eq>
+									<msg_ref type="sip">Response.SourceAddress.Port</msg_ref>
+									<msg_ref type="platform">UE5.UDPPort</msg_ref>
+								</eq>
+							</or>
+							<then>
+								<proxy target="UE1" stack="SIP Stack 1"/>
+							</then>
+						</elseif>
+					</if>
+				</response>
+				<transition to="Connected" event="ACK"/>
+				<transition to="Connected" event="Bye"/>
+				<transition to="Setup2" event="200-Bye"/>
+			</state>
+			
+			<state ID="Setup2">
+				<response>
+					<if>
+						<or>
+							<eq>
+								<msg_ref type="sip">Request.SourceAddress.Port</msg_ref>
+								<msg_ref type="platform">UE1.UDPPort</msg_ref>
+							</eq>
+							<eq>
+								<msg_ref type="sip">Response.SourceAddress.Port</msg_ref>
+								<msg_ref type="platform">UE1.UDPPort</msg_ref>
+							</eq>
+						</or>
+						<then>
+							<proxy target="UE5" stack="SIP Stack 2"/>
+						</then>
+						<elseif>
+							<or>
+								<eq>
+									<msg_ref type="sip">Request.SourceAddress.Port</msg_ref>
+									<msg_ref type="platform">UE5.UDPPort</msg_ref>
+								</eq>
+								<eq>
+									<msg_ref type="sip">Response.SourceAddress.Port</msg_ref>
+									<msg_ref type="platform">UE5.UDPPort</msg_ref>
+								</eq>
+							</or>
+							<then>
+								<proxy target="UE1" stack="SIP Stack 1"/>
+							</then>
+						</elseif>
+					</if>
+				</response>
+				<transition to="Setup2" event="DialDigitsComplete"/>
+				<transition to="Setup2" event="INVITE"/>
+				<transition to="Alerting2" event="CANCEL"/>
+				<transition to="Alerting2" event="xxx-INVITE"/>
+				<transition to="Setup2" event="OffHookComplete"/>
+			</state>
+		
+			<state ID="Alerting2" timer="6000">
+				<response>
+					<if>
+						<or>
+							<eq>
+								<msg_ref type="sip">Request.SourceAddress.Port</msg_ref>
+								<msg_ref type="platform">UE1.UDPPort</msg_ref>
+							</eq>
+							<eq>
+								<msg_ref type="sip">Response.SourceAddress.Port</msg_ref>
+								<msg_ref type="platform">UE1.UDPPort</msg_ref>
+							</eq>
+						</or>
+						<then>
+							<proxy target="UE5" stack="SIP Stack 2"/>
+						</then>
+						<elseif>
+							<or>
+								<eq>
+									<msg_ref type="sip">Request.SourceAddress.Port</msg_ref>
+									<msg_ref type="platform">UE5.UDPPort</msg_ref>
+								</eq>
+								<eq>
+									<msg_ref type="sip">Response.SourceAddress.Port</msg_ref>
+									<msg_ref type="platform">UE5.UDPPort</msg_ref>
+								</eq>
+							</or>
+							<then>
+								<proxy target="UE1" stack="SIP Stack 1"/>
+							</then>
+						</elseif>
+					</if>
+				</response>
+				<transition to="Alerting2" event="INVITE"/>
+				<transition to="Alerting2" event="OPTIONS"/>
+				<transition to="Alerting2" event="200-OPTIONS"/>
+				<transition to="Alerting2" event="PRACK"/>
+				<transition to="Alerting2" event="200-PRACK"/>
+				<transition to="Alerting2" event="UPDATE"/>
+				<transition to="Alerting2" event="200-UPDATE"/>
+				<transition to="Alerting2" event="xxx-INVITE"/>
+				<transition to="Alerting2" event="OffHookComplete"/>
+				<transition to="Connected2" event="ACK"/>
+			</state>
+			
+			<state ID="Connected2">
+				<response>
+					<if>
+						<or>
+							<eq>
+								<msg_ref type="sip">Request.SourceAddress.Port</msg_ref>
+								<msg_ref type="platform">UE1.UDPPort</msg_ref>
+							</eq>
+							<eq>
+								<msg_ref type="sip">Response.SourceAddress.Port</msg_ref>
+								<msg_ref type="platform">UE1.UDPPort</msg_ref>
+							</eq>
+						</or>
+						<then>
+							<proxy target="UE5" stack="SIP Stack 2"/>
+						</then>
+						<elseif>
+							<or>
+								<eq>
+									<msg_ref type="sip">Request.SourceAddress.Port</msg_ref>
+									<msg_ref type="platform">UE5.UDPPort</msg_ref>
+								</eq>
+								<eq>
+									<msg_ref type="sip">Response.SourceAddress.Port</msg_ref>
+									<msg_ref type="platform">UE5.UDPPort</msg_ref>
+								</eq>
+							</or>
+							<then>
+								<proxy target="UE1" stack="SIP Stack 1"/>
+							</then>
+						</elseif>
+					</if>
+				</response>
+				<transition to="Connected2" event="ACK"/>
+				<transition to="Connected2" event="Bye"/>
+				<transition to="END" event="200-Bye"/>
+			</state>
+		</states>
+	</fsm>
+</pc2xml>

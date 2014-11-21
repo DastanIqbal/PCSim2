@@ -1,0 +1,91 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+ Change History: (Author & Date)
+-->
+<pc2xml version="$Revision: 7768 $"
+        name="EUE Prov 1.1.2.18"
+        descrip="eUE continues provisioning process and ignores invalid sub-options
+                 provided in the DHCP configuration parameters."
+        number="EUE Prov 1.1.2.18">
+
+    <template file="./templates/EUE_Prov_B_1_1_1.xml" name="IgnoreInvalidSubOpts"/>
+	
+	<remove_from fsm="IgnoreInvalidSubOpts">
+		<state ID="StartCapture_RebootWait"/>
+	</remove_from>
+	
+    <add_to fsm="IgnoreInvalidSubOpts">
+        <!--transition from="StartCapture_RebootWait" to="DHCPMessages" event="TimerExpired"/-->
+		<state ID="StartCapture_RebootWait" timer="120000">
+			<prelude once="true" >
+				<start_capture>
+					<filter>
+						<var_expr>
+							<expr>host </expr>
+							<msg_ref type="platform">DUT.IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.CM IP Address</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.DHCP Server IP</msg_ref>
+						</var_expr>
+					</filter>
+				</start_capture>
+			</prelude>
+			<transition to="DHCPMessages" event="TimerExpired"/>
+		</state>
+
+        <!-- Step 4. E/MTA DUT reports provisioning pass code (1) to the provisioning service (SNMP Entity). -->
+        <!--state ID="EDVAProvisions">
+            <prelude once="true">
+                <stop_capture/>
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvisioningState.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">UE0.IP</msg_ref>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="4">
+                    <contains>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>1</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="DHCPMessages" event="SNMPResp"/>
+        </state-->
+
+
+        <!-- Step 6. Verify DHCP is sending the DHCP OFFER with suboption-10 included in Option-122. -->
+        <!-- Step 7. Verify MTA sends the DHCP REQUEST. -->
+        <state ID="DHCPMessages">
+            <prelude once="true">
+				<sleep time="60000"/>
+                <stop_capture/>
+
+                <parse_capture name="eUE_v6">
+                    <parser_filter protocol="dhcpv6" clientMAC="DUT.MAC Address"/>
+                </parse_capture>
+
+                <verify step="7">
+                    <notnull>
+                        <capture_ref type="dhcpv6" name="eUE_v6">Request.Option17.suboption10.show</capture_ref>
+                    </notnull>
+                </verify>
+				<generate event="SucceedEvent"/>
+            </prelude>
+			<transition to="END" event="SucceedEvent"/>
+        </state>
+    </add_to>
+</pc2xml>

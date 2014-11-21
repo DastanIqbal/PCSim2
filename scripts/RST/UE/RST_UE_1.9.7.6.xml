@@ -1,0 +1,476 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	PCPCII-139 : Update the Voicetronix modifiers to use the new values. (ghassler 07/10/2009)
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-UE 1.9.7.6" 
+	descrip="No AR allowed after an emergency call " 
+	number="RST-UE 1.9.7.6" inspector="disable">
+	
+	<template file="./templates/CallOrigAtUETemp.xml" name="UE1"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Setup" sub="prelude"/>
+		<state ID="OnHook"/>
+		<state ID="Releasing"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<NE targets="service:sos  911"/>
+		
+		<state ID="Setup" sub="prelude" once="true">
+			<!-- Step 1 test case SIP 1.9.7.6- Initiate an emergency call session from the -->
+			<send protocol="utility" msgtype="DialDigits">
+				<mod modtype="add" hdr="number">
+					<expr>911</expr>
+				</mod>
+			</send>
+		</state>
+		
+		<transition from="Connected" to="Releasing" event="TimerExpired"/>
+		
+		<state ID="Releasing">
+			<prelude>
+				<!--Sending BYE to peer to terminate call.-->
+				<send protocol="sip" msgtype="BYE"/>
+			</prelude>
+			<transition to="OnHook" event="200-Bye"/>
+		</state>
+		
+		<state ID="OnHook">
+			<prelude>
+				<send protocol="utility" msgtype="OnHook"/>
+				<sleep time="1000"/>
+			</prelude>
+			<transition to="EndCall1" event="OnHookComplete"/>
+		</state>
+		
+		<state ID="EndCall1" ES="true">
+			<transition to="Setup1" event="SessionTerminated"/>
+		</state>
+		
+		<state ID="Setup1">
+			<prelude>
+				<sleep time="8000"/>
+				<!-- Step 4 test case SIP 1.9.7.6- Verify that the emergency session is established. 
+					Verify that the UE received an INVITE - priority = emergency, 
+					and the INVITE-From = URN:service:sos? -->
+				<send protocol="sip" msgtype="Invite">
+					<mod modtype="add" hdr="Priority">
+						<expr>emergency</expr>
+					</mod>
+				</send>
+			</prelude>
+			<!-- Expected responses are 100, 180, 183 or 200 -->
+			<response>
+				<if>
+					<contains>
+						<msg_ref type="sip" msg_instance="last" hdr_instance="any">18x-Invite.Require</msg_ref>
+						<expr>100rel</expr>
+					</contains>
+					<then>
+						<!--Reliability required for test sending Prack message to peer.-->
+						<send protocol="sip" msgtype="Prack"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Proceeding1" event="100-INVITE"/>
+			<transition to="Alerting1" event="180-INVITE"/>
+			<transition to="Alerting1" event="183-INVITE"/>
+			<transition to="Connected1" event="200-INVITE"/>
+		</state>
+		
+		<state ID="Proceeding1">
+			<!-- Expected responses are 180, 183 or 200 -->
+			<response>
+				<if>
+					<contains>
+						<msg_ref type="sip" hdr_instance="any">18x-Invite.Require</msg_ref>
+						<expr>100rel</expr>
+					</contains>
+					<then>
+						<!--Reliability required for test sending Prack message to peer.-->
+						<send protocol="sip" msgtype="Prack"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Alerting1" event="180-INVITE"/>
+			<transition to="Alerting1" event="183-INVITE"/>
+			<transition to="Connected1" event="200-INVITE"/>
+		</state>
+		
+		<state ID="Alerting1" timer="12000">
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="event"/>
+						<expr>TimerExpired</expr>
+					</eq>
+					<then>
+						<!--Take DUT phone off hook-->
+						<send protocol="utility" msgtype="OffHook"/>
+					</then>
+				</if>
+				<!-- Expected responses are 180, 183, PRACK, UPDATE, or 200 -->
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>UPDATE</expr>
+					</eq>
+					<then>
+						<!--QoS required for test, sending a 200-OK to Update message to peer.-->
+						<send protocol="sip" msgtype="200-Update"/>
+					</then>
+					<elseif>
+						<and>
+							<eq>
+								<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+								<expr>180</expr>
+							</eq>
+							<contains>
+								<msg_ref type="sip" hdr_instance="any">180-INVITE.Require</msg_ref>
+								<expr>100rel</expr>
+							</contains>
+						</and>
+						<then>
+							<!--Reliability required for test, sending Prack message to peer.-->
+							<send protocol="sip" msgtype="Prack"/>
+						</then>
+					</elseif>
+				</if>
+			</response>
+			<transition to="Alerting1" event="200-PRACK"/>
+			<transition to="Alerting1" event="UPDATE"/>
+			<transition to="Alerting1" event="18x-INVITE"/>
+			<transition to="Answer1" event="TimerExpired"/>
+			<transition to="Connected1" event="200-INVITE"/>
+		</state>
+		
+		<state ID="Answer1">
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>UPDATE</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="200-Update"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Answer1" event="UPDATE"/>
+			<transition to="Answer1" event="200-PRACK"/>
+			<transition to="Answer1" event="18x-INVITE"/>
+			<transition to="Answer1" event="OffHookComplete"/>
+			<transition to="Connected1" event="200-INVITE"/>
+		</state>
+		
+		<state ID="Connected1" timer="30000">
+			<prelude>
+				<send protocol="sip" msgtype="ACK"/>
+			</prelude>
+			<transition to="Releasing1" event="TimerExpired"/>
+		</state>
+		
+		<state ID="Releasing1">
+			<prelude>
+				<send protocol="sip" msgtype="Bye"/>
+			</prelude>
+			<transition to="OnHook1" event="200-BYE"/>
+		</state>
+		
+		<state ID="OnHook1">
+			<prelude>
+				<send protocol="utility" msgtype="OnHook"/>
+			</prelude>
+			<transition to="EndCall2" event="OnHookComplete"/>
+		</state>
+		
+		<state ID="EndCall2" ES="true">
+			<transition to="WaitForOneMinute" event="SessionTerminated"/>
+		</state>
+		
+		<state ID="WaitForOneMinute" timer="60000">
+			<transition to="OffHook2" event="TimerExpired"/>
+		</state>
+		
+		<state ID="OffHook2">
+			<prelude>
+				<send protocol="utility" msgtype="OffHook"/>
+			</prelude>
+			<transition to="Dial2" event="OffHookComplete"/>
+		</state>
+		
+		<state ID="Dial2">
+			<prelude>
+				<!-- Step 8 test case SIP 1.9.7.6-User dials the Auto Recall 
+					feature code (default *69)..-->
+				<send protocol="utility" msgtype="DialDigits">
+					<mod modtype="add" hdr="number">
+						<expr>*69</expr>
+					</mod>
+				</send>
+			</prelude>
+			<postlude>
+				<log promptUser="true" yesExpected="True" verify="True" 
+					step="8" requirements="REQ14126" 
+					expr="Verify that the UE does NOT generate a normal ring\ntone or normal busy signal. Verify the UE sends\nan announcement in the UE default language (or multiple languages)\n.In addition, is desirable that the UE should display similar visual\ninformation for the hearing impaired."/>
+			</postlude>
+			<transition to="VerifyNoReinvite" event="DialDigitsComplete"/>
+		</state>
+		
+		<state ID="VerifyNoReinvite" timer="10000">
+			<response>
+				<if>
+					<neq>
+						<msg_ref type="event"/>
+						<expr>TimerExpired</expr>
+					</neq>
+					<verify step="8" requirements="REQ14126">
+						<neq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>REINVITE</expr>
+						</neq>
+					</verify>
+				</if>
+			</response>
+			<transition to="OnHook2" event="TimerExpired"/>
+		</state>
+		
+		<state ID="OnHook2">
+			<prelude>
+				<send protocol="utility" msgtype="OnHook"/>
+			</prelude>
+			<transition to="WaitAnotherMinute" event="OnHookComplete"/>
+		</state>
+		
+		<state ID="WaitAnotherMinute" timer="60000">
+			<transition to="OffHook3" event="TimerExpired"/>
+		</state>
+		
+		<state ID="OffHook3">
+			<prelude>
+				<send protocol="utility" msgtype="OffHook"/>
+			</prelude>
+			<transition to="Dial3" event="OffHookComplete"/>
+		</state>
+		
+		<state ID="Dial3">
+			<prelude>
+				<send protocol="utility" msgtype="DialDigits">
+					<mod modtype="add" hdr="number">
+						<expr>*69</expr>
+					</mod>
+				</send>
+			</prelude>
+			<postlude>
+				<log promptUser="true" yesExpected="true" verify="true" 
+					step="11" requirements="REQ14126" 
+					expr="Verify that the UE does NOT generate a normal ring\ntone or normal busy signal. Verify the UE sends an announcement\nin the UE default language (or multiple languages)\n.In addition, is desirable that the UE should display similar\nvisual information for the hearing impaired.\nThis should be same as in step 8."/>
+			</postlude>
+			<transition to="VerifyNoReinvite2" event="DialDigitsComplete"/>
+		</state>
+		
+		<state ID="VerifyNoReinvite2" timer="10000">
+			<response>
+				<if>
+					<neq>
+						<msg_ref type="event"/>
+						<expr>TimerExpired</expr>
+					</neq>
+					<verify step="11" requirements="REQ14126">
+						<neq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>REINVITE</expr>
+						</neq>
+					</verify>
+				</if>
+			</response>
+			<transition to="Setup4" event="TimerExpired"/>
+		</state>
+		
+		<state ID="Setup4">
+			<prelude>
+				<send protocol="sip" msgtype="Invite">
+					<mod modtype="add" hdr="Priority">
+						<expr>emergency</expr>
+					</mod>
+				</send>
+			</prelude>
+			<!-- Expected responses are 100, 180, 183 or 200 -->
+			<response>
+				<if>
+					<contains>
+						<msg_ref type="sip" hdr_instance="any">18x-Invite.Require</msg_ref>
+						<expr>100rel</expr>
+					</contains>
+					<then>
+						<!--Reliability required for test sending Prack message to peer.-->
+						<send protocol="sip" msgtype="Prack"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Proceeding4" event="100-INVITE"/>
+			<transition to="Alerting4" event="180-INVITE"/>
+			<transition to="Alerting4" event="183-INVITE"/>
+			<transition to="Connected4" event="200-INVITE"/>
+		</state>
+		
+		<state ID="Proceeding4">
+			<!-- Expected responses are 180, 183 or 200 -->
+			<response>
+				Test 18x response for reliability for possible Prack message -->
+				<if>
+					<contains>
+						<msg_ref type="sip" hdr_instance="any">18x-Invite.Require</msg_ref>
+						<expr>100rel</expr>
+					</contains>
+					<then>
+						<!--Reliability required for test sending Prack message to peer.-->
+						<send protocol="sip" msgtype="Prack"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Alerting4" event="180-INVITE"/>
+			<transition to="Alerting4" event="183-INVITE"/>
+			<transition to="Connected4" event="200-INVITE"/>
+		</state>
+		
+		<state ID="Alerting4" timer="12000">
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="event"/>
+						<expr>TimerExpired</expr>
+					</eq>
+					<then>
+						<!--Take DUT phone off hook-->
+						<send protocol="utility" msgtype="OffHook"/>
+					</then>
+				</if>
+				<!-- Expected responses are 180, 183, PRACK, UPDATE, or 200 -->
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>UPDATE</expr>
+					</eq>
+					<then>
+						<!--QoS required for test, sending a 200-OK to Update message to peer.-->
+						<send protocol="sip" msgtype="200-Update"/>
+					</then>
+					<elseif>
+						<and>
+							<eq>
+								<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+								<expr>180</expr>
+							</eq>
+							<contains>
+								<msg_ref type="sip" hdr_instance="any">180-INVITE.Require</msg_ref>
+								<expr>100rel</expr>
+							</contains>
+						</and>
+						<then>
+							<!--Reliability required for test, sending Prack message to peer.-->
+							<send protocol="sip" msgtype="Prack"/>
+						</then>
+					</elseif>
+				</if>
+			</response>
+			<transition to="Alerting4" event="200-PRACK"/>
+			<transition to="Alerting4" event="UPDATE"/>
+			<transition to="Alerting4" event="18x-INVITE"/>
+			<transition to="Answer4" event="TimerExpired"/>
+			<transition to="Connected4" event="200-INVITE"/>
+		</state>
+		
+		<state ID="Answer4">
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>UPDATE</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="200-Update"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Answer4" event="UPDATE"/>
+			<transition to="Answer4" event="200-PRACK"/>
+			<transition to="Answer4" event="18x-INVITE"/>
+			<transition to="Answer4" event="OffHookComplete"/>
+			<transition to="Connected4" event="200-INVITE"/>
+		</state>
+		
+		<state ID="Connected4" timer="30000">
+			<prelude>
+				<send protocol="sip" msgtype="ACK"/>
+			</prelude>
+			<transition to="Releasing4" event="TimerExpired"/>
+		</state>
+		
+		<state ID="Releasing4">
+			<prelude>
+				<send protocol="sip" msgtype="Bye"/>
+			</prelude>
+			<transition to="EndCall4" event="200-BYE"/>
+		</state>
+		
+		<state ID="EndCall4" ES="true">
+			<transition to="OffHook5" event="SessionTerminated"/>
+		</state>
+		
+		<state ID="OffHook5">
+			<prelude>
+				<sleep time="8000"/>
+				<send protocol="utility" msgtype="OffHook"/>
+			</prelude>
+			<transition to="Setup5" event="OffHookComplete"/>
+		</state>
+				
+		<state ID="Setup5">
+			<prelude once="true">
+				<!-- Step 14 test case SIP 1.9.7.6 -
+				User dials the Auto Recall feature code (default *69)..-->
+				<send protocol="utility" msgtype="DialDigits">
+					<mod modtype="add" hdr="number">
+						<expr>*69</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>INVITE</expr>
+					</eq>
+					<then>
+						<verify step="14" requirements="REQ14126">
+							<eq>
+								<msg_ref type="sip">Invite.Request-Line.Request-URI</msg_ref>
+								<msg_ref type="sip" msg_instance="prev">Invite.P-Asserted-Identity.name-addr</msg_ref>
+							</eq>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<transition to="Setup5" event="DialDigitsComplete"/>
+			<transition to="END" event="INVITE"/>
+		</state>
+	</add_to>
+</pc2xml>

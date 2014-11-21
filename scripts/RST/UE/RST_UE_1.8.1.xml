@@ -1,0 +1,283 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-UE 1.8.1" 
+	descrip="Operator Services (Busy Line Verification and Operator Interrupt) : Enabled" 
+	number="RST-UE 1.8.1">
+	
+	<template file="./templates/CallOrigAtUETemp.xml" name="UE1"/>
+	<template file="./templates/CallTermAtUETemp.xml" name="Operator"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Setup"/>
+		<state ID="Connected"/>
+		<state ID="OnHook"/>
+		<state ID="Releasing"/>
+	</remove_from>
+	
+	<remove_from fsm="Operator">
+		<NE elements="UE1" targets="UE1"/>
+		<state ID="Setup"/>
+		<state ID="Alerting"/>
+		<state ID="Answer"/>
+		<state ID="Connected"/>
+		<state ID="OnHook"/>
+		<state ID="Releasing"/>
+	</remove_from>
+	
+	<add_to fsm="Operator">
+		<NE elements="UE2" targets="UE2"/>
+		<states initialstate="WaitForSucceedEvent"/>
+	</add_to>
+	
+	<add_to fsm="UE1">
+		<state ID="Setup">
+			<prelude once="true">
+				<send protocol="utility" msgtype="DialDigits">
+					<mod modtype="add" hdr="number">
+						<msg_ref type="platform">UE1.phone number 1</msg_ref>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>Invite</expr>
+					</eq>
+					<then>
+						<verify step="1" requirements="RFC2596">
+							<contains>
+								<msg_ref type="sip" hdr_instance="any">Invite.Supported</msg_ref>
+								<expr>join</expr>
+							</contains>
+						</verify>
+						<send protocol="sip" msgtype="100-INVITE"/>
+					</then>
+				</if>
+				<!-- This set of tests determines whether to send 183 with Answer
+						 or a 180 to the INVITE -->
+				<if>
+					<and>
+						<eq>
+							<msg_ref type="extensions">precondition</msg_ref>
+							<expr>require</expr>
+						</eq>
+						<or>
+							<contains>
+								<msg_ref type="sip" hdr_instance="any">Invite.Require</msg_ref>
+								<expr>precondition</expr>
+							</contains>
+							<contains>
+								<msg_ref type="sip" hdr_instance="any">Invite.Supported</msg_ref>
+								<expr>precondition</expr>
+							</contains>
+						</or>
+					</and>
+					<then>
+						<!--Sending 183-Invite with answer-->
+						<sleep time="200"/>
+						<send protocol="sip" msgtype="183-Invite"/>
+					</then>
+					<elseif>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>Invite</expr>
+						</eq>
+						<then>
+							<!--Sending 180-Invite with SS not supporting precondition.-->
+							<sleep time="200"/>
+							<send protocol="sip" msgtype="180-Invite"/>
+						</then>
+					</elseif>
+				</if>
+			</response>
+			<transition to="Setup" event="DialDigitsComplete"/>
+			<transition to="Alerting" event="INVITE"/>
+		</state>
+		
+		<state ID="Connected">
+			<prelude>
+				<generate event="SucceedEvent" fsm="Operator"/>
+			</prelude>
+			<transition to="Release" event="Branch2Event"/>
+		</state>
+		
+		<state ID="Release">
+			<prelude>
+				<send protocol="sip" msgtype="BYE"/>
+			</prelude>
+			<transition to="EndCall1" event="200-BYE"/>
+		</state>
+		
+		<state ID="EndCall1" ES="true"/>
+						
+	</add_to>
+	
+	<add_to fsm="Operator">
+		<state ID="WaitForSucceedEvent">
+			<transition to="Subscribe" event="SucceedEvent"/>
+		</state>
+		
+		<state ID="Subscribe">
+			<prelude>
+				<send protocol="sip" msgtype="Subscribe" subscribeType="dialog">
+					<mod modtype="add" hdr="P-Asserted-Identity">
+						<expr>&lt;operator ID&gt;</expr>
+					</mod>
+				</send>
+			</prelude>
+			<postlude>
+				<verify step="2" requirements="REQ14025">
+					<eq>
+						<msg_ref type="sip">Response</msg_ref>
+						<expr>200-Subscribe</expr>
+					</eq>
+				</verify>
+			</postlude>
+			<transition to="Send200Notify" event="200-Subscribe"/>
+		</state>
+		
+		<state ID="Send200Notify">
+			<postlude>
+				<verify step="2" requirements="REQ14025">
+					<eq>
+						<msg_ref type="sip">NOTIFY.Content-Type.media-subtype</msg_ref>
+						<expr>dialog-info+xml</expr>
+					</eq>
+				</verify>
+				<verify step="2" requirements="REQ14025">
+					<contains>
+						<msg_ref type="sip">NOTIFY.SDP</msg_ref>
+						<expr>dialog-info</expr>
+					</contains>
+				</verify>
+				<send protocol="sip" msgtype="200-NOTIFY" targets="DUT"/>
+			</postlude>
+			<transition to="Setup" event="NOTIFY"/>
+		</state>
+		
+		<state ID="Setup">
+			<prelude>
+				<send protocol="sip" msgtype="Invite">
+					<!--Step 3 test case SIP 1.8.1-->
+					<mod modtype="add" hdr="Join">
+						<var_expr>
+							<msg_ref type="dialog-info+xml" msg_instance="last" xml_value="true">NOTIFY.dialog.call-id</msg_ref>
+							<expr>;from-tag=</expr>
+							<msg_ref type="dialog-info+xml" msg_instance="last" xml_value="true">NOTIFY.dialog.local-tag</msg_ref>
+							<expr>;to-tag=</expr>
+							<msg_ref type="dialog-info+xml" msg_instance="last" xml_value="true">NOTIFY.dialog.remote-tag</msg_ref>
+						</var_expr>
+					</mod>
+					<!--Step 3 test case SIP 1.8.1-->
+					<mod modtype="add" hdr="P-Asserted-Identity">
+						<expr>&lt;operator ID&gt;</expr>
+					</mod>
+				</send>
+			</prelude>
+			<!-- Expected responses are 100, 180, 183 or 200 -->
+			<response>
+				<if>
+					<contains>
+						<msg_ref type="sip" msg_instance="last" hdr_instance="any">18x-Invite.Require</msg_ref>
+						<expr>100rel</expr>
+					</contains>
+					<then>
+						<!--Reliability required for test sending Prack message to peer.-->
+						<send protocol="sip" msgtype="Prack"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Proceeding" event="100-INVITE"/>
+			<transition to="Alerting" event="180-INVITE"/>
+			<transition to="Alerting" event="183-INVITE"/>
+			<transition to="Connected" event="200-INVITE"/>
+		</state>
+		
+		<state ID="Alerting">
+			<response>
+				<!-- Expected responses are 180, 183, PRACK, UPDATE, or 200 -->
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>UPDATE</expr>
+					</eq>
+					<then>
+						<!--QoS required for test, sending a 200-OK to Update message to peer.-->
+						<send protocol="sip" msgtype="200-Update"/>
+					</then>
+					<elseif>
+						<and>
+							<eq>
+								<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+								<expr>180</expr>
+							</eq>
+							<contains>
+								<msg_ref type="sip" hdr_instance="any">180-INVITE.Require</msg_ref>
+								<expr>100rel</expr>
+							</contains>
+						</and>
+						<then>
+							<!--Reliability required for test, sending Prack message to peer.-->
+							<send protocol="sip" msgtype="Prack"/>
+						</then>
+					</elseif>
+				</if>
+				<if>
+					<eq>
+						<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+						<expr>200</expr>
+					</eq>
+					<then>
+						<verify step="3" requirements="REQ14039, REQ14027, RFC2584">
+							<eq>
+								<msg_ref type="sip">Response</msg_ref>
+								<expr>200-INVITE</expr>
+							</eq>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<transition to="Alerting" event="200-PRACK"/>
+			<transition to="Alerting" event="UPDATE"/>
+			<transition to="Alerting" event="18x-INVITE"/>
+			<transition to="Connected" event="200-INVITE"/>
+		</state>
+			
+		<state ID="Connected" timer="10000">
+			<prelude once="true">
+				<send protocol="sip" msgtype="ACK"/>
+			</prelude>
+			<transition to="Connected" event="OffHookComplete"/>
+			<transition to="WaitBye" event="TimerExpired"/>
+		</state>
+		
+		<state ID="WaitBye">
+			<prelude>
+				<generate event="Branch2Event" fsm="UE1"/>
+			</prelude>
+			<postlude>
+				<send protocol="sip" msgtype="200-BYE"/>
+			</postlude>
+			<transition to="END" event="BYE"/>
+		</state>
+	</add_to>
+</pc2xml>

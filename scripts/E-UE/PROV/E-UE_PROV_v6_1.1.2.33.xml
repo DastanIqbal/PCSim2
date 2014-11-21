@@ -1,0 +1,143 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+ Change History: (Author & Date)
+-->
+<!-- Document type and attributes. -->
+<pc2xml version="$Revision: 6076 $"
+        name="E-UE_PROV_1.1.2.33"
+        descrip="Default Values when Sub-options are Absent.Invalid."
+        number="E-UE_PROV_1.1.2.33">
+
+    <!-- Reset UE; start capture. -->
+    <template file="./templates/EUE_Prov_B_1_1_1.xml" name="MissingSubOpts"/>
+
+    <add_to fsm="MissingSubOpts">
+        <!-- Don't start capture when UE resets. -->
+        <transition from="StartCapture_RebootWait" to="EUE_Provisions" event="TimerExpired"/>
+
+        <!-- E-UE DUT provisions successfully and becomes operational. -->        
+        <state ID="EUE_Provisions">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPGet">
+                    <mod modtype="add" hdr="oids">
+                        <expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvisioningState.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+		    <mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+            </prelude>
+            <response>
+                <verify step="7">
+                    <contains>
+                        <msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+                        <expr>1</expr>
+                    </contains>
+                </verify>
+            </response>
+            <transition to="VerifyRealmTable" event="SNMPResp"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+        <!-- Examine the following MIB Objects in the RealmTable, suboption-6 -->
+        <state ID="VerifyRealmTable">
+            <prelude once="true">
+                <send protocol="utility" msgtype="SNMPGetTable">
+                    <mod modtype="add" hdr="oids">
+                        <expr>PKTC-IETF-MTA-MIB::pktcMtaDevRealmTable</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+                    <mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+            </prelude>
+
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPResp</expr>
+                    </eq>
+                <then>
+                    <verify step="9">
+                        <and>
+                            <eq>
+                                <!-- pktcMtaDevProvUnsolicitedKeyMaxTimeout -->
+                                <msg_ref type="utility" index="0 4 2">SNMPResp.varBind</msg_ref>
+                                <expr>100</expr>
+                            </eq>
+				<and>
+				    <eq>
+					<!-- pktcMtaDevProvUnsolicitedKeyNomTimeout -->
+					<msg_ref type="utility" index="0 5 2">SNMPResp.varBind</msg_ref>
+					<expr>3000</expr>
+				    </eq>
+				    <eq>
+					<!-- pktcMtaDevProvUnsolicitedKeyMaxRetries -->
+					<msg_ref type="utility" index="0 6 2">SNMPResp.varBind</msg_ref>
+					<expr>5</expr>
+				    </eq>
+				</and>
+                        </and>
+                    </verify>
+                </then>
+                </if>
+		
+            </response>
+		<transition to="VerifyProvTimer" event="SNMPResp"/>
+        </state>
+	
+	<state ID="VerifyProvTimer">
+		<prelude once="true">
+                <send protocol="utility" msgtype="SNMPGetTable">
+                    <mod modtype="add" hdr="oids">
+                         <expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvisioningTimer.0</expr>
+                    </mod>
+                    <mod modtype="replace" hdr="agentip">
+                        <msg_ref type="platform">DUT.IP</msg_ref>
+                    </mod>
+                    <mod modtype="replace" hdr="version">
+                        <expr>3</expr>
+                    </mod>
+                </send>
+		</prelude>
+		
+		<response>
+			<if>
+			    <eq>
+				<msg_ref type="utility">Response</msg_ref>
+				<expr>SNMPResp</expr>
+			    </eq>
+			<then>
+			    <verify step="9">		
+				<eq>
+					<!-- pktcMtaDevProvisioningTimer -->
+					<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+					<expr>10</expr>
+				</eq>
+			    </verify>
+			</then>
+			</if>
+		
+		</response>
+		<transition to="END" event="SNMPResp"/>
+	</state>
+	
+	
+
+    </add_to>
+</pc2xml>

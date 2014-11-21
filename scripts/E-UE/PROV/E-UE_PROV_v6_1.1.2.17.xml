@@ -1,0 +1,507 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+ Change History: (Author & Date)
+-->
+<pc2xml version="$Revision: 7768 $"
+        name="EUE Prov 1.1.2.17"
+        descrip="eUE to fail to provision if required sub-options provided in DHCP
+                 configuration contain improper values."
+        number="EUE Prov 1.1.2.17">
+
+    <template file="./templates/EUE_Prov_B_1_1_1.xml" name="FailsProvision"/>
+
+    <add_to fsm="FailsProvision">
+        <transition from="StartCapture_RebootWait" to="Informs1" event="TimerExpired"/>
+
+
+        <!-- Step 4. MTA must not send Enroll SNMP INFORM, nor Status SNMP INFORM. -->
+        <!-- Step 6. Verify that MTA only sends DHCP DISCOVER and does not send any DHCP REQUEST. -->
+        <state ID="Informs1">
+            <prelude once="true">
+                <stop_capture/>
+
+                <parse_capture name="eUE_v6_1">
+                    <parser_filter protocol="dhcpv6" clientMAC="DUT.MAC Address"/>
+                </parse_capture>
+                <parse_capture name="eUE_Prov_1">
+                    <parser_filter protocol="snmp" ip="DUT.IP"/>
+                </parse_capture>
+
+                <verify step="4 6">
+                    <and>
+                        <null>
+                            <capture_ref type="snmp" name="eUE_Prov_1">Inform Request</capture_ref>
+                        </null>
+                    <and>
+                        <notnull>
+                            <capture_ref type="dhcpv6" name="eUE_v6_1">Solicit.num</capture_ref>
+                        </notnull>
+                        <null>
+                            <capture_ref type="dhcpv6" name="eUE_v6_1">Request.num</capture_ref>
+                        </null>
+                    </and>
+                    </and>
+                </verify>
+                <generate event="SucceedEvent"/>
+            </prelude>
+            <transition to="ReConfigure1" event="SucceedEvent"/>
+        </state>
+
+
+        <!-- Step 7. Configure DHCP Service so suboption-3. -->
+        <!--state ID="ReConfigure1"
+            provFile="E-UE_PROV_v6_2.1.2.1_2.bin"
+            policyFile="MTAFORCW122_test"
+            nextState="Reset2"/-->
+			
+		<state ID="ReConfigure1">
+			<prelude>
+				<log promptUser="true" expr="Set the DUT to use a new policy, X_eUEv6_wrong_sub3 and depoly."/>
+				<generate event="Branch1Event"/>
+			</prelude>
+			<transition to="Reset2" event="Branch1Event"/>
+		</state>
+
+
+        <state ID="Reset2" timer="120000">
+            <prelude once="true">
+
+                <start_capture>
+                    <filter>
+						<var_expr>
+							<expr>host </expr>
+							<msg_ref type="platform">DUT.IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.CM IP Address</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.DHCP Server IP</msg_ref>
+						</var_expr>
+                    </filter>
+                </start_capture>
+
+				<send protocol="utility" msgtype="SNMPSet">
+					<mod modtype="add" hdr="array">
+						<var_expr>
+							<expr>varBind 1 1 3 \r\n ][ , </expr>
+							<expr>DOCS-CABLE-DEVICE-MIB::docsDevResetNow.0,INTEGER,1][\r\n</expr>
+						</var_expr>
+					</mod>
+					<mod modtype="replace" hdr="agentip">
+						<msg_ref type="platform">DUT.CM IP Address</msg_ref>
+					</mod>
+					<!-- Always use version 2 for a CM reset -->
+					<mod modtype="replace" hdr="version">
+						<expr>2c</expr>
+					</mod>
+				</send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPRespFailure</expr>
+                    </eq>
+                    <then>
+                        <fail/>
+                    </then>
+                </if>
+                <if>
+                    <or>
+                        <eq>
+                            <msg_ref type="sip">REGISTER.Contact.expires</msg_ref>
+                            <expr>0</expr>
+                        </eq>
+                        <eq>
+                            <msg_ref type="sip">REGISTER.Expires.value</msg_ref>
+                            <expr>0</expr>
+                        </eq>
+                    </or>
+                    <then>
+                        <send protocol="sip" msgtype="200-REGISTER"/>
+                    </then>
+                </if>
+            </response>
+            <transition to="Informs2" event="TimerExpired"/>
+            <transition to="Reset2" event="SNMPResp"/>
+            <transition to="Reset2" event="REGISTER"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+
+        <!-- Step 10. MTA must not send Enroll SNMP INFORM, nor Status SNMP INFORM. -->
+        <!-- Step 12. Verify that MTA only sends DHCP DISCOVER and does not send any DHCP REQUEST. -->
+        <state ID="Informs2">
+            <prelude once="true">
+				<stop_capture/>
+
+                <parse_capture name="eUE_v6_2">
+                    <parser_filter protocol="dhcpv6" clientMAC="DUT.MAC Address"/>
+                </parse_capture>
+                <parse_capture name="eUE_Prov_2">
+                    <parser_filter protocol="snmp" ip="DUT.IP"/>
+                </parse_capture>
+				
+                <verify step="10 12">
+                    <and>
+                        <null>
+                            <capture_ref type="snmp" name="eUE_Prov_2">Inform Request</capture_ref>
+                        </null>
+                    <and>
+                        <notnull>
+                            <capture_ref type="dhcpv6" name="eUE_v6_2">Solicit.num</capture_ref>
+                        </notnull>
+                        <null>
+                            <capture_ref type="dhcpv6" name="eUE_v6_2">Request.num</capture_ref>
+                        </null>
+                    </and>
+                    </and>
+                </verify>
+                <generate event="SucceedEvent"/>
+            </prelude>
+            <transition to="ReConfigure2" event="SucceedEvent"/>
+        </state>
+
+
+        <!-- Step 13. Configure DHCP Service suboption-3. -->
+        <!--state ID="ReConfigure2"
+            provFile="E-UE_PROV_v6_2.1.2.1_2.bin"
+            policyFile="MTAFORCW122_test"
+            nextState="Reset3"/-->
+		
+		<state ID="ReConfigure2">
+			<prelude>
+				<log promptUser="true" expr="Set the DUT to use a new policy, X_eUEv6_wrong_sub3_length and depoly."/>
+				<generate event="Branch1Event"/>
+			</prelude>
+			<transition to="Reset3" event="Branch1Event"/>
+		</state>
+
+
+        <state ID="Reset3" timer="120000">
+            <prelude once="true">
+                <start_capture>
+					<filter>
+						<var_expr>
+							<expr>host </expr>
+							<msg_ref type="platform">DUT.IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.CM IP Address</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.DHCP Server IP</msg_ref>
+						</var_expr>
+					</filter>
+                </start_capture>
+                	<send protocol="utility" msgtype="SNMPSet">
+						<mod modtype="add" hdr="array">
+							<var_expr>
+								<expr>varBind 1 1 3 \r\n ][ , </expr>
+								<expr>DOCS-CABLE-DEVICE-MIB::docsDevResetNow.0,INTEGER,1][\r\n</expr>
+							</var_expr>
+						</mod>
+						<mod modtype="replace" hdr="agentip">
+							<msg_ref type="platform">DUT.CM IP Address</msg_ref>
+						</mod>
+						<!-- Always use version 2 for a CM reset -->
+						<mod modtype="replace" hdr="version">
+							<expr>2c</expr>
+						</mod>
+					</send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPRespFailure</expr>
+                    </eq>
+                    <then>
+                        <fail/>
+                    </then>
+                </if>
+                <if>
+                    <or>
+                        <eq>
+                            <msg_ref type="sip">REGISTER.Contact.expires</msg_ref>
+                            <expr>0</expr>
+                        </eq>
+                        <eq>
+                            <msg_ref type="sip">REGISTER.Expires.value</msg_ref>
+                            <expr>0</expr>
+                        </eq>
+                    </or>
+                    <then>
+                        <send protocol="sip" msgtype="200-REGISTER"/>
+                    </then>
+                </if>
+            </response>
+            <transition to="Informs3" event="TimerExpired"/>
+            <transition to="Reset3" event="SNMPResp"/>
+            <transition to="Reset3" event="REGISTER"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+
+        <!-- Step 16. MTA must not send Enroll SNMP INFORM, nor Status SNMP INFORM. -->
+        <!-- Step 18. Verify that MTA only sends DHCP DISCOVER and does not send any DHCP REQUEST. -->
+        <state ID="Informs3">
+            <prelude once="true">
+				<stop_capture/>
+
+                <parse_capture name="eUE_v6_3">
+                    <parser_filter protocol="dhcpv6" clientMAC="DUT.MAC Address"/>
+                </parse_capture>
+                <parse_capture name="eUE_Prov_3">
+                    <parser_filter protocol="snmp" ip="DUT.IP"/>
+                </parse_capture>
+				
+                <verify step="16 18">
+                    <and>
+                        <null>
+                            <capture_ref type="snmp" name="eUE_Prov_3">Inform Request</capture_ref>
+                        </null>
+                    <and>
+                        <notnull>
+                            <capture_ref type="dhcpv6" name="eUE_v6_3">Solicit.num</capture_ref>
+                        </notnull>
+                        <null>
+                            <capture_ref type="dhcpv6" name="eUE_v6_3">Request.num</capture_ref>
+                        </null>
+                    </and>
+                    </and>
+                </verify>
+                <generate event="SucceedEvent"/>
+            </prelude>
+            <transition to="ReConfigure3" event="SucceedEvent"/>
+        </state>
+
+
+        <!-- Step 19. Configure DHCP Service suboption-6. -->
+        <!--state ID="ReConfigure3"
+            provFile="E-UE_PROV_v6_2.1.2.1_2.bin"
+            policyFile="MTAFORCW122_test"
+            nextState="Reset4"/-->
+			
+		<state ID="ReConfigure3">
+			<prelude>
+				<log promptUser="true" expr="Set the DUT to use a new policy, X_eUEv6_wrong_sub6_length and depoly."/>
+				<generate event="Branch1Event"/>
+			</prelude>
+			<transition to="Reset4" event="Branch1Event"/>
+		</state>
+
+
+        <state ID="Reset4" timer="120000">
+            <prelude once="true">
+				<start_capture>
+					<filter>
+						<var_expr>
+							<expr>host </expr>
+							<msg_ref type="platform">DUT.IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.CM IP Address</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.DHCP Server IP</msg_ref>
+						</var_expr>
+					</filter>
+                </start_capture>
+                	<send protocol="utility" msgtype="SNMPSet">
+						<mod modtype="add" hdr="array">
+							<var_expr>
+								<expr>varBind 1 1 3 \r\n ][ , </expr>
+								<expr>DOCS-CABLE-DEVICE-MIB::docsDevResetNow.0,INTEGER,1][\r\n</expr>
+							</var_expr>
+						</mod>
+						<mod modtype="replace" hdr="agentip">
+							<msg_ref type="platform">DUT.CM IP Address</msg_ref>
+						</mod>
+						<!-- Always use version 2 for a CM reset -->
+						<mod modtype="replace" hdr="version">
+							<expr>2c</expr>
+						</mod>
+					</send>	
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPRespFailure</expr>
+                    </eq>
+                    <then>
+                        <fail/>
+                    </then>
+                </if>
+                <if>
+                    <or>
+                        <eq>
+                            <msg_ref type="sip">REGISTER.Contact.expires</msg_ref>
+                            <expr>0</expr>
+                        </eq>
+                        <eq>
+                            <msg_ref type="sip">REGISTER.Expires.value</msg_ref>
+                            <expr>0</expr>
+                        </eq>
+                    </or>
+                    <then>
+                        <send protocol="sip" msgtype="200-REGISTER"/>
+                    </then>
+                </if>
+            </response>
+            <transition to="Informs4" event="TimerExpired"/>
+            <transition to="Reset4" event="SNMPResp"/>
+            <transition to="Reset4" event="REGISTER"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+
+        <!-- Step 22. MTA must not send Enroll SNMP INFORM, nor Status SNMP INFORM to provisioning service. -->
+        <!-- Step 24. Verify that MTA only sends DHCP DISCOVER and does not send any DHCP REQUEST. -->
+        <state ID="Informs4">
+            <prelude once="true">
+				<stop_capture/>
+
+                <parse_capture name="eUE_v6_4">
+                    <parser_filter protocol="dhcpv6" clientMAC="DUT.MAC Address"/>
+                </parse_capture>
+                <parse_capture name="eUE_Prov_4">
+                    <parser_filter protocol="snmp" ip="DUT.IP"/>
+                </parse_capture>
+				
+                <verify step="22 24">
+                    <and>
+                        <null>
+                            <capture_ref type="snmp" name="eUE_Prov_4">Inform Request</capture_ref>
+                        </null>
+                    <and>
+                        <notnull>
+                            <capture_ref type="dhcpv6" name="eUE_v6_4">Solicit.num</capture_ref>
+                        </notnull>
+                        <null>
+                            <capture_ref type="dhcpv6" name="eUE_v6_4">Request.num</capture_ref>
+                        </null>
+                    </and>
+                    </and>
+                </verify>
+                <generate event="SucceedEvent"/>
+            </prelude>
+            <transition to="ReConfigure4" event="SucceedEvent"/>
+        </state>
+
+
+        <!-- Step 25. Configure DHCP Service suboption-6. -->
+        <!--state ID="ReConfigure4"
+            provFile="E-UE_PROV_v6_2.1.2.1_2.bin"
+            policyFile="MTAFORCW122_test"
+            nextState="Reset5"/-->
+			
+		<state ID="ReConfigure4">
+			<prelude>
+				<log promptUser="true" expr="Set the DUT to use a new policy, X_eUEv6_wrong_sub6_length and depoly."/>
+				<generate event="Branch1Event"/>
+			</prelude>
+			<transition to="Reset5" event="Branch1Event"/>
+		</state>
+
+        <state ID="Reset5" timer="120000">
+            <prelude once="true">
+				<start_capture>
+					<filter>
+						<var_expr>
+							<expr>host </expr>
+							<msg_ref type="platform">DUT.IP</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.CM IP Address</msg_ref>
+							<expr> || host </expr>
+							<msg_ref type="platform">DUT.DHCP Server IP</msg_ref>
+						</var_expr>
+					</filter>
+                </start_capture>
+                	<send protocol="utility" msgtype="SNMPSet">
+						<mod modtype="add" hdr="array">
+							<var_expr>
+								<expr>varBind 1 1 3 \r\n ][ , </expr>
+								<expr>DOCS-CABLE-DEVICE-MIB::docsDevResetNow.0,INTEGER,1][\r\n</expr>
+							</var_expr>
+						</mod>
+						<mod modtype="replace" hdr="agentip">
+							<msg_ref type="platform">DUT.CM IP Address</msg_ref>
+						</mod>
+						<!-- Always use version 2 for a CM reset -->
+						<mod modtype="replace" hdr="version">
+							<expr>2c</expr>
+						</mod>
+					</send>
+            </prelude>
+            <response>
+                <if>
+                    <eq>
+                        <msg_ref type="utility">Response</msg_ref>
+                        <expr>SNMPRespFailure</expr>
+                    </eq>
+                    <then>
+                        <fail/>
+                    </then>
+                </if>
+                <if>
+                    <or>
+                        <eq>
+                            <msg_ref type="sip">REGISTER.Contact.expires</msg_ref>
+                            <expr>0</expr>
+                        </eq>
+                        <eq>
+                            <msg_ref type="sip">REGISTER.Expires.value</msg_ref>
+                            <expr>0</expr>
+                        </eq>
+                    </or>
+                    <then>
+                        <send protocol="sip" msgtype="200-REGISTER"/>
+                    </then>
+                </if>
+            </response>
+            <transition to="Informs5" event="TimerExpired"/>
+            <transition to="Reset5" event="SNMPResp"/>
+            <transition to="Reset5" event="REGISTER"/>
+            <transition to="END" event="SNMPRespFailure"/>
+        </state>
+
+
+        <!-- Step 28. MTA must not send Enroll SNMP INFORM, nor Status SNMP INFORM to provisioning service. -->
+        <!-- Step 30. Verify that MTA only sends DHCP DISCOVER and does not send any DHCP REQUEST. -->
+        <state ID="Informs5">
+            <prelude once="true">
+				<stop_capture/>
+
+                <parse_capture name="eUE_v6_5">
+                    <parser_filter protocol="dhcpv6" clientMAC="DUT.MAC Address"/>
+                </parse_capture>
+                <parse_capture name="eUE_Prov_5">
+                    <parser_filter protocol="snmp" ip="DUT.IP"/>
+                </parse_capture>
+				
+                <verify step="28 30">
+                    <and>
+                        <null>
+                            <capture_ref type="snmp" name="eUE_Prov_5">Inform Request</capture_ref>
+                        </null>
+                    <and>
+                        <notnull>
+                            <capture_ref type="dhcpv6" name="eUE_v6_5">Solicit.num</capture_ref>
+                        </notnull>
+                        <null>
+                            <capture_ref type="dhcpv6" name="eUE_v6_5">Request.num</capture_ref>
+                        </null>
+                    </and>
+                    </and>
+                </verify>
+                <generate event="SucceedEvent"/>
+            </prelude>
+            <transition to="END" event="SucceedEvent"/>
+        </state>
+    </add_to>
+</pc2xml>

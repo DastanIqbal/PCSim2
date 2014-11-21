@@ -1,0 +1,136 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	PCPCII-256 : Include quotes for testing the auid paramter of the Event header (ghassler 04/22/2010)
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-UE 1.3.1.4" 
+	descrip="Keep CFV subscription current" 
+	number="RST-UE 1.3.1.4" inspector="disable">
+	
+	<template file="./templates/UERegAndSubTemp.xml" name="UE1"/>
+	
+	<remove_from fsm="UE1">
+		<state ID="Registered"/>
+		<state ID="Notification"/>
+	</remove_from>
+	
+	<add_to fsm="UE1">
+		<state ID="Registered">
+			<prelude once="true">
+				<var name="from">
+					<expr>false</expr>
+				</var>
+				<send protocol="sip" msgtype="200-Register"/>
+			</prelude>
+			<response>
+				<!--  Check if the SUBSCRIBE is for reg event -->
+				<if>
+					<and>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>SUBSCRIBE</expr>
+						</eq>
+						<eq>
+							<msg_ref type="sip">SUBSCRIBE.Event.event-type</msg_ref>
+							<expr>reg</expr>
+						</eq>
+					</and>
+					<then>
+						<verify step="2" requirements="REQ16742">
+							<eq>
+								<msg_ref type="sip">Request</msg_ref>
+								<expr>SUBSCRIBE</expr>
+							</eq>
+						</verify>
+						<send protocol="sip" msgtype="200-SUBSCRIBE"/>
+						<send protocol="sip" msgtype="NOTIFY"/>
+					</then>
+				</if>
+				<if>
+					<eq>
+						<msg_ref type="sip" bodyType="xml">SUBSCRIBE.Event.auid</msg_ref>
+						<expr>&quot;com.cablelabs.pkt.rst.featureset.1&quot;</expr>
+					</eq>
+					<then>
+						<assign name="from">
+							<msg_ref type="sip">SUBSCRIBE.From.tag</msg_ref>
+						</assign>
+						<send protocol="sip" msgtype="200-SUBSCRIBE">
+							<mod modtype="delete" hdr="Contact" param="expires"/>
+							<mod modtype="replace" hdr="Expires">
+								<expr>300</expr>
+							</mod>
+						</send>
+						<send protocol="sip" msgtype="NOTIFY" subscribeType="ua-profile">
+							<mod modtype="delete" hdr="SetElement" hdr_instance="3" body="xml"/>
+							<mod modtype="delete" hdr="SetElement" hdr_instance="2" body="xml"/>
+							<mod modtype="delete" hdr="SCFForwardedCallCount" body="xml"/>
+						</send>
+					</then>
+				</if>
+				<if>
+					<eq>
+						<msg_ref type="sip">xxx-NOTIFY.To.tag</msg_ref>
+						<var_ref name="from"/>
+					</eq>
+					<then>
+						<generate event="Branch1Event"/>
+					</then>
+				</if>
+			</response>
+			<transition to="Registered" event="SUBSCRIBE"/>
+			<transition to="Registered" event="200-NOTIFY"/>
+			<transition to="ReduceSubscription" event="Branch1Event"/>
+		</state>
+		
+		<state ID="ReduceSubscription" timer="300000">
+			<response>
+				<verify step="3" requirements="REQ16742">
+					<and>
+						<neq>
+							<msg_ref type="event"/>
+							<expr>TimerExpired</expr>
+						</neq>
+						<eq>
+							<msg_ref type="sip" bodyType="xml">SUBSCRIBE.Event.auid</msg_ref>
+							<expr>&quot;com.cablelabs.pkt.rst.featureset.1&quot;</expr>
+						</eq>
+					</and>
+					<then>
+						<send protocol="sip" msgtype="200-SUBSCRIBE">
+							<mod modtype="delete" hdr="Contact" param="expires"/>
+							<mod modtype="replace" hdr="Expires">
+								<expr>300</expr>
+							</mod>
+						</send>
+						<send protocol="sip" msgtype="NOTIFY" subscribeType="ua-profile">
+							<mod modtype="delete" hdr="SetElement" hdr_instance="3" body="xml"/>
+							<mod modtype="delete" hdr="SetElement" hdr_instance="2" body="xml"/>
+							<mod modtype="delete" hdr="SCFForwardedCallCount" body="xml"/>
+						</send>
+					</then>
+				</verify>
+			</response>
+			<transition to="Wait200Notify" event="SUBSCRIBE"/>
+		</state>
+		
+		<state ID="Wait200Notify">
+			<transition to="END" event="200-NOTIFY"/>
+		</state>
+	</add_to>
+</pc2xml>

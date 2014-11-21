@@ -1,0 +1,143 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+
+<!-- First are the document type and the attributes for our document -->
+<pc2xml version="$Revision: 8188 $" name="RST-UE 1.7.1.3" descrip="Auto-Recall as Anonymous" number="RST-UE 1.9.4.5">
+	<template file="./templates/CallOrigAtUETemp.xml" name="UE1"/>
+	<remove_from fsm="UE1">
+		<state ID="Setup"/>
+		<state ID="OnHook"/>
+	</remove_from>
+	<add_to fsm="UE1">
+		<!-- DIAL State -->
+		<state ID="Dial">
+			
+			<!-- Transitions for Dial state -->
+			
+		</state>
+		<!-- SETUP State -->
+		<!-- The state machine will wait in the Setup state until it 
+				 receives an Invite from the originating UE or the fail timeout occurs. -->
+		<!-- Step 1 of the Call-Orig-at_UE(DUT) Default Message Flow document. -->
+		<state ID="Setup">
+			<prelude once="true">
+				<!-- Step 2 test case SIP 1.7.1.3-->
+				<send protocol="utility" msgtype="DialDigits">
+					<mod modtype="replace" hdr="number">
+						<expr>*67</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>INVITE</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="100-INVITE"/>
+					</then>
+				</if>
+				<!-- This set of tests determines whether to send 183 with Answer
+						 or a 180 to the INVITE -->
+				<!-- Step 3 in the Call-Orig-at_UE(DUT) Default Message Flow document. -->
+				<if>
+					<and>
+						<eq>
+							<msg_ref type="extensions">precondition</msg_ref>
+							<expr>require</expr>
+						</eq>
+						<or>
+							<contains>
+								<msg_ref type="sip" hdr_instance="any">Invite.Require</msg_ref>
+								<expr>precondition</expr>
+							</contains>
+							<contains>
+								<msg_ref type="sip" hdr_instance="any">Invite.Supported</msg_ref>
+								<expr>precondition</expr>
+							</contains>
+						</or>
+					</and>
+					<then>
+						<!--Sending 183-Invite with answer-->
+						<send protocol="sip" msgtype="183-Invite"/>
+					</then>
+					<elseif>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>Invite</expr>
+						</eq>
+						<then>
+							<!--Sending 180-Invite with SS not supporting precondition.-->
+							<send protocol="sip" msgtype="180-Invite"/>
+						</then>
+					</elseif>
+				</if>
+			</response>
+			<!-- Transitions for Setup state -->
+			<transition to="Setup" event="DialDigitsComplete"/>
+			<transition to="Alerting" event="INVITE"/>
+		</state>
+		<!-- OnHook State -->
+		<state ID="OnHook">
+			<prelude>
+				<send protocol="utility" msgtype="OnHook"/>
+			</prelude>
+			<!-- Transitions for OnHook state -->
+			<transition to="End2ndCall" event="OnHookComplete"/>
+		</state>
+		<!-- End2ndCall State -->
+		<state ID="End2ndCall" ES="true">
+			<!-- Transitions for End2ndCall state -->
+			<transition to="OffHook1" event="SessionTerminated"/>
+		</state>
+		<!-- OFFHOOK State -->
+		<state ID="OffHook1">
+			<prelude>
+				<send protocol="utility" msgtype="OffHook"/>
+			</prelude>
+			<!-- Transitions for OffHook state -->
+			<transition to="Setup1" event="OffHookComplete"/>
+		</state>
+		
+		<!-- SETUP1 State -->
+		<state ID="Setup1">
+			<prelude once="true">
+				<!-- Step 4 test case SIP 1.7.1.3-->
+				<send protocol="utility" msgtype="DialDigits">
+					<mod modtype="replace" hdr="number">
+						<expr>*69</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="4" requirements="REQ13971">
+					<contains>
+						<msg_ref type="sip">Invite.Privacy</msg_ref>
+						<expr>id</expr>
+					</contains>
+				</verify>
+			</response>
+			<!-- Transitions for Setup1 state -->
+			<transition to="Setup1" event="DialDigitsComplete"/>
+			<transition to="END" event="INVITE"/>
+		</state>
+	</add_to>
+</pc2xml>

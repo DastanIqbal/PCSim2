@@ -1,0 +1,50 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+
+<pc2xml version="$Revision: 8188 $" name="UT_UE_1.13.7" descrip="This is a unit test script for testing the UE_1.13.7 test script." number="1">
+	<template name="UE0" file="$UT_PATH/Templates/ut/Orig_DUT.xml"/>
+	<remove_from fsm="UE0">
+		<state ID="Setup" sub="prelude"/>
+	</remove_from>
+	<add_to fsm="UE0">
+		<NE ext_supported="precondition 100rel"/>
+		<states initialstate="Register"/>
+		<state ID="Setup" sub="prelude">
+			<sleep time="3000"/>
+			<send protocol="sip" msgtype="Invite" target="UE1" originator="DUT">
+				<mod modtype="replace" hdr="qos-des-local" param="strength">
+					<expr>mandatory</expr>
+				</mod>
+			</send>
+		</state>
+		<transition from="Setup" to="Fail" event="18x-INVITE"/>
+		<transition from="Setup" to="Fail" event="100-INVITE"/>
+		<transition from="Setup" to="Fail" event="200-INVITE"/>
+		<transition from="Setup" to="END" event="500-INVITE"/>
+		<state ID="Fail">
+			<prelude>
+				<fail/>
+				<generate event="FailEvent"/>
+			</prelude>
+			<!-- Transitions for Fail state -->
+			<transition to="END" event="FailEvent"/>
+		</state>
+	</add_to>
+</pc2xml>

@@ -1,0 +1,381 @@
+################################################################################
+#// Filename: E-UE-PROV_1-1-2-23.test
+#// Author:   Matthew Forbes
+#// Creation Date: 9/28/05
+#// Modified by:
+################################################################################
+#// Description:
+#//     TC1569 TEST CASE PROV 5.67 Ability to retry all resolved IP addresses
+#//     from SNMP entity FQDN before return to MTA-1 (Secure Flow, No AP-REP)
+#// Objective:
+#//     Test the MTA ability in the secure flow to retry all resolved IP addresses
+#//     from SNMP Entity FQDN contained in Option 122, sub-option 3 in the absence of a
+#//     valid AP-REP for Provisioning ticket.
+#//
+#// PacketCable DUT:
+#//     MTA
+#//
+#// Test Steps:
+#//     - Initial configuration
+#//     - Configure provisioning server
+#//     - Start sniffer capture
+#//     - Reset DUT
+#//     - Check Provisioning state
+#//     - Clear Kerberos Tickets
+#//     - Reset MTA using SNMPv3
+#//     - Verify AP REQ to first IP address
+#//     - Verify No AP REP
+#//     - Verify 3 AP REQs to first IP address
+#//     - Verify AP REQ to second IP address
+#//     - Verify No AP REP
+#//     - Verify 3 AP REQs to second IP address
+#//     - Verify AP REQ to third IP address
+#//     - Verify No AP REP
+#//     - Verify 3 AP REQs to third IP address
+#//     - Verify sequence, DUT returns to MTA-1
+#//     - Restore provisioning server
+#//     - Reset DUT
+#//     - Check Provisioning state
+#//     - Cleanup
+#//
+#// Notes:
+#//     - Requires provPrimitives.tcl & tftp_primitives.tcl.
+#//     - Requires the specific config file in $BASE_CFG_FILE_PATH in Provisioning Server.
+#//     - Requires parT.tcl parsing tool to parse data from capture file.
+#//
+################################################################################
+
+global SCRIPT_VERSION
+set SCRIPT_VERSION { # $Id: E-UE-PROV_1-1-2-23.test 7406 2010-07-20 17:17:37Z dthakore $ }
+
+##############################################################################
+    # Init_PROV
+    # if {000} {
+
+################################################################################
+
+DoStep "E-UE-PROV_1-1-2-23_1-1" "Initial configuration" {
+    LogMsg "--- Initial PROV module ---"
+    Init_PROV
+    # ProvCreateConfig 291 $MTA_MAC
+    PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122
+    PROV_DEPLOY_DHCP
+} { PASS_STEP }
+
+
+DoStep "E-UE-PROV_1-1-2-23_3-2" "Start sniffer" {
+    LogMsg "--- Start sniffer ---"
+    Init_CONTROLLER_LAN
+    SetupCaptureControllerLan "host $MTA_IP || host $CM_IP || udp port 67"
+    StartCaptureControllerLan
+} {PASS_STEP}
+
+################ Reset CM and MTA and Verify Provisioning ################
+
+DoStep "E-UE-PROV_1-1-2-23_4-1" "Reset CM/MTA" {
+    set val [SNMPvN_RESET $CM_IP ]
+    LogMsg "Reset of CM and MTA has passed"
+} {
+    IsEqual $val 0
+}
+
+DoStep "E-UE-PROV_1-1-2-23_5-1" "pktcMTADevProvisioningState Content Verification" {
+    actionWait "Wait 60 seconds for CM/MTA to provision" 60
+    # Get the OID from the MTA and check it using our previously defined
+    set val [GetProvState 1 600]
+    LogMsg "MTA Provisioning State" 49
+    LogMsg "             - Expected : 1" 49
+    LogMsg "             - Received : $val" 49
+} {
+    IsEqual $val 1
+}
+########################## Clear Tickets ##################################
+
+DoStep "E-UE-PROV_1-1-2-23_6-1" "pktcMtaDevResetKrbTickets Reset Kerberos Tickets" {
+    set val [SNMP_SET $oid_pktcMtaDevResetKrbTickets OCTET-STRING 0xC0 $MTA_IP]
+} {
+    if {$val == 0} {
+        LogMsg "Kerberos Tickets Have been cleared"
+        PASS_STEP
+    } else {
+        FAIL_STEP "Cannot reset Kerberos tickets"
+    }
+}
+
+################ Reset CM and MTA and Verify Provisioning ################
+
+DoStep "PROV_5-64_7-1" "Setup policy in provisioning server" {
+    LogMsg "Setup policy in provisioning server"
+} {
+    # verify_signal "Setup policy in server for 122.5 OFFSET 0=15/4=600/8=2 and 122.3 resolves to 3 IP addresses (MTATC1569)"
+    PROV_MODIFY_DEVICE $MTA_MAC MTATC1569
+    PROV_DEPLOY_DHCP
+}
+
+DoStep "E-UE-PROV_1-1-2-23_7-2" "Reset MTA" {
+        set val [SNMP_SET $oid_pktcMtaDevResetNow INTEGER 1 $MTA_IP]
+    LogMsg "Reset of MTA has passed"
+} {
+    IsEqual $val 0
+}
+
+DoStep "E-UE-PROV_1-1-2-23_8-1" "Monitor Trace for AP-REQ to one of the IP addresses" {
+    LogMsg "Monitor Trace for AP-REQ to one of the IP addresses"
+} {
+    verify_signal "Monitor the trace : Is there an AP-REQ from the MTA($MTA_IP) to either 10.32.0.200/210/220?"
+}
+
+DoStep "E-UE-PROV_1-1-2-23_9-1" "Monitor Trace for no AP-REP to one of the IP addresses" {
+    LogMsg "Monitor Trace for no AP-REP to one of the IP addresses"    
+} {
+    verify_signal "Monitor the trace : Is there no AP-REP to the MTA($MTA_IP) from that address?"
+}
+
+DoStep "E-UE-PROV_1-1-2-23_10-1" "Monitor Trace for 3 and only 3 AP-REQs to one of the IP addresses" {
+    LogMsg "Monitor Trace for 3 and only 3 AP-REQs to one of the IP addresses"
+} {
+    verify_signal "Monitor the trace : Is there 3 and only 3 AP-REQs from the MTA($MTA_IP) to that address?"
+}
+
+DoStep "E-UE-PROV_1-1-2-23_11-1" "Monitor Trace for AP-REQ to one of the IP addresses" {
+    LogMsg "Monitor Trace for AP-REQ to one of the IP addresses"  
+} {
+    verify_signal "Monitor the trace : Is there an AP-REQ from the MTA($MTA_IP) to a different one of 10.32.0.200/210/220?"
+}
+
+DoStep "E-UE-PROV_1-1-2-23_12-1" "Monitor Trace for no AP-REP to one of the IP addresses" {
+    LogMsg "Monitor Trace for no AP-REP to one of the IP addresses"
+} {
+    verify_signal "Monitor the trace : Is there no AP-REP to the MTA($MTA_IP) from that address?"
+}
+
+DoStep "E-UE-PROV_1-1-2-23_13-1" "Monitor Trace for 3 and only 3 AP-REQs to one of the IP addresses" {
+    LogMsg "Monitor Trace for 3 and only 3 AP-REQs to one of the IP addresses"
+} {
+    verify_signal "Monitor the trace : Is there 3 and only 3 AP-REQs from the MTA($MTA_IP) to that address?"
+}
+
+DoStep "E-UE-PROV_1-1-2-23_14-1" "Monitor Trace for AP-REQ to one of the IP addresses" {
+    LogMsg "Monitor Trace for AP-REQ to one of the IP addresses"
+} {
+    verify_signal "Monitor the trace : Is there an AP-REQ from the MTA($MTA_IP) to a different one of 10.32.0.200/210/220?"
+}
+
+DoStep "E-UE-PROV_1-1-2-23_15-1" "Monitor Trace for no AP-REP to one of the IP addresses" {
+    LogMsg "Monitor Trace for no AP-REP to one of the IP addresses"
+} {
+    verify_signal "Monitor the trace : Is there no AP-REP to the MTA($MTA_IP) from that address?"
+}
+
+DoStep "E-UE-PROV_1-1-2-23_16-1" "Monitor Trace for 3 and only 3 AP-REQs to one of the IP addresses" {
+    LogMsg "Monitor Trace for 3 and only 3 AP-REQs to one of the IP addresses"
+} {
+    verify_signal "Monitor the trace : Is there 3 and only 3 AP-REQs from the MTA($MTA_IP) to that address?"
+}
+
+## For automated test
+# DoStep "E-UE-PROV_1-1-2-23_8-1" "Wait 120 seconds for MTA to attempt to reprovision" {
+        # LogMsg "Wait 6 minutes for MTA to attempt to reprovision"
+    # # actionWait "Wait 6 minutes for CM/MTA to attempt to provision" 360
+    # verify_signal "Monitor trace until 3AP REQs to 3 IP Addresses (9 AP REQs) occur and DUT returns to MTA1-4,
+    # DHCP Discover-Ack, then hit yes immediately"
+# } {
+    # PASS_STEP
+# }
+
+DoStep "E-UE-PROV_1-1-2-23_17-1" "Monitor Trace for return to MTA-1" {
+    LogMsg "Monitor Trace for return to MTA-1"
+
+} {
+    verify_signal "Monitor the trace : Does the DUT return to MTA-1 (DHCP Discover) after 3 AP-REQs from the \
+    MTA($MTA_IP) to the third address?"
+}
+
+DoStep "E-UE-PROV_1-1-2-23_18-1" "Stop sniffer" {
+    LogMsg "--- Stop sniffer ---"
+    StopCaptureControllerLan
+    SaveToFileControllerLan
+} { PASS_STEP }
+
+
+################################################################################
+
+# }
+# Parsing below for automated test
+if {000} {
+
+################ Initialize parsing tool and parse data ################
+
+DoStep "E-UE-PROV_1-1-2-23_9-1" "Analyze flow data" {
+    # Initial PARSER TOOL
+    Init_PART
+    
+    # Set up parser file
+    set PARSERFILE    $ETH_DEFAULT_TXT_FILE
+} { PASS_STEP }
+
+
+DoStep "E-UE-PROV_1-1-2-23_9-2" "Parse all data into database" {
+    set SNMP_IP1 10.32.0.200
+    # Parse data
+    
+    set PARAMS_SNMP_SRC      "{{} {} {} {} $SNMP_IP1 {} {} {} {}}"
+    set PARAMS_SNMP_DST      "{{} {} {} {} {} {} {} $SNMP_IP1 {}}"
+    set msgID_SNMP1          [ParseFile $PARSERFILE "$PARAMS_SNMP_SRC $PARAMS_SNMP_DST"]
+} {
+    if { $::PART_RETURN == 0 } {
+        PASS_STEP
+    } else {
+        FAIL_STEP "Cannot find data"
+    }
+}
+
+
+DoStep "E-UE-PROV_1-1-2-23_10-1" "Verify 3 and only 3 AS-REQs to the first IP address" {
+    #DECLARE A NEW VARIABLE
+    catch { unset ::MATT }
+    variable ::MATT
+    #CALL INRANGE TO RETURN THE TIMESTAMPS FOR ALL THE AS-REQs PARSED FROM THE FILE AND ORIGINATED BY THE MTA
+    VerifyValue $msgID_SNMP1 "INRANGEALL(AFTER:-1,BEFORE:-1):(::MATT):(PKKM_AP_REQ) PKKM PKKM_AP_REQ PKKM_KRB_TYPE" "IS" "AP-REQ"
+    # tk_messageBox -message "DELETEME: The packets which match this type are: $::MATT($msgID_MTA_KRB) "
+    
+    
+    if { [ llength $::MATT($msgID_SNMP1) ] != 3 } {
+        verify_signal "ERROR: The capture file captured less/more than 3 AP-REQ. Is this correct?"
+        FAIL_STEP "Incorrect number of AS REQ"
+    }
+} {PASS_STEP}
+
+DoStep "E-UE-PROV_1-1-2-23_11-1" "Parse all data into database" {
+    set SNMP_IP2 10.32.0.210
+    # Parse data
+    
+    set PARAMS_SNMP_SRC      "{{} {} {} {} $SNMP_IP2 {} {} {} {}}"
+    set PARAMS_SNMP_DST      "{{} {} {} {} {} {} {} $SNMP_IP2 {}}"
+    set msgID_SNMP2           [ParseFile $PARSERFILE "$PARAMS_SNMP_SRC $PARAMS_SNMP_DST"]
+} {
+    if { $::PART_RETURN == 0 } {
+        PASS_STEP
+    } else {
+        FAIL_STEP "Cannot find data"
+    }
+}
+
+DoStep "E-UE-PROV_1-1-2-23_13-1" "Verify 3 and only 3 AS-REQs to the second IP address" {
+    #DECLARE A NEW VARIABLE
+    catch { unset ::MATT }
+    variable ::MATT
+    #CALL INRANGE TO RETURN THE TIMESTAMPS FOR ALL THE AS-REQs PARSED FROM THE FILE AND ORIGINATED BY THE MTA
+    VerifyValue $msgID_SNMP2 "INRANGEALL(AFTER:-1,BEFORE:-1):(::MATT):(PKKM_AP_REQ) PKKM PKKM_AP_REQ PKKM_KRB_TYPE" "IS" "AP-REQ"
+    # tk_messageBox -message "DELETEME: The packets which match this type are: $::MATT($msgID_MTA_KRB) "
+    
+    
+    if { [ llength $::MATT($msgID_SNMP2) ] != 3 } {
+        verify_signal "ERROR: The capture file captured less/more than 3 AP-REQ. Is this correct?"
+        FAIL_STEP "Incorrect number of AS REQ"
+    }
+} {PASS_STEP}
+
+
+DoStep "E-UE-PROV_1-1-2-23_14-1" "Parse all data into database" {
+    set SNMP_IP3 10.32.0.220
+    # Parse data
+    
+    set PARAMS_SNMP_SRC      "{{} {} {} {} $SNMP_IP3 {} {} {} {}}"
+    set PARAMS_SNMP_DST      "{{} {} {} {} {} {} {} $SNMP_IP3 {}}"
+    set msgID_SNMP3           [ParseFile $PARSERFILE "$PARAMS_SNMP_SRC $PARAMS_SNMP_DST"]
+} {
+    if { $::PART_RETURN == 0 } {
+        PASS_STEP
+    } else {
+        FAIL_STEP "Cannot find data"
+    }
+}
+
+DoStep "E-UE-PROV_1-1-2-23_16-1" "Verify 3 and only 3 AS-REQs to the third IP address" {
+    #DECLARE A NEW VARIABLE
+    catch { unset ::MATT }
+    variable ::MATT
+    #CALL INRANGE TO RETURN THE TIMESTAMPS FOR ALL THE AS-REQs PARSED FROM THE FILE AND ORIGINATED BY THE MTA
+    VerifyValue $msgID_SNMP3 "INRANGEALL(AFTER:-1,BEFORE:-1):(::MATT):(PKKM_AP_REQ) PKKM PKKM_AP_REQ PKKM_KRB_TYPE" "IS" "AP-REQ"
+    # tk_messageBox -message "DELETEME: The packets which match this type are: $::MATT($msgID_MTA_KRB) "
+    
+    
+    if { [ llength $::MATT($msgID_SNMP3) ] != 3 } {
+        verify_signal "ERROR: The capture file captured less/more than 3 AP-REQ. Is this correct?"
+        FAIL_STEP "Incorrect number of AS REQ"
+    }
+} {PASS_STEP}
+
+DoStep "E-UE-PROV_1-1-2-23_17-1" "Parse all data into database" {
+    # Parse data
+    set PARAMS_DHCP         "{DHCP {} {} {} {} {} {} {} {}}"
+    
+    set PARAMS_MTA_SRC      "{{} {} {} {} $MTA_IP {} {} {} {}}"
+    set PARAMS_MTA_DST      "{{} {} {} {} {} {} {} $MTA_IP {}}"
+    set msgID_MTA           [ParseFile $PARSERFILE "$PARAMS_DHCP $PARAMS_MTA_SRC $PARAMS_MTA_DST"]
+} {
+    if { $::PART_RETURN == 0 } {
+        PASS_STEP
+    } else {
+        FAIL_STEP "Cannot find data"
+    }
+}
+
+
+DoStep "E-UE-PROV_1-1-2-23_17-2" "MTA Sequence" {
+    LogMsg "Verify MTA Sequence"
+    
+    # Set MTA SEQUENCE to check
+    set MTA_SEQUENCE "DHCP:DISCOVER,DHCP:OFFER,DHCP:REQUEST,DHCP:ACK,\
+            DNS:DNS_QUERY_SRV,DNS:DNS_RESPONSE_SRV,DNS:DNS_QUERY_HOST,DNS:DNS_RESPONSE_HOST,\
+            KRB:KRB_AS_REQ,KRB:KRB_AS_REP,PKKM:PKKM_AP_REQ,PKKM:PKKM_AP_REQ,PKKM:PKKM_AP_REQ,\
+            PKKM:PKKM_AP_REQ,PKKM:PKKM_AP_REQ,PKKM:PKKM_AP_REQ,PKKM:PKKM_AP_REQ,PKKM:PKKM_AP_REQ,\
+            PKKM:PKKM_AP_REQ,DHCP:DISCOVER,DHCP:OFFER,DHCP:REQUEST,DHCP:ACK"
+    # Remove whitespace
+    regsub -all { } $MTA_SEQUENCE {} MTA_SEQUENCE
+} {
+    # Verify TOD Response
+    VerifyValue $msgID_MTA "SEQUENCE $MTA_SEQUENCE" "" ""
+}
+
+#Remove below for automated test
+}
+################################################################################
+
+
+DoStep "E-UE-PROV_1-1-2-23_19-1" "Restore policy in provisioning server" {
+    LogMsg "Setup policy in provisioning server"
+} {
+    # verify_signal "Restore MTA policy (MTAFORCW_122)"
+    PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122
+    PROV_DEPLOY_DHCP
+}
+
+################ Reset CM and MTA and Verify Provisioning ################
+
+DoStep "E-UE-PROV_1-1-2-23_19-2" "Reset CM/MTA" {
+    set val [SNMPvN_RESET $CM_IP ]
+    LogMsg "Reset of CM and MTA has passed"
+} {
+    IsEqual $val 0
+}
+
+DoStep "E-UE-PROV_1-1-2-23_19-3" "pktcMTADevProvisioningState Content Verification" {
+    actionWait "Wait 60 seconds for CM/MTA to provision" 60
+    # Get the OID from the MTA and check it using our previously defined
+    set val [GetProvState 1 600]
+    LogMsg "MTA Provisioning State" 49
+    LogMsg "             - Expected : 1" 49
+    LogMsg "             - Received : $val" 49
+} {
+    IsEqual $val 1
+}
+
+################################################################################
+# Cleanup
+################################################################################
+
+Cleanup
+return 0
+

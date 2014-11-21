@@ -1,0 +1,115 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="SIP-UE 1.2.3.3" 
+	descrip="UAS Responds to Pending Requests on BYE" 
+	number="SIP-UE 1.2.3.3">
+	
+	<template file="./templates/CallTermAtUETemp.xml" name="UE1"/>
+	
+	<add_to fsm="UE1">
+		<transition from="Setup" to="EarlyDialog" event="EARLY_DIALOG_UAC"/>
+		<transition from="Proceeding" to="EarlyDialog" event="EARLY_DIALOG_UAC"/>
+		<transition from="Alerting" to="EarlyDialog" event="EARLY_DIALOG_UAC"/>
+		
+		<!-- Enter this state when EARLY_DIALOG_UAC [RFP table UE terminating case] is attained -->
+		<state ID="EarlyDialog">
+			<prelude>
+				<!-- Step 2 of Message Flow from test case 1.2.3.3 - Send an BYE -->
+				<send protocol="sip" msgtype="BYE"/>
+			</prelude>
+			<response>
+				<if>
+					<and>
+						<gte>
+							<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+							<expr>400</expr>
+						</gte>
+						<lte>
+							<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+							<expr>499</expr>
+						</lte>
+					</and>
+					<then>
+						<verify step="2" requirements="RFC733" group="4xx">
+							<and>
+								<gte>
+									<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+									<expr>400</expr>
+								</gte>
+							<and>
+								<lte>
+									<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+									<expr>499</expr>
+								</lte>
+								<eq>
+									<msg_ref type="sip">Response.CSeq.method</msg_ref>
+									<expr>INVITE</expr>
+								</eq>
+							</and>
+							</and>
+						</verify>
+					</then>
+				</if>
+				<if>
+					<eq>
+						<msg_ref type="sip">Response</msg_ref>
+						<expr>200-BYE</expr>
+					</eq>
+					<then>
+						<verify step="2" requirements="RFC733">
+							<eq>
+								<msg_ref type="sip">Response</msg_ref>
+								<expr>200-BYE</expr>
+							</eq>
+						</verify>
+					</then>
+				</if>
+			</response>
+			<!-- Go to a new state if we receive a response to the BYE -->
+			<transition to="Receive4xx" event="200-BYE"/>
+			<transition to="END" event="4xx-INVITE"/>
+		</state>
+		
+		<state ID="Receive4xx">
+			<postlude>
+				<verify step="2" requirements="RFC733" group="4xx">
+					<and>
+						<gte>
+							<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+							<expr>400</expr>
+						</gte>
+					<and>
+						<lte>
+							<msg_ref type="sip">Response.Status-Line.status-code</msg_ref>
+							<expr>499</expr>
+						</lte>
+						<eq>
+							<msg_ref type="sip">Response.CSeq.method</msg_ref>
+							<expr>INVITE</expr>
+						</eq>
+					</and>
+					</and>
+				</verify>
+			</postlude>
+			<transition to="END" event="4xx-INVITE"/>
+		</state>
+	</add_to>
+</pc2xml>

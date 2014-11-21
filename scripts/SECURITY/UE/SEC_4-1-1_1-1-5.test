@@ -1,0 +1,1348 @@
+#//**************************************************************************
+#// Filename: SEC_1-1-5.test
+#// Author: Rachapong Pornwiriyangkura
+#// Creation Date: August 27, 2002
+#// Modified by : 
+#//     Rachapong P.
+#//     - Add Automatic Ethereal Start and Stop
+#//     Titintorn Yaemnoi on October 23, 2003
+#//     - Add ResetTicket.
+#//     - Comments and cosmetic changes.
+#//     - Add PacketCable DUT.
+#//     Titintorn on January 26, 2004
+#//     - change Wait for AP Request message after reset MTA to Wait for Provisioning Complete
+#//     Titintorn Y. on April 30, 2004
+#//     - Add verify_signal in the last step of the script to verify the 
+#//       timestamp for Step 20 -21 (cusec and ctime)
+#//     Titintorn Y. on June 22,2004
+#//     - Modified step 20 and 21 to show the ctime and cusec of the AS request
+#//     - Modified last step in verify_signal
+#//
+#//		03/18/09 WJN
+#//		- Changed removed set for oid_pktcMtaDevResetKrbTickets so platform default would be used
+#//		- Changed reboot to SNMP_set for PC2.0
+#//**************************************************************************
+#// Description:
+#//     TC595 TEST CASE SEC 1.1.5 Provisioning Steps MTA-5 to MTA-14. AS_REQUEST Message.
+#//
+#// Objective:
+#//     Verify that the MTA properly formats an AS_REQUEST message. 
+#//
+#// PacketCable DUT:
+#//     MTA
+#//**************************************************************************
+
+global SCRIPT_VERSION
+set SCRIPT_VERSION { # $Id: SEC_4-1-1_1-1-5.test 7406 2010-07-20 17:17:37Z dthakore $ }
+
+set testName        "MTA-5 to MTA-14 AS_Request Message"
+set stepName        "SEC_1-1-5_"
+set preStepName     "PRE_STEP_SEC_1-1-5_"
+set postStepName    "POST_STEP_SEC_1-1-5_"
+set majorStepCount  1   ;# Major step
+set minorStepCount  1   ;# Minor step
+set MSG_FOR_TGT     0   ;# Flag to show this is a message for TGT
+set MSG_FOR_PROV    0   ;# Flag to show this is a message for Provisioning
+set CMS_VERSION     0   ;# Keep CMS version
+set PA_PK_ELEM      0   ;# Keep element number of padata that is PA-PK-AS-REQ
+set PROV_SRV_ELEM   0   ;# Keep element number of padata that is 
+                         # PROV-SRV-LOCATION
+
+##############################################################################
+# PRESTEP_SEC_1-1-5_1-1: Verify if SNMP is enable or not
+##############################################################################
+DoStep ${preStepName}${majorStepCount}-${minorStepCount} "verify snmp" {
+    puts "--- Verify if SNMP API is started ---" action
+} {
+    if {$SNMP_V3_API} {
+        puts "SNMPv3 API is already started"
+        PASS_STEP
+    } else {
+        puts "\
+            WARNING:
+            It seems as though you do not have a Provisioning server API application.
+            This test can not be executed without a API or sort of SNMPv3 Utility.
+            Please Enable SNMPv3 utility and restart TclSim. " action
+        FAIL_STEP "SNMPv3 API is not started"
+    }
+}
+incr majorStepCount
+
+##############################################################################
+# PRESTEP_SEC_1-1-5_2-1: Start Sniffer
+##############################################################################
+DoStep ${preStepName}${majorStepCount}-${minorStepCount} "Start Sniffer" {
+    # Start sniffer
+    LogMsg "--- Start sniffer ---"
+    Init_CONTROLLER_LAN
+    SetupCaptureControllerLan "host $MTA_IP"
+    StartCaptureControllerLan 
+} {
+    PASS_STEP
+}
+incr majorStepCount
+
+##############################################################################
+# PRESTEP_SEC_1-1-5_3-1: Reset Tickets
+##############################################################################
+DoStep ${preStepName}${majorStepCount}-${minorStepCount} "Reset Tickets" {
+    # No sending message
+} {
+    LogMsg "--- Reset Tickets ---"    
+    # set oid_pktcMtaDevResetKrbTickets .1.3.6.1.4.1.4491.2.2.1.1.3.19.0
+    Init_PROV
+    set retCode [SNMP_SET $oid_pktcMtaDevResetKrbTickets \
+                          OCTET-STRING \
+                          0xC0 \
+                          $MTA_IP]
+
+    # Check if SNMP SET is successful
+    if {$retCode == 0} {
+        PASS_STEP
+    } else {
+        FAIL_STEP "Cannot reset tickets from NVRAM"
+    }
+}
+incr majorStepCount
+
+##############################################################################
+# PRESTEP_SEC_1-1-5_4-1: Reset MTA, wait of AP Request
+##############################################################################
+DoStep ${preStepName}${majorStepCount}-${minorStepCount} "Reset MTA and Wait for AP Request" {
+        
+        SNMP_SET $oid_pktcMtaDevResetNow INTEGER 1 $MTA_IP
+        
+        actionWait "Wait for Provisioning message" 90
+        set retCode [SNMP_GET $oid_pktcMtaDevProvisioningState $MTA_IP]
+        
+        # Perhaps MTA cannot reset with SNMP reset
+        if { $retCode != 1 } {
+            verify_signal "
+            1. MTA fail to reset with SNMP Reset command
+            2. Hard Reset MTA
+            3. Click 'YES' when ready"
+            set retCode [Wait_Msg msgIDSAEst 120]
+        }
+    } {
+        if { $retCode == 1 } {
+        PASS_STEP
+    } else {
+        FAIL_STEP "MTA does not send AP Request after reset"
+    }
+}
+incr majorStepCount
+
+##############################################################################
+# PRESTEP_SEC_1-1-5_5-1: Capture AS Request and print to a text file
+##############################################################################
+DoStep ${preStepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    LogMsg "--- Stop sniffer ---" action
+    StopCaptureControllerLanAfter ApReplyCMS
+    SaveToFileControllerLan 
+    }
+
+incr majorStepCount
+
+##############################################################################
+# PRESTEP_SEC_1-1-5_6-1: Decode AS Request message
+##############################################################################
+DoStep ${preStepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    puts "Set CONTINUE_PAST_STEP_ERROR flag"
+    set CONTINUE_PAST_STEP_ERROR 1 ;# Continue test next step even found one fail
+
+    set hexFileName "SEC_1-1-5_Prov_AsReq.hex"
+    set binFileName "SEC_1-1-5_Prov_AsReq.bin"
+
+    # Initial Parser LAN and check if it pass
+    if { [Init_PARSER_LAN "CHECKS" "$testName"] != 0 } {
+        LogMsg "!! Initial Parser LAN ERROR: - exiting"; 
+        Cleanup; 
+        return -1
+    }
+
+    # Collect raw data into array variable FR_INFO(frame#,RAWDATA,RAWDATA)
+    ParseKerberos
+    
+    # Find Provisioning AS Request. Start finding at the first frame
+    set provAsRequestFrame [FindAsRequest]
+    puts "AS Request frame for Provisioning server = $provAsRequestFrame" action
+    
+    # Combine fragmented frame into a file.hex
+    CombineFragmentedMessage $provAsRequestFrame $hexFileName
+    
+    # Convert ascii printed hex into binary file
+    ConvertHexFileToBinFile $hexFileName $binFileName
+    
+    # Call decoder
+    exec ${KRB_DECODER_FOLDER}/asdec.exe \
+         ${KERBEROS_FOLDER}/$binFileName
+
+    # Pass binary data to PARSERSEC
+    set INPUT_FILE "${KERBEROS_FOLDER}/${binFileName}_Decoded.txt"
+    Init_PARSER_SEC
+
+     PASS_STEP
+}
+set  majorStepCount 1
+
+##############################################################################
+# SEC_1-1-5_1-1: Verify application number
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    # Cannot check Application number from the decoded message.
+    LogMsg "Tag value of AS-REQ is implicitly verified by decoder"
+    PASS_STEP
+}
+incr majorStepCount
+
+##############################################################################
+# SEC_1-1-5_2-1: Verify pvno
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    verifyValue {Protocol version number (pvno)} \
+                {5}
+}
+incr majorStepCount
+
+##############################################################################
+# SEC_1-1-5_3-1: Verify msg-type
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    verifyValue {Message type (msg-type)} \
+                {10}
+}
+incr majorStepCount
+
+##############################################################################
+# SEC_1-1-5_4-1: Verify padata:number of elements
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    verifyValue {Pre-authentication data (padata):
+                 Number of elements} \
+                {2}
+}
+incr minorStepCount
+
+##############################################################################
+# SEC_1-1-5_4-2: Verify padata:padata-type:PA-PK-AS-REQ
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    set allPass 0 ;# Flag for pass test step
+
+    # Get the number of entries
+    set numberOfEntries [getValue {Pre-authentication data (padata):
+                                   Number of elements}]
+
+    # Check all entries if it use the correct Authentication Algorithm
+    for {set i 0} {$i < $numberOfEntries} {incr i} {
+        if { [verifyValue "Pre-authentication data (padata):
+                           element\[$i\]:
+                           Preauthentication data type (padata-type)" \
+                          {14 (PA-PK-AS-REQ)}] == $PASS } {
+            # If only found one matched, pass this step
+            set allPass 1
+            set PA_PK_ELEM $i
+        }
+    }
+
+    if { $allPass == 1 } {
+        PASS_STEP
+    } {
+        FAIL_STEP
+    }
+}
+incr minorStepCount
+
+##############################################################################
+# SEC_1-1-5_4-3: Verify padata:padata-type:PROV-SRV-LOCATION
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    set allPass 0 ;# Flag for pass test step
+
+    # Get the number of entries
+    set numberOfEntries [getValue {Pre-authentication data (padata):
+                                   Number of elements}]
+
+    # Check all entries if it use the correct Authentication Algorithm
+    for {set i 0} {$i < $numberOfEntries} {incr i} {
+        if { [verifyValue "Pre-authentication data (padata):
+                           element\[$i\]:
+                           Preauthentication data type (padata-type)" \
+                          {-1 (PROV-SRV-LOCATION)}] == $PASS } {
+            # If only found one matched, pass this step
+            set allPass 1
+            set PROV_SRV_ELEM $i
+        }
+    }
+
+    if { $allPass == 1 } {
+        PASS_STEP
+    } {
+        FAIL_STEP
+    }
+
+}
+incr majorStepCount
+set  minorStepCount 1
+
+##############################################################################
+# SEC_1-1-5_5-1: Verify size of kdc_options
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    verifyLength {Request Body (req-body):
+                  KDC options (kdc-options)} \
+                 {32}
+}
+incr minorStepCount
+
+##############################################################################
+# SEC_1-1-5_5-2: Verify presence of cname
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    verifyPresent {Request Body (req-body):
+                   Client Name (cname)}
+}
+incr minorStepCount
+
+##############################################################################
+# SEC_1-1-5_5-3: Verify presence of realm
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    verifyPresent {Request Body (req-body):
+                   Realm (realm)}
+}
+incr minorStepCount
+
+##############################################################################
+# SEC_1-1-5_5-4: Verify presence of sname
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    verifyPresent {Request Body (req-body):
+                   Server name (sname)}
+}
+incr minorStepCount
+
+##############################################################################
+# SEC_1-1-5_5-5: Verify presence of from
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    LogMsg "from maybe present"
+    PASS_STEP
+}
+incr minorStepCount
+
+##############################################################################
+# SEC_1-1-5_5-6: Verify presence of till
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    # till time could be present or not present
+    LogMsg "till maybe present"
+    PASS_STEP
+}
+incr minorStepCount
+
+##############################################################################
+# SEC_1-1-5_5-7: Verify presence of rtime
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    verifyNotPresent {Request Body (req-body):
+                      Renew Time (rtime)}
+}
+incr minorStepCount
+
+##############################################################################
+# SEC_1-1-5_5-8: Verify presence of nonce
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    verifyPresent {Request Body (req-body):
+                   Nonce}
+}
+incr minorStepCount
+
+##############################################################################
+# SEC_1-1-5_5-9: Verify presence of etype
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    verifyPresent {Request Body (req-body):
+                   Encryption Type (etype)}
+}
+incr minorStepCount
+
+##############################################################################
+# SEC_1-1-5_5-10: Verify presence of addresses
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    verifyPresent {Request Body (req-body):
+                   Addresses (addresses)}
+}
+incr minorStepCount
+
+##############################################################################
+# SEC_1-1-5_5-11: Verify presence of enc-authorization-data
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    verifyNotPresent {Request Body (req-body):
+                      Encrypted Authorization Data (enc-authorization-data)}
+}
+incr minorStepCount
+
+##############################################################################
+# SEC_1-1-5_5-12: Verify presence of additional-tickets
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    verifyNotPresent {Request Body (req-body):
+                      Additional Ticket (additional-tickets)}
+}
+incr majorStepCount
+set  minorStepCount 1
+
+##############################################################################
+# SEC_1-1-5_6-1: Verify KDC-Options
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    if { [verifyValue {Request Body (req-body):
+                       KDC options (kdc-options)} \
+                      {'00000000 00000000 00000000 00000000'B}] == $PASS || \
+         [verifyValue {Request Body (req-body):
+                       KDC options (kdc-options)} \
+                      {'00000000 00000000 00000000 00100000'B}] == $PASS } {
+        PASS_STEP
+    } else {
+        FAIL_STEP
+    }
+}
+incr majorStepCount
+
+##############################################################################
+# SEC_1-1-5_7-1: Verify cname:name-type
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    verifyValue {Request Body (req-body):
+                 Client Name (cname):
+                 name-type} \
+                {3}
+}
+incr majorStepCount
+
+##############################################################################
+# SEC_1-1-5_8-1: Verify cname:name-string:Number of element
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    verifyValue {Request Body (req-body):
+                 Client Name (cname):
+                 name-string:
+                 Number of elements} \
+                {2}
+}
+incr minorStepCount
+
+##############################################################################
+# SEC_1-1-5_8-2: Verify cname:name-string:element[0]
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    verifyValue {Request Body (req-body):
+                 Client Name (cname):
+                 name-string:
+                 element[0]} \
+                {"mta"}
+}
+incr minorStepCount
+
+##############################################################################
+# SEC_1-1-5_8-3: Verify cname:name-string:element[1]
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    global MTA_FQDN
+
+    # Change MTA's fqdn to lower case
+    set MTA_FQDN [string tolower $MTA_FQDN]
+
+    verifyValue {Request Body (req-body):
+                 Client Name (cname):
+                 name-string:
+                 element[1]} \
+                "$MTA_FQDN"
+}
+incr majorStepCount
+set minorStepCount 1
+
+##############################################################################
+# SEC_1-1-5_9-1: Verify sname:name-string:element[1]
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    global REALM
+    verifyValue {Request Body (req-body):
+                 Realm (realm)} \
+                "$REALM"
+}
+incr majorStepCount
+
+##############################################################################
+# SEC_1-1-5_10-1: Verify sname:name-type
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    # NOTE:
+    # 1. sname:name-type = 2  (when sname:element[0] = krbtgt)
+    # 2. sname:name-type = 3  (when sname:element[0] = mtaprovsrvr)
+    if { [verifyValue {Request Body (req-body):
+                       Server name (sname): 
+                       name-type} \
+                      {2}] == $SUCCESS } {
+        LogMsg "This is a message for TGT"
+        set MSG_FOR_TGT 1
+        PASS_STEP
+    } elseif { [verifyValue {Request Body (req-body):
+                             Server name (sname): 
+                             name-type} \
+                             {3}] == $SUCCESS } {
+        LogMsg "This is a message for Provisioning"
+        set MSG_FOR_PROV 1
+        PASS_STEP
+    } else {
+        LogMsg "This is neither message for TGT nor Provisioning"
+        FAIL_STEP
+    }
+}
+incr majorStepCount
+
+##############################################################################
+# SEC_1-1-5_11-1: Verify sname:name-string:Number of element
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    verifyValue {Request Body (req-body):
+                 Server name (sname):
+                 name-string:
+                 Number of elements} \
+                {2}
+}
+incr minorStepCount
+
+##############################################################################
+# SEC_1-1-5_11-2: Verify sname:name-string:element[0]
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    if { $MSG_FOR_TGT } {
+        verifyValue {Request Body (req-body):
+                     Server name (sname):
+                     name-string:
+                     element[0]} \
+                    {"krbtgt"}
+    } elseif { $MSG_FOR_PROV } {
+        verifyValue {Request Body (req-body):
+                     Server name (sname):
+                     name-string:
+                     element[0]} \
+                    {"mtaprovsrvr"}
+    } else {
+        LogMsg "This is neither message for TGT nor Provisioning"
+        FAIL_STEP
+    }
+}
+incr minorStepCount
+
+##############################################################################
+# SEC_1-1-5_11-3: Verify sname:name-string:element[1]
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    global PROV_FQDN
+
+    # Change to lower case
+    set PROV_FQDN [string tolower $PROV_FQDN]
+
+    # Change PROV's fqdn to lower case
+    set PROV_FQDN [string tolower $PROV_FQDN]
+
+    if { $MSG_FOR_TGT } {
+        verifyValue {Request Body (req-body):
+                     Server name (sname):
+                     name-string:
+                     element[1]} \
+                    "$REALM"
+    } elseif { $MSG_FOR_PROV } {
+        verifyValue {Request Body (req-body):
+                     Server name (sname):
+                     name-string:
+                     element[1]} \
+                    "$PROV_FQDN"
+    } else {
+        LogMsg "This is neither message for TGT nor Provisioning"
+        FAIL_STEP
+    }
+}
+incr majorStepCount
+set minorStepCount 1
+
+##############################################################################
+# SEC_1-1-5_12-1: Verify req-body:etype:element[0]
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    verifyValue {Request Body (req-body):
+                 Encryption Type (etype):
+                 element[0]} \
+                {5}
+}
+incr majorStepCount
+
+##############################################################################
+# SEC_1-1-5_13-1: Verify req-body:addresses:address
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    verifyValue {Request Body (req-body):
+                 Addresses (addresses):
+                 element[0]:
+                 Address (address)} \
+                "$MTA_IP_IN_HEX"
+}
+incr majorStepCount
+
+##############################################################################
+# SEC_1-1-5_14-1: Verify PA-DATA:PROV-SRV-LOCATION Value
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    verifyValue "Pre-authentication data (padata):
+                 element\[$PROV_SRV_ELEM\]:
+                 Preauthentication data value (padata-value):
+                 PROV-SRV-LOCATION" \
+                $PROV_FQDN
+}
+incr majorStepCount
+
+##############################################################################
+# SEC_1-1-5_15-1: Verify signedAuthPack
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    verifyPresent "Pre-authentication data (padata):
+                   element\[$PA_PK_ELEM\]:
+                   Preauthentication data value (padata-value):
+                   signedAuthPack"
+}
+incr minorStepCount
+
+##############################################################################
+# SEC_1-1-5_15-2: Verify trustedCertifiers
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    verifyNotPresent "Pre-authentication data (padata):
+                      element\[$PA_PK_ELEM\]:
+                      Preauthentication data value (padata-value):
+                      trustedCertifiers"
+}
+incr minorStepCount
+
+##############################################################################
+# SEC_1-1-5_15-3: Verify kdcCert
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    verifyNotPresent "Pre-authentication data (padata):
+                      element\[$PA_PK_ELEM\]:
+                      Preauthentication data value (padata-value):
+                      KDC Certificate (kdcCert)"
+}
+incr minorStepCount
+
+##############################################################################
+# SEC_1-1-5_15-4: Verify encryptionCert
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    verifyNotPresent "Pre-authentication data (padata):
+                      element\[$PA_PK_ELEM\]:
+                      Preauthentication data value (padata-value):
+                      Encryption Certificate (encryptionCert)"
+}
+incr majorStepCount
+set  minorStepCount 1
+
+##############################################################################
+# SEC_1-1-5_16-1: Verify contentType
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    verifyValue "Pre-authentication data (padata):
+                 element\[$PA_PK_ELEM\]:
+                 Preauthentication data value (padata-value):
+                 signedAuthPack:
+                 contentType" \
+                {1.2.840.113549.1.7.2 (signedData)}
+}
+incr majorStepCount
+
+##############################################################################
+# SEC_1-1-5_17-1: Verify cmsVersion
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    verifyValue "Pre-authentication data (padata):
+                 element\[$PA_PK_ELEM\]:
+                 Preauthentication data value (padata-value):
+                 signedAuthPack:
+                 content:
+                 version" \
+                {3}
+}
+incr majorStepCount
+
+##############################################################################
+# SEC_1-1-5_18-1: Verify digestAlgorithm
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    verifyValue "Pre-authentication data (padata):
+                 element\[$PA_PK_ELEM\]:
+                 Preauthentication data value (padata-value):
+                 signedAuthPack:
+                 content:
+                 digestAlgorithms:
+                 element\[0\]:
+                 algorithm" \
+                {1.3.14.3.2.26 (id_sha1)}
+}
+incr majorStepCount
+
+##############################################################################
+# SEC_1-1-5_19-1: Verify eContentType
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    verifyValue "Pre-authentication data (padata):
+                 element\[$PA_PK_ELEM\]:
+                 Preauthentication data value (padata-value):
+                 signedAuthPack:
+                 content:
+                 encapContentInfo:
+                 eContentType" \
+                {1.3.6.1.5.2.3.1 (pkAuthData)}
+}
+incr majorStepCount
+
+##############################################################################
+# SEC_1-1-5_20-1: Verify pkAuthenticator:cusec
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    LogMsg "This step (cusec) will be verified later"
+    # Get microseconds part of client's time from AS Request.
+    set cusec [getValue "Pre-authentication data (padata):
+                         element\[$PA_PK_ELEM\]:
+                         Preauthentication data value (padata-value):
+                         signedAuthPack:
+                         content:
+                         encapContentInfo:
+                         eContent:
+                         pkAuthenticator:
+                         cusec"]
+} {
+    PASS_STEP
+}
+
+incr majorStepCount
+
+##############################################################################
+# SEC_1-1-5_21-1: Verify pkAuthenticator:ctime
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    LogMsg "This step (ctime) will be verified later"
+    # Get microseconds part of client's time from AS Request.
+    set ctime [getValue "Pre-authentication data (padata):
+                         element\[$PA_PK_ELEM\]:
+                         Preauthentication data value (padata-value):
+                         signedAuthPack:
+                         content:
+                         encapContentInfo:
+                         eContent:
+                         pkAuthenticator:
+                         ctime"]
+} {
+    PASS_STEP
+}
+
+incr majorStepCount
+
+##############################################################################
+# SEC_1-1-5_22-1: Verify pkAuthenticator:nonce
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    verifyNotValue "Pre-authentication data (padata):
+                    element\[$PA_PK_ELEM\]:
+                    Preauthentication data value (padata-value):
+                    signedAuthPack:
+                    content:
+                    encapContentInfo:
+                    eContent:
+                    pkAuthenticator:
+                    nonce" \
+                   {0}
+}
+incr majorStepCount
+
+##############################################################################
+# SEC_1-1-5_23-1: Verify pkAuthenticator:cksumtype
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    verifyValue "Pre-authentication data (padata):
+                 element\[$PA_PK_ELEM\]:
+                 Preauthentication data value (padata-value):
+                 signedAuthPack:
+                 content:
+                 encapContentInfo:
+                 eContent:
+                 pkAuthenticator:
+                 pachecksum:
+                 Checksum Type (cksumtype)" \
+                {7}
+}
+incr minorStepCount
+
+##############################################################################
+# SEC_1-1-5_23-2: Verify pkAuthenticator:checksum
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    verifyLength "Pre-authentication data (padata):
+                  element\[$PA_PK_ELEM\]:
+                  Preauthentication data value (padata-value):
+                  signedAuthPack:
+                  content:
+                  encapContentInfo:
+                  eContent:
+                  pkAuthenticator:
+                  pachecksum:
+                  Checksum Value (checksum)" \
+                 {16}
+}
+incr majorStepCount
+set  minorStepCount 1
+
+##############################################################################
+# SEC_1-1-5_24-1: Verify pkAuthenticator:clientPublicValue
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    verifyPresent "Pre-authentication data (padata):
+                   element\[$PA_PK_ELEM\]:
+                   Preauthentication data value (padata-value):
+                   signedAuthPack:
+                   content:
+                   encapContentInfo:
+                   eContent:
+                   clientPublicValue"
+}
+incr majorStepCount
+
+##############################################################################
+# SEC_1-1-5_25-1: Verify clientPublicValue:algorithm:algorithm
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    verifyValue "Pre-authentication data (padata):
+                 element\[$PA_PK_ELEM\]:
+                 Preauthentication data value (padata-value):
+                 signedAuthPack:
+                 content:
+                 encapContentInfo:
+                 eContent:
+                 clientPublicValue:
+                 algorithm:
+                 algorithm" \
+                {1.2.840.10046.2.1 (dhpublicnumber)}
+}
+incr majorStepCount
+
+##############################################################################
+# SEC_1-2-6_26-1: Verify prime
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    verifyPresent "Pre-authentication data (padata):
+                   element\[$PA_PK_ELEM\]:
+                   Preauthentication data value (padata-value):
+                   signedAuthPack:
+                   content:
+                   encapContentInfo:
+                   eContent:
+                   clientPublicValue:
+                   algorithm:
+                   parameters:
+                   prime (p)"
+}
+incr minorStepCount
+
+##############################################################################
+# SEC_1-2-6_26-2: Verify generator
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    verifyPresent "Pre-authentication data (padata):
+                   element\[$PA_PK_ELEM\]:
+                   Preauthentication data value (padata-value):
+                   signedAuthPack:
+                   content:
+                   encapContentInfo:
+                   eContent:
+                   clientPublicValue:
+                   algorithm:
+                   parameters:
+                   generator (g)"
+}
+incr minorStepCount
+
+##############################################################################
+# SEC_1-2-6_26-3: Verify factor
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    verifyPresent "Pre-authentication data (padata):
+                   element\[$PA_PK_ELEM\]:
+                   Preauthentication data value (padata-value):
+                   signedAuthPack:
+                   content:
+                   encapContentInfo:
+                   eContent:
+                   clientPublicValue:
+                   algorithm:
+                   parameters:
+                   factor (q)"
+}
+incr majorStepCount
+set  minorStepCount 1
+
+##############################################################################
+# SEC_1-1-5_27-1: Verify clientPublicValue:subjectPublicKey
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    verifyPresent "Pre-authentication data (padata):
+                   element\[$PA_PK_ELEM\]:
+                   Preauthentication data value (padata-value):
+                   signedAuthPack:
+                   content:
+                   encapContentInfo:
+                   eContent:
+                   clientPublicValue:
+                   subjectPublicKey"
+}
+incr majorStepCount
+
+##############################################################################
+# SEC_1-1-5_28-1: Verify certificates:Number of elements
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    verifyValue "Pre-authentication data (padata):
+                 element\[$PA_PK_ELEM\]:
+                 Preauthentication data value (padata-value):
+                 signedAuthPack:
+                 content:
+                 certificates:
+                 Number of elements" \
+                {2}
+}
+incr minorStepCount
+
+##############################################################################
+# SEC_1-1-5_28-2: Verify certificates:MTA Manufacturer Certificate
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    set AllPass 0 ;# Flag for pass test step
+
+    # Get the number of entries
+    set numberOfEntries [getValue "Pre-authentication data (padata):
+                                   element\[$PA_PK_ELEM\]:
+                                   Preauthentication data value (padata-value):
+                                   signedAuthPack:
+                                   content:
+                                   certificates:
+                                   Number of elements"]
+
+    # Go through each entry of certificate and figure out which one is 
+    # Manufacturer certificate by looking at commonName
+    for {set i 0} {$i < $numberOfEntries} {incr i} {
+
+        # Set SUBJECT_RDN_SEQUENCE for subject
+        set SUBJECT_RDN_SEQUENCE "Pre-authentication data (padata):
+                                  element\[$PA_PK_ELEM\]:
+                                  Preauthentication data value (padata-value):
+                                  signedAuthPack:
+                                  content:
+                                  certificates:
+                                  element\[$i\]:
+                                  certificate:
+                                  tbsCertificate:
+                                  subject:
+                                  RdnSequence:"
+
+        # Get number of RdnSequence
+        set numberOfRdnEntries [getValue "$SUBJECT_RDN_SEQUENCE
+                                          Number of elements"]
+
+        # Check if any of this entries is Company name address
+        for {set j 0} {$j < $numberOfRdnEntries} {incr j} {
+            if { ( [verifyRegexp "$SUBJECT_RDN_SEQUENCE
+                                element\[$j\]:
+                                element\[0\]:
+                                value" \
+                               "\"${COMPANY_NAME}.*\"" -nocase] == $PASS ) && 
+                 ( [verifyRegexp "$SUBJECT_RDN_SEQUENCE
+                                element\[$j\]:
+                                element\[0\]:
+                                value" \
+                               "\".* PacketCable CA\"" -nocase] == $PASS ) } {
+                set AllPass 1
+            }
+        }
+    }
+
+    if { $AllPass == 1 } {
+        PASS_STEP
+    } else {
+        FAIL_STEP
+    }
+}
+incr minorStepCount
+
+##############################################################################
+# SEC_1-1-5_28-3: Verify certificates:MTA Device Certificate
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    set allPass 0 ;# Flag for pass test step
+
+    # Get the number of entries
+    set numberOfEntries [getValue "Pre-authentication data (padata):
+                                   element\[$PA_PK_ELEM\]:
+                                   Preauthentication data value (padata-value):
+                                   signedAuthPack:
+                                   content:
+                                   certificates:
+                                   Number of elements"]
+
+    # Go through each entry of certificate and figure out which one is 
+    # MTA Device certificate by looking at commonName
+    for {set i 0} {$i < $numberOfEntries} {incr i} {
+
+        # Set SUBJECT_RDN_SEQUENCE for subject
+        set SUBJECT_RDN_SEQUENCE "Pre-authentication data (padata):
+                                  element\[$PA_PK_ELEM\]:
+                                  Preauthentication data value (padata-value):
+                                  signedAuthPack:
+                                  content:
+                                  certificates:
+                                  element\[$i\]:
+                                  certificate:
+                                  tbsCertificate:
+                                  subject:
+                                  RdnSequence:"
+
+        # Get number of RdnSequence
+        set numberOfRdnEntries [getValue "$SUBJECT_RDN_SEQUENCE
+                                          Number of elements"]
+
+        # Check if any of this entries is MTA MAC address
+        for {set j 0} {$j < $numberOfRdnEntries} {incr j} {
+            if { [verifyValue "$SUBJECT_RDN_SEQUENCE
+                               element\[$j\]:
+                               element\[0\]:
+                               value" \
+                              "\"$MTA_MAC\""] == $PASS } {
+                set allPass 1
+            }
+        }
+    }
+
+    if { $allPass == 1 } {
+        PASS_STEP
+    } else {
+        FAIL_STEP
+    }
+}
+incr majorStepCount
+set  minorStepCount 1
+
+##############################################################################
+# SEC_1-1-5_29-1: Verify Presences of crls
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    verifyNotPresent "Pre-authentication data (padata):
+                      element\[$PA_PK_ELEM\]:
+                      Preauthentication data value (padata-value):
+                      signedAuthPack:
+                      content:
+                      Certificate Revocation List (crls)"
+}
+incr majorStepCount
+
+##############################################################################
+# SEC_1-1-5_30-1: Verify signerInfos:Number of elements
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    verifyValue "Pre-authentication data (padata):
+                 element\[$PA_PK_ELEM\]:
+                 Preauthentication data value (padata-value):
+                 signedAuthPack:
+                 content:
+                 signerInfos:
+                 Number of elements" \
+                {1}
+}
+incr majorStepCount
+
+##############################################################################
+# SEC_1-1-5_31-1: Verify signerInfos:cmsVersion
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    if { [verifyValue "Pre-authentication data (padata):
+                       element\[$PA_PK_ELEM\]:
+                       Preauthentication data value (padata-value):
+                       signedAuthPack:
+                       content:
+                       signerInfos:
+                       element\[0\]:
+                       version" \
+                      {1}] == $PASS } {
+        set CMS_VERSION 1
+        PASS_STEP
+    } elseif { [verifyValue "Pre-authentication data (padata):
+                             element\[$PA_PK_ELEM\]:
+                             Preauthentication data value (padata-value):
+                             signedAuthPack:
+                             content:
+                             signerInfos:
+                             element\[0\]:
+                             version" \
+                            {3}] == $PASS } {
+        set CMS_VERSION 3
+        PASS_STEP
+    } else {
+        LogMsg {"Incorrect CMS version"}
+        FAIL_STEP
+    }
+}
+incr minorStepCount
+
+##############################################################################
+# SEC_1-1-5_31-2: Verify signerInfos:SignerIdentifier
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    if { $CMS_VERSION == 1 } {
+        verifyPresent "Pre-authentication data (padata):
+                       element\[$PA_PK_ELEM\]:
+                       Preauthentication data value (padata-value):
+                       signedAuthPack:
+                       content:
+                       signerInfos:
+                       element\[0\]:
+                       SignerIdentifier (sid):
+                       issuerAndSerialNumber"
+    } elseif { $CMS_VERSION == 3 } {
+        verifyPresent "Pre-authentication data (padata):
+                       element\[$PA_PK_ELEM\]:
+                       Preauthentication data value (padata-value):
+                       signedAuthPack:
+                       content:
+                       signerInfos:
+                       element\[0\]:
+                       SignerIdentifier (sid):
+                       subjectKeyIdentifier"
+    } else {
+        LogMsg {"Incorrect CMS version"}
+        FAIL_STEP
+    }
+}
+incr majorStepCount
+set minorStepCount 1
+
+##############################################################################
+# SEC_1-1-5_32-1: Verify signerInfos:digestAlgorithm
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    verifyValue "Pre-authentication data (padata):
+                 element\[$PA_PK_ELEM\]:
+                 Preauthentication data value (padata-value):
+                 signedAuthPack:
+                 content:
+                 signerInfos:
+                 element\[0\]:
+                 digestAlgorithm:
+                 algorithm" \
+                {1.3.14.3.2.26 (id_sha1)}
+}
+incr majorStepCount
+
+##############################################################################
+# SEC_1-1-5_33-1: Verify signerInfos:signatureAlgorithm
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    verifyValue "Pre-authentication data (padata):
+                 element\[$PA_PK_ELEM\]:
+                 Preauthentication data value (padata-value):
+                 signedAuthPack:
+                 content:
+                 signerInfos:
+                 element\[0\]:
+                 signatureAlgorithm:
+                 algorithm" \
+                {1.2.840.113549.1.1.1 (rsaEncryption)}
+}
+incr majorStepCount
+
+##############################################################################
+# SEC_1-1-5_34-1: Verify signerInfos:signedAttrs
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    verifyNotPresent "Pre-authentication data (padata):
+                      element\[$PA_PK_ELEM\]:
+                      Preauthentication data value (padata-value):
+                      signedAuthPack:
+                      content:
+                      signerInfos:
+                      element\[0\]:
+                      signedAttrs"
+}
+incr minorStepCount
+
+##############################################################################
+# SEC_1-1-5_34-2: Verify signerInfos:unsignedAttrs
+##############################################################################
+DoStep ${stepName}${majorStepCount}-${minorStepCount} $testName {
+    # No sending message
+} {
+    verifyNotPresent "Pre-authentication data (padata):
+                      element\[$PA_PK_ELEM\]:
+                      Preauthentication data value (padata-value):
+                      signedAuthPack:
+                      content:
+                      signerInfos:
+                      element\[0\]:
+                      unsignedAttrs"
+}
+set  majorStepCount 1
+set  minorStepCount 1
+
+##############################################################################
+# POSTSTEP_SEC_1-1-5_1-1: Verify Signal for Step 20-21 to check TimeStamp
+##############################################################################
+DoStep ${postStepName}${majorStepCount}-${minorStepCount} "Verify TimeStamp" {
+} {
+    LogMsg "--- Compare cusec ($cusec) and ctime ($ctime) in AS Request with the time on the workstation ---"
+    
+    verify_signal "
+       1. The Time Zone on the Client might not be the UTC Time Zone. 
+          Make sure you are verifing the time base on the UTC time zone. 
+       2. Verify in the AS-REQ and compare that 
+          cusec ($cusec) and ctime ($ctime) 
+          are not more or less than 5 minutes different with the time on the workstation
+    Click 'Yes' if all above messages are true, otherwise Click 'No'"
+}
+
+##############################################################################
+# Cleanup
+##############################################################################
+set CONTINUE_PAST_STEP_ERROR 0  ;# Reset Continue Past step
+Cleanup                         ;# Clean up NCS
+
+return $SUCCESS

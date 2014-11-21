@@ -1,0 +1,192 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	PCPCII-145 : Change the "" test to empty string test as platform removes double-quotes. (ghassler 10/30/2009)
+
+
+
+
+-->
+
+<!-- First are the document type and the attributes for our document -->
+<pc2xml version="$Revision: 8188 $" 
+	name="NAT_UE_1.1.2" 
+	descrip="Initial unprotected registration details when using UDP" 
+	number="NAT_UE_1.1.2">
+	
+  <template file="./templates/UERegAndSubTemp.xml" name="Registrar" />
+
+  <remove_from fsm="Registrar">
+    <state ID="PendingRegistration" sub="response" />
+    <state ID="Notification" />
+  </remove_from>
+ 
+  <add_to fsm="Registrar">
+    <state ID="PendingRegistration" sub="response">
+      <verify step="2" requirements="REQ19740">
+        <contains>
+          <msg_ref type="sip">Register.From.name-addr</msg_ref>
+          <msg_ref type="platform">UE0.pui</msg_ref>
+        </contains>
+      </verify>
+      <verify step="2" requirements="REQ19740">
+        <contains>
+          <msg_ref type="sip">Register.To.name-addr</msg_ref>
+          <msg_ref type="platform">UE0.pui</msg_ref>
+        </contains>
+      </verify>
+      <verify step="3" requirements="REQ19740">
+        <contains>
+          <msg_ref type="sip">Register</msg_ref>
+          <expr>Authorization: </expr>
+        </contains>
+      </verify>
+      <verify step="4" requirements="REQ19740">
+        <contains>
+          <msg_ref type="sip">Register.Authorization.username</msg_ref>
+          <msg_ref type="platform">UE0.prui</msg_ref>
+        </contains>
+      </verify>
+      <verify step="5" requirements="REQ19740">
+        <contains>
+          <msg_ref type="sip">Register.Authorization.realm</msg_ref>
+          <msg_ref type="platform">UE0.domain</msg_ref>
+        </contains>
+      </verify>
+      <verify step="6" requirements="REQ19740">
+        <contains>
+          <msg_ref type="sip">Register.Authorization.uri</msg_ref>
+          <msg_ref type="platform">UE0.domain</msg_ref>
+        </contains>
+      </verify>
+      <verify step="7" requirements="REQ19740">
+        <eq>
+          <msg_ref type="sip">Register.Authorization.nonce</msg_ref>
+          <!-- PCPCII-145 Change from "" to empty string -->
+          <expr></expr>
+        </eq>
+      </verify>
+      <verify step="8" requirements="REQ19740">
+        <eq>
+          <msg_ref type="sip">Register.Authorization.response</msg_ref>
+          <!-- PCPCII-145 Change from "" to empty string -->
+          <expr></expr>
+        </eq>
+      </verify>
+      <verify step="9" requirements="REQ19740">
+        <or>
+          <contains>
+            <msg_ref type="sip">Register.From.name-addr</msg_ref>
+            <msg_ref type="platform">UE0.pui</msg_ref>
+          </contains>
+          <contains>
+            <msg_ref type="sip">Register.From.addr-spec</msg_ref>
+            <msg_ref type="platform">UE0.pui</msg_ref>
+          </contains>
+        </or>
+      </verify>
+      <verify step="10" requirements="REQ19740">
+        <or>
+          <contains>
+            <msg_ref type="sip">Register.To.name-addr</msg_ref>
+            <msg_ref type="platform">UE0.pui</msg_ref>
+          </contains>
+          <contains>
+            <msg_ref type="sip">Register.To.addr-spec</msg_ref>
+            <msg_ref type="platform">UE0.pui</msg_ref>
+          </contains>
+        </or>
+      </verify>
+      <verify step="11" requirements="REQ19740, REQ19211, REQ19212, REQ19213" group="step11">
+        <or>
+          <contains>
+            <msg_ref type="sip">Register.Contact.addr-spec</msg_ref>
+            <msg_ref type="platform">UE0.FQDN</msg_ref>
+          </contains>
+          <contains>
+            <msg_ref type="sip">Register.Contact.addr-spec</msg_ref>
+            <msg_ref type="platform">UE0.IP</msg_ref>
+          </contains>
+        </or>
+      </verify>
+      <verify step="11" requirements="REQ19740, REQ19211, REQ19212, REQ19213" group="step11">
+        <contains>
+          <msg_ref type="sip">Register.Contact</msg_ref>
+          <expr>sip.instance="</expr>
+        </contains>
+      </verify>
+      <verify step="11" requirements="REQ19740, REQ19211, REQ19212, REQ19213" group="step11">
+        <gt>
+          <msg_ref type="sip">Register.Contact.reg-id</msg_ref>
+          <expr>0</expr>
+        </gt>
+      </verify>
+      <verify step="12" requirements="REQ19740, REQ19214, REQ19215, REQ19217, RFC2029" group="step12">
+        <or>
+          <contains>
+            <msg_ref type="sip">Register.Via.sent-by</msg_ref>
+            <msg_ref type="platform">UE0.FQDN</msg_ref>
+          </contains>
+          <contains>
+            <msg_ref type="sip">Register.Via.sent-by</msg_ref>
+            <msg_ref type="platform">UE0.IP</msg_ref>
+          </contains>
+        </or>
+      </verify>
+      <verify step="12" requirements="REQ19740, REQ19214, REQ19215, REQ19217, RFC2029" group="step12">
+        <contains>
+          <msg_ref type="sip">Register.Via.rport</msg_ref>
+          <expr>rport</expr>
+        </contains>
+      </verify>
+      <verify step="13" requirements="REQ19740">
+        <or>
+          <eq>
+            <msg_ref type="sip">Register.Expires.value</msg_ref>
+            <expr>600000</expr>
+          </eq>
+          <eq>
+            <msg_ref type="sip">Register.Contact.expires</msg_ref>
+            <expr>600000</expr>
+          </eq>
+        </or>
+      </verify>
+      <verify step="14" requirements="REQ19740">
+        <contains>
+          <msg_ref type="sip">REGISTER.Request-Line.Request-URI</msg_ref>
+          <msg_ref type="platform">PCSCF1.domain</msg_ref>
+        </contains>
+      </verify>
+      <verify step="15" requirements="REQ19740">
+        <contains>
+          <msg_ref type="sip" hdr_instance="any">REGISTER.Supported</msg_ref>
+          <expr>path</expr>
+        </contains>
+      </verify>
+      <if>
+        <eq>
+          <msg_ref type="sip">Request</msg_ref>
+          <expr>REGISTER</expr>
+        </eq>
+        <!-- Step-2 from the Default Message Flow - UE Registration (DUT) Sequence Diagram- send 401-REGISTER-->
+        <then>
+          <send protocol="sip" msgtype="401-REGISTER" />
+        </then>
+      </if>
+    </state>
+    <state ID="Notification">
+      <!-- Transitions for Notification state -->
+      <transition to="END" event="200-NOTIFY" />
+    </state>
+  </add_to>
+</pc2xml>

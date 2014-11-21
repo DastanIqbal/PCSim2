@@ -1,0 +1,277 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	PCPCII-139 : Update the Voicetronix modifiers to use the new values. (ghassler 07/10/2009)
+	PCPCII-174 : Update the script to the D11 version of the ATP (ghassler 01/26/2010)
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-UE 1.6.5.1" 
+	descrip="Speed Dialing (Network Implementation) feature enabled " 
+	number="RST-UE 1.6.5.1">
+
+	<fsm name="UE1">
+		<models>
+			<session/>
+		</models>
+		
+		<NE sim_type="term" elements="UE1 PCSCF2 SCSCF1 PCSCF1" targets="UE1 *74.3 3 3"/>
+		
+		<states initialstate="Register">
+			<state ID="Register">
+				<transition to="OffHook1" event="Registered"/>
+			</state>
+			
+			<!-- CALL NUMBER 1 -->
+			<state ID="OffHook1">
+				<prelude>
+					<!-- We provide 1 sec gap between OnHook and OffHook-->
+					<sleep time="1000"/>
+					<send protocol="utility" msgtype="OffHook"/>
+				</prelude>
+				<transition to="Dial1" event="OffHookComplete"/>
+			</state>
+			<state ID="Dial1">
+				<prelude>
+					<!-- Step 1 test case SIP 1.6.5.1-->
+					<send protocol="utility" msgtype="DialDigits">
+						<mod modtype="add" hdr="number">
+							<expr>*74</expr>
+						</mod>
+					</send>
+				</prelude>
+				<transition to="Call1" event="DialDigitsComplete"/>
+			</state>
+			<state ID="Call1">
+				<prelude once="true">
+					<!-- Step 1 test case SIP 1.6.5.1-->
+					<send protocol="utility" msgtype="DialDigits">
+						<mod modtype="add" hdr="number">
+							<expr>3</expr>
+						</mod>
+					</send>
+				</prelude>
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>Invite</expr>
+						</eq>
+						<then>
+							<verify step="1" requirements="REQ13931, REQ13932">
+								<eq>
+									<msg_ref type="sip">Invite.Request-Line.username</msg_ref>
+									<expr>*74.3</expr>
+								</eq>
+							</verify>
+							<verify step="1" requirements="REQ13931, REQ13932">
+								<eq>
+									<msg_ref type="sip">Invite.Request-Line.domain</msg_ref>
+									<msg_ref type="platform">DUT.domain</msg_ref>
+								</eq>
+							</verify>
+							<verify step="1" requirements="REQ13931, REQ13932">
+								<eq>
+									<msg_ref type="sip">Invite.Request-Line.user</msg_ref>
+									<expr>dialstring</expr>
+								</eq>
+							</verify>
+							<send protocol="sip" msgtype="200-Invite"/>
+						</then>
+					</if>
+				</response>
+				<transition to="Call1" event="DialDigitsComplete"/>
+				<transition to="HandleAck" event="Invite"/>
+			</state>
+			
+			<state ID="HandleAck">
+				<transition to="HandleAck" event="DialDigitsComplete"/>
+				<transition to="CFVNumber" event="Ack"/>
+			</state>
+			
+			<state ID="CFVNumber">
+				<prelude>
+					<!-- Step 1 test case SIP 1.6.5.1-->
+					<send protocol="utility" msgtype="DialDigits">
+						<mod modtype="add" hdr="number">
+							<msg_ref type="platform">UE2.phone number 1</msg_ref>
+						</mod>
+					</send>
+				</prelude>
+				<transition to="CollectCFV" event="DialDigitsComplete"/>
+			</state>
+			
+			<state ID="CollectCFV" timer="20000">
+				<transition to="OnHook1" event="TimerExpired"/>
+			</state>
+			
+			<state ID="OnHook1">
+				<prelude>
+					<send protocol="utility" msgtype="OnHook"/>
+				</prelude>
+				<transition to="WaitBye" event="OnHookComplete"/>
+			</state>
+			
+			<state ID="WaitBye">
+				<postlude>
+					<send protocol="sip" msgtype="200-BYE"/>
+				</postlude>
+				<transition to="EndCall1" event="Bye"/>
+			</state>
+			
+			<state ID="EndCall1" ES="true">
+				<transition to="OffHook2" event="SessionTerminated"/>
+			</state>
+			
+			<!-- CALL NUMBER 2 -->
+			<state ID="OffHook2">
+				<prelude>
+					<!-- We provide 1 sec gap between OnHook and OffHook-->
+					<sleep time="1000"/>
+					<send protocol="utility" msgtype="OffHook"/>
+				</prelude>
+				<transition to="Call2" event="OffHookComplete"/>
+			</state>
+			
+			<state ID="Call2">
+				<prelude once="true">
+					<!-- Step 2 test case SIP 1.6.5.1 - Initiate a call from the UE(DUT) 
+					by dialing 3# or dial 3 and wait for 4 seconds.-->
+					<send protocol="utility" msgtype="DialDigits">
+						<mod modtype="add" hdr="number">
+							<expr>3</expr>
+						</mod>
+					</send>
+					<sleep time="4000"/>
+				</prelude>
+				<response>
+					<if>
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>INVITE</expr>
+						</eq>
+						<then>
+							<verify step="2" requirements="REQ13934">
+								<eq>
+									<msg_ref type="sip">Invite.Request-Line.username</msg_ref>
+									<expr>3</expr>
+								</eq>
+							</verify>
+							<verify step="2" requirements="REQ13934">
+								<eq>
+									<msg_ref type="sip">Invite.Request-Line.domain</msg_ref>
+									<msg_ref type="platform">DUT.domain</msg_ref>
+								</eq>
+							</verify>
+							<verify step="2" requirements="REQ13934">
+								<eq>
+									<msg_ref type="sip">Invite.Request-Line.user</msg_ref>
+									<expr>dialstring</expr>
+								</eq>
+							</verify>
+						</then>
+					</if>
+				</response>
+				<transition to="Call2" event="DialDigitsComplete"/>
+				<transition to="EndCall2" event="Invite"/>
+			</state>
+			
+			<state ID="EndCall2" ES="true">
+				<transition to="OffHook3" event="SessionTerminated"/>
+			</state>
+			
+			<!-- CALL NUMBER 3 -->
+			<state ID="OffHook3">
+				<prelude>
+					<!-- We provide 1 sec gap between OnHook and OffHook-->
+					<sleep time="1000"/>
+					<send protocol="utility" msgtype="OffHook"/>
+				</prelude>
+				<transition to="Call3" event="OffHookComplete"/>
+			</state>
+			
+			<!-- CALL3 State -->
+			<state ID="Call3">
+				<prelude once="true">
+					<!-- Step 4 test case SIP 1.6.5.1 -
+					Initiate a call from the UE(DUT) by dialing 3# or dial 3 and wait for 4 seconds.-->
+					<send protocol="utility" msgtype="DialDigits">
+						<mod modtype="add" hdr="number">
+							<expr>3</expr>
+						</mod>
+					</send>
+				</prelude>
+				<response>
+					<if>
+						<!-- Step 2 test case SIP 1.6.5.1 - 
+						Verify that the UE (DUT) sends an INVITE and \
+						INVITE→Request-URI = sip:3<domainname>;user=dialstring.-->
+						<eq>
+							<msg_ref type="sip">Request</msg_ref>
+							<expr>Invite</expr>
+						</eq>
+						<then>
+							<verify step="4" requirements="REQ13934">
+								<eq>
+									<msg_ref type="sip">Invite.Request-Line.username</msg_ref>
+									<expr>3</expr>
+								</eq>
+							</verify>
+							<verify step="4" requirements="REQ13934">
+								<eq>
+									<msg_ref type="sip">Invite.Request-Line.domain</msg_ref>
+									<msg_ref type="platform">DUT.domain</msg_ref>
+								</eq>
+							</verify>
+							<verify step="4" requirements="REQ13934">
+								<eq>
+									<msg_ref type="sip">Invite.Request-Line.user</msg_ref>
+									<expr>dialstring</expr>
+								</eq>
+							</verify>
+							<!-- Step 4 test case SIP 1.6.5.1 
+							Verify that the UE (DUT) sends an INVITE and 
+							INVITE→Request-URI = sip:4<domainname>;user=dialstring
+							The SS sends a 403 in response to the INVITE.-->
+							<send protocol="sip" msgtype="403-INVITE"/>
+						</then>
+					</if>
+				</response>
+				<transition to="Call3" event="DialDigitsComplete"/>
+				<transition to="WaitAck3" event="Invite"/>
+			</state>
+			
+			<state ID="WaitAck3">
+				<transition to="WaitAck3" event="ACK"/>
+				<transition to="VERIFYREORDER" event="DIALOG_CONFIRMED_UAS"/>
+			</state>
+			
+			<state ID="VERIFYREORDER">
+				<prelude>
+					<send protocol="utility" msgtype="VerifyReorder"/>
+				</prelude>
+				<response>
+					<verify step="5" requirements="REQ13936">
+						<eq>
+							<msg_ref type="utility">message</msg_ref>
+							<expr>VerifyReorderComplete</expr>
+						</eq>
+					</verify>
+				</response>
+				<transition to="END" event="VerifyReorderComplete"/>
+			</state>
+		</states>
+	</fsm>
+</pc2xml>

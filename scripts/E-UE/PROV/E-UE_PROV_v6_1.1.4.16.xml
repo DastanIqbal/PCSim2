@@ -1,0 +1,99 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+ Change History: (Author & Date)
+
+
+
+-->
+<!-- First are the document type and the attributes for our document -->
+<pc2xml version="$Revision: 7768 $" name="EUE Prov 1.1.4.16" 
+		descrip="Verify Proper eUE Behavior When DHCPv6 CL_OPTION_CCCv6 Sub-option 3 Value is 00.00.00.00" 
+		number="EUE Prov 1.1.4.16">
+
+	<!-- Next we define the each of state machines -->
+	<template file="./templates/EUE_Prov_B_1_1_1.xml" name="RebootCM"/>
+	
+	<add_to fsm="RebootCM">
+		<transition from="StartCapture_RebootWait" to="VerifyBootState" event="TimerExpired"/>
+	
+		<state ID="VerifyBootState">
+			<prelude once="true">
+				<send protocol="utility" msgtype="SNMPGet">
+					<mod modtype="add" hdr="oids">
+						<expr>DOCS-CABLE-DEVICE-MIB::docsDevServerBootState.0</expr>
+					</mod>
+					<mod modtype="replace" hdr="agentip">
+						<msg_ref type="platform">DUT.CM IP Address</msg_ref>
+					</mod>
+					<mod modtype="replace" hdr="version">
+					    <expr>2c</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="2">
+					<contains>
+						<msg_ref type="utility" index="0 0 2">SNMPResp.varBind</msg_ref>
+						<expr>1</expr>
+					</contains>
+				</verify>
+			</response>
+			
+			<transition to="VerifyProvisioning" event="SNMPResp"/>
+			<transition to="VerifyProvisioning" event="SNMPRespFailure"/>
+		</state>
+		
+		<state ID="VerifyProvisioning">
+			<prelude>
+				<stop_capture/>
+				<parse_capture name="eUE_DHCPv6">
+					<parser_filter protocol="dhcpv6" clientMAC="DUT.MAC Address"/>
+				</parse_capture>
+				<parse_capture name="eUE_Prov">
+					<parser_filter ip="DUT.IP"/>
+				</parse_capture>
+				<send protocol="utility" msgtype="SNMPGet">
+					<mod modtype="add" hdr="oids">
+						<expr>PKTC-IETF-MTA-MIB::pktcMtaDevProvisioningState.0</expr>
+					</mod>
+					<mod modtype="replace" hdr="agentip">
+						<msg_ref type="platform">DUT.IP</msg_ref>
+					</mod>
+					<mod modtype="replace" hdr="version">
+						<expr>3</expr>
+					</mod>
+				</send>
+			</prelude>
+			<response>
+				<verify step="2 6">
+					<contains>
+						<msg_ref type="utility">SNMPRespFailure.errorString</msg_ref>
+						<expr>No Response</expr>
+					</contains>
+				</verify>
+				<verify step="3">
+					<contains>
+						<capture_ref type="dhcpv6" name="eUE_DHCPv6">Solicit.Relay.Option17.Suboption 1.show</capture_ref>
+						<expr>2171</expr>
+					</contains>
+				</verify>
+				<verify step="5">
+					<null>
+						<capture_ref type="dns" name="eUE_Prov">Request.num</capture_ref>
+					</null>
+				</verify>
+			</response>
+			<transition to="END" event="SNMPResp"/>
+			<transition to="END" event="SNMPRespFailure"/>
+		</state>
+	</add_to>
+</pc2xml>

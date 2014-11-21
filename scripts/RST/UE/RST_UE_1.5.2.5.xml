@@ -1,0 +1,246 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+	PCPCII-108 : Update the script to reflect the changes made for D09 or D08.1 release of the ATP.
+		(ghassler 4/29/2009).
+	PCPCII-139 : Update the Voicetronix modifiers to use the new values. (ghassler 07/10/2009)
+
+
+
+-->
+<pc2xml version="$Revision: 8188 $" 
+	name="RST-UE 1.5.2.5" 
+	descrip="Call Waiting – Tone Time-out  " 
+	number="RST-UE 1.5.2.5" inspector="disable">
+	
+	<template file="./templates/CallOrigAtUETemp.xml" name="UE1"/>
+	<template file="./templates/CallTermAtUETemp.xml" name="UE2"/>
+
+	<remove_from fsm="UE1">
+		<state ID="Connected"/>
+	</remove_from>
+
+	<remove_from fsm="UE2">
+		<NE elements="UE1" targets="UE1"/>
+		<state ID="Connected"/>
+	</remove_from>
+
+	<add_to fsm="UE1">
+		<state ID="Connected">
+			<prelude>
+				<sleep time="3000"/>
+				<generate event="Branch1Event" fsm="UE2"/>
+			</prelude>
+			<transition to="Releasing" event="Branch1Event"/>
+		</state>
+		
+		<transition from="OnHook" to="EndUE1Call" event="OnHookComplete"/>
+		
+		<state ID="EndUE1Call" ES="true">
+			<prelude>
+				<generate event="Branch2Event" fsm="UE2"/>
+			</prelude>
+		</state>
+		
+	</add_to>
+
+	<add_to fsm="UE2">
+		<NE elements="UE2" targets="UE2"/>
+		<transition from="RealOrSimulatedUE" to="WaitState" event="Branch2Event"/>
+		
+		<state ID="WaitState">
+			<transition to="Setup" event="Branch1Event"/>
+		</state>
+		
+		<transition from="Setup" to="WaitTone" event="ALERTING_UAC"/>
+		
+		<transition from="Proceeding" to="WaitTone" event="ALERTING_UAC"/>
+		
+		<transition from="Alerting" to="WaitTone" event="ALERTING_UAC"/>
+		
+		<state ID="WaitTone">
+			<prelude>
+				<send protocol="utility" msgtype="VerifyCallWaitingTone"/>
+			</prelude>
+			<response>
+				<verify step="3" requirements="REQ13791">
+					<eq>
+						<msg_ref type="utility">Response</msg_ref>
+						<expr>VerifyCallWaitingToneComplete</expr>
+					</eq>
+				</verify>
+			</response>
+			<postlude once="true">
+				<send protocol="utility" msgtype="VerifyCallWaitingTone"/>
+			</postlude>
+			<transition to="2ndWaitTone" event="VerifyCallWaitingToneComplete"/>
+			<transition to="2ndWaitTone" event="VerifyCallWaitingToneError"/>
+		</state>
+		
+		<state ID="2ndWaitTone">
+			<response>
+				<verify step="3" requirements="REQ13791">
+					<eq>
+						<msg_ref type="utility">Response</msg_ref>
+						<expr>VerifyCallWaitingToneComplete</expr>
+					</eq>
+				</verify>
+			</response>
+			<postlude once="true">
+				<send protocol="utility" msgtype="VerifyCallWaitingTone"/>
+			</postlude>
+			<transition to="NoWaitTone" event="VerifyCallWaitingToneComplete"/>
+			<transition to="NoWaitTone" event="VerifyCallWaitingToneError"/>
+		</state>
+		
+		<state ID="NoWaitTone">
+			<response>
+				<verify step="3" requirements="REQ13791">
+					<eq>
+						<msg_ref type="utility">Response</msg_ref>
+						<expr>VerifyCallWaitingToneError</expr>
+					</eq>
+				</verify>
+			</response>
+			<transition to="AlertingUac" event="VerifyCallWaitingToneError"/>
+			<transition to="AlertingUac" event="VerifyCallWaitingToneComplete"/>
+		</state>
+		
+		<state ID="AlertingUac">
+			<prelude>
+				<generate event="Branch1Event" fsm="UE1"/>
+			</prelude>
+			<transition to="VerifyRinging" event="Branch2Event"/>
+		</state>
+		
+		<state ID="VerifyRinging">
+			<prelude>
+				<send protocol="utility" msgtype="VerifyRing"/>
+			</prelude>
+			<response>
+				<verify step="5" requirements="REQ13791, REQ23107">
+					<eq>
+						<msg_ref type="utility">Response</msg_ref>
+						<expr>VerifyRingComplete</expr>
+					</eq>
+					<then>
+						<send protocol="utility" msgtype="OffHook"/>
+					</then>
+				</verify>
+			</response>
+			<transition to="Answer" event="VerifyRingComplete"/>
+		</state>
+		
+		<state ID="Connected" timer="5000">
+			<prelude once="true">
+				<send protocol="sip" msgtype="ACK"/>
+			</prelude>
+			<response>
+				<!-- if>
+					<and>
+						<eq>
+							<msg_ref type="event"/>
+							<expr>DIALOG_CONFIRMED_UAC</expr>
+						</eq>
+						<notnull>
+							<msg_ref type="sip" msg_instance="last">18x-Invite.SDP</msg_ref>
+						</notnull>
+					</and>
+					<then>
+						<var name="answer">
+							<msg_ref type="sip" msg_instance="last">18x-Invite.SDP</msg_ref>
+						</var>
+					</then>
+					<elseif>
+						<and>
+							<eq>
+								<msg_ref type="event"/>
+								<expr>DIALOG_CONFIRMED_UAC</expr>
+							</eq>
+							<notnull>
+								<msg_ref type="sip" msg_instance="last">200-UPDATE.SDP</msg_ref>
+							</notnull>
+						</and>
+						<then>
+							<var name="answer">
+								<msg_ref type="sip" msg_instance="last">200-UPDATE.SDP</msg_ref>
+							</var>
+						</then>
+					</elseif>
+					<else-->
+					<if>
+						<and>
+							<eq>
+								<msg_ref type="event"/>
+								<expr>DIALOG_CONFIRMED_UAC</expr>
+							</eq>
+							<notnull>
+								<msg_ref type="sip" msg_instance="last">200-Invite.SDP</msg_ref>
+							</notnull>
+						</and>
+						<then>
+							<var name="answer">
+								<msg_ref type="sip" msg_instance="last">200-INVITE.SDP</msg_ref>
+							</var>
+						</then>
+					<!-- /elseif-->
+				</if>
+				<if>
+					<eq>
+						<msg_ref type="event"/>
+						<expr>DIALOG_CONFIRMED_UAC</expr>
+					</eq>
+					<then>
+						<start_capture>
+							<filter>
+								<var_expr>
+									<expr>host </expr>
+									<msg_ref type="platform">UE0.IP</msg_ref>
+									<expr> || host </expr>
+									<msg_ref type="platform">Platform.STUN IP Address</msg_ref>
+								</var_expr>
+							</filter>
+						</start_capture>
+						<start_stream name="vm" file="../config/tones/tone1.rtp" format="G711">
+							<to>
+								<ip>
+									<var_ref name="answer" protocol="sdp" hdr="o" param="address"/>
+								</ip>
+								<port>
+									<var_ref name="answer" protocol="sdp" hdr="audio" param="port"/>
+								</port>
+							</to>
+							<from>
+								<ip>
+									<msg_ref type="platform">Platform.STUN IP Address</msg_ref>
+								</ip>
+								<port>
+									<msg_ref type="platform">Platform.RTP Port1</msg_ref>
+								</port>
+							</from>
+						</start_stream>
+						<sleep time="5000"/>
+						<stop_capture/>
+						<log promptUser="true" verify="true" 
+							step="6" requirements="REQ13791, REQ23107" 
+							expr="Verify in the capture file that there are RTP packets sent\nfrom the DUT to UE1."/>
+						<log promptUser="true" verify="true" 
+							step="6" requirements="REQ13791, REQ23107" 
+							expr="Verify that tone1 is heard in the DUT's handset."/>
+					</then>
+				</if>
+			</response>
+			<transition to="Releasing" event="DIALOG_CONFIRMED_UAC"/>
+		</state>
+	</add_to>
+</pc2xml>

@@ -1,0 +1,48 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+
+<!-- First are the document type and the attributes for our document -->
+<pc2xml version="$Revision: 8188 $" name="UT_SIP-UE 1.2.1.3" descrip="Header Fields in message not matching category" number="UT_SIP-UE 1.2.1.3">
+	<template name="UT_SIP-UE 1.2.1.3" file="./templates/ut/Term_DUT.xml"/>
+	<remove_from fsm="UT_SIP-UE 1.2.1.3">
+		<state ID="Setup" sub="response"/>
+	</remove_from>
+	<add_to fsm="UT_SIP-UE 1.2.1.3">
+		<!-- SETUP State -->
+		<state ID="Setup" sub="response">
+			<!-- Expected responses are 100, 180, 183 or 200 -->
+			<response>
+				<!-- Step 4 from the Default Message Flow Call-Term-at-UE(DUT) Sequence Diagram -
+               Test 18x response for reliability for possible Prack message -->
+				<if>
+					<eq>
+						<msg_ref type="sip">Request</msg_ref>
+						<expr>Invite</expr>
+					</eq>
+					<then>
+						<send protocol="sip" msgtype="180-INVITE" target="UE1" originator="DUT"/>
+					</then>
+				</if>
+			</response>
+			<!-- Transitions for Setup state -->
+			<transition to="Alerting" event="INVITE"/>
+		</state>
+	</add_to>
+</pc2xml>

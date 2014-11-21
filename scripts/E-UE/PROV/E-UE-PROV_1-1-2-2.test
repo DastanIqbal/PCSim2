@@ -1,0 +1,249 @@
+#//*****************************************************************************
+#// Filename: E-UE-PROV_1-1-2-2.test
+#// Author:   Matthew Forbes
+#// Creation Date: February 11, 2009
+#// Modified by:
+#//            
+#//*****************************************************************************
+#// Description:
+#//     TC2768 TEST CASE PROV E-UE-PROV 1-1-2-2 Configuration of Different Voice and Data Providers
+#//     (the same subnet for CM and MTA)
+#//
+#// Objective:
+#//     Test that the MTA can be configured with different voice and data providers.
+#//     
+#//
+#// PacketCable DUT:
+#//     MTA
+#//
+#// Test Steps:
+#//     - Initial Configuration: Cfg. 291, Configure 2 DHCP servers to select secure prov flow.
+#//     - CMTS should be configured for one subnet and two IP helper addresses
+#//     - Each server should use the same subnet for data and for telephony.
+#//     - Start sniffer
+#//     - Reset DUT
+#//     - Check Provisioning state of MTA 
+#//     - Stop sniffer
+#//     - Invoke parsing tool and validate using Pass/Fail scripts
+#//     - Delete MTA config file
+#//
+#// Notes:
+#//     - Requires provPrimitives.tcl & tftp_primitives.tcl.
+#//     - Requires the specific config file in $BASE_CFG_FILE_PATH in Provisioning Server.
+#//     - Requires parT.tcl parsing tool to parse data from capture file.
+#//*****************************************************************************
+global SCRIPT_VERSION
+set SCRIPT_VERSION { # $Id: E-UE-PROV_1-1-2-2.test 7406 2010-07-20 17:17:37Z dthakore $ }
+set mtaip1 $MTA_IP
+set cmip1 $CM_IP
+
+DoStep "E-UE-PROV_1-1-2-2_PreStep-1" "Initialize Test Platform" {
+    Init_PROV
+    Init_CONTROLLER_LAN
+    # Initial PARSER TOOL
+    Init_PART
+} { PASS_STEP }
+
+DoStep "E-UE-PROV_1-1-2-2_PreStep-2" "Initial configuration" {
+    LogMsg "--- Initial configuration ---"
+    verify_signal "Configure CMTS for TWO DHCP SERVERS on same subnet(add ip helper address, $PROV_DHCP2_IP,
+    delete secondary subnets)"
+    # ProvCreateConfig 291 $MTA_MAC
+} { PASS_STEP }
+
+
+DoStep "E-UE-PROV_1-1-2-2_2-1" "Configure DHCP servers " {
+    # verify_signal "Configure TWO - DHCP SERVERS(PROV servers): \n\
+            # 1st DHCP SERVER: CM policy excludes CM (CMTSGROUPEXCLUDE) and normal policy for \n\
+            # MTA (MTAFORCW122) & UNCHECK force multple subnets. \n\
+            # 2nd DHCP SERVER: Option 122.1 MTA DHCP server (DHCP1) IP address(CMTC1082) & UNCHECK force multple subnets"
+    verify_signal "Configure TWO - DHCP SERVERS(PROV servers):
+    1st DHCP SERVER: Exclude CM ($PROV_DHCP1_IP, list devices, then check box by $CM_MAC then click exclude & ok
+    then List Subnets, delete MTA subnet & click on CM subnet and change allocate CM to MTA & save)"
+    verify_signal "2nd DHCP SERVER: Include CM ($PROV_DHCP2_IP, list devices, then check box by $CM_MAC then click include & ok)"
+    # ProvCreateConfig 291 $MTA_MAC
+    PROV_MODIFY_DEVICE $MTA_MAC MTAFORCW_122 Device_Level_Secure.cfg
+    PROV_DEPLOY_DHCP
+    PACT_SWITCH_PROV_TO $PROV_DHCP2_IP
+    PROV_MODIFY_DEVICE $CM_MAC CMTC1082
+    PROV_DEPLOY_DHCP
+    PACT_SWITCH_PROV_BACK
+} { PASS_STEP }
+
+set msgStr "Start Sniffer"
+DoStep "E-UE-PROV_1-1-2-2_2-2" $msgStr {
+    LogMsg "--- $msgStr ---"
+    SetupCaptureControllerLan "host $MTA_IP || udp port 67 || host $CM_IP"
+    StartCaptureControllerLan
+} {PASS_STEP}
+
+DoStep "E-UE-PROV_1-1-2-2_3-1" "Reset CM/MTA" {
+    SNMPvN_RESET $CM_IP
+    LogMsg "Reset CM/MTA has passed"
+} {
+    PASS_STEP
+}
+
+DoStep "E-UE-PROV_1-1-2-2_4-1" "Wait for CM/MTA to reboot" {
+    # Wait for 100 secs to let CM/MTA starting to reboot
+    actionWait "Wait for CM/MTA to reboot" 120
+} {
+    PASS_STEP
+}
+
+DoStep "E-UE-PROV_1-1-2-2_4-2" "Stop Sniffer" {
+    LogMsg "--- Stop Sniffer ---"
+    StopCaptureControllerLan
+    SaveToFileControllerLan
+} {PASS_STEP}
+
+
+########################## INVOKE PARSING TOOL ##################################
+
+DoStep "E-UE-PROV_1-1-2-2_4-3" "Analyze flow data" {
+    # Set up parser file
+    set PARSERFILE    $ETH_DEFAULT_TXT_FILE
+} { PASS_STEP }
+
+DoStep "E-UE-PROV_1-1-2-2_4-4" "Parse all data into database" {
+    # Parse data
+    set PARAMS_DHCP         "{DHCP {} {} {} {} {} {} {} {}}"
+    set PARAMS_CM_SRC       "{{} {} {} {} $CM_IP {} {} {} {}}"
+    set PARAMS_CM_DST       "{{} {} {} {} {} {} {} $CM_IP {}}"
+    set msgID_CM            [ParseFile $PARSERFILE "$PARAMS_DHCP $PARAMS_CM_SRC $PARAMS_CM_DST"]
+    set PARAMS_MTA_SRC      "{{} {} {} {} $MTA_IP {} {} {} {}}"
+    set PARAMS_MTA_DST      "{{} {} {} {} {} {} {} $MTA_IP {}}"
+    set msgID_MTA           [ParseFile $PARSERFILE "$PARAMS_DHCP $PARAMS_MTA_SRC $PARAMS_MTA_DST"]
+} {
+    if { $::PART_RETURN == 0 } {
+        PASS_STEP
+    } else {
+        FAIL_STEP "Cannot find data"
+    }
+}
+
+
+DoStep "E-UE-PROV_1-1-2-2_4-5" "Verify MTA Prov" {
+    # Find MTA MAC with colons
+    set MTA_MAC_COL [AddColMac $MTA_MAC]
+    set mtaip [GetValue $msgID_MTA "INANY DHCP ACK OPTIONCLIENTIPADDRESS" AND \
+            "OPTIONCLIENTHWADDRESS" "IS" "$MTA_MAC_COL"]
+    set mtaip [string trimright $mtaip " (*)"]
+    set MTA_IP $mtaip
+    set val [GetProvState 1 20]
+    LogMsg "MTA Provisioning State"
+    LogMsg "             - Expected : 1"
+    LogMsg "             - Received : $val"
+} {
+    IsEqual $val 1
+}
+
+
+DoStep "E-UE-PROV_1-1-2-2_4-6" "Note the IP address for the Data Service Provider" {
+    LogMsg "Note the IP address for the Data Service Provider"
+    set CONTINUE_PAST_STEP_ERROR 1
+    # Find CM MAC with colons
+    set CM_MAC_COL [AddColMac $CM_MAC]
+} {
+    # Get the IP address for server that sends ACK to CM
+    set dhcp1 [GetValue $msgID_CM "INANY DHCP ACK HEADERSRCIP" AND \
+            "OPTIONCLIENTHWADDRESS" "IS" "$CM_MAC_COL"]
+    IsEqual $dhcp1 $PROV_DHCP2_IP
+}
+
+DoStep "E-UE-PROV_1-1-2-2_4-7" "Note the IP address for the CM" {
+    LogMsg "Note the IP address for the CM"
+    set cmip [GetValue $msgID_CM "INANY DHCP ACK OPTIONCLIENTIPADDRESS" AND \
+            "OPTIONCLIENTHWADDRESS" "IS" "$CM_MAC_COL"]
+    set cmip [string trimright $cmip " (*)"]
+} {
+    LogMsg "CM IP is $cmip"
+}
+
+DoStep "E-UE-PROV_1-1-2-2_5-1" "DHCP ACK: Source IP matches 122.1(telephony server)" {
+    LogMsg "Verify DHCP ACK: Source IP matches 122.1(telephony server)"
+} {
+    # Verify source IP
+    set dhcp2 [GetValue $msgID_CM "INANY DHCP ACK OPTION122SUBOPTION1" AND \
+            "OPTIONCLIENTHWADDRESS" "IS" "$CM_MAC_COL"]
+    set dhcp2 [string trimright $dhcp2 " (4 bytes)"]
+    set val [GetValue $msgID_MTA "INANY DHCP ACK HEADERSRCIP" AND \
+            "OPTIONCLIENTHWADDRESS" "IS" "$MTA_MAC_COL"]
+    IsEqual $val $dhcp2
+    LogMsg "DHCP ACK: Source IP($val) matches 122.1(telephony server)($dhcp2)"
+}
+
+DoStep "E-UE-PROV_1-1-2-2_6-1" "Verify MTA receives ACK from telephony server." {
+    LogMsg "Verify MTA receives ACK from telephony server."
+    VerifyValue $msgID_MTA "INANY DHCP ACK HEADERSRCIP" "IS" "$dhcp2" AND \
+            "OPTIONCLIENTHWADDRESS" "IS" "$MTA_MAC_COL"
+} {
+    LogMsg "MTA receives ACK from $dhcp2"
+}
+
+DoStep "E-UE-PROV_1-1-2-2_6-2" "Note the IP address for the MTA" {
+    LogMsg "Note the IP address for the MTA"
+} {
+    LogMsg "MTA IP is $mtaip"
+}
+
+DoStep "E-UE-PROV_1-1-2-2_7-1" "Verify CM DHCP server Source IP and MTA DHCP server Source IP are different" {
+    LogMsg "Verify CM DHCP server Source IP and MTA DHCP server Source IP are different"
+} {
+    IsNotEqual $dhcp1 $dhcp2
+    LogMsg "CM DHCP server Source IP($dhcp1) and MTA DHCP server Source IP($dhcp2) are different"
+}
+
+DoStep "E-UE-PROV_1-1-2-2_7-2" "Compare CM and MTA subnets" {
+    set cmsubnet [regsub -all {\.} $cmip { }]
+    set mtasubnet [regsub -all {\.} $mtaip { }]
+    set cmsubnet [lindex $cmsubnet 2]
+    set mtasubnet [lindex $mtasubnet 2]
+} {
+    IsEqual $cmsubnet $mtasubnet
+    LogMsg "CM Subnet($cmsubnet) and MTA Subnet($mtasubnet) are the same."
+}
+
+DoStep "E-UE-PROV_1-1-2-2_7-3" "sysUpTime (SNMPv2) Content Verification" {
+    set cmip [string trimright $cmip " (*)"]
+    set valv2 [SNMPvN_GET 1.3.6.1.2.1.1.3.0 $cmip]
+    # set cmpv2 [string match *(*)*:*:*.* $valv2]
+    # IsEqual $cmpv2 1    
+} {verify_signal "sysUpTime (SNMPv2) is $valv2 (1/100th sec), is this correct?"}
+    
+DoStep "E-UE-PROV_1-1-2-2_7-4" "sysUpTime (SNMPv3) Content Verification" {
+    set valv3 [SNMP_GET .1.3.6.1.2.1.1.3.0 $MTA_IP]
+    # set cmpv3 [string match *seconds $valv3]
+    # IsEqual $cmpv3 1   
+} {verify_signal "sysUpTime (SNMPv3) is $valv3 (1/100th sec), is this correct?"}
+
+################################################################################
+# Cleanup
+################################################################################
+
+DoStep "E-UE-PROV_1-1-2-2-PostStep-1" "Restore DHCP server policies and CMTS" {
+    verify_signal "Restore CMTS (remove ip helper address, $PROV_DHCP2_IP,
+    restore secondary subnets)"
+    verify_signal "Restore DHCP SERVERS(PROV servers):
+    1st DHCP SERVER: Include CM ($PROV_DHCP1_IP, list devices, then check box by $CM_MAC then click include & ok
+    then List Subnets, restore MTA subnet & click on CM subnet and change allocate MTA to CM & save)
+    2nd DHCP SERVER:  Exclude CM & MTA ($PROV_DHCP2_IP, list devices, then check box by $CM_MAC & $MTA_MAC then click exclude & ok)"
+    PROV_MODIFY_DEVICE $MTA_MAC {} {} $mtaip1
+    PROV_MODIFY_DEVICE $CM_MAC {} {} $cmip1
+    PROV_DEPLOY_DHCP
+    PACT_SWITCH_PROV_TO $PROV_DHCP2_IP
+    PROV_MODIFY_DEVICE $CM_MAC CMFORCW_122
+    PROV_DEPLOY_DHCP
+    PACT_SWITCH_PROV_BACK
+} {PASS_STEP}
+
+DoStep "E-UE-PROV_1-1-2-2-PostStep-2" "Reset DUT" {
+    SNMPvN_RESET $cmip
+    actionWait "Wait for CM/MTA to reboot" 60
+    PROV_MODIFY_DEVICE $MTA_MAC {} {} {""}
+    #Added remove static IP for CM - MLF 4/16/08
+    PROV_MODIFY_DEVICE $CM_MAC {} {} {""}
+    PROV_DEPLOY_DHCP
+} {PASS_STEP}
+
+Cleanup

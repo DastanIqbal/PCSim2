@@ -1,0 +1,116 @@
+<?xml version="1.0"?>
+
+<!--
+#######################################################################################
+##                                                                                   ##
+## (c) 2007-2012 Cable Television Laboratories, Inc.  All rights reserved.  Any use  ##
+## of this documentation/package is subject to the terms and conditions of the       ##
+## CableLabs License provided to you on download of the documentation/package.       ##
+##                                                                                   ##
+#######################################################################################
+
+
+ Change History: (Author & Date)
+
+
+
+
+
+-->
+
+<pc2xml version="$Revision: 8188 $" name="UT_SIP_RegAndSub_Temp" descrip="This is a unit test script for testing the UE Registration and Subscribe template." number="1">
+	<fsm name="UE0">
+		<models>
+			<register/>
+		</models>
+		<NE sim_type="term" elements="DUT" targets="UE0 DUT"/>
+		<states initialstate="Register">
+			<!-- REGISTER State -->
+			<state ID="Register">
+				<prelude>
+					<send protocol="sip" msgtype="Register" target="PCSCF1" originator="DUT"/>
+				</prelude>
+				<transition to="Digest" event="401-Register"/>
+				<transition to="Subscribe" event="200-Register"/>
+			</state>
+			<state ID="Digest">
+				<prelude>
+					<send protocol="sip" msgtype="Register" target="PCSCF1" originator="DUT"/>
+				</prelude>
+				<transition to="Subscribe" event="200-Register"/>
+			</state>
+			<!-- Subscribe State -->
+			<state ID="Subscribe">
+				<prelude>
+					<send protocol="sip" msgtype="Subscribe" target="PCSCF1" originator="DUT"/>
+				</prelude>
+				<transition to="RecvNotify" event="200-Subscribe"/>
+			</state>
+			<state ID="RecvNotify">
+				<postlude>
+					<send protocol="sip" msgtype="200-Notify" target="PCSCF1" originator="DUT"/>
+				</postlude>
+				<transition to="SubscribeUA" event="NOTIFY"/>
+			</state>
+			<!-- Subscribe ua-profile State -->
+			<state ID="SubscribeUA">
+				<prelude>
+					<send protocol="sip" msgtype="Subscribe" 
+						subscribeType="ua-profile" target="PCSCF1" originator="DUT">
+						<mod modtype="replace" hdr="Event">
+							<expr>ua-profile;application=profile;auid=com.cablelabs.pkt.rst.featureset.1</expr>
+						</mod>
+					</send>
+				</prelude>
+				<transition to="RecvCFVNotify" event="200-Subscribe"/>
+			</state>
+			<state ID="RecvCFVNotify">
+				<postlude>
+					<send protocol="sip" msgtype="200-Notify" target="PCSCF1" originator="DUT"/>
+				</postlude>
+				<transition to="RecvSCFNotify" event="NOTIFY"/>
+			</state>
+			<state ID="RecvSCFNotify">
+				<postlude>
+					<send protocol="sip" msgtype="200-Notify" target="PCSCF1" originator="DUT"/>
+				</postlude>
+				<transition to="SendDNDSubscribe" event="NOTIFY"/>
+			</state>
+			<state ID="SendDNDSubscribe">
+				<prelude>
+					<send protocol="sip" msgtype="Subscribe" 
+						subscribeType="ua-profile" target="PCSCF1" originator="DUT">
+						<mod modtype="replace" hdr="Event">
+							<expr>ua-profile;application=profile;auid=com.cablelabs.pkt.rst.featureset.2</expr>
+						</mod>
+					</send>
+				</prelude>
+				<transition to="RecvDNDNotify" event="200-Subscribe"/>
+			</state>
+			<state ID="RecvDNDNotify">
+				<postlude>
+					<send protocol="sip" msgtype="200-Notify" target="PCSCF1" originator="DUT"/>
+				</postlude>
+				<transition to="RecvCFVNotify2" event="NOTIFY"/>
+			</state>
+			<state ID="RecvCFVNotify2">
+				<postlude>
+					<send protocol="sip" msgtype="200-Notify" target="PCSCF1" originator="DUT"/>
+				</postlude>
+				<transition to="RecvSCFNotify2" event="NOTIFY"/>
+			</state>
+			<state ID="RecvSCFNotify2">
+				<postlude>
+					<send protocol="sip" msgtype="200-Notify" target="PCSCF1" originator="DUT"/>
+				</postlude>
+				<transition to="RecvCFVNotify3" event="NOTIFY"/>
+			</state>
+			<state ID="RecvCFVNotify3">
+				<postlude>
+					<send protocol="sip" msgtype="200-Notify" target="PCSCF1" originator="DUT"/>
+				</postlude>
+				<transition to="END" event="NOTIFY"/>
+			</state>
+		</states>
+	</fsm>
+</pc2xml>
